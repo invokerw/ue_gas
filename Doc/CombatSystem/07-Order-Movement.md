@@ -114,6 +114,8 @@ Queued
 
 ## 6. 碰撞、避让和临时阻挡
 
+M0 已冻结 Combat 几何单位和 Profile：所有距离为 cm、速度为 cm/s；Cast/Attack/Order 默认使用双方半径扣除后的 XY 边缘距离并共享 5 cm 容差。`CombatUnit`、`CombatUnitNoCollision`、`CombatProjectile`、`CombatBlocker`、`CombatCorpse` 和 `CombatTargeting` 的职责及响应矩阵见 [14 M0 设计冻结](14-M0-Design-Freeze.md#6-dec-005碰撞los-和地图单位)。现有 Pawn/WorldDynamic 模板碰撞不直接获得 Combat 语义。
+
 - CharacterMovement 使用 RVO 或 Detour Crowd；选型要在同一地图统一，避免双重避让。
 - Capsule 半径映射 hull radius。
 - `State.NoUnitCollision` 通过聚合 Tag 响应器切换 collision/avoidance。
@@ -128,6 +130,8 @@ Fissure 等临时阻挡分三阶段：
 第一版正确性不能依赖异步 NavMesh 已经完成重建。
 
 ## 7. 队伍控制和 RPC
+
+M0 固定 TeamId、关系和控制权是三种不同概念：`FCombatTeamId` 决定 Friendly/Hostile/Neutral，`UCombatTeamSubsystem` 是唯一关系入口，CommandingPlayerController 只决定谁能发 RPC。召唤物默认快照 spawn 时的队伍，召唤者之后换队不自动传播；细则见 [14 M0 设计冻结](14-M0-Design-Freeze.md#2-dec-001队伍与目标关系)。Order 不得因为 Controller 相同就推断 Friendly，也不得因为 Friendly 就授予控制权。
 
 PlayerController 将批量 Order RPC 到服务器。服务器验证：
 

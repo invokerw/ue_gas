@@ -153,6 +153,8 @@ struct FCombatSpecialValue
 
 ## 7. 第一版硬约束
 
+M0 冻结的跨系统值域和默认值集中在 [14 M0 设计冻结](14-M0-Design-Freeze.md)：TeamId/关系、LifeState/LifeGeneration、Ability Class/Data/Spec 身份、Numeric/RNG v1、Collision/LOS/cm、Native Tag 和 PrimaryAsset identity。下列硬约束的公共字段必须遵循该契约；变更时按 ADR、schema/version 和迁移规则处理。
+
 | 问题 | 唯一规则 |
 | --- | --- |
 | 属性最终值 | ASC Attribute/ActiveGE 聚合结果是唯一来源；Runtime 不维护第二套 Armor/MoveSpeed 等最终值。 |

@@ -31,6 +31,10 @@ TargetTeam.Both
 
 ## 2. 目标校验契约
 
+M0 已冻结队伍身份和关系：玩法层使用 `FCombatTeamId`（`0` Neutral camp、`1..254` 普通队、`255` NoTeam/Invalid）以及 `UCombatTeamSubsystem` 的单一 Relation API。相同有效 TeamId 为 Friendly，不同有效 TeamId 默认 Hostile，Neutral camp 默认也与其他队 Hostile；显式 diplomacy table 可以覆盖为 Friendly/Hostile/Neutral。`Self` 独立于队伍关系，由 `bAllowSelf` 控制。完整值域、召唤物快照和换队规则见 [14 M0 设计冻结](14-M0-Design-Freeze.md#2-dec-001队伍与目标关系)。
+
+`TargetTeam.Friendly` 接受 Friendly，`TargetTeam.Enemy` 接受 Hostile，`TargetTeam.Both` 接受二者；显式 Neutral relation 只有 `bAllowNeutralRelation=true` 才接受。NoTeam、Self 禁止和关系不匹配分别返回稳定 `Combat.Failure.Target.*`，Order/Ability/Projectile 不得翻译或另建阵营错误。
+
 目标校验由 C++ 公共层统一实现，蓝图只声明规则。每次校验至少考虑：
 
 - 调用者是否拥有 Unit 和 AbilitySpec，AbilitySpec 是否有效且已授予。
@@ -41,6 +45,8 @@ TargetTeam.Both
 - 世界位置：有限值、可选 NavMesh 投影、最大请求范围和地图边界。
 - 可见性与视线：第一版可配置关闭，但 API 必须保留明确结果，不能默认客户端可见即服务器可见。
 - Point/AoE 形状：服务器重算，不接收客户端传入的命中 Actor 列表。
+
+范围/LOS 使用 M0 单一几何规则：运行时单位为 cm，Cast/Attack/Order 默认用 XY 边缘距离，固定 `CombatRangeToleranceCm=5`；LOS 从 Combat targeting origin 到 aim point 走 `CombatTargeting` trace，忽略 Source/Target 自身并由 WorldStatic、有效 WorldDynamic 和 CombatBlocker 阻挡。完整 Profile 和失败 Tag 见 [14 M0 设计冻结](14-M0-Design-Freeze.md#6-dec-005碰撞los-和地图单位)。
 
 建议返回结构化 `FCombatTargetValidationResult`，包含 `bValid`、稳定 `FailureTag` 和可选修正位置。Order、Ability 激活和 UI 预览共享规则；UI 结果只作提示，服务器结果才权威。
 
@@ -157,17 +163,21 @@ protected:
 
 ## 6. Ability 授予、等级和自动施放
 
-为补齐原设计缺口，第一版增加以下规则：
+M0 已关闭授予身份和产品默认值，完整契约见 [14 M0 设计冻结](14-M0-Design-Freeze.md#4-dec-003ability-授予等级和-autocast)。第一版规则：
 
 - 服务器从 UnitData/AbilitySet 授予 Ability；客户端不得指定 Ability 类、DefinitionId 或等级。
 - `FGameplayAbilitySpec.Level` 是运行时权威等级，DataAsset special 按该等级读取并做边界校验。
 - Ability Class 与 AbilityData DefinitionId 必须一一对应；重复 DefinitionId 在编辑器校验和启动检查中报错。
+- AbilityData 不反向引用 Class；AbilitySet 只保存 Class、InitialLevel、初始 AutoCast 和 grant flags，不保存运行时 SpecHandle。
+- 同一 Unit 每个 Ability DefinitionId 最多一个 Spec；同一 grant source 重复初始化幂等，其他冲突来源明确失败。
+- 等级合法范围为 `1..MaxLevel`，越界拒绝而非 clamp；special 数组长度只能为 1 或 MaxLevel。
 - 升级、降级、移除均为服务器 API，并产生 CombatLog 事件。
 - 移除 Ability 时，默认取消该 Ability 的活动实例；已脱离 Ability 生命周期的 Projectile/AttackRecord 按快照继续。
-- AutoCast 是 AbilitySpec/单位上的服务器状态，Order RPC 只能请求切换，服务器复核可切换性和归属。
-- Intrinsic Modifier 的授予和移除跟随 AbilitySpec；重复初始化必须幂等。
+- AutoCast 是 per-Spec 服务器状态，Order RPC 只能请求切换，服务器复核可切换性、归属和生命状态。
+- Intrinsic Modifier 以 AbilitySpecHandle + DefinitionId 作为 owner key；授予、ActorInfo 重建和 respawn reconcile 幂等，移除 Spec 后不得残留。
+- AbilitySpec、等级、AutoCast 和 cooldown 默认跨 Death/Respawn 保留；活动实例在 Dying 被取消。
 
-“技能点、等级上限、重生后保留、物品临时授予”仍是产品规则，登记在 [12](12-Decisions-Gaps.md)。
+技能点、经验和物品临时授予不属于第一版；未来只能调用相同服务器 API，不能成为第二套等级权威来源。
 
 ## 7. DataDriven Actions
 

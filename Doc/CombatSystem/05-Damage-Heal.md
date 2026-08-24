@@ -116,12 +116,15 @@ armor < 0:  multiplier = 2 - pow(0.94, -armor)
 数值安全：
 
 - 拒绝 NaN、Inf 和负请求 Amount；0 返回零 Result，不运行有副作用 Hook。
-- MagicResist、Evasion 等百分比使用显式 clamp，具体上下限在 Data/Calculator 常量中集中定义。
+- Damage/Heal/Shield 请求必须位于 `[0, 1e9]`；超限与非法值拒绝，不静默 clamp。
+- MagicResist、Evasion 等百分比使用显式 clamp，具体上下限由 `FCombatNumericPolicyV1` 集中定义。
 - 内部使用 `float` 与 GAS 保持一致；日志保留原始 float，UI 只负责显示取整。
 - 不在中间阶段逐步取整；最终 Health 写入遵守 AttributeSet 的单位精度规则。
 - 公式版本写入 CombatLog/测试基线，改变公式视为数据兼容变更。
 
-随机暴击、闪避等不直接调用全局随机数；使用可注入/可记录的 Combat RNG 服务，见 [GAP-006](12-Decisions-Gaps.md)。
+Numeric Policy v1 的完整边界见 [14 M0 设计冻结](14-M0-Design-Freeze.md#51-numeric-policy-v1)。权威值不做小数位量化；Health clamp 后只在 `PreviousHealth > 0 && NewHealth == 0` 时判定 lethal。
+
+随机暴击、闪避等不直接调用全局随机数；使用服务器 `UCombatRngSubsystem` 的 keyed roll：`MatchSeed + RootEventId + DomainTag + StableSubjectId + Ordinal` 唯一决定一次 roll。算法、固定攻击顺序、记录字段和版本兼容见 [14 M0 设计冻结](14-M0-Design-Freeze.md#52-combat-rng-v1)。
 
 ## 6. Heal 管线
 
@@ -172,12 +175,13 @@ Alive -> Dying -> Dead -> Respawning -> Alive
 第一版最低语义：
 
 - Alive 进入 Dying 的原子转换只成功一次。
+- Dying 是同步清理阶段；完成后进入 Dead 并只广播一次 UnitDeath。
 - Dying 立即阻止新 Order/Attack/Ability，取消当前可中断行为，清理 motion 和按规则移除 Modifier。
 - 已到 attack point 的 Projectile/AttackRecord 依其快照继续或 fizzle，不由 Death 回调任意销毁。
 - Death 事件、奖励和日志只由成功状态转换产生一次。
-- Respawn 不通过 Heal 模拟；它重建本生命 generation 并按 UnitData 初始化资源。
+- Respawn 不通过 Heal 模拟；仅 `Dead -> Respawning` 的服务器 API 可在预检后递增 `uint32 LifeGeneration`，并按 UnitData 初始化资源。
 
-尸体时长、复活点、技能/冷却保留等产品规则见 [GAP-002](12-Decisions-Gaps.md)。
+Death/Respawn 的固定清理表、generation 规则和默认保留项见 [14 M0 设计冻结](14-M0-Design-Freeze.md#3-dec-002unit-生命状态)。尸体时长、奖励和按 Unit 类型覆盖策略见 [GAP-013](12-Decisions-Gaps.md)。
 
 ## 9. 实现分工
 

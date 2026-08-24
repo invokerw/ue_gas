@@ -5,6 +5,7 @@
 本文件区分三种状态：
 
 - `已定`：第一版硬约束，修改需要决策记录和测试迁移。
+- `已关闭`：原 Gap 已由已定结论、owner、迁移和测试落点关闭；重新打开必须新增 ADR。
 - `建议基线`：为避免实现停摆给出的默认方案，必须在“最迟节点”前接受或替换。
 - `开放`：缺少产品/技术结论，不能悄悄由某个子系统自行决定。
 
@@ -30,6 +31,13 @@
 | ADR-014 | 已定 | Ability 默认 InstancedPerActor，同实例不重入 | 隔离蓝图/TargetData/提交状态 |
 | ADR-015 | 已定 | UWorld game time 驱动 Combat Scheduler | pause/global dilation 一致作用于战斗 |
 | ADR-016 | 已定 | Editor/Content/Blueprint/PIE 任务优先使用 UE MCP 读取、受控修改和回读 | 提高资产操作效率与准确性；编译/Automation/Dedicated 仍是最终 Gate |
+| ADR-017 | 已定 | Combat 使用独立 FCombatTeamId + TeamSubsystem Relation API；控制权与队伍分离 | 关闭 GAP-001，避免 AI/Ability/Order/Projectile 散落阵营比较 |
+| ADR-018 | 已定 | Unit 使用 Alive/Dying/Dead/Respawning；Respawn 递增 uint32 LifeGeneration | 关闭 GAP-002，Death exactly-once 且旧生命回调失效 |
+| ADR-019 | 已定 | Ability Class 单向引用 Data，Spec.Level 权威，每 Unit/DefinitionId 一个 Spec | 关闭 GAP-003，消除 Class/Data/Spec 身份环和等级双来源 |
+| ADR-020 | 已定 | Numeric Policy/Formula v1 集中边界且不中途取整；Combat RNG v1 使用 keyed roll | 关闭 GAP-006/GAP-007，可解释并重放数值与随机结果 |
+| ADR-021 | 已定 | 运行时单位为 cm；固定 Combat Channel/Profile、XY edge range、5 cm tolerance 和统一 LOS | 关闭 GAP-009，Target/Order/Projectile 共享几何语义 |
+| ADR-022 | 已定 | 核心语义使用 Native Tag v1；定义资产使用固定 Combat PrimaryAssetType + 显式 lower_snake DefinitionName | 关闭 GAP-004，身份不随路径漂移且可在 cook 阻止冲突 |
+| ADR-023 | 已定 | M0 冻结包是 M1 公共字段输入，修改需显式 supersede/schema migration | 防止实现阶段重新引入 `TODO decide later` |
 
 ## 3. 本轮查漏补缺摘要
 
@@ -54,13 +62,13 @@
 
 | Gap | 状态 | 缺口 | 建议基线 | 最迟节点 |
 | --- | --- | --- | --- | --- |
-| GAP-001 | 开放 | TeamId、Neutral、召唤物继承关系和队伍变化 | `FGenericTeamId` 或独立 `FCombatTeamId` + 单一 Relation API；禁止散落枚举比较 | M0/DEC-001 |
-| GAP-002 | 开放 | Alive/Dying/Dead/Respawning、尸体、复活和跨生命回调 | 原子 Alive->Dying；Death once；life generation 使旧 Handle 失效；Respawn 独立 API | M0/DEC-002 |
-| GAP-003 | 开放 | Ability grant/level/remove/intrinsic/autocast 产品规则 | UnitData/AbilitySet 服务器授予，Spec.Level 权威，移除取消活动实例 | M0/DEC-003 |
-| GAP-004 | 开放 | DefinitionId 命名、重命名、资产版本和 Tag 废弃 | 固定 PrimaryAsset 类型/稳定 id；redirect/version table；核心 Native Tags | M0/DEC-006 |
-| GAP-006 | 开放 | 暴击/闪避/随机 proc 的随机源和复现 | Combat RNG 服务按 RootEvent/Attack 记录 seed/roll；测试可注入 | M0/DEC-004 |
-| GAP-007 | 开放 | 百分比 clamp、取整、超大值、NaN/Inf 和公式版本 | float 内部计算，中途不取整，集中 clamp，非法数拒绝，日志记公式版本 | M0/DEC-004 |
-| GAP-009 | 开放 | Pawn/Projectile/WorldStatic/友军/Source 的碰撞矩阵 | 建立 CombatUnit/CombatProjectile/CombatBlocker profiles 和数据化 hit policy | M0/DEC-005 |
+| GAP-001 | 已关闭 | TeamId、Neutral、召唤物继承关系和队伍变化 | ADR-017；完整值域/失败 Tag/换队规则见 [14](14-M0-Design-Freeze.md#2-dec-001队伍与目标关系) | 2026-08-24 / DEC-001 |
+| GAP-002 | 已关闭 | Alive/Dying/Dead/Respawning、尸体、复活和跨生命回调 | ADR-018；状态机/固定清理表/默认保留项见 [14](14-M0-Design-Freeze.md#3-dec-002unit-生命状态) | 2026-08-24 / DEC-002 |
+| GAP-003 | 已关闭 | Ability grant/level/remove/intrinsic/autocast 产品规则 | ADR-019；单一身份链/等级/移除规则见 [14](14-M0-Design-Freeze.md#4-dec-003ability-授予等级和-autocast) | 2026-08-24 / DEC-003 |
+| GAP-004 | 已关闭 | DefinitionId 命名、重命名、资产版本和 Tag 废弃 | ADR-022；Tag/PrimaryAsset/redirect 规则见 [14](14-M0-Design-Freeze.md#7-dec-006gameplaytag-与资产身份) | 2026-08-24 / DEC-006 |
+| GAP-006 | 已关闭 | 暴击/闪避/随机 proc 的随机源和复现 | ADR-020；keyed roll/记录/注入规则见 [14](14-M0-Design-Freeze.md#52-combat-rng-v1) | 2026-08-24 / DEC-004 |
+| GAP-007 | 已关闭 | 百分比 clamp、取整、超大值、NaN/Inf 和公式版本 | ADR-020；Numeric Policy v1 见 [14](14-M0-Design-Freeze.md#51-numeric-policy-v1) | 2026-08-24 / DEC-004 |
+| GAP-009 | 已关闭 | Pawn/Projectile/WorldStatic/友军/Source 的碰撞矩阵 | ADR-021；Channel/Profile/LOS/单位规则见 [14](14-M0-Design-Freeze.md#6-dec-005碰撞los-和地图单位) | 2026-08-24 / DEC-005 |
 | GAP-020 | 开放 | Automation/CI 是否包含 Dedicated Server/Client target | M1 创建独立 Target、建立 World test 和 Dedicated build/connect smoke，不延后到网络阶段 | M1/TST-003 |
 
 这些字段会进入公共 Context、Handle、DataAsset 或 Collision Profile，晚改会波及几乎全部子系统。

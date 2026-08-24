@@ -126,6 +126,8 @@ final = (base + additive) * (1 + additive_pct) * total_multiplier
 
 GAS ModifierOp 覆盖常规聚合；Dota 特殊公式由纯 C++ Calculator 或 AttributeSet clamp 负责，不能两处重复。所有输入先验证有限值；百分比和速度上限必须由显式规则定义。
 
+M0 已冻结 Numeric Policy v1：请求非法值拒绝，聚合 Attribute 在消费点按集中常量 clamp，中间不取整；Health/Mana、Armor、MagicResist、Evasion、增幅、吸血、CDR 和状态抗性的具体边界见 [14 M0 设计冻结](14-M0-Design-Freeze.md#51-numeric-policy-v1)。任何边界或公式变化都必须增加 FormulaVersion，不能在局部 Runtime 覆盖。
+
 动态属性推荐：
 
 1. 创建/刷新 GE 时把计算值写入 SetByCaller，由 GE Modifier 修改 Attribute。
@@ -134,6 +136,10 @@ GAS ModifierOp 覆盖常规聚合；Dota 特殊公式由纯 C++ Calculator 或 A
 ## 7. 状态标签与响应
 
 ```text
+State.Alive
+State.Dying
+State.Dead
+State.Respawning
 State.Stunned
 State.Silenced
 State.Rooted
@@ -147,7 +153,6 @@ State.Untargetable
 State.NoUnitCollision
 State.NoHealthBar
 State.Frozen
-State.Dead
 ```
 
 典型消费者：
@@ -202,15 +207,16 @@ MotionComponent 分别维护 Horizontal/Vertical 通道，并定义 Priority、�
 
 ## 11. 死亡时 Modifier 处理
 
-为补齐生命周期：
+M0 已关闭基础生命周期状态机和清理顺序，完整契约见 [14 M0 设计冻结](14-M0-Design-Freeze.md#3-dec-002unit-生命状态)：
 
 - Death 事件开始后阻止新 Apply（标记允许作用于尸体的 Modifier 除外）。
-- `bRemoveOnDeath=true` 的 ActiveGE 进入 deferred removal；其他效果按产品规则保留到复活或自然过期。
+- `bRemoveOnDeath=true` 的 ActiveGE 进入 deferred removal；`false` 的效果默认保留到复活或自然过期。
 - Motion 一律释放；NoUnitCollision/NoHealthBar 等最终状态仍由聚合 Tag count 驱动。
 - `OnDestroyed` 仍按稳定顺序执行，但禁止在死亡清理期间无条件重新施加自身。
-- Respawn 重置基础属性、Order/Attack generation 和 Ability 可用状态；不复用上一生命的 Runtime Handle。
+- `bRemoveOnDeath=false` 的 Runtime/ActiveGE 是显式跨生命对象，保留原绝对到期时间，但非 Alive 时默认停用普通战斗 Hook，且不得持有上一 LifeGeneration 的 Order/Attack/Motion Handle。
+- Respawn 在预检后递增 Unit LifeGeneration，重置基础属性、Order/Attack/Motion 和 life-bound Schedule；AbilitySpec/AutoCast/cooldown 默认保留，Intrinsic Modifier 幂等 reconcile。
 
-完整死亡/复活状态机仍需关闭 [GAP-002](12-Decisions-Gaps.md)。
+尸体时长、奖励和按 Unit 类型覆盖保留/重置策略继续由 [GAP-013](12-Decisions-Gaps.md) 在 M2 收口；在此之前不得偏离 M0 默认值。
 
 ## 12. 最低验收
 

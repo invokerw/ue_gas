@@ -93,6 +93,8 @@ UE MCP 读取/修改/回读记录:
 
 目标：在写基础类型前关闭会造成大面积返工的 P0 缺口。
 
+实际冻结结论、owner、迁移和测试映射记录在 [14 M0 设计冻结](14-M0-Design-Freeze.md)；执行状态和用户验收仍只记录在 [00](00-Progress-Tracker.md)。
+
 | ID | 任务 | 交付物 | 依赖 | 验收 |
 | --- | --- | --- | --- | --- |
 | DEC-001 | 队伍与目标关系 | TeamId/关系 API、Friendly/Enemy 规则、目标失败 Tag | 无 | Unit/Ability/Order/Projectile 共用一套规则；关闭 GAP-001 |
@@ -115,10 +117,10 @@ UE MCP 读取/修改/回读记录:
 
 | ID | 任务 | 交付物 | 依赖 | 验收 |
 | --- | --- | --- | --- | --- |
-| FND-001 | 启用 GAS | uproject 插件、Build.cs 模块、Combat 目录骨架 | G0 | Editor 编译、启动，无模块缺失 |
+| FND-001 | 启用 GAS 与 Combat 碰撞 | uproject 插件、Build.cs 模块、Combat 目录骨架、M0 Collision Channel/Profile | G0 | Editor 编译/启动无模块缺失；Profile 名称和 response 矩阵可查询 |
 | FND-002 | Native Gameplay Tags | State/Ability/Target/Damage/Data/Event/Cue/Failure Tag | DEC-006,FND-001 | 启动注册无重复，自动化可查 |
 | FND-003 | PrimaryAsset 基类 | Unit/Ability/Modifier/Projectile/AbilitySet skeleton | DEC-003,DEC-006 | AssetManager 可发现，DefinitionId 校验可运行 |
-| FND-004 | 公共 Handle/Result | Event/Modifier/Attack/Order/Projectile/Schedule Handle，Result/FailureTag | DEC-002,DEC-004 | 默认无效、比较、ToString、Unit life generation 测试通过 |
+| FND-004 | 公共 Handle/Result/Numeric/RNG | Event/Modifier/Attack/Order/Projectile/Schedule Handle，Result/FailureTag，Numeric Policy 与 keyed RNG v1 | DEC-002,DEC-004 | Handle 默认无效/比较/ToString/life generation；数值边界和 RNG replay/injection 测试通过 |
 
 ### 5.2 GAS 与运行时
 
@@ -142,6 +144,7 @@ UE MCP 读取/修改/回读记录:
 ### G1 基础设施
 
 - Scheduler 的时序、catch-up、预算、teardown 自动化通过。
+- M0 Collision Profile response、Numeric Policy v1 和 keyed RNG v1 自动化通过。
 - ASC 在 Standalone、Listen owner/non-owner、Dedicated Server/Client 正确初始化。
 - Development Server/Client Target 可构建并完成最小连接 smoke；若当前 Engine 安装不支持目标构建，G1 保持阻塞并提交环境决策，不得用 Network PIE 冒充通过。
 - 自定义 EffectContext 字段复制与回收安全。

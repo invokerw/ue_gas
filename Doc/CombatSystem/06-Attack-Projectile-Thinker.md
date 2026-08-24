@@ -15,7 +15,7 @@ struct FCombatAttackHandle
     int64 Sequence = 0;
 
     UPROPERTY(BlueprintReadOnly)
-    int32 LifeGeneration = 0;
+    uint32 LifeGeneration = 0;
 
     bool IsValid() const;
 };
@@ -39,7 +39,7 @@ struct FCombatAttackRecord
 
 `UCombatAttackComponent` 的 `TMap<int64, FCombatAttackRecord>` 是唯一 registry，Sequence 单调递增。Handle 通过 Attacker 找组件，并同时校验组件当前 Unit life generation；Projectile、Cue 和异步回调只持有 Handle，不复制整份 Record。
 
-Component EndPlay 把所有 Pending 原子终结为 Failed、解绑 Projectile 回调并清空 registry。Death/Respawn 提升 Unit life generation，旧 Handle 即使 Actor 和 Sequence 仍可解析也必须失效，防止旧回调命中新生命。
+Component EndPlay 把所有 Pending 原子终结为 Failed、解绑 Projectile 回调并清空 registry。Dying 清理 Attack registry/内部 generation，Respawn 在预检后提升 Unit LifeGeneration；旧 Handle 即使 Actor 和 Sequence 仍可解析也必须失效，防止旧回调命中新生命。
 
 ## 2. 普攻状态机
 
@@ -103,7 +103,7 @@ Finalize request
   -> Landed hooks
 ```
 
-随机数必须来自可记录的 Combat RNG，上下文包含 AttackHandle/EventId。Miss/evade 不调用 Damage，但仍发送 AttackFail/RecordDestroy。Break/SpellBlock 与普攻法球的交互作为具体 Modifier 规则，不隐含在 Projectile 中。
+随机数必须来自 M0 冻结的 Combat RNG v1，上下文包含 RootEventId、DomainTag、AttackHandle/StableSubjectId 和 Ordinal。固定顺序是 impact 合法性、Evasion、Crit、再按 Modifier 稳定顺序执行 proc；未到达的阶段不创建 roll record。完整 keyed roll 和复现字段见 [14 M0 设计冻结](14-M0-Design-Freeze.md#52-combat-rng-v1)。Miss/evade 不调用 Damage，但仍发送 AttackFail/RecordDestroy。Break/SpellBlock 与普攻法球的交互作为具体 Modifier 规则，不隐含在 Projectile 中。
 
 ## 6. Projectile 数据和 Actor
 
@@ -136,7 +136,7 @@ Projectile 不保存裸 Ability instance。Subsystem 为 Handle 维护 Active/Fi
 - 只保存 AttackHandle。
 - 命中/结束请求 AttackComponent Finalize，不自行结算伤害。
 
-Projectile collision channel、WorldStatic 阻挡、友军穿透、Source 忽略和命中优先级必须集中为 Data/Collision Profile，见 [GAP-009](12-Decisions-Gaps.md)。
+M0 已冻结 `CombatUnit`、`CombatProjectile`、`CombatBlocker` Object Channel，`CombatTargeting` Trace Channel，以及对应 Profile。WorldStatic/WorldDynamic/CombatBlocker 的阻挡、友军命中、Source ignore、穿透和 first-hit 由集中 `FCombatProjectileHitPolicy` 决定；同一 sweep 按 path distance、Blocker-before-Unit、稳定 Net identity 排序。完整矩阵见 [14 M0 设计冻结](14-M0-Design-Freeze.md#6-dec-005碰撞los-和地图单位)。
 
 ## 7. AbilityTask 边界
 

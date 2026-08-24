@@ -12,11 +12,15 @@ Unit / Ability / Modifier / Projectile / AbilitySet
 
 规则：
 
-- DefinitionId 在类型内唯一，不由显示名或磁盘临时路径推导。
-- 重命名/迁移通过 redirect/version table 处理，不能静默生成新身份。
+- PrimaryAssetType 固定为 `CombatUnit`、`CombatAbility`、`CombatModifier`、`CombatProjectile`、`CombatAbilitySet`。
+- 每个定义保存显式 lower_snake_case `DefinitionName` 和 `SchemaVersion=1`；Class 决定固定 Type，`GetPrimaryAssetId()` 返回 `(Type, DefinitionName)`。
+- DefinitionId 在类型内唯一，不由显示名、UObject 名或磁盘路径推导；移动/重命名 `.uasset` 不改变身份。
+- DefinitionId 重命名/删除通过唯一、无环、目标存在的 redirect 或 tombstone 处理，不能静默生成新身份或依赖长期 redirect chain。
 - Ability Class 单向引用 AbilityData；DataAsset 不反向引用 Class。
 - Cook 前运行完整资产校验，错误阻止打包，警告进入报告。
 - 运行时缺失资产用稳定占位显示并记诊断，服务器权威结算不得依赖客户端加载成功。
+
+完整命名正则、ContentVersion 和迁移规则见 [14 M0 设计冻结](14-M0-Design-Freeze.md#72-primaryasset-身份)。当前工程没有 Combat PrimaryAsset，v1 不需要迁移既有内容。
 
 ## 2. GameplayTag 治理
 
@@ -33,9 +37,12 @@ Event.Combat.*
 Cue.Combat.*
 Order.Failure.*
 Combat.Failure.*
+Combat.RNG.*
 ```
 
 核心 C++ Tag 使用 Native Gameplay Tags 集中声明；内容扩展可来自配置，但禁止同义 Tag 并存。Tag 新增/废弃需要说明消费者和兼容策略。DamageType 在一个 Spec 中必须恰好一个。
+
+M0 已冻结 C++ 直接引用的 v1 叶节点，包括四个生命状态、Ability Behavior、TargetTeam、Damage Type/Flag、Data SetByCaller、Combat Event/Failure、Order Failure 和 RNG Domain；清单见 [14 M0 设计冻结](14-M0-Design-Freeze.md#71-native-tag-清单-v1)。核心 Tag 重命名必须同提交添加 redirect，旧名只读兼容一个 ContentSchemaVersion，并由 validator 禁止新资产继续写入。
 
 ## 3. ASC 所有权和复制矩阵
 
@@ -91,7 +98,7 @@ struct FCombatModifierView
 
 建议 `FCombatUnitView` 至少投影：
 
-- Unit DefinitionId、TeamId、life generation、Alive/Dead 状态。
+- Unit DefinitionId、TeamId、`uint32` life generation、完整 LifeState。
 - Health/MaxHealth、Mana/MaxMana 或 ASC 直接可见 Attribute。
 - 当前 cast/channel DefinitionId、ServerStart/EndTime。
 - 可见 ModifierView。

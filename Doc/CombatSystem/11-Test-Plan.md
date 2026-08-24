@@ -53,6 +53,21 @@
 
 任何 MCP 调用都先使用当前会话暴露的工具 schema；endpoint 或工具不可用时，测试应明确跳转到命令行/手工 Editor 备用流程，不能把未执行的验证记为通过。
 
+### 3.2 M0 冻结契约测试映射
+
+M0 本身不新增运行时代码，以下正向/失败断言是后续 Task 的强制输入，不得在实现时换一套语义：
+
+| 决策 | 正向 | 失败/边界 | 最早自动化 Task |
+| --- | --- | --- | --- |
+| DEC-001 Team | same-team、hostile、Neutral camp、diplomacy override、summon snapshot | NoTeam、Self disabled、explicit Neutral 未获允许、TeamChanged 重校验 | FND-006/TGT-001 |
+| DEC-002 Life | 初始 generation=1、一次 Death、合法 Respawn、跨生命保留项 | 同帧双 lethal、重复 Death/Respawn、旧 generation、非法位置、generation 0 | FND-004/LIFE-001 |
+| DEC-003 Ability | AbilitySet 幂等、Spec.Level、Intrinsic reconcile、AutoCast | Class/Data 冲突、重复 DefinitionId、level 0/越界、越权切换、移除残留 | FND-003/ABL-006 |
+| DEC-004 Numeric/RNG | v1 边界、同 key 重放、Domain 隔离、注入 roll | NaN/Inf/负/超限拒绝、消费 clamp、不同 Ordinal、固定 roll 顺序 | FND-004/CMB-002/ATK-004 |
+| DEC-005 Geometry | cm、XY edge range、5 cm tolerance、LOS、stable sweep | 4.9/5.1 cm、薄墙、NoUnitCollision、同距 blocker/unit、非法位置 | TGT-001/PRJ-002 |
+| DEC-006 Identity | Native Tag lookup、稳定 Id、合法 redirect、缺资产 placeholder | DamageType 0/2 个、非法/重复名、redirect chain/cycle/缺目标、Class/Data 冲突 | FND-002/FND-003 |
+
+测试日志必须包含对应 FormulaVersion、RngAlgorithmVersion、DefinitionId、LifeGeneration 或 FailureTag，使 M0 契约的关键字段可以直接断言。
+
 ## 4. Scheduler
 
 P0：
@@ -247,7 +262,8 @@ P1：
 
 | Gate | 必须完成的测试章节 |
 | --- | --- |
-| G1 | Scheduler、公共 Handle、ASC ActorInfo、自定义 Context traits/Globals/NetSerialize、Server/Client Target smoke、UE MCP smoke |
+| G0 | M0 文档契约评审；确认 DEC-001..007 的值域、默认值、owner、迁移和测试落点，无运行时测试 |
+| G1 | Scheduler、公共 Handle、Numeric/RNG、Collision Profile、ASC ActorInfo、自定义 Context traits/Globals/NetSerialize、Server/Client Target smoke、UE MCP smoke |
 | G2 | Attribute/Damage/Heal、Modifier、状态、Magic Shield/DOT |
 | G3 | Ability/Target、三个基础技能 |
 | G4 | Order/Movement、Attack/Orb |
