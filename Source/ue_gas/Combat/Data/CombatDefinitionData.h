@@ -1,0 +1,245 @@
+#pragma once
+
+#include "CoreMinimal.h"
+#include "Engine/DataAsset.h"
+#include "GameplayTagContainer.h"
+
+#include "Combat/Core/CombatTypes.h"
+
+#include "CombatDefinitionData.generated.h"
+
+class UGameplayAbility;
+class UCombatAbilitySet;
+
+/** 描述一个旧 DefinitionId 到新 DefinitionId 的显式版本迁移。 */
+USTRUCT(BlueprintType)
+struct UE_GAS_API FCombatDefinitionRedirect
+{
+	GENERATED_BODY()
+
+	/** 已废弃但仍可能出现在存档或网络记录中的旧 ID。 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Combat|Identity")
+	FPrimaryAssetId OldId;
+
+	/** 当前可解析的目标 ID。 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Combat|Identity")
+	FPrimaryAssetId NewId;
+
+	/** 首次引入该重定向的 Combat 内容版本。 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Combat|Identity", meta=(ClampMin="1"))
+	int32 IntroducedInVersion = 1;
+};
+
+/** 提供 DefinitionId 集合校验、重定向解析与缺失占位文本。 */
+struct UE_GAS_API FCombatDefinitionRegistry
+{
+	/** 当前 Combat 内容 schema 版本。 */
+	static constexpr int32 CombatContentVersion = 1;
+
+	/** 校验重定向的 ID、环路、重复源和已知目标，错误追加到 OutErrors。 */
+	static bool ValidateRedirects(
+		const TArray<FCombatDefinitionRedirect>& Redirects,
+		const TSet<FPrimaryAssetId>& KnownIds,
+		TArray<FString>& OutErrors);
+
+	/** 沿显式重定向链解析 ID；解析到已知定义时返回 true。 */
+	static bool ResolveDefinitionId(
+		const FPrimaryAssetId& RequestedId,
+		const TArray<FCombatDefinitionRedirect>& Redirects,
+		const TSet<FPrimaryAssetId>& KnownIds,
+		FPrimaryAssetId& OutResolvedId);
+
+	/** 为无法解析的定义生成稳定且可诊断的占位文本。 */
+	static FString MakeMissingPlaceholder(const FPrimaryAssetId& MissingId);
+};
+
+/** 保存按 1-based Ability Level 查询的一组可配置数值。 */
+USTRUCT(BlueprintType)
+struct UE_GAS_API FCombatSpecialValue
+{
+	GENERATED_BODY()
+
+	/** 从 Level 1 开始排列的数值表。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Ability")
+	TArray<float> Values;
+
+	/** 返回指定等级的数值；越界时使用首/末值进行稳定降级。 */
+	float GetValueAtLevel(int32 Level) const;
+	/** 检查数值数量是否覆盖 MaxLevel 且全部为有限值。 */
+	bool IsValidForMaxLevel(int32 MaxLevel) const;
+};
+
+/** 所有 Combat PrimaryDataAsset 的身份和 schema 基类。 */
+UCLASS(Abstract, BlueprintType)
+class UE_GAS_API UCombatDefinitionData : public UPrimaryDataAsset
+{
+	GENERATED_BODY()
+
+public:
+	/** lower_snake_case 稳定定义名，与资产路径解耦。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, AssetRegistrySearchable, Category="Combat|Identity")
+	FName DefinitionName;
+
+	/** 当前资产数据的 schema 版本。 */
+	UPROPERTY(VisibleDefaultsOnly, BlueprintReadOnly, AssetRegistrySearchable, Category="Combat|Identity")
+	int32 SchemaVersion = 1;
+
+	/** 组合固定 PrimaryAssetType 与 DefinitionName 生成稳定 ID。 */
+	virtual FPrimaryAssetId GetPrimaryAssetId() const override;
+	/** 返回派生定义类型对应的固定 Combat PrimaryAssetType。 */
+	virtual FPrimaryAssetType GetCombatPrimaryAssetType() const;
+
+	/** 检查定义名是否满足 lower_snake_case 身份规则。 */
+	static bool IsValidDefinitionName(FName Name);
+	/** 检查定义集合是否存在空资产、无效 ID 或重复 ID。 */
+	static bool ValidateDefinitionSet(const TArray<const UCombatDefinitionData*>& Definitions, TArray<FString>& OutErrors);
+
+#if WITH_EDITOR
+	/** 在 Editor 保存/验证时检查基础身份与 schema。 */
+	virtual EDataValidationResult IsDataValid(FDataValidationContext& Context) const override;
+#endif
+};
+
+/** 定义战斗单位的初始队伍、碰撞覆盖与固有 AbilitySet。 */
+UCLASS(BlueprintType)
+class UE_GAS_API UCombatUnitData : public UCombatDefinitionData
+{
+	GENERATED_BODY()
+
+public:
+	/** Unit 生成时使用的初始战斗队伍。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Unit")
+	FCombatTeamId InitialTeamId = FCombatTeamId(1);
+
+	/** 大于 0 时覆盖 Character 默认胶囊半径，单位为厘米。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Unit", meta=(ClampMin="0", Units="cm"))
+	float CapsuleRadiusOverride = 0.0f;
+
+	/** Unit 初始化时按顺序授予的 AbilitySet 软引用。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Unit")
+	TArray<TSoftObjectPtr<UCombatAbilitySet>> AbilitySets;
+
+	/** 返回 CombatUnit PrimaryAssetType。 */
+	virtual FPrimaryAssetType GetCombatPrimaryAssetType() const override;
+};
+
+/** 定义 GameplayAbility 类、等级上限、行为标签与等级数值。 */
+UCLASS(BlueprintType)
+class UE_GAS_API UCombatAbilityData : public UCombatDefinitionData
+{
+	GENERATED_BODY()
+
+public:
+	/** 与该定义单向绑定的 GameplayAbility 类。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Ability")
+	TSubclassOf<UGameplayAbility> AbilityClass;
+
+	/** AbilitySpec 允许的最大权威等级。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Ability", meta=(ClampMin="1"))
+	int32 MaxLevel = 1;
+
+	/** 描述目标模式、被动、引导和 AutoCast 等行为。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Ability")
+	FGameplayTagContainer BehaviorTags;
+
+	/** 以稳定字段名索引的等级数值表。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Ability")
+	TMap<FName, FCombatSpecialValue> SpecialValues;
+
+	/** 返回 CombatAbility PrimaryAssetType。 */
+	virtual FPrimaryAssetType GetCombatPrimaryAssetType() const override;
+
+#if WITH_EDITOR
+	/** 检查 AbilityClass、等级和全部 SpecialValue。 */
+	virtual EDataValidationResult IsDataValid(FDataValidationContext& Context) const override;
+#endif
+};
+
+/** 定义 Modifier 的稳定优先级、周期与死亡清理策略。 */
+UCLASS(BlueprintType)
+class UE_GAS_API UCombatModifierData : public UCombatDefinitionData
+{
+	GENERATED_BODY()
+
+public:
+	/** Hook 排序的第一关键字，数值越大越先执行。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Modifier")
+	int32 Priority = 0;
+
+	/** 大于 0 时由 Combat Scheduler 驱动的周期秒数。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Modifier", meta=(ClampMin="0", Units="s"))
+	float ThinkInterval = 0.0f;
+
+	/** Unit 进入死亡清理时是否移除该 Modifier。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Modifier")
+	bool bRemoveOnDeath = true;
+
+	/** 返回 CombatModifier PrimaryAssetType。 */
+	virtual FPrimaryAssetType GetCombatPrimaryAssetType() const override;
+};
+
+/** 定义弹体的基础运动、半径、最大距离与碰撞 Profile。 */
+UCLASS(BlueprintType)
+class UE_GAS_API UCombatProjectileData : public UCombatDefinitionData
+{
+	GENERATED_BODY()
+
+public:
+	/** 弹体线性速度，单位为厘米/秒。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Projectile", meta=(ClampMin="0", Units="cm/s"))
+	float Speed = 0.0f;
+
+	/** 碰撞 sweep 半径，单位为厘米。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Projectile", meta=(ClampMin="0", Units="cm"))
+	float Radius = 0.0f;
+
+	/** 超出后 fizzle 的最大飞行距离，单位为厘米。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Projectile", meta=(ClampMin="0", Units="cm"))
+	float MaxDistance = 0.0f;
+
+	/** 弹体碰撞组件使用的固定 Profile 名。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Projectile")
+	FName CollisionProfileName = TEXT("CombatProjectile");
+
+	/** 返回 CombatProjectile PrimaryAssetType。 */
+	virtual FPrimaryAssetType GetCombatPrimaryAssetType() const override;
+};
+
+/** AbilitySet 中一项待授予 Ability 的类、初始等级与 AutoCast 状态。 */
+USTRUCT(BlueprintType)
+struct UE_GAS_API FCombatAbilitySetEntry
+{
+	GENERATED_BODY()
+
+	/** 待授予的 GameplayAbility 类。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|AbilitySet")
+	TSubclassOf<UGameplayAbility> AbilityClass;
+
+	/** 写入 AbilitySpec.Level 的初始权威等级。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|AbilitySet", meta=(ClampMin="1"))
+	int32 InitialLevel = 1;
+
+	/** 授予后是否默认启用 AutoCast。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|AbilitySet")
+	bool bAutoCastEnabled = false;
+};
+
+/** 保存可复用的一组 Ability 授予条目。 */
+UCLASS(BlueprintType)
+class UE_GAS_API UCombatAbilitySet : public UCombatDefinitionData
+{
+	GENERATED_BODY()
+
+public:
+	/** 按配置顺序授予的 Ability 条目。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|AbilitySet")
+	TArray<FCombatAbilitySetEntry> Abilities;
+
+	/** 返回 CombatAbilitySet PrimaryAssetType。 */
+	virtual FPrimaryAssetType GetCombatPrimaryAssetType() const override;
+
+#if WITH_EDITOR
+	/** 检查 Ability 类非空、等级合法且没有重复类。 */
+	virtual EDataValidationResult IsDataValid(FDataValidationContext& Context) const override;
+#endif
+};

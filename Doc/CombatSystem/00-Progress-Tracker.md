@@ -1,8 +1,8 @@
 # 00 开发进度台账
 
-> 最后更新：2026-08-24
-> 当前里程碑：M0 已验收；M1 尚未开始
-> 总进度：7/82 Task 完成，1/9 里程碑由用户验收
+> 最后更新：2026-08-25
+> 当前里程碑：M1 已验收（等待 M2 单独授权）
+> 总进度：20/82 Task 完成，2/9 里程碑由用户验收
 
 本文件是项目执行状态的唯一来源。[10 实施路线图](10-Implementation-Roadmap.md)定义任务内容和依赖，本文件记录实际状态、验证证据和用户验收结论。
 
@@ -34,8 +34,8 @@
 
 | 里程碑 | 名称 | Task 进度 | Gate | 用户验收 | 完成/验收日期 | 备注 |
 | --- | --- | ---: | --- | --- | --- | --- |
-| M0 | 设计冻结 | 7/7 | 通过 | 已验收 | 2026-08-24 / 2026-08-24 | M1 尚未授权 |
-| M1 | GAS 基座 | 0/13 | 未开始 | 未开始 | — | 必须在 M0 已验收且用户要求继续后开始 |
+| M0 | 设计冻结 | 7/7 | 通过 | 已验收 | 2026-08-24 / 2026-08-24 | M1 已授权 |
+| M1 | GAS 基座 | 13/13 | 通过 | 已验收 | 2026-08-25 / 2026-08-25 | 源码 UE 5.8.0 Server/Client Target 构建通过；独立 Server/Game 进程连接 smoke 通过；M2 未授权 |
 | M2 | 战斗内核 | 0/15 | 未开始 | 未开始 | — | — |
 | M3 | 可施法切片 | 0/10 | 未开始 | 未开始 | — | — |
 | M4 | Order 与普攻 | 0/8 | 未开始 | 未开始 | — | — |
@@ -60,19 +60,19 @@
 
 | Task | 需求名称 | 状态 | 完成证据/备注 |
 | --- | --- | --- | --- |
-| FND-001 | 启用 GAS 与 Combat 碰撞 | 未开始 | — |
-| FND-002 | Native Gameplay Tags | 未开始 | — |
-| FND-003 | PrimaryAsset 基类 | 未开始 | — |
-| FND-004 | 公共 Handle/Result/Numeric/RNG | 未开始 | — |
-| FND-005 | 自定义 EffectContext | 未开始 | — |
-| FND-006 | Combat Unit 与 ASC | 未开始 | — |
-| FND-007 | Combat Scheduler | 未开始 | 到期：GAP-025 |
-| FND-008 | Deferred Operation 基件 | 未开始 | — |
-| TST-001 | Automation 基架 | 未开始 | — |
-| TST-002 | PIE 测试地图 | 未开始 | — |
-| TST-003 | Dedicated Server/Client 构建目标 | 未开始 | 到期：GAP-020 |
-| OBS-001 | 事件与调试骨架 | 未开始 | — |
-| MCP-001 | UE MCP Smoke | 未开始 | — |
+| FND-001 | 启用 GAS 与 Combat 碰撞 | 已完成 | `ue_gas.uproject`、`ue_gas.Build.cs`、`DefaultEngine.ini`；Editor Target 构建成功；`TagsAndCollision` 通过 |
+| FND-002 | Native Gameplay Tags | 已完成 | `CombatTags.h/.cpp`；自动化查询通过；MCP `ListTags(Combat)` 回读成功 |
+| FND-003 | PrimaryAsset 基类 | 已完成 | `CombatDefinitionData.*`、AssetManager scan、redirect/唯一性校验；`CombatUnit:team_one/team_two` 冷启动发现通过 |
+| FND-004 | 公共 Handle/Result/Numeric/RNG | 已完成 | `CombatTypes.*`、`CombatNumericPolicy.*`、`CombatRngSubsystem.*`；冻结向量与边界测试通过 |
+| FND-005 | 自定义 EffectContext | 已完成 | `CombatGameplayEffectContext.*`、`CombatAbilitySystemGlobals.*`；实际分配、Duplicate、traits、NetSerialize round-trip 通过 |
+| FND-006 | Combat Unit 与 ASC | 已完成 | `CombatUnitCharacter.*`、`CombatAbilitySystemComponent.*`、`CombatTeamSubsystem.*`；四 NetMode ActorInfo 用例与 PIE ASC 回读通过 |
+| FND-007 | Combat Scheduler | 已完成 | `CombatSchedulerSubsystem.*`；稳定顺序、三 policy、三层 budget、generation、reentry、owner/world teardown 测试通过；关闭 GAP-025 |
+| FND-008 | Deferred Operation 基件 | 已完成 | `CombatDeferredOperationQueue.*`；嵌套阶段、稳定快照和回调内新增延迟提交通过 |
+| TST-001 | Automation 基架 | 已完成 | `CombatAutomationWorldFixture.*`、`CombatFoundationTests.cpp`；冷启动 `Combat.Foundation` 7/7 通过 |
+| TST-002 | PIE 测试地图 | 已完成 | `/Game/Combat/Tests/L_CombatTest`、`CombatTestScenarioActor.*`；NavMesh 回读，PIE 自动生成 Team 1/2，停止后清理通过 |
+| TST-003 | Dedicated Server/Client 构建目标 | 已完成 | 源码 UE 5.8.0（`D:\UE\UE`）Development Server/Client Target 构建成功；安装版 UE 5.8.1 独立 Server/Game 进程完成 127.0.0.1 连接，Server 记录 `Join succeeded`，Client 记录 `Welcomed by server`；场景日志确认 2 Unit、Team 1/2、ASC ActorInfo 与 `State.Alive`；见 [15](15-M1-Environment-Decision.md)，关闭 GAP-020 |
+| OBS-001 | 事件与调试骨架 | 已完成 | `CombatEventSubsystem.*`、结构化 `LogCombat`、Event/Root/Depth、Handle `ToString`；失败原因日志测试通过 |
+| MCP-001 | UE MCP Smoke | 已完成 | endpoint/toolset discovery、Editor/PIE World 区分、Tag/资产/地图/Actor/ASC 回读、MCP Automation 6/6 均通过 |
 
 ## 5. M2：战斗内核
 
@@ -175,8 +175,8 @@
 
 | 里程碑 | 提交验收日期 | 用户结论 | 修正要求 | 最终验收日期 | 下一阶段授权 |
 | --- | --- | --- | --- | --- | --- |
-| M0 | 2026-08-24 | 已验收 | 无 | 2026-08-24 | 未授权 |
-| M1 | — | 未提交 | — | — | 未授权 |
+| M0 | 2026-08-24 | 已验收 | 无 | 2026-08-24 | 已授权 M1（2026-08-24） |
+| M1 | 2026-08-25 | 已验收 | 中文注释规范与 M1 源码注释已补齐 | 2026-08-25 | 未授权 |
 | M2 | — | 未提交 | — | — | 未授权 |
 | M3 | — | 未提交 | — | — | 未授权 |
 | M4 | — | 未提交 | — | — | 未授权 |
@@ -193,6 +193,12 @@
 | 2026-08-24 | 根据最终文档评审补充 TST-003、EXT-602；总 Task 调整为 82，并标注 Gap 到期任务 | M1、M6、Gap 关联任务 |
 | 2026-08-24 | 完成 M0 冻结包；关闭 GAP-001/002/003/004/006/007/009，G0 通过并提交用户验收 | DEC-001..007 / M0 |
 | 2026-08-24 | 用户确认 M0 验收通过；保持 M1 未开始，等待单独授权 | M0 |
+| 2026-08-24 | 用户授权开始 M1；FND-001 切换为进行中 | M1 / FND-001 |
+| 2026-08-24 | 完成 M1 其余 12 项；Editor 构建、冷启动 Automation 7/7、MCP/PIE 回读通过；TST-003 因 Installed Engine 不支持 Server/Client Target 而阻塞 G1 | M1 / FND-001..008 / TST-001..003 / OBS-001 / MCP-001 |
+| 2026-08-25 | 使用 `D:\UE\UE` 源码引擎完成 Development Server/Client Target 构建；持久化测试场景 Actor；独立 Server/Game 进程完成真实连接并确认双 Unit、双 Team、ASC ActorInfo、`State.Alive`；冷启动 Automation 7/7；关闭 GAP-020，G1 通过并提交用户验收 | M1 / TST-003 / GAP-020 / G1 |
+| 2026-08-25 | 增加生成代码中文注释规范：项目自有的新建/实质修改代码必须注释类、结构、枚举、函数和关键字段，并纳入 Gate 与 Issue Definition of Done | 全部后续代码任务 |
+| 2026-08-25 | 按新规范回填全部 M1 自有源码中文注释；Editor/Server/Client Target 编译通过，`Combat.Foundation` 回归 7/7 通过 | M1 / 中文注释整改 |
+| 2026-08-25 | 用户确认 M1 验收通过并要求提交；保持 M2 未开始，等待单独授权 | M1 |
 
 ## 14. 更新规则
 

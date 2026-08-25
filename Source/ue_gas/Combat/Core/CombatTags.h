@@ -1,0 +1,115 @@
+#pragma once
+
+#include "NativeGameplayTags.h"
+
+/** 集中声明 Combat 模块使用的 Native GameplayTag，避免运行时字符串拼写漂移。 */
+namespace CombatTags
+{
+	/** Unit 生命周期、控制、可见性与碰撞状态标签。 */
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Alive)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Dying)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Dead)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Respawning)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Stunned)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Silenced)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Rooted)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Disarmed)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Hexed)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Invisible)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Invulnerable)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_OutOfGame)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_MagicImmune)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Untargetable)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_NoUnitCollision)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_NoHealthBar)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Frozen)
+
+	/** Ability 行为与目标模式标签。 */
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Ability_Behavior_NoTarget)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Ability_Behavior_UnitTarget)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Ability_Behavior_PointTarget)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Ability_Behavior_Passive)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Ability_Behavior_Channelled)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Ability_Behavior_AoE)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Ability_Behavior_Attack)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Ability_Behavior_AutoCast)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Ability_Behavior_IgnoreSilence)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Ability_Behavior_IgnoreMagicImmune)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Ability_Behavior_IgnoreUntargetable)
+
+	/** Ability 允许选择的队伍关系标签。 */
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(TargetTeam_None)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(TargetTeam_Enemy)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(TargetTeam_Friendly)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(TargetTeam_Both)
+
+	/** Damage 类型、结算标志、SetByCaller 数据与 Cue 标签。 */
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Damage_Type_Physical)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Damage_Type_Magical)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Damage_Type_Pure)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Damage_Flag_BypassMagicImmune)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Damage_Flag_HPLoss)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Damage_Flag_NoSpellAmplification)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Damage_Flag_Reflection)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Damage_Flag_NoLifesteal)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Damage_Flag_NoCrit)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Data_Damage_Final)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Data_Heal_Final)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Cue_Combat)
+
+	/** Combat 结构化事件类型标签。 */
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Combat_DamageApplied)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Combat_HealApplied)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Combat_UnitDeath)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Combat_UnitRespawned)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Combat_TeamChanged)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Combat_AbilityGranted)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Combat_AbilityRemoved)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Combat_AbilityLevelChanged)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Combat_AutoCastChanged)
+
+	/** 公共操作、Target 与 Ability 校验失败标签。 */
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Failure_Authority)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Failure_InvalidNumber)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Failure_ActionUnsupported)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Failure_Target_Invalid)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Failure_Target_TeamInvalid)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Failure_Target_SelfNotAllowed)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Failure_Target_FriendlyNotAllowed)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Failure_Target_HostileNotAllowed)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Failure_Target_NeutralNotAllowed)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Failure_Target_Dying)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Failure_Target_Dead)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Failure_Target_Respawning)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Failure_Target_Untargetable)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Failure_Target_OutOfGame)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Failure_Target_Invulnerable)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Failure_Target_MagicImmune)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Failure_Target_OutOfRange)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Failure_Target_LocationInvalid)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Failure_Target_LineOfSightBlocked)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Failure_Life_NotAlive)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Failure_Life_InvalidTransition)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Failure_Ability_DuplicateDefinition)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Failure_Ability_InvalidLevel)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Failure_Ability_NotGranted)
+
+	/** Order 状态机专用失败标签。 */
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Order_Failure_Cancelled)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Order_Failure_QueueFull)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Order_Failure_PathFailed)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Order_Failure_Blocked)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Order_Failure_AbilityRejected)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Order_Failure_UnitStateBlocked)
+
+	/** keyed RNG 的稳定随机域标签。 */
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(RNG_Attack_Evasion)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(RNG_Attack_Crit)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(RNG_Modifier_Proc)
+
+	/**
+	 * 从标签容器中提取唯一的 Damage.Type 叶子标签。
+	 * @return 恰好存在一个合法类型时返回 true；缺失或多类型时返回 false。
+	 */
+	UE_GAS_API bool TryGetSingleDamageType(const FGameplayTagContainer& Tags, FGameplayTag& OutDamageType);
+}

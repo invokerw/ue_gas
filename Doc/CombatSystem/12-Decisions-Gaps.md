@@ -69,7 +69,7 @@
 | GAP-006 | 已关闭 | 暴击/闪避/随机 proc 的随机源和复现 | ADR-020；keyed roll/记录/注入规则见 [14](14-M0-Design-Freeze.md#52-combat-rng-v1) | 2026-08-24 / DEC-004 |
 | GAP-007 | 已关闭 | 百分比 clamp、取整、超大值、NaN/Inf 和公式版本 | ADR-020；Numeric Policy v1 见 [14](14-M0-Design-Freeze.md#51-numeric-policy-v1) | 2026-08-24 / DEC-004 |
 | GAP-009 | 已关闭 | Pawn/Projectile/WorldStatic/友军/Source 的碰撞矩阵 | ADR-021；Channel/Profile/LOS/单位规则见 [14](14-M0-Design-Freeze.md#6-dec-005碰撞los-和地图单位) | 2026-08-24 / DEC-005 |
-| GAP-020 | 开放 | Automation/CI 是否包含 Dedicated Server/Client target | M1 创建独立 Target、建立 World test 和 Dedicated build/connect smoke，不延后到网络阶段 | M1/TST-003 |
+| GAP-020 | 已关闭 | Automation/CI 是否包含 Dedicated Server/Client target | `ue_gasServer`/`ue_gasClient` Development Target 已纳入基线并由源码 UE 5.8.0 构建通过；安装版 UE 5.8.1 以独立 Server/Game 进程完成真实连接与场景状态 smoke；版本边界及复现命令见 [15](15-M1-Environment-Decision.md) | 2026-08-25 / TST-003 |
 
 这些字段会进入公共 Context、Handle、DataAsset 或 Collision Profile，晚改会波及几乎全部子系统。
 
@@ -98,7 +98,7 @@
 | GAP-019 | 开放 | Combat Event schema 版本、存档/回放边界 | 第一版结构化/版本化日志；不承诺完整 replay | M7/OBS-701 |
 | GAP-021 | 开放 | RPC token bucket、批量命令上限和重复 request id 窗口 | 每 connection 限额 + 单包上限 + 幂等 request cache | M7/NET-002 |
 | GAP-022 | 明确延期 | Ability/移动本地预测和回滚 | G7 后单独设计 PredictionKey/rollback/Cue reconcile | M8/REL-004 |
-| GAP-025 | 建议基线 | 暂停、global/custom time dilation 语义 | Combat Scheduler 使用 world game time；real-time UI 不进入 Scheduler | M1/FND-007 |
+| GAP-025 | 已关闭 | 暂停、global/custom time dilation 语义 | `UCombatSchedulerSubsystem` 使用 World game time；real-time UI 不进入 Scheduler；时序/catch-up/budget/teardown 自动化通过 | 2026-08-24 / FND-007 |
 
 ## 7. 模板适配风险
 

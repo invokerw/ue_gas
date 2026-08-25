@@ -170,6 +170,7 @@ M0 冻结的跨系统值域和默认值集中在 [14 M0 设计冻结](14-M0-Desi
 | Order 释放 | 只等待 `OrderReleased`、`AbilityChannelEnded` 或失败/中断，不等待 cooldown 或纯表现 backswing。 |
 | 蓝图边界 | 数值来自 DataAsset，公共校验/权限/生命周期在 C++，蓝图只实现技能差异。 |
 | Editor/资产操作 | 优先通过 UE MCP 读取真实状态和执行受控修改；每次写入必须回读，并以编译/Automation/Gate 作为完成标准。 |
+| 代码注释 | 项目自有的新建或实质修改代码必须按 §10 添加中文注释；缺少类、函数或关键语义注释时不得通过对应 Gate。 |
 
 如果需要打破任一约束，先在 [12](12-Decisions-Gaps.md) 增加决策记录、替代路径和迁移影响。
 
@@ -196,3 +197,45 @@ M0 冻结的跨系统值域和默认值集中在 [14 M0 设计冻结](14-M0-Desi
 5. 先完成单机/服务器权威纵向切片，再扩展复制 UI 和预测。
 6. 每个里程碑必须通过对应 Gate，不能用示例蓝图“看起来能工作”替代自动化验收。
 7. 资产、蓝图、关卡和 PIE 操作使用 UE MCP 建立“读取—修改—回读—测试”闭环，减少手工配置漂移。
+8. 生成项目代码时同步编写中文注释，不把注释补写留到里程碑验收阶段。
+
+## 10. 生成代码中文注释规范
+
+本规范适用于 `Source/` 下项目自有的新建代码，以及对既有项目代码的实质修改；不要求修改 Unreal Engine、第三方库或未触及的模板源码。注释使用 UTF-8，中文为主，类名、API 名、GameplayTag 和 Unreal/GAS 术语保留英文。
+
+### 10.1 必须注释的对象
+
+- 每个新建的类、结构体、枚举和委托：在声明前用中文说明职责、使用边界；涉及网络权威或生命周期时同时说明 owner、创建与终止条件。
+- 每个函数：在声明处用中文说明行为；包括 `public`、`protected`、`private`、静态函数、回调和 `override`。参数、返回值、失败条件或副作用不直观时必须一并说明。
+- 每个枚举值，以及影响复制、保存、时序、权限、Handle generation 或数值语义的成员字段：说明取值含义和约束。
+- 对外暴露的 `UCLASS`、`USTRUCT`、`UFUNCTION`、`UPROPERTY`：注释必须能让 C++/蓝图调用者理解用途；Editor 中需要展示说明时补充中文 `ToolTip` metadata。
+- 复杂分支、公式、稳定排序、deferred/reentry、网络降级和兼容逻辑：在实现处说明“为什么这样做”和关键不变量，不只复述代码表面动作。
+
+### 10.2 写法与维护
+
+- 声明处优先使用 `/** ... */` 文档注释；实现内部使用 `// ...` 解释局部决策。
+- 函数声明和定义不机械重复同一段注释；公共契约写在头文件，`.cpp` 只补充实现原因和边界。
+- 简单 getter、setter、构造函数和 Unreal 回调也需要简短中文职责说明，不以“名称已经清楚”为由省略。
+- 修改行为时同步更新相邻注释；与实现不一致的旧注释视为缺陷，不能保留。
+- 注释不得代替可执行测试，也不得使用 `TODO` 掩盖未完成的权限、生命周期或失败处理。
+
+示例：
+
+```cpp
+/**
+ * 战斗调度器负责按 World Game Time 执行服务器权威的离散战斗任务。
+ * World teardown 时会使全部未完成 Handle 失效。
+ */
+UCLASS()
+class UCombatSchedulerSubsystem : public UWorldSubsystem
+{
+    GENERATED_BODY()
+
+public:
+    /**
+     * 注册一次调度任务并返回带 generation 的稳定句柄。
+     * @return 注册失败时返回无效句柄，不会执行回调。
+     */
+    FCombatScheduleHandle Schedule(const FCombatScheduleRequest& Request);
+};
+```

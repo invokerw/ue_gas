@@ -54,6 +54,7 @@ M2 Combat Event schema ------------> M7 UI/log/tools
 - 生命周期：正常、取消、Owner EndPlay、World teardown、过期 Handle 都有测试。
 - 观测：关键 Handle/EventId/FailureTag 可从日志或调试命令定位。
 - UE MCP：涉及 Editor/Content/Blueprint/PIE 的任务先读取真实状态，写入后回读目标并记录编译/测试结果；“MCP 调用成功”不算 Gate 证据。
+- 中文注释：新建或实质修改的项目代码已按 [01 §10](01-Scope-Architecture.md#10-生成代码中文注释规范) 注释类、结构、枚举、函数和关键字段；注释与最终行为一致。
 - 文档：实际命名/行为回写对应设计文档；开放偏差进入 [12](12-Decisions-Gaps.md)。
 - 评审：没有绕过统一 Damage/Modifier/Order/Projectile 入口的蓝图或临时代码。
 
@@ -345,10 +346,11 @@ Task ID:
 权限与复制:
 自动化用例:
 调试输出:
+中文注释检查（类/函数/关键字段）:
 UE MCP 读取/修改/回读记录（涉及 Editor/Content 时）:
 对应文档:
 Definition of Done:
 ```
 
-完成定义必须包括代码、测试、文档和清理路径；只有蓝图演示或手工 PIE 成功不算完成。
+完成定义必须包括代码、中文注释、测试、文档和清理路径；只有蓝图演示或手工 PIE 成功不算完成。
 完成当前里程碑的 Definition of Done 后仍必须进入用户验收暂停；不得自动开始下一里程碑。
