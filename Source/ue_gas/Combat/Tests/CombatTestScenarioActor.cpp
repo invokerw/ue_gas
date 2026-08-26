@@ -1,10 +1,12 @@
 #include "Combat/Tests/CombatTestScenarioActor.h"
 
 #include "Combat/Ability/CombatAbilitySystemComponent.h"
+#include "Combat/Ability/CombatGameplayAbility.h"
 #include "Combat/Attributes/CombatAttributeSet.h"
 #include "Combat/Core/CombatTags.h"
 #include "Combat/Log/CombatEventSubsystem.h"
 #include "Combat/Modifiers/CombatModifierComponent.h"
+#include "Combat/Targeting/CombatTargetingSubsystem.h"
 #include "Combat/Unit/CombatRegenerationComponent.h"
 #include "Combat/Unit/CombatUnitCharacter.h"
 #include "Combat/Unit/CombatUnitLifecycleComponent.h"
@@ -58,6 +60,8 @@ void ACombatTestScenarioActor::SpawnScenario()
 	bool bAllActorInfoInitialized = SpawnedUnits.Num() == 2;
 	bool bAllAlive = SpawnedUnits.Num() == 2;
 	bool bM2CoreReady = SpawnedUnits.Num() == 2;
+	const bool bM3AbilityReady = GetWorld()->GetSubsystem<UCombatTargetingSubsystem>() != nullptr
+		&& UCombatGameplayAbility::StaticClass() != nullptr;
 	for (const ACombatUnitCharacter* Unit : SpawnedUnits)
 	{
 		TeamOneCount += Unit->GetCombatTeamId() == FCombatTeamId(1) ? 1 : 0;
@@ -72,11 +76,12 @@ void ACombatTestScenarioActor::SpawnScenario()
 	}
 
 	UE_LOG(LogCombat, Display,
-		TEXT("M2ScenarioReady Units=%d Team1=%d Team2=%d ASCActorInfo=%s State.Alive=%s CoreComponents=%s"),
+		TEXT("M3ScenarioReady Units=%d Team1=%d Team2=%d ASCActorInfo=%s State.Alive=%s CoreComponents=%s AbilityRuntime=%s"),
 		SpawnedUnits.Num(), TeamOneCount, TeamTwoCount,
 		bAllActorInfoInitialized ? TEXT("Ready") : TEXT("Invalid"),
 		bAllAlive ? TEXT("Present") : TEXT("Missing"),
-		bM2CoreReady ? TEXT("Ready") : TEXT("Invalid"));
+		bM2CoreReady ? TEXT("Ready") : TEXT("Invalid"),
+		bM3AbilityReady ? TEXT("Ready") : TEXT("Invalid"));
 }
 
 void ACombatTestScenarioActor::DestroyScenario()

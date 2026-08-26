@@ -121,6 +121,7 @@ FCombatModifierApplyResult UCombatModifierComponent::ApplyNewModifier(
 	Runtime->OwningComponent = this;
 	Runtime->ModifierData = Request.ModifierData;
 	Runtime->SourceUnit = Request.Source;
+	Runtime->AbilityOwnerHandle = Request.AbilityOwnerHandle;
 	Runtime->TargetUnit = Target;
 	Runtime->Handle.Key.Id = NextHandleId++;
 	Runtime->Handle.Key.Generation = 1;
@@ -288,7 +289,8 @@ UCombatModifierRuntime* UCombatModifierComponent::FindRefreshCandidate(const FCo
 	for (UCombatModifierRuntime* Runtime : ActiveModifiers)
 	{
 		if (Runtime && Runtime->IsActive() && Runtime->GetModifierData() == Request.ModifierData
-			&& Runtime->GetSourceUnit() == Request.Source)
+			&& Runtime->GetSourceUnit() == Request.Source
+			&& Runtime->GetAbilityOwnerHandle() == Request.AbilityOwnerHandle)
 		{
 			return Runtime;
 		}
@@ -440,6 +442,18 @@ COMBAT_EXECUTE_CONST_HOOK(ExecutePostTakeHeal, OnPostTakeHeal, TEXT("PostTakeHea
 
 #undef COMBAT_EXECUTE_MUTABLE_HOOK
 #undef COMBAT_EXECUTE_CONST_HOOK
+
+void UCombatModifierComponent::ExecuteAbilityExecuted(
+	const FPrimaryAssetId& AbilityDefinitionId,
+	const FCombatEventContext& Context)
+{
+	DeferredOperations.BeginPhase(TEXT("AbilityExecuted"), Context.EventId);
+	for (UCombatModifierRuntime* Runtime : MakeSortedSnapshot())
+	{
+		Runtime->OnAbilityExecuted(AbilityDefinitionId, Context);
+	}
+	DeferredOperations.EndPhase();
+}
 
 void UCombatModifierComponent::HandleOwnerDeath()
 {

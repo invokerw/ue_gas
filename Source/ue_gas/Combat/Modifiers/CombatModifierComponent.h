@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
+#include "GameplayAbilitySpec.h"
 #include "GameplayEffectTypes.h"
 
 #include "Combat/Combat/CombatTransactionTypes.h"
@@ -36,6 +37,8 @@ struct UE_GAS_API FCombatModifierApplyRequest
 	UPROPERTY(BlueprintReadWrite, Category="Combat|Modifier") TObjectPtr<ACombatUnitCharacter> Source = nullptr;
 	/** 小于 0 使用定义 Duration；0 表示本次无限；正数覆盖定义持续时间。 */
 	UPROPERTY(BlueprintReadWrite, Category="Combat|Modifier") float DurationOverride = -1.0f;
+	/** Intrinsic Modifier 使用的 AbilitySpec owner key；普通 Modifier 保持无效。 */
+	UPROPERTY(BlueprintReadWrite, Category="Combat|Modifier") FGameplayAbilitySpecHandle AbilityOwnerHandle;
 };
 
 /** ApplyModifier 返回的成功状态、句柄与刷新信息。 */
@@ -97,6 +100,8 @@ public:
 	void ExecutePostDealHeal(const FCombatHealEvent& Event);
 	/** 依稳定快照执行目标治疗后置 Hook。 */
 	void ExecutePostTakeHeal(const FCombatHealEvent& Event);
+	/** 技能进入 SpellStarted 后向来源 Unit 的 Modifier 稳定派发一次。 */
+	void ExecuteAbilityExecuted(const FPrimaryAssetId& AbilityDefinitionId, const FCombatEventContext& Context);
 
 	/** 生命周期进入 Dying 时移除死亡清理 Modifier，并暂停保留 Runtime 的 Hook/Think。 */
 	void HandleOwnerDeath();

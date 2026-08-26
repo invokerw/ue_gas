@@ -1,8 +1,8 @@
 # 00 开发进度台账
 
 > 最后更新：2026-08-26
-> 当前里程碑：M2 已验收，等待 M3 授权
-> 总进度：35/82 Task 完成，3/9 里程碑由用户验收
+> 当前里程碑：M3 已验收（等待 M4 授权）
+> 总进度：45/82 Task 完成，4/9 里程碑由用户验收
 
 本文件是项目执行状态的唯一来源。[10 实施路线图](10-Implementation-Roadmap.md)定义任务内容和依赖，本文件记录实际状态、验证证据和用户验收结论。
 
@@ -36,8 +36,8 @@
 | --- | --- | ---: | --- | --- | --- | --- |
 | M0 | 设计冻结 | 7/7 | 通过 | 已验收 | 2026-08-24 / 2026-08-24 | M1 已授权 |
 | M1 | GAS 基座 | 13/13 | 通过 | 已验收 | 2026-08-25 / 2026-08-25 | 源码 UE 5.8.0 Server/Client Target 构建通过；独立 Server/Game 进程连接 smoke 通过；M2 已授权并完成实现 |
-| M2 | 战斗内核 | 15/15 | 通过 | 已验收 | 2026-08-25 / 2026-08-26 | G2 通过；Editor/Server/Client 构建、Automation 12/12 和独立联机 smoke 通过；见 [17](17-M2-Acceptance.md) |
-| M3 | 可施法切片 | 0/10 | 未开始 | 未开始 | — | — |
+| M2 | 战斗内核 | 15/15 | 通过 | 已验收 | 2026-08-25 / 2026-08-26 | G2 通过；Editor/Server/Client 构建、Automation 12/12 和独立联机 smoke 通过；M3 已授权；见 [17](17-M2-Acceptance.md) |
+| M3 | 可施法切片 | 10/10 | 通过 | 已验收 | 2026-08-26 / 2026-08-26 | Editor/Server/Client 构建、Automation 17/17 和独立联机 smoke 通过；用户验收通过；见 [19](19-M3-Acceptance.md) |
 | M4 | Order 与普攻 | 0/8 | 未开始 | 未开始 | — | — |
 | M5 | Projectile、Thinker 与 Motion | 0/9 | 未开始 | 未开始 | — | — |
 | M6 | 复杂技能集 | 0/6 | 未开始 | 未开始 | — | — |
@@ -98,16 +98,16 @@
 
 | Task | 需求名称 | 状态 | 完成证据/备注 |
 | --- | --- | --- | --- |
-| TGT-001 | Team 与 Target Filter | 未开始 | 到期：GAP-008 |
-| ABL-001 | AbilityData | 未开始 | — |
-| ABL-002 | Ability 基类 | 未开始 | — |
-| ABL-003 | Ability 生命周期与事件 | 未开始 | 到期：GAP-011、GAP-024 |
-| ABL-004 | WaitCombatInterval | 未开始 | — |
-| ABL-005 | DataDriven Actions | 未开始 | — |
-| ABL-006 | 授予、等级与 AutoCast | 未开始 | — |
-| DEMO-301 | 无目标治疗 | 未开始 | — |
-| DEMO-302 | 单位目标伤害 | 未开始 | — |
-| DEMO-303 | 点目标 AoE | 未开始 | — |
+| TGT-001 | Team 与 Target Filter | 已完成 | `CombatTargetingSubsystem.*`；关系/状态/edge range/Point/visibility/LOS/权威 AoE 自动化通过；关闭 GAP-008 |
+| ABL-001 | AbilityData | 已完成 | 目标、时序、commit、special、Action schema 与运行时/Editor validator 完成；非法组合和 future Action 拒绝通过 |
+| ABL-002 | Ability 基类 | 已完成 | `CombatGameplayAbility.*`；InstancedPerActor、Activation 快照、多 Unit 同类隔离和统一 cleanup 通过 |
+| ABL-003 | Ability 生命周期与事件 | 已完成 | 分阶段原子提交、CDR 快照、固定事件顺序、状态中断和 ActorInfo 清理通过；关闭 GAP-011/GAP-024 |
+| ABL-004 | WaitCombatInterval | 已完成 | Scheduler repeating/finish Handle、补帧与 duration 边界、正常/中断清理通过 |
+| ABL-005 | DataDriven Actions | 已完成 | Damage/Heal/ApplyModifier/Event/服务器 AoE 公共执行器完成；M5 Action 明确 Unsupported |
+| ABL-006 | 授予、等级与 AutoCast | 已完成 | DefinitionId 唯一、Spec.Level、remove、RPC、intrinsic reconcile 和 cooldown 清理通过 |
+| DEMO-301 | 无目标治疗 | 已完成 | Self Heal 前摇、同 Stage cost/cooldown、CDR 与双 Unit 实例隔离自动化通过 |
+| DEMO-302 | 单位目标伤害 | 已完成 | cast point 目标丢失、MagicImmune 与 Magical Damage 公共管线自动化通过 |
+| DEMO-303 | 点目标 AoE | 已完成 | PointTarget 服务器 query、客户端命中列表拒绝、阵营过滤与稳定多目标结果通过 |
 
 ## 7. M4：Order 与普攻
 
@@ -177,8 +177,8 @@
 | --- | --- | --- | --- | --- | --- |
 | M0 | 2026-08-24 | 已验收 | 无 | 2026-08-24 | 已授权 M1（2026-08-24） |
 | M1 | 2026-08-25 | 已验收 | 中文注释规范与 M1 源码注释已补齐 | 2026-08-25 | 已授权 M2（2026-08-25） |
-| M2 | 2026-08-25 | 已验收 | 无 | 2026-08-26 | 未授权 |
-| M3 | — | 未提交 | — | — | 未授权 |
+| M2 | 2026-08-25 | 已验收 | 无 | 2026-08-26 | 已授权 M3（2026-08-26） |
+| M3 | 2026-08-26 | 已验收 | 无 | 2026-08-26 | 未授权 |
 | M4 | — | 未提交 | — | — | 未授权 |
 | M5 | — | 未提交 | — | — | 未授权 |
 | M6 | — | 未提交 | — | — | 未授权 |
@@ -202,6 +202,9 @@
 | 2026-08-25 | 用户授权开始 M2；ATR-001 切换为进行中 | M2 / ATR-001 |
 | 2026-08-25 | 完成 M2 全部 15 项；关闭 GAP-005/012/013；Editor、源码 Server/Client Target 构建成功，`Combat.` 自动化 12/12、独立监听服务器联机 smoke 通过；G2 通过并提交用户验收 | M2 / ATR-001..OBS-002 / GAP-005/012/013 / G2 |
 | 2026-08-26 | 用户确认 M2 验收通过并要求提交；保持 M3 未开始，等待单独授权 | M2 |
+| 2026-08-26 | 用户授权开始 M3；冻结 Target visibility、Ability gameplay timing 与 commit snapshot 决策，TGT-001 切换为进行中 | M3 / TGT-001 / ADR-027..029 |
+| 2026-08-26 | 完成 M3 全部 10 项；Editor、源码 Server/Client Target 构建成功，`Combat.` 自动化 17/17、独立监听服务器联机 smoke 通过；G3 通过并提交用户验收 | M3 / TGT-001 / ABL-001..006 / DEMO-301..303 / G3 |
+| 2026-08-26 | 用户确认 M3 验收通过并要求提交；保持 M4 未开始，等待单独授权 | M3 |
 
 ## 14. 更新规则
 

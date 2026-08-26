@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "GameplayAbilitySpec.h"
 #include "GameplayEffectTypes.h"
 #include "UObject/Object.h"
 
@@ -63,6 +64,9 @@ public:
 	/** 目标单位获得真实治疗结果后的 Hook。 */
 	UFUNCTION(BlueprintNativeEvent, Category="Combat|Modifier|Heal")
 	void OnPostTakeHeal(const FCombatHealEvent& Event);
+	/** 来源 Unit 的 Ability 已通过 commit 并进入 SpellStarted 时调用。 */
+	UFUNCTION(BlueprintNativeEvent, Category="Combat|Modifier|Ability")
+	void OnAbilityExecuted(const FPrimaryAssetId& AbilityDefinitionId, const FCombatEventContext& Context);
 
 	/** 请求在当前 Hook 阶段结束后移除自身 ActiveGE 与 Runtime。 */
 	UFUNCTION(BlueprintCallable, Category="Combat|Modifier")
@@ -89,6 +93,8 @@ public:
 	FCombatScheduleHandle GetExpireScheduleHandle() const { return ExpireSchedule; }
 	/** 返回来源单位；来源结束后可能为空。 */
 	ACombatUnitCharacter* GetSourceUnit() const { return SourceUnit.Get(); }
+	/** 返回 Intrinsic Modifier 的 AbilitySpec owner key；普通 Modifier 无效。 */
+	FGameplayAbilitySpecHandle GetAbilityOwnerHandle() const { return AbilityOwnerHandle; }
 	/** 返回承载该 Runtime 的目标单位。 */
 	ACombatUnitCharacter* GetTargetUnit() const { return TargetUnit.Get(); }
 	/** 返回只读 Modifier 定义。 */
@@ -111,6 +117,7 @@ protected:
 	virtual void OnPreTakeHeal_Implementation(FCombatHealEvent& Event);
 	virtual void OnPostDealHeal_Implementation(const FCombatHealEvent& Event);
 	virtual void OnPostTakeHeal_Implementation(const FCombatHealEvent& Event);
+	virtual void OnAbilityExecuted_Implementation(const FPrimaryAssetId& AbilityDefinitionId, const FCombatEventContext& Context);
 
 private:
 	/** 仅 ModifierComponent 可以建立或更新一一映射的内部状态。 */
@@ -122,6 +129,8 @@ private:
 	UPROPERTY(Transient) TObjectPtr<const UCombatModifierData> ModifierData;
 	/** 施加 Modifier 的单位。 */
 	TWeakObjectPtr<ACombatUnitCharacter> SourceUnit;
+	/** Intrinsic Modifier 的 AbilitySpec owner key。 */
+	FGameplayAbilitySpecHandle AbilityOwnerHandle;
 	/** 承载 Modifier 的单位。 */
 	TWeakObjectPtr<ACombatUnitCharacter> TargetUnit;
 	/** 与 Runtime 一一对应的公共句柄。 */

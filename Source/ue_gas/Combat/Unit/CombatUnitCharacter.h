@@ -93,8 +93,6 @@ protected:
 	void RefreshLifeStateTag();
 	/** 根据状态 Tag count 更新移动、碰撞和 Ability 取消响应。 */
 	void RefreshStatusResponse();
-	/** 任一控制状态 Tag count 改变时重新计算组合响应。 */
-	void HandleStatusTagChanged(const FGameplayTag Tag, int32 NewCount);
 	/** MoveSpeed 聚合值改变时投影到 CharacterMovement。 */
 	void HandleMoveSpeedChanged(const FOnAttributeChangeData& ChangeData);
 	/** 仅 LifecycleComponent 可以执行服务器状态转换。 */
@@ -104,6 +102,8 @@ protected:
 
 	/** 生命周期组件需要访问受保护状态转换入口。 */
 	friend class UCombatUnitLifecycleComponent;
+	/** Combat ASC 需要在 Tag count 变化后刷新移动、碰撞与状态投影。 */
+	friend class UCombatAbilitySystemComponent;
 
 	/** Unit 自持并复制的 Combat ASC。 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Combat|Components")

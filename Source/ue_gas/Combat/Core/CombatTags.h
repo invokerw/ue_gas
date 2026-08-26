@@ -69,6 +69,13 @@ namespace CombatTags
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Combat_AbilityRemoved)
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Combat_AbilityLevelChanged)
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Combat_AutoCastChanged)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Combat_AbilityCastStarted)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Combat_AbilitySpellStarted)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Combat_AbilityChannelEnded)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Combat_AbilityOrderReleased)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Combat_AbilityInterrupted)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Combat_AbilityEnded)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Combat_AbilityActionFailed)
 
 	/** 公共操作、Target 与 Ability 校验失败标签。 */
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Failure_Authority)
@@ -95,6 +102,12 @@ namespace CombatTags
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Failure_Ability_DuplicateDefinition)
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Failure_Ability_InvalidLevel)
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Failure_Ability_NotGranted)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Failure_Ability_InvalidTargetData)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Failure_Ability_Cost)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Failure_Ability_Cooldown)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Failure_Ability_CommitFailed)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Failure_Ability_AlreadyActive)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Failure_Ability_UnitStateBlocked)
 
 	/** Order 状态机专用失败标签。 */
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Order_Failure_Cancelled)

@@ -1,8 +1,10 @@
 #include "Combat/Data/CombatDefinitionData.h"
 
-#include "Abilities/GameplayAbility.h"
 #include "Algo/AllOf.h"
 #include "Misc/DataValidation.h"
+
+#include "Combat/Ability/CombatGameplayAbility.h"
+#include "Combat/Core/CombatTags.h"
 
 /** Combat Definition 派生类型使用的固定 PrimaryAssetType，不能由资产路径推导。 */
 namespace CombatPrimaryAssetTypes
@@ -136,8 +138,6 @@ bool UCombatDefinitionData::IsValidDefinitionName(const FName Name)
 bool UCombatDefinitionData::ValidateDefinitionSet(const TArray<const UCombatDefinitionData*>& Definitions, TArray<FString>& OutErrors)
 {
 	TSet<FPrimaryAssetId> SeenIds;
-	// Ability Class 到 DefinitionId 必须一对一，否则 AbilitySpec 无法反向解析稳定身份。
-	TMap<UClass*, FPrimaryAssetId> AbilityClassOwners;
 	for (const UCombatDefinitionData* Definition : Definitions)
 	{
 		if (!IsValid(Definition))
@@ -158,24 +158,6 @@ bool UCombatDefinitionData::ValidateDefinitionSet(const TArray<const UCombatDefi
 			continue;
 		}
 		SeenIds.Add(Id);
-
-		if (const UCombatAbilityData* AbilityDefinition = Cast<UCombatAbilityData>(Definition))
-		{
-			UClass* AbilityClass = AbilityDefinition->AbilityClass.Get();
-			if (!AbilityClass)
-			{
-				OutErrors.Add(FString::Printf(TEXT("Ability definition has no class: %s"), *Id.ToString()));
-			}
-			else if (const FPrimaryAssetId* ExistingId = AbilityClassOwners.Find(AbilityClass))
-			{
-				OutErrors.Add(FString::Printf(TEXT("Ability class maps to multiple definitions: %s and %s"),
-					*ExistingId->ToString(), *Id.ToString()));
-			}
-			else
-			{
-				AbilityClassOwners.Add(AbilityClass, Id);
-			}
-		}
 	}
 	return OutErrors.IsEmpty();
 }
@@ -209,6 +191,115 @@ FPrimaryAssetType UCombatModifierData::GetCombatPrimaryAssetType() const { retur
 FPrimaryAssetType UCombatProjectileData::GetCombatPrimaryAssetType() const { return CombatPrimaryAssetTypes::Projectile; }
 FPrimaryAssetType UCombatAbilitySet::GetCombatPrimaryAssetType() const { return CombatPrimaryAssetTypes::AbilitySet; }
 
+float UCombatAbilityData::GetSpecialValue(const FName Key, const int32 Level, const float DefaultValue) const
+{
+	if (const FCombatSpecialValue* Value = SpecialValues.Find(Key))
+	{
+		return Value->GetValueAtLevel(Level);
+	}
+	return DefaultValue;
+}
+
+bool UCombatAbilityData::ValidateRuntime(FString& OutDiagnostic) const
+{
+	OutDiagnostic.Reset();
+	if (!GetPrimaryAssetId().IsValid() || MaxLevel < 1)
+	{
+		OutDiagnostic = TEXT("AbilityData requires a valid identity and MaxLevel >= 1");
+		return false;
+	}
+	const bool bNoTarget = BehaviorTags.HasTagExact(CombatTags::Ability_Behavior_NoTarget);
+	const bool bUnitTarget = BehaviorTags.HasTagExact(CombatTags::Ability_Behavior_UnitTarget);
+	const bool bPointTarget = BehaviorTags.HasTagExact(CombatTags::Ability_Behavior_PointTarget);
+	if (static_cast<int32>(bNoTarget) + static_cast<int32>(bUnitTarget) + static_cast<int32>(bPointTarget) != 1)
+	{
+		OutDiagnostic = TEXT("AbilityData must contain exactly one target behavior");
+		return false;
+	}
+	const bool bValidTeamTag = TargetingRules.TargetTeamTag == CombatTags::TargetTeam_Enemy
+		|| TargetingRules.TargetTeamTag == CombatTags::TargetTeam_Friendly
+		|| TargetingRules.TargetTeamTag == CombatTags::TargetTeam_Both;
+	if ((bUnitTarget && !bValidTeamTag) || (bNoTarget && TargetingRules.TargetTeamTag != CombatTags::TargetTeam_None))
+	{
+		OutDiagnostic = TEXT("TargetTeam tag does not match the target behavior");
+		return false;
+	}
+	if (!FMath::IsFinite(TargetingRules.CastRange) || TargetingRules.CastRange < 0.0f
+		|| TargetingRules.VisibilityPolicy != ECombatVisibilityPolicy::None
+		|| !FMath::IsFinite(CastPoint) || CastPoint < 0.0f
+		|| !FMath::IsFinite(ChannelDuration) || ChannelDuration < 0.0f
+		|| !FMath::IsFinite(ChannelInterval) || ChannelInterval < 0.0f)
+	{
+		OutDiagnostic = TEXT("Ability targeting or lifecycle timing is invalid/unsupported in M3");
+		return false;
+	}
+	const bool bChannelled = BehaviorTags.HasTagExact(CombatTags::Ability_Behavior_Channelled);
+	if (bChannelled != (ChannelDuration > 0.0f && ChannelInterval > 0.0f)
+		|| (bChannelled && ChannelInterval > ChannelDuration))
+	{
+		OutDiagnostic = TEXT("Channelled behavior requires a positive interval not exceeding duration");
+		return false;
+	}
+	for (const TPair<FName, FCombatSpecialValue>& Pair : SpecialValues)
+	{
+		if (Pair.Key.IsNone() || !Pair.Value.IsValidForMaxLevel(MaxLevel))
+		{
+			OutDiagnostic = FString::Printf(TEXT("Invalid special value '%s'"), *Pair.Key.ToString());
+			return false;
+		}
+	}
+	for (const FName NonNegativeKey : { FName(TEXT("mana_cost")), FName(TEXT("cooldown")) })
+	{
+		if (const FCombatSpecialValue* Value = SpecialValues.Find(NonNegativeKey))
+		{
+			if (!Algo::AllOf(Value->Values, [](const float Entry) { return Entry >= 0.0f; }))
+			{
+				OutDiagnostic = FString::Printf(TEXT("Special '%s' must be non-negative"), *NonNegativeKey.ToString());
+				return false;
+			}
+		}
+	}
+	for (const FCombatAbilityAction& Action : Actions)
+	{
+		if (bUnitTarget && TargetLostPolicy == ECombatTargetLostPolicy::UseLastKnownPoint
+			&& Action.Target == ECombatAbilityActionTarget::UnitTarget)
+		{
+			OutDiagnostic = TEXT("UseLastKnownPoint cannot execute a UnitTarget action after target loss");
+			return false;
+		}
+		if (Action.Type == ECombatAbilityActionType::SpawnLinearProjectile
+			|| Action.Type == ECombatAbilityActionType::SpawnTrackingProjectile
+			|| Action.Type == ECombatAbilityActionType::CreateThinker)
+		{
+			OutDiagnostic = TEXT("Projectile and Thinker actions are unsupported before M5");
+			return false;
+		}
+		if ((Action.Type == ECombatAbilityActionType::Damage || Action.Type == ECombatAbilityActionType::Heal)
+			&& (!SpecialValues.Contains(Action.MagnitudeKey) || Action.MagnitudeKey.IsNone()))
+		{
+			OutDiagnostic = TEXT("Damage/Heal action requires a valid magnitude special key");
+			return false;
+		}
+		if (Action.Type == ECombatAbilityActionType::ApplyModifier && !Action.ModifierData)
+		{
+			OutDiagnostic = TEXT("ApplyModifier action requires ModifierData");
+			return false;
+		}
+		if (Action.Type == ECombatAbilityActionType::SendGameplayEvent && !Action.EventTag.IsValid())
+		{
+			OutDiagnostic = TEXT("SendGameplayEvent action requires a valid EventTag");
+			return false;
+		}
+		if (Action.Target == ECombatAbilityActionTarget::UnitsInRadius
+			&& (Action.RadiusKey.IsNone() || !SpecialValues.Contains(Action.RadiusKey)))
+		{
+			OutDiagnostic = TEXT("UnitsInRadius action requires a radius special key");
+			return false;
+		}
+	}
+	return true;
+}
+
 #if WITH_EDITOR
 EDataValidationResult UCombatUnitData::IsDataValid(FDataValidationContext& Context) const
 {
@@ -238,23 +329,11 @@ EDataValidationResult UCombatUnitData::IsDataValid(FDataValidationContext& Conte
 EDataValidationResult UCombatAbilityData::IsDataValid(FDataValidationContext& Context) const
 {
 	EDataValidationResult Result = Super::IsDataValid(Context);
-	if (!AbilityClass)
+	FString Diagnostic;
+	if (!ValidateRuntime(Diagnostic))
 	{
-		Context.AddError(FText::FromString(TEXT("AbilityClass is required for one-to-one ability identity mapping")));
+		Context.AddError(FText::FromString(Diagnostic));
 		Result = EDataValidationResult::Invalid;
-	}
-	if (MaxLevel < 1)
-	{
-		Context.AddError(FText::FromString(TEXT("MaxLevel must be at least one")));
-		Result = EDataValidationResult::Invalid;
-	}
-	for (const TPair<FName, FCombatSpecialValue>& Pair : SpecialValues)
-	{
-		if (Pair.Key.IsNone() || !Pair.Value.IsValidForMaxLevel(MaxLevel))
-		{
-			Context.AddError(FText::FromString(FString::Printf(TEXT("Invalid special value '%s'"), *Pair.Key.ToString())));
-			Result = EDataValidationResult::Invalid;
-		}
 	}
 	return Result;
 }
@@ -296,6 +375,7 @@ EDataValidationResult UCombatAbilitySet::IsDataValid(FDataValidationContext& Con
 {
 	EDataValidationResult Result = Super::IsDataValid(Context);
 	TSet<UClass*> SeenClasses;
+	TSet<FPrimaryAssetId> SeenDefinitions;
 	for (const FCombatAbilitySetEntry& Entry : Abilities)
 	{
 		UClass* AbilityClass = Entry.AbilityClass.Get();
@@ -311,6 +391,19 @@ EDataValidationResult UCombatAbilitySet::IsDataValid(FDataValidationContext& Con
 			Result = EDataValidationResult::Invalid;
 		}
 		SeenClasses.Add(AbilityClass);
+		const UCombatGameplayAbility* AbilityCdo = Cast<UCombatGameplayAbility>(AbilityClass->GetDefaultObject());
+		const UCombatAbilityData* AbilityData = AbilityCdo ? AbilityCdo->GetAbilityData() : nullptr;
+		FString Diagnostic;
+		if (!AbilityData || !AbilityData->ValidateRuntime(Diagnostic)
+			|| Entry.InitialLevel > AbilityData->MaxLevel
+			|| SeenDefinitions.Contains(AbilityData->GetPrimaryAssetId())
+			|| (Entry.bAutoCastEnabled && !AbilityData->BehaviorTags.HasTagExact(CombatTags::Ability_Behavior_AutoCast)))
+		{
+			Context.AddError(FText::FromString(TEXT("AbilitySet entry has invalid class/data/level/autocast identity")));
+			Result = EDataValidationResult::Invalid;
+			continue;
+		}
+		SeenDefinitions.Add(AbilityData->GetPrimaryAssetId());
 	}
 	return Result;
 }

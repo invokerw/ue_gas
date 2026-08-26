@@ -176,12 +176,10 @@ bool FCombatDataIdentityTest::RunTest(const FString& Parameters)
 
 	UCombatAbilityData* AbilityA = NewObject<UCombatAbilityData>(GetTransientPackage());
 	AbilityA->DefinitionName = TEXT("ability_a");
-	AbilityA->AbilityClass = UGameplayAbility::StaticClass();
 	UCombatAbilityData* AbilityB = NewObject<UCombatAbilityData>(GetTransientPackage());
 	AbilityB->DefinitionName = TEXT("ability_b");
-	AbilityB->AbilityClass = UGameplayAbility::StaticClass();
 	Errors.Reset();
-	TestFalse(TEXT("One AbilityClass cannot map to multiple DefinitionIds"),
+	TestTrue(TEXT("AbilityData identities do not require a reverse AbilityClass reference"),
 		UCombatDefinitionData::ValidateDefinitionSet({ AbilityA, AbilityB }, Errors));
 
 	const FPrimaryAssetType UnitType(TEXT("CombatUnit"));

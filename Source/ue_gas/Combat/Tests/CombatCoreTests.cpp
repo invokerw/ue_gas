@@ -16,6 +16,7 @@
 #include "Combat/Combat/CombatTransactionSubsystem.h"
 #include "Combat/Core/CombatTags.h"
 #include "Combat/Data/CombatDefinitionData.h"
+#include "Combat/Demo/CombatDemoAbilities.h"
 #include "Combat/Demo/CombatDemoModifierRuntimes.h"
 #include "Combat/Log/CombatEventSubsystem.h"
 #include "Combat/Modifiers/CombatModifierComponent.h"
@@ -102,8 +103,15 @@ bool FCombatAttributeLifecycleTest::RunTest(const FString& Parameters)
 		FVector(1000.0, 0.0, 0.0), FRotator::ZeroRotator, AbilityUnitParams);
 	UCombatAbilitySet* AbilitySet = NewObject<UCombatAbilitySet>(AbilityUnit);
 	AbilitySet->DefinitionName = TEXT("initial_ability_set");
+	UCombatAbilityData* InitialAbilityData = NewObject<UCombatAbilityData>(AbilityUnit);
+	InitialAbilityData->DefinitionName = TEXT("initial_autocast_ability");
+	InitialAbilityData->MaxLevel = 3;
+	InitialAbilityData->BehaviorTags.AddTag(CombatTags::Ability_Behavior_NoTarget);
+	InitialAbilityData->BehaviorTags.AddTag(CombatTags::Ability_Behavior_AutoCast);
+	InitialAbilityData->TargetingRules.TargetTeamTag = CombatTags::TargetTeam_None;
+	GetMutableDefault<UCombatSelfHealAbility>()->AbilityData = InitialAbilityData;
 	FCombatAbilitySetEntry AbilityEntry;
-	AbilityEntry.AbilityClass = UGameplayAbility::StaticClass();
+	AbilityEntry.AbilityClass = UCombatSelfHealAbility::StaticClass();
 	AbilityEntry.InitialLevel = 2;
 	AbilityEntry.bAutoCastEnabled = true;
 	AbilitySet->Abilities.Add(AbilityEntry);
@@ -112,7 +120,7 @@ bool FCombatAttributeLifecycleTest::RunTest(const FString& Parameters)
 	AbilityUnitData->AbilitySets.Add(TSoftObjectPtr<UCombatAbilitySet>(AbilitySet));
 	TestTrue(TEXT("UnitData grants its initial AbilitySet"), AbilityUnit->InitializeFromUnitData(AbilityUnitData));
 	FGameplayAbilitySpec* GrantedSpec = AbilityUnit->GetCombatAbilitySystemComponent()->FindAbilitySpecFromClass(
-		UGameplayAbility::StaticClass());
+		UCombatSelfHealAbility::StaticClass());
 	TestNotNull(TEXT("Initial AbilitySpec is granted"), GrantedSpec);
 	if (GrantedSpec)
 	{

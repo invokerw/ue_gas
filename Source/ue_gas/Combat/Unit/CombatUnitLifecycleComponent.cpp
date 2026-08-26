@@ -101,6 +101,10 @@ bool UCombatUnitLifecycleComponent::RespawnAtLocation(const FVector NewLocation)
 		Modifiers->HandleOwnerRespawn();
 	}
 	Unit->SetLifeStateFromLifecycle(ECombatLifeState::Alive);
+	if (UCombatAbilitySystemComponent* Asc = Unit->GetCombatAbilitySystemComponent())
+	{
+		Asc->ReconcileIntrinsicModifiers();
+	}
 	if (UCombatRegenerationComponent* Regen = Unit->GetCombatRegenerationComponent())
 	{
 		Regen->HandleOwnerRespawn();

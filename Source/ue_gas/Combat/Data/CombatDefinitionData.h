@@ -6,12 +6,14 @@
 #include "GameplayTagContainer.h"
 
 #include "Combat/Attributes/CombatAttributeSet.h"
+#include "Combat/Ability/CombatAbilityTypes.h"
 #include "Combat/Core/CombatTypes.h"
+#include "Combat/Targeting/CombatTargetingTypes.h"
 
 #include "CombatDefinitionData.generated.h"
 
-class UGameplayAbility;
 class UCombatAbilitySet;
+class UCombatGameplayAbility;
 class UCombatModifierRuntime;
 
 /** 定义 Modifier 被驱散时需要的最低驱散强度。 */
@@ -171,17 +173,13 @@ public:
 #endif
 };
 
-/** 定义 GameplayAbility 类、等级上限、行为标签与等级数值。 */
+/** 定义等级、目标、生命周期提交策略与 DataDriven Actions。 */
 UCLASS(BlueprintType)
 class UE_GAS_API UCombatAbilityData : public UCombatDefinitionData
 {
 	GENERATED_BODY()
 
 public:
-	/** 与该定义单向绑定的 GameplayAbility 类。 */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Ability")
-	TSubclassOf<UGameplayAbility> AbilityClass;
-
 	/** AbilitySpec 允许的最大权威等级。 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Ability", meta=(ClampMin="1"))
 	int32 MaxLevel = 1;
@@ -190,15 +188,60 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Ability")
 	FGameplayTagContainer BehaviorTags;
 
+	/** Unit/Point 目标的阵营、状态、范围、LOS 与可见性规则。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Ability")
+	FCombatTargetingRules TargetingRules;
+
 	/** 以稳定字段名索引的等级数值表。 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Ability")
 	TMap<FName, FCombatSpecialValue> SpecialValues;
+
+	/** 前摇时间；gameplay 完成点只由 Combat Scheduler 驱动。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Ability", meta=(ClampMin="0", Units="s"))
+	float CastPoint = 0.0f;
+
+	/** 引导总时长；只有 Channelled Ability 可以大于 0。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Ability", meta=(ClampMin="0", Units="s"))
+	float ChannelDuration = 0.0f;
+
+	/** 引导逻辑 tick 间隔。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Ability", meta=(ClampMin="0", Units="s"))
+	float ChannelInterval = 0.0f;
+
+	/** ManaCost 在哪个生命周期阶段提交。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Ability")
+	ECombatAbilityCommitStage CostCommitPoint = ECombatAbilityCommitStage::SpellStarted;
+
+	/** Cooldown 在哪个生命周期阶段提交。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Ability")
+	ECombatAbilityCommitStage CooldownCommitPoint = ECombatAbilityCommitStage::SpellStarted;
+
+	/** UnitTarget 在 cast point 失效后的处理策略。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Ability")
+	ECombatTargetLostPolicy TargetLostPolicy = ECombatTargetLostPolicy::Fail;
+
+	/** 引导中断后未来 OrderComponent 的队列策略。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Ability")
+	ECombatChannelInterruptOrderPolicy ChannelInterruptOrderPolicy = ECombatChannelInterruptOrderPolicy::Continue;
+
+	/** SpellStarted 时按顺序执行的服务器公共动作。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Ability")
+	TArray<FCombatAbilityAction> Actions;
+
+	/** AbilitySpec 存在期间幂等施加的固有 Modifier。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Ability")
+	TObjectPtr<UCombatModifierData> IntrinsicModifier = nullptr;
+
+	/** 读取指定等级的 special；缺失键返回 DefaultValue。 */
+	float GetSpecialValue(FName Key, int32 Level, float DefaultValue = 0.0f) const;
+	/** 在运行时和自动化中执行与 Editor validator 相同的 M3 schema 校验。 */
+	bool ValidateRuntime(FString& OutDiagnostic) const;
 
 	/** 返回 CombatAbility PrimaryAssetType。 */
 	virtual FPrimaryAssetType GetCombatPrimaryAssetType() const override;
 
 #if WITH_EDITOR
-	/** 检查 AbilityClass、等级和全部 SpecialValue。 */
+	/** 检查目标模式、等级、时序、提交策略和全部 Action。 */
 	virtual EDataValidationResult IsDataValid(FDataValidationContext& Context) const override;
 #endif
 };
@@ -310,7 +353,7 @@ struct UE_GAS_API FCombatAbilitySetEntry
 
 	/** 待授予的 GameplayAbility 类。 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|AbilitySet")
-	TSubclassOf<UGameplayAbility> AbilityClass;
+	TSubclassOf<UCombatGameplayAbility> AbilityClass;
 
 	/** 写入 AbilitySpec.Level 的初始权威等级。 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|AbilitySet", meta=(ClampMin="1"))

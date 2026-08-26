@@ -16,6 +16,13 @@ void UCombatModifierRuntime::OnPreDealHeal_Implementation(FCombatHealEvent& Even
 void UCombatModifierRuntime::OnPreTakeHeal_Implementation(FCombatHealEvent& Event) { (void)Event; }
 void UCombatModifierRuntime::OnPostDealHeal_Implementation(const FCombatHealEvent& Event) { (void)Event; }
 void UCombatModifierRuntime::OnPostTakeHeal_Implementation(const FCombatHealEvent& Event) { (void)Event; }
+void UCombatModifierRuntime::OnAbilityExecuted_Implementation(
+	const FPrimaryAssetId& AbilityDefinitionId,
+	const FCombatEventContext& Context)
+{
+	(void)AbilityDefinitionId;
+	(void)Context;
+}
 
 bool UCombatModifierRuntime::RequestRemoveSelf()
 {

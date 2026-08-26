@@ -1,6 +1,7 @@
 #include "Combat/Unit/CombatUnitCharacter.h"
 
 #include "Combat/Ability/CombatAbilitySystemComponent.h"
+#include "Combat/Ability/CombatGameplayAbility.h"
 #include "Combat/Attributes/CombatAttributeSet.h"
 #include "Combat/Combat/CombatEffectUtilities.h"
 #include "Combat/Core/CombatTags.h"
@@ -65,6 +66,7 @@ bool ACombatUnitCharacter::InitializeFromUnitData(UCombatUnitData* InUnitData)
 	// 先加载并完整校验 AbilitySet，避免属性已写入后才发现授予表非法。
 	TArray<UCombatAbilitySet*> LoadedSets;
 	TSet<UClass*> PendingAbilityClasses;
+	TSet<FPrimaryAssetId> PendingAbilityDefinitions;
 	for (const TSoftObjectPtr<UCombatAbilitySet>& SetReference : InUnitData->AbilitySets)
 	{
 		UCombatAbilitySet* AbilitySet = SetReference.LoadSynchronous();
@@ -76,12 +78,22 @@ bool ACombatUnitCharacter::InitializeFromUnitData(UCombatUnitData* InUnitData)
 		for (const FCombatAbilitySetEntry& Entry : AbilitySet->Abilities)
 		{
 			UClass* AbilityClass = Entry.AbilityClass.Get();
-			if (!AbilityClass || Entry.InitialLevel < 1 || PendingAbilityClasses.Contains(AbilityClass)
-				|| CombatAbilitySystemComponent->FindAbilitySpecFromClass(AbilityClass))
+			const UCombatGameplayAbility* AbilityCdo = AbilityClass
+				? Cast<UCombatGameplayAbility>(AbilityClass->GetDefaultObject()) : nullptr;
+			const UCombatAbilityData* AbilityData = AbilityCdo ? AbilityCdo->GetAbilityData() : nullptr;
+			FString AbilityDiagnostic;
+			if (!AbilityData || !AbilityData->ValidateRuntime(AbilityDiagnostic)
+				|| Entry.InitialLevel < 1 || Entry.InitialLevel > AbilityData->MaxLevel
+				|| PendingAbilityClasses.Contains(AbilityClass)
+				|| PendingAbilityDefinitions.Contains(AbilityData->GetPrimaryAssetId())
+				|| CombatAbilitySystemComponent->FindCombatAbilitySpecByDefinitionId(AbilityData->GetPrimaryAssetId())
+				|| (Entry.bAutoCastEnabled
+					&& !AbilityData->BehaviorTags.HasTagExact(CombatTags::Ability_Behavior_AutoCast)))
 			{
 				return false;
 			}
 			PendingAbilityClasses.Add(AbilityClass);
+			PendingAbilityDefinitions.Add(AbilityData->GetPrimaryAssetId());
 		}
 	}
 
@@ -128,9 +140,13 @@ bool ACombatUnitCharacter::InitializeFromUnitData(UCombatUnitData* InUnitData)
 	{
 		for (const FCombatAbilitySetEntry& Entry : AbilitySet->Abilities)
 		{
-			const FGameplayAbilitySpecHandle Handle = CombatAbilitySystemComponent->GiveAbility(
-				FGameplayAbilitySpec(Entry.AbilityClass, Entry.InitialLevel));
-			CombatAbilitySystemComponent->SetInitialAutoCastState(Handle, Entry.bAutoCastEnabled);
+			FGameplayAbilitySpecHandle Handle;
+			FGameplayTag FailureTag;
+			if (!CombatAbilitySystemComponent->GrantCombatAbility(
+				Entry.AbilityClass, Entry.InitialLevel, Entry.bAutoCastEnabled, Handle, FailureTag))
+			{
+				return false;
+			}
 		}
 	}
 	InitializedUnitDefinitionId = RequestedId;
@@ -193,16 +209,6 @@ void ACombatUnitCharacter::BeginPlay()
 	RefreshLifeStateTag();
 	if (CombatAbilitySystemComponent)
 	{
-		const FGameplayTag StatusTags[] = {
-			CombatTags::State_Stunned, CombatTags::State_Silenced, CombatTags::State_Rooted,
-			CombatTags::State_Disarmed, CombatTags::State_Hexed, CombatTags::State_NoUnitCollision,
-			CombatTags::State_Frozen
-		};
-		for (const FGameplayTag& Tag : StatusTags)
-		{
-			CombatAbilitySystemComponent->RegisterGameplayTagEvent(Tag, EGameplayTagEventType::NewOrRemoved)
-				.AddUObject(this, &ACombatUnitCharacter::HandleStatusTagChanged);
-		}
 		CombatAbilitySystemComponent->GetGameplayAttributeValueChangeDelegate(UCombatAttributeSet::GetMoveSpeedAttribute())
 			.AddUObject(this, &ACombatUnitCharacter::HandleMoveSpeedChanged);
 	}
@@ -309,16 +315,6 @@ void ACombatUnitCharacter::RefreshStatusResponse()
 	{
 		GetCapsuleComponent()->SetCollisionProfileName(TEXT("CombatUnit"));
 	}
-}
-
-void ACombatUnitCharacter::HandleStatusTagChanged(const FGameplayTag Tag, const int32 NewCount)
-{
-	if (NewCount > 0 && (Tag == CombatTags::State_Stunned || Tag == CombatTags::State_Hexed
-		|| Tag == CombatTags::State_Frozen) && CombatAbilitySystemComponent)
-	{
-		CombatAbilitySystemComponent->CancelAllAbilities();
-	}
-	RefreshStatusResponse();
 }
 
 void ACombatUnitCharacter::HandleMoveSpeedChanged(const FOnAttributeChangeData& ChangeData)

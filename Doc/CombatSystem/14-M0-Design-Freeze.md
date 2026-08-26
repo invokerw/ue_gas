@@ -305,6 +305,8 @@ Data.Damage.Final / Data.Heal.Final
 
 Event.Combat.DamageApplied / HealApplied / ModifierApplied / ModifierRemoved / UnitDeath / UnitRespawned / TeamChanged
 Event.Combat.AbilityGranted / AbilityRemoved / AbilityLevelChanged / AutoCastChanged
+Event.Combat.AbilityCastStarted / AbilitySpellStarted / AbilityChannelEnded
+Event.Combat.AbilityOrderReleased / AbilityInterrupted / AbilityEnded / AbilityActionFailed
 
 Combat.Failure.Authority / InvalidNumber / ActionUnsupported
 Combat.Failure.Target.Invalid / TeamInvalid / SelfNotAllowed
@@ -313,7 +315,8 @@ Combat.Failure.Target.Dying / Dead / Respawning / Untargetable / OutOfGame
 Combat.Failure.Target.Invulnerable / MagicImmune / OutOfRange
 Combat.Failure.Target.LocationInvalid / LineOfSightBlocked
 Combat.Failure.Life.NotAlive / InvalidTransition
-Combat.Failure.Ability.DuplicateDefinition / InvalidLevel / NotGranted
+Combat.Failure.Ability.DuplicateDefinition / InvalidLevel / NotGranted / InvalidTargetData
+Combat.Failure.Ability.Cost / Cooldown / CommitFailed / AlreadyActive / UnitStateBlocked
 
 Order.Failure.Cancelled / QueueFull / PathFailed / Blocked
 Order.Failure.AbilityRejected / UnitStateBlocked

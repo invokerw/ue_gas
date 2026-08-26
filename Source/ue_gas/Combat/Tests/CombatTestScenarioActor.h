@@ -17,7 +17,7 @@ public:
 	/** 配置测试 Actor 的默认 UnitClass，并关闭运行时 Tick。 */
 	ACombatTestScenarioActor();
 
-	/** 在 Authority 上生成 Team 1/2 各一名 Unit，并输出 M1 场景状态日志。 */
+	/** 在 Authority 上生成 Team 1/2 各一名 Unit，并输出 M3 场景状态日志。 */
 	UFUNCTION(BlueprintCallable, CallInEditor, Category="Combat|Test")
 	void SpawnScenario();
 

@@ -50,7 +50,7 @@ M0 已冻结队伍身份和关系：玩法层使用 `FCombatTeamId`（`0` Neutra
 
 建议返回结构化 `FCombatTargetValidationResult`，包含 `bValid`、稳定 `FailureTag` 和可选修正位置。Order、Ability 激活和 UI 预览共享规则；UI 结果只作提示，服务器结果才权威。
 
-目标数据使用 `FGameplayAbilityTargetDataHandle`。客户端可提交 Actor NetGUID 或位置，服务器在进入 cast point 前校验一次，在 cast point 完成时再次校验并生成权威快照。
+M3 目标数据使用最小 `FCombatAbilityTargetData`（Unit Actor 或有限 Point 二选一）；客户端命中列表字段只用于显式识别并拒绝伪造。未来接入通用 GAS targeting task 时可以在 RPC 边界转换为 `FGameplayAbilityTargetDataHandle`，但服务器仍在进入 cast point 前校验一次、cast point 完成时再次校验并生成权威快照。
 
 ## 3. Ability 基类
 
