@@ -8,6 +8,7 @@
 #include "Combat/Attributes/CombatAttributeSet.h"
 #include "Combat/Ability/CombatAbilityTypes.h"
 #include "Combat/Core/CombatTypes.h"
+#include "Combat/Projectile/CombatProjectileTypes.h"
 #include "Combat/Targeting/CombatTargetingTypes.h"
 
 #include "CombatDefinitionData.generated.h"
@@ -15,6 +16,8 @@
 class UCombatAbilitySet;
 class UCombatGameplayAbility;
 class UCombatModifierRuntime;
+class UCombatProjectileData;
+class ACombatProjectileActor;
 
 /** 定义 Modifier 被驱散时需要的最低驱散强度。 */
 UENUM(BlueprintType)
@@ -184,6 +187,10 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Unit|Attack", meta=(ClampMin="1"))
 	float CriticalStrikeMultiplier = 2.0f;
 
+	/** 非空时普通攻击在 attack point 生成 Tracking Attack Projectile。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Unit|Attack")
+	TObjectPtr<UCombatProjectileData> AttackProjectileData = nullptr;
+
 	/** Unit 初始化时按顺序授予的 AbilitySet 软引用。 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Unit")
 	TArray<TSoftObjectPtr<UCombatAbilitySet>> AbilitySets;
@@ -247,6 +254,10 @@ public:
 	/** 引导中断后未来 OrderComponent 的队列策略。 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Ability")
 	ECombatChannelInterruptOrderPolicy ChannelInterruptOrderPolicy = ECombatChannelInterruptOrderPolicy::Continue;
+
+	/** true 时 Ability End 取消本 Activation 显式绑定的 Projectile；默认 fire-and-forget。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Ability")
+	bool bCancelProjectilesWithAbility = false;
 
 	/** SpellStarted 时按顺序执行的服务器公共动作。 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Ability")
@@ -349,6 +360,22 @@ class UE_GAS_API UCombatProjectileData : public UCombatDefinitionData
 	GENERATED_BODY()
 
 public:
+	/** 权威 Actor 类型；为空时使用 ACombatProjectileActor。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Projectile")
+	TSubclassOf<ACombatProjectileActor> ProjectileActorClass;
+
+	/** Linear 或 Tracking 连续运动。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Projectile")
+	ECombatProjectileMovementType MovementType = ECombatProjectileMovementType::Linear;
+
+	/** Tracking 目标失效后 fizzle 或去最后已知点。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Projectile")
+	ECombatProjectileTargetLostPolicy TargetLostPolicy = ECombatProjectileTargetLostPolicy::Fizzle;
+
+	/** 阵营、穿透、first-hit 与 world-stop 默认策略。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Projectile")
+	FCombatProjectileHitPolicy HitPolicy;
+
 	/** 弹体线性速度，单位为厘米/秒。 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Projectile", meta=(ClampMin="0", Units="cm/s"))
 	float Speed = 0.0f;
@@ -361,12 +388,25 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Projectile", meta=(ClampMin="0", Units="cm"))
 	float MaxDistance = 0.0f;
 
+	/** 0 表示只按距离结束；正数到期时 timeout。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Projectile", meta=(ClampMin="0", Units="s"))
+	float MaxLifetime = 10.0f;
+
+	/** 单次 sweep 的最大路径长度，用于高速 substep。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Projectile", meta=(ClampMin="1", Units="cm"))
+	float MaxSimulationStep = 100.0f;
+
 	/** 弹体碰撞组件使用的固定 Profile 名。 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Projectile")
 	FName CollisionProfileName = TEXT("CombatProjectile");
 
 	/** 返回 CombatProjectile PrimaryAssetType。 */
 	virtual FPrimaryAssetType GetCombatPrimaryAssetType() const override;
+
+#if WITH_EDITOR
+	/** 检查速度、半径、距离、寿命、substep 和碰撞 Profile。 */
+	virtual EDataValidationResult IsDataValid(FDataValidationContext& Context) const override;
+#endif
 };
 
 /** AbilitySet 中一项待授予 Ability 的类、初始等级与 AutoCast 状态。 */

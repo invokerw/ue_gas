@@ -145,7 +145,7 @@ P0：
 - 多 Unit 同 Ability Class 的目标快照互不污染。
 - EndAbility、移除 Ability、Avatar 变化时 task/delegate/schedule 清理。
 - grant/remove/level/intrinsic/autocast 幂等和服务器权威。
-- M3 使用 Projectile/Thinker Action 时，资产校验和运行时返回稳定 Unsupported；M5 启用后同一 schema 正常执行。
+- M3 历史版本使用 Projectile/Thinker Action 时返回稳定 Unsupported；M5 中同一 schema 应通过统一 Subsystem 正常执行。
 
 P1：
 

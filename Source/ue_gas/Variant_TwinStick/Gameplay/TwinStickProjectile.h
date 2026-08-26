@@ -10,37 +10,35 @@ class USphereComponent;
 class UStaticMeshComponent;
 class UProjectileMovementComponent;
 
-/**
- *  A simple bouncing projectile for a Twin Stick shooter game
- */
+/** TwinStick 模板的纯表现弹体；Combat gameplay 弹体统一由 CombatProjectileSubsystem 管理。 */
 UCLASS(abstract)
 class ATwinStickProjectile : public AActor
 {
 	GENERATED_BODY()
 	
-	/** Projectile collision sphere */
+	/** 提供表现弹体的碰撞球。 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components", meta = (AllowPrivateAccess = "true"))
 	USphereComponent* CollisionSphere;
 
-	/** Mesh that provides the visual representation for this projectile */
+	/** 提供弹体外观的静态网格。 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components", meta = (AllowPrivateAccess = "true"))
 	UStaticMeshComponent* Mesh;
 
-	/** Handles movement behaviors for this projectile */
+	/** 只驱动模板表现运动，不负责 Combat 命中结算。 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components", meta = (AllowPrivateAccess = "true"))
 	UProjectileMovementComponent* ProjectileMovement;
 
 public:	
 
-	/** Constructor */
+	/** 创建模板表现组件并关闭无用 Actor Tick。 */
 	ATwinStickProjectile();
 
-	/** Handles collisions */
+	/** 发生碰撞时只结束表现 Actor，不直接调用任何单位伤害函数。 */
 	virtual void NotifyHit(class UPrimitiveComponent* MyComp, AActor* Other, class UPrimitiveComponent* OtherComp, bool bSelfMoved, FVector HitLocation, FVector HitNormal, FVector NormalImpulse, const FHitResult& Hit) override;
 
 protected:
 	
-	/** Handles collisions that stop this projectile from moving */
+	/** ProjectileMovement 停止时销毁表现 Actor。 */
 	UFUNCTION()
 	void OnProjectileStop(const FHitResult& ImpactResult);
 

@@ -12,6 +12,7 @@ class UCombatAbilitySystemComponent;
 class UCombatAttackComponent;
 class UCombatAttributeSet;
 class UCombatModifierComponent;
+class UCombatMotionComponent;
 class UCombatOrderComponent;
 class UCombatRegenerationComponent;
 class UCombatUnitData;
@@ -44,6 +45,8 @@ public:
 	UCombatAttackComponent* GetCombatAttackComponent() const { return CombatAttackComponent; }
 	/** 返回统一 Move/Cast/Attack FIFO 状态机组件。 */
 	UCombatOrderComponent* GetCombatOrderComponent() const { return CombatOrderComponent; }
+	/** 返回水平/垂直强制位移通道组件。 */
+	UCombatMotionComponent* GetCombatMotionComponent() const { return CombatMotionComponent; }
 
 	/** 返回当前复制的战斗队伍。 */
 	FCombatTeamId GetCombatTeamId() const { return TeamId; }
@@ -134,6 +137,9 @@ protected:
 	/** Unit 的服务器权威 Order FIFO 与异步状态机。 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Combat|Components")
 	TObjectPtr<UCombatOrderComponent> CombatOrderComponent;
+	/** Unit 的水平/垂直强制位移通道与抢占执行器。 */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Combat|Components")
+	TObjectPtr<UCombatMotionComponent> CombatMotionComponent;
 
 	/** 服务器初始化使用的稳定 Unit 定义。 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Combat|Unit")

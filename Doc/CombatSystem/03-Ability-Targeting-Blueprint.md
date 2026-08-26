@@ -196,8 +196,8 @@ Action.SendGameplayEvent
 可执行范围按里程碑开放：
 
 - M3：`Damage`、`Heal`、`ApplyModifier`、服务器 AoE Query 和 `SendGameplayEvent`。
-- M5：在 ProjectileSubsystem/Thinker 完成后启用 `SpawnLinearProjectile`、`SpawnTrackingProjectile` 和 `CreateThinker`。
-- M5 前可以冻结并序列化完整 schema，但资产校验必须拒绝在当前运行能力中使用尚未启用的 Action，执行器也返回稳定 `Combat.Failure.ActionUnsupported`，不能静默 no-op 或临时直连 SpawnActor。
+- M5：已通过 ProjectileSubsystem/Thinker 启用 `SpawnLinearProjectile`、`SpawnTrackingProjectile` 和 `CreateThinker`；Projectile 的伤害、宽度、距离和速度可从 SpecialValues 在 Spawn 时快照。
+- M3 阶段曾冻结并序列化完整 schema，同时明确拒绝尚未启用的 Action；M5 执行器现通过统一 Subsystem 创建，不静默 no-op，也不临时直连 SpawnActor。
 
 Action 负责声明目标选择、参数 key 和输出，不允许直接写 Health、Transform 或 Runtime 容器。复杂技能使用蓝图子类，例如 Dragon Slave、Meat Hook、Fissure；公共权限、校验、资源和生命周期仍走基类。
 
@@ -235,4 +235,4 @@ SpawnProjectile/CreateThinker（返回稳定 Handle）
 - Channel tick 不随帧率漂移，所有退出路径取消 Scheduler Handle。
 - 六类生命周期事件的数量和顺序可自动化断言。
 - Ability 移除能清理 intrinsic modifier 和活动实例，不回滚已发射快照对象。
-- M3 对尚未启用的 Projectile/Thinker Action 在资产校验和运行时都明确拒绝，M5 启用后使用同一 schema。
+- M3 对当时尚未启用的 Projectile/Thinker Action 在资产校验和运行时都明确拒绝；M5 已使用同一 schema 正式启用。

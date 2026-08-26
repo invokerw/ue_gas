@@ -73,7 +73,7 @@ public:
 	TObjectPtr<UCombatAbilityData> AbilityData;
 
 protected:
-	/** 按服务器权威 Target 快照依次执行全部 M3 DataDriven Actions。 */
+	/** 按服务器权威 Target 快照依次执行同步动作和 M5 异步实体动作。 */
 	FCombatAbilityActionResult ExecuteDataDrivenActions();
 
 	/** C++ 默认蓝图事件为空。 */

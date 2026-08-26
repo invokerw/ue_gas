@@ -87,7 +87,7 @@ M4 已按 `AttackTiming Policy v1` 落地公式、上限和转向策略并关闭
 3. 对 winner 调 `OnAttackClaimed` 提交魔法/冷却，并把 bonus、DamageType、ProjectileData 和 OnHitActions 写入 Record 快照。
 4. 提交失败继续尝试下一个候选；未胜出者不得扣资源或改变状态。`OnAttackClaimed=true` 代表提交已发生并锁定分组，后续输出即使需要净化也不再尝试同组候选，防止重复消费。
 
-M4 已实现近战 AttackRecord、时序、RNG、Damage 与法球快照；本文件后续 Projectile/Thinker 部分仍属于 M5 范围。
+M4 已实现近战 AttackRecord、时序、RNG、Damage 与法球快照；M5 已补齐远程 Attack Projectile、通用 Projectile registry、AbilityTask 与 Thinker。
 
 命中时只执行 Record 中的 OnHitActions，不重新读取可能已升级/移除的 Ability 实例。是否允许多个非互斥 proc 叠加由 group/tag 规则声明。
 

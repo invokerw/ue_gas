@@ -315,15 +315,26 @@ bool FCombatAbilityGrantLifecycleTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("Removing Ability also removes its intrinsic modifier"),
 		Unit->GetCombatModifierComponent()->GetActiveModifierCount(), 0);
 
-	UCombatAbilityData* Invalid = CombatAbilityTests::MakeAbilityData(
-		*Unit, TEXT("unsupported_future_action"), CombatTags::Ability_Behavior_NoTarget, CombatTags::TargetTeam_None);
-	FCombatAbilityAction FutureAction;
-	FutureAction.Type = ECombatAbilityActionType::SpawnLinearProjectile;
-	FutureAction.Target = ECombatAbilityActionTarget::Caster;
-	Invalid->Actions.Add(FutureAction);
+	UCombatAbilityData* ProjectileAbility = CombatAbilityTests::MakeAbilityData(
+		*Unit, TEXT("m5_projectile_action"), CombatTags::Ability_Behavior_NoTarget, CombatTags::TargetTeam_None);
+	UCombatProjectileData* ProjectileData = NewObject<UCombatProjectileData>(Unit);
+	ProjectileData->DefinitionName = TEXT("m5_projectile_schema");
+	ProjectileData->Speed = 1000.0f;
+	ProjectileData->Radius = 25.0f;
+	ProjectileData->MaxDistance = 1000.0f;
+	CombatAbilityTests::AddSpecial(*ProjectileAbility, TEXT("damage"), 10.0f);
+	FCombatAbilityAction ProjectileAction;
+	ProjectileAction.Type = ECombatAbilityActionType::SpawnLinearProjectile;
+	ProjectileAction.Target = ECombatAbilityActionTarget::Caster;
+	ProjectileAction.MagnitudeKey = TEXT("damage");
+	ProjectileAction.ProjectileData = ProjectileData;
+	ProjectileAbility->Actions.Add(ProjectileAction);
 	FString Diagnostic;
-	TestFalse(TEXT("M5 projectile action is explicitly rejected in M3"), Invalid->ValidateRuntime(Diagnostic));
-	TestTrue(TEXT("Unsupported action supplies a diagnostic"), !Diagnostic.IsEmpty());
+	TestTrue(TEXT("M5 enables the frozen projectile action schema"), ProjectileAbility->ValidateRuntime(Diagnostic));
+	ProjectileAction.ProjectileData = nullptr;
+	ProjectileAbility->Actions[0] = ProjectileAction;
+	TestFalse(TEXT("Projectile action without ProjectileData is rejected"), ProjectileAbility->ValidateRuntime(Diagnostic));
+	TestTrue(TEXT("Invalid projectile action supplies a diagnostic"), !Diagnostic.IsEmpty());
 	return true;
 }
 

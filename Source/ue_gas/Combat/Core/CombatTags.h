@@ -80,6 +80,13 @@ namespace CombatTags
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Combat_AttackLaunched)
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Combat_AttackLanded)
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Combat_AttackFailed)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Combat_ProjectileSpawned)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Combat_ProjectileHit)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Combat_ProjectileFinished)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Combat_ThinkerPulse)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Combat_ThinkerFinished)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Combat_MotionStarted)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Combat_MotionFinished)
 
 	/** 公共操作、Target 与 Ability 校验失败标签。 */
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Failure_Authority)
@@ -129,6 +136,14 @@ namespace CombatTags
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Failure_Attack_Blocked)
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Failure_Attack_StaleHandle)
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Failure_Attack_Evaded)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Failure_Projectile_StaleHandle)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Failure_Projectile_Blocked)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Failure_Projectile_TargetLost)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Failure_Projectile_Timeout)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Failure_Thinker_StaleHandle)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Failure_Motion_ChannelBusy)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Failure_Motion_Blocked)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Failure_Motion_StaleHandle)
 
 	/** keyed RNG 的稳定随机域标签。 */
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(RNG_Attack_Evasion)

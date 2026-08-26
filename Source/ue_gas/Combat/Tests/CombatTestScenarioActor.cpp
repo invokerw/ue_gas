@@ -5,10 +5,13 @@
 #include "Combat/Attack/CombatAttackComponent.h"
 #include "Combat/Attributes/CombatAttributeSet.h"
 #include "Combat/Core/CombatTags.h"
+#include "Combat/Data/CombatDefinitionData.h"
 #include "Combat/Log/CombatEventSubsystem.h"
 #include "Combat/Modifiers/CombatModifierComponent.h"
 #include "Combat/Order/CombatOrderComponent.h"
+#include "Combat/Projectile/CombatProjectileSubsystem.h"
 #include "Combat/Targeting/CombatTargetingSubsystem.h"
+#include "Combat/Thinker/CombatThinkerSubsystem.h"
 #include "Combat/Unit/CombatRegenerationComponent.h"
 #include "Combat/Unit/CombatUnitCharacter.h"
 #include "Combat/Unit/CombatUnitLifecycleComponent.h"
@@ -121,6 +124,54 @@ void ACombatTestScenarioActor::StartM4AttackScenario()
 			? *SpawnedUnits[0]->GetActorLocation().ToCompactString() : TEXT("Invalid"),
 		SpawnedUnits.Num() > 1 && SpawnedUnits[1]
 			? *SpawnedUnits[1]->GetActorLocation().ToCompactString() : TEXT("Invalid"));
+	StartM5ProjectileScenario();
+}
+
+void ACombatTestScenarioActor::StartM5ProjectileScenario()
+{
+	UCombatProjectileSubsystem* Projectiles = GetWorld()
+		? GetWorld()->GetSubsystem<UCombatProjectileSubsystem>() : nullptr;
+	UCombatThinkerSubsystem* Thinkers = GetWorld()
+		? GetWorld()->GetSubsystem<UCombatThinkerSubsystem>() : nullptr;
+	const bool bUnitsReady = HasAuthority() && SpawnedUnits.Num() == 2
+		&& IsValid(SpawnedUnits[0]) && IsValid(SpawnedUnits[1]);
+	const bool bMotionReady = bUnitsReady
+		&& SpawnedUnits[0]->GetCombatMotionComponent() && SpawnedUnits[1]->GetCombatMotionComponent();
+	FCombatProjectileResult SpawnResult;
+	if (bUnitsReady && Projectiles)
+	{
+		ScenarioProjectileData = NewObject<UCombatProjectileData>(this);
+		ScenarioProjectileData->DefinitionName = TEXT("m5_scenario_tracking_projectile");
+		ScenarioProjectileData->MovementType = ECombatProjectileMovementType::Tracking;
+		ScenarioProjectileData->Speed = 600.0f;
+		ScenarioProjectileData->Radius = 20.0f;
+		ScenarioProjectileData->MaxDistance = 1000.0f;
+		ScenarioProjectileData->MaxLifetime = 5.0f;
+		ScenarioProjectileData->MaxSimulationStep = 100.0f;
+		ScenarioProjectileData->HitPolicy.bStopOnWorld = false;
+		FCombatProjectileSpec Spec;
+		Spec.ProjectileData = ScenarioProjectileData;
+		Spec.Source = SpawnedUnits[0];
+		Spec.Target = SpawnedUnits[1];
+		Spec.SpawnLocation = SpawnedUnits[0]->GetActorLocation();
+		Spec.Direction = SpawnedUnits[1]->GetActorLocation() - Spec.SpawnLocation;
+		Spec.MovementType = ECombatProjectileMovementType::Tracking;
+		Spec.TargetLostPolicy = ScenarioProjectileData->TargetLostPolicy;
+		Spec.HitPolicy = ScenarioProjectileData->HitPolicy;
+		FCombatProjectileImpactAction Damage;
+		Damage.Magnitude = 5.0f;
+		Damage.DamageType = ECombatDamageType::Magical;
+		Spec.ImpactActions.Add(Damage);
+		SpawnResult = Projectiles->SpawnProjectile(Spec);
+		ScenarioProjectileHandle = SpawnResult.Handle;
+	}
+	UE_LOG(LogCombat, Display,
+		TEXT("M5ScenarioReady ProjectileRuntime=%s ThinkerRuntime=%s MotionRuntime=%s ProjectileSpawned=%s Handle=%s"),
+		Projectiles ? TEXT("Ready") : TEXT("Invalid"),
+		Thinkers ? TEXT("Ready") : TEXT("Invalid"),
+		bMotionReady ? TEXT("Ready") : TEXT("Invalid"),
+		SpawnResult.bSuccess ? TEXT("Yes") : TEXT("No"),
+		*SpawnResult.Handle.ToString());
 }
 
 void ACombatTestScenarioActor::DestroyScenario()
@@ -130,6 +181,13 @@ void ACombatTestScenarioActor::DestroyScenario()
 		return;
 	}
 	GetWorldTimerManager().ClearTimer(M4AttackScenarioTimer);
+	if (UCombatProjectileSubsystem* Projectiles = GetWorld()
+		? GetWorld()->GetSubsystem<UCombatProjectileSubsystem>() : nullptr)
+	{
+		Projectiles->CancelProjectile(ScenarioProjectileHandle);
+	}
+	ScenarioProjectileHandle = FCombatProjectileHandle();
+	ScenarioProjectileData = nullptr;
 	for (ACombatUnitCharacter* Unit : SpawnedUnits)
 	{
 		if (IsValid(Unit))

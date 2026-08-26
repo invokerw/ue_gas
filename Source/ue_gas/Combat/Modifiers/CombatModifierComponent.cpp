@@ -122,6 +122,8 @@ FCombatModifierApplyResult UCombatModifierComponent::ApplyNewModifier(
 	Runtime->ModifierData = Request.ModifierData;
 	Runtime->SourceUnit = Request.Source;
 	Runtime->AbilityOwnerHandle = Request.AbilityOwnerHandle;
+	Runtime->bHasInitialMotionRequest = Request.bHasInitialMotionRequest;
+	Runtime->InitialMotionRequest = Request.InitialMotionRequest;
 	Runtime->TargetUnit = Target;
 	Runtime->Handle.Key.Id = NextHandleId++;
 	Runtime->Handle.Key.Generation = 1;
@@ -139,6 +141,13 @@ FCombatModifierApplyResult UCombatModifierComponent::ApplyNewModifier(
 	ActiveModifiers.Add(Runtime);
 	ScheduleRuntime(*Runtime, true);
 	Runtime->OnCreated();
+	if (!Runtime->bActive || !ActiveModifiers.Contains(Runtime))
+	{
+		// OnCreated 可以因 Motion 获取失败等原因同步移除自身；此时不能再补发 Applied 日志或返回活动成功。
+		Result.Handle = Runtime->Handle;
+		Result.FailureTag = CombatTags::Failure_ActionUnsupported;
+		return Result;
+	}
 	EmitModifierLog(*Runtime, false);
 
 	Result.bSuccess = true;

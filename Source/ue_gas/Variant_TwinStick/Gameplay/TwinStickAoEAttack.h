@@ -4,73 +4,69 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+
+#include "Combat/Core/CombatTypes.h"
+
 #include "TwinStickAoEAttack.generated.h"
 
 class UStaticMeshComponent;
 class USphereComponent;
 
-/**
- *  A simple persistent AoE attack.
- *  Damages characters that enter for as long as it's active
- */
+/** TwinStick 模板的纯表现 AoE；Combat 周期结算统一改由 ThinkerSubsystem 执行。 */
 UCLASS(abstract)
 class ATwinStickAoEAttack : public AActor
 {
 	GENERATED_BODY()
 	
-	/** Provides the visual representation for the AoE attack */
+	/** 提供 AoE 外观。 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components", meta = (AllowPrivateAccess = "true"))
 	UStaticMeshComponent* SphereVisual;
 
-	/** Provides the collision volume for the AoE attack */
+	/** 仅供表现或蓝图读取的范围球，不再直接结算伤害。 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components", meta = (AllowPrivateAccess = "true"))
 	USphereComponent* CollisionSphere;
 
 protected:
 
-	/** Timer to start AoE damage checks */
-	FTimerHandle StartAoETimer;
+	/** 由 Combat Scheduler 管理的表现开始任务。 */
+	FCombatScheduleHandle StartAoESchedule;
 
-	/** Timer to end AoE damage checks */
-	FTimerHandle StopAoETimer;
+	/** 由 Combat Scheduler 管理的表现结束任务。 */
+	FCombatScheduleHandle StopAoESchedule;
 
-	/** Time to wait between AoE damage ticks */
+	/** AoE 表现激活前的延迟。 */
 	UPROPERTY(EditAnywhere, Category="AoE Attack", meta=(ClampMin = 0, ClampMax = 5, Units = "s"))
 	float StartAoETime = 0.033f;
 
-	/** Time to wait before stopping AoE damage checks */
+	/** AoE 表现结束前的延迟。 */
 	UPROPERTY(EditAnywhere, Category="AoE Attack", meta=(ClampMin = 0, ClampMax = 5, Units = "s"))
 	float StopAoETime = 0.5f;
 
-	/** While true, the AoE will damage anything that overlaps it */
+	/** 表现是否已激活；不代表 gameplay 伤害窗口。 */
 	bool bIsAoEActive = false;
 
 public:	
 	
-	/** Constructor */
+	/** 创建表现组件并关闭无用 Actor Tick。 */
 	ATwinStickAoEAttack();
 
 protected:
 
-	/** Initialization */
+	/** 使用 Combat Scheduler 安排表现开始与结束。 */
 	virtual void BeginPlay() override;
 
-	/** Cleanup */
+	/** 取消残留 Scheduler 句柄。 */
 	virtual void EndPlay(EEndPlayReason::Type EndPlayReason) override;
 
 protected:
 
-	/** Called when the start AoE timer triggers */
-	void StartAoE();
+	/** Scheduler 到期后激活表现，不遍历或伤害重叠对象。 */
+	void StartAoE(const FCombatScheduledTickContext& TickContext);
 
-	/** Called when the stop AoE timer triggers */
-	void StopAoE();
+	/** Scheduler 到期后关闭表现并交给蓝图收尾。 */
+	void StopAoE(const FCombatScheduledTickContext& TickContext);
 
-	/** Allows Blueprint handling of AoE fade out effects. NOTE: Call Destroy Actor at the end of this! */
+	/** 允许蓝图播放淡出；蓝图应在表现结束时销毁 Actor。 */
 	UFUNCTION(BlueprintImplementableEvent, Category="AoE Attack")
 	void BP_AoEFinished();
-
-	/** Handles collision with the AoE while it's active */
-	UFUNCTION()
-	void OnAoEOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult);
 };

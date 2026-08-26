@@ -33,6 +33,10 @@ public:
 	FCombatAttackResult StartMeleeAttack(ACombatUnitCharacter* Target, FCombatOrderHandle OrderHandle);
 	/** 幂等终结仍活动的 Record；主要供 M5 Projectile 回调使用。 */
 	FCombatAttackResult FinalizeAttack(FCombatAttackHandle Handle);
+	/** Attack Projectile 命中原目标后结算；跳过已由弹道承担的距离与 LOS 复核。 */
+	FCombatAttackResult FinalizeAttackFromProjectile(FCombatAttackHandle Handle, ACombatUnitCharacter* ImpactTarget);
+	/** Attack Projectile fizzle、阻挡或超时后 exactly-once 失败对应已发射记录。 */
+	bool FailLaunchedAttackFromProjectile(FCombatAttackHandle Handle, FGameplayTag FailureTag);
 	/** 仅取消尚未越过 attack point 且属于指定 Order 的前摇。 */
 	bool CancelWindupForOrder(FCombatOrderHandle OrderHandle, FGameplayTag FailureTag);
 	/** 返回 Handle 是否仍能解析当前生命代次的活动 Record。 */
@@ -74,7 +78,10 @@ private:
 	/** recovery 到期后切换 Ready；旧 OrderHandle 仍由 OrderComponent 复核。 */
 	void HandleAttackReady(FCombatOrderHandle OrderHandle, const FCombatScheduledTickContext& TickContext);
 	/** 执行 impact 合法性、Evasion、Crit、Damage 与快照 OnHit。 */
-	FCombatAttackResult FinalizeAttackInternal(FCombatAttackHandle Handle);
+	FCombatAttackResult FinalizeAttackInternal(
+		FCombatAttackHandle Handle,
+		bool bProjectileImpact = false,
+		ACombatUnitCharacter* ImpactTarget = nullptr);
 	/** 以指定失败 outcome 原子结束一条记录。 */
 	FCombatAttackResult AbortRecord(FCombatAttackHandle Handle, ECombatAttackOutcome Outcome, FGameplayTag FailureTag);
 	/** 写入最终状态、日志、移除 registry 并广播一次。 */

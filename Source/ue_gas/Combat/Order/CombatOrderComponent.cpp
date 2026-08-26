@@ -15,6 +15,7 @@
 #include "Combat/Core/CombatTags.h"
 #include "Combat/Data/CombatDefinitionData.h"
 #include "Combat/Log/CombatEventSubsystem.h"
+#include "Combat/Motion/CombatMotionComponent.h"
 #include "Combat/Scheduling/CombatSchedulerSubsystem.h"
 #include "Combat/Targeting/CombatTargetingSubsystem.h"
 #include "Combat/Unit/CombatUnitCharacter.h"
@@ -99,6 +100,12 @@ void UCombatOrderComponent::PumpCurrentOrder()
 		}
 		if (!CurrentOrder.IsSet())
 		{
+			return;
+		}
+		if (Unit->GetCombatMotionComponent() && Unit->GetCombatMotionComponent()->HasActiveMotion())
+		{
+			TransitionTo(ECombatOrderState::Paused, CombatTags::Order_Failure_UnitStateBlocked,
+				TEXT("Forced motion temporarily pauses the current order"));
 			return;
 		}
 		const FCombatQueuedOrder& Order = CurrentOrder.GetValue();
@@ -261,6 +268,26 @@ void UCombatOrderComponent::HandleOwnerDeath()
 void UCombatOrderComponent::HandleOwnerRespawn()
 {
 	AdvanceGenerationAndCancel(CombatTags::Order_Failure_Cancelled, false);
+}
+
+void UCombatOrderComponent::HandleOwnerMotionStarted()
+{
+	if (!CurrentOrder.IsSet())
+	{
+		return;
+	}
+	CancelMovementAsync();
+	TransitionTo(ECombatOrderState::Paused, CombatTags::Order_Failure_UnitStateBlocked,
+		TEXT("Current order paused by forced motion"));
+}
+
+void UCombatOrderComponent::HandleOwnerMotionFinished()
+{
+	if (CurrentOrder.IsSet())
+	{
+		TransitionTo(ECombatOrderState::Validating);
+		PumpCurrentOrder();
+	}
 }
 
 FCombatOrderHandle UCombatOrderComponent::GetCurrentOrderHandle() const

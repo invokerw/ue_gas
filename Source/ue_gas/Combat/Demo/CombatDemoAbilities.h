@@ -27,6 +27,20 @@ class UE_GAS_API UCombatPointAoeAbility : public UCombatGameplayAbility
 	GENERATED_BODY()
 };
 
+/** M5 Dragon Slave：由 AbilityData 生成可穿透直线弹体并按 special 冻结伤害、宽度、距离与速度。 */
+UCLASS()
+class UE_GAS_API UCombatDragonSlaveAbility : public UCombatGameplayAbility
+{
+	GENERATED_BODY()
+};
+
+/** M5 Meat Hook：由 AbilityData 生成首命中弹体，依次伤害、施加 Hook Modifier 并请求水平拖拽。 */
+UCLASS()
+class UE_GAS_API UCombatMeatHookAbility : public UCombatGameplayAbility
+{
+	GENERATED_BODY()
+};
+
 /** M3 Scheduler Channel 自动化使用的可观察 Ability Class。 */
 UCLASS()
 class UE_GAS_API UCombatChannelProbeAbility : public UCombatGameplayAbility

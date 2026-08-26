@@ -1,8 +1,8 @@
 # 00 开发进度台账
 
 > 最后更新：2026-08-26
-> 当前里程碑：M4 已验收（等待 M5 授权）
-> 总进度：53/82 Task 完成，5/9 里程碑由用户验收
+> 当前里程碑：M5 已验收，等待 M6 授权
+> 总进度：62/82 Task 完成，6/9 里程碑由用户验收
 
 本文件是项目执行状态的唯一来源。[10 实施路线图](10-Implementation-Roadmap.md)定义任务内容和依赖，本文件记录实际状态、验证证据和用户验收结论。
 
@@ -39,7 +39,7 @@
 | M2 | 战斗内核 | 15/15 | 通过 | 已验收 | 2026-08-25 / 2026-08-26 | G2 通过；Editor/Server/Client 构建、Automation 12/12 和独立联机 smoke 通过；M3 已授权；见 [17](17-M2-Acceptance.md) |
 | M3 | 可施法切片 | 10/10 | 通过 | 已验收 | 2026-08-26 / 2026-08-26 | Editor/Server/Client 构建、Automation 17/17 和独立联机 smoke 通过；用户验收通过；见 [19](19-M3-Acceptance.md) |
 | M4 | Order 与普攻 | 8/8 | 通过 | 已验收 | 2026-08-26 / 2026-08-26 | Editor/Server/Client 构建、Automation 23/23 和独立联机追击/连续近战 smoke 通过；用户验收通过；见 [21](21-M4-Acceptance.md) |
-| M5 | Projectile、Thinker 与 Motion | 0/9 | 未开始 | 未开始 | — | — |
+| M5 | Projectile、Thinker 与 Motion | 9/9 | 通过 | 已验收 | 2026-08-26 / 2026-08-26 | Editor/Server/Client 构建、Automation 27/27 和独立联机 Projectile spawn/hit/finish smoke 通过；用户验收通过；见 [23](23-M5-Acceptance.md) |
 | M6 | 复杂技能集 | 0/6 | 未开始 | 未开始 | — | — |
 | M7 | 联机、UI、工具和性能 | 0/9 | 未开始 | 未开始 | — | — |
 | M8 | 候选发布 | 0/5 | 未开始 | 未开始 | — | — |
@@ -103,7 +103,7 @@
 | ABL-002 | Ability 基类 | 已完成 | `CombatGameplayAbility.*`；InstancedPerActor、Activation 快照、多 Unit 同类隔离和统一 cleanup 通过 |
 | ABL-003 | Ability 生命周期与事件 | 已完成 | 分阶段原子提交、CDR 快照、固定事件顺序、状态中断和 ActorInfo 清理通过；关闭 GAP-011/GAP-024 |
 | ABL-004 | WaitCombatInterval | 已完成 | Scheduler repeating/finish Handle、补帧与 duration 边界、正常/中断清理通过 |
-| ABL-005 | DataDriven Actions | 已完成 | Damage/Heal/ApplyModifier/Event/服务器 AoE 公共执行器完成；M5 Action 明确 Unsupported |
+| ABL-005 | DataDriven Actions | 已完成 | Damage/Heal/ApplyModifier/Event/服务器 AoE 公共执行器完成；M5 已启用 Linear/Tracking Projectile 与 Thinker Action |
 | ABL-006 | 授予、等级与 AutoCast | 已完成 | DefinitionId 唯一、Spec.Level、remove、RPC、intrinsic reconcile 和 cooldown 清理通过 |
 | DEMO-301 | 无目标治疗 | 已完成 | Self Heal 前摇、同 Stage cost/cooldown、CDR 与双 Unit 实例隔离自动化通过 |
 | DEMO-302 | 单位目标伤害 | 已完成 | cast point 目标丢失、MagicImmune 与 Magical Damage 公共管线自动化通过 |
@@ -126,15 +126,15 @@
 
 | Task | 需求名称 | 状态 | 完成证据/备注 |
 | --- | --- | --- | --- |
-| PRJ-001 | ProjectileData 与 Subsystem | 未开始 | — |
-| PRJ-002 | Linear Projectile | 未开始 | — |
-| PRJ-003 | Tracking 与 Attack Projectile | 未开始 | 到期：GAP-023 |
-| PRJ-004 | Projectile Spawn/Wait Task | 未开始 | — |
-| THK-001 | Thinker | 未开始 | — |
-| MOT-001 | MotionComponent | 未开始 | — |
-| ADP-001 | TwinStick Projectile/AoE 适配 | 未开始 | — |
-| DEMO-501 | Dragon Slave | 未开始 | — |
-| DEMO-502 | Meat Hook | 未开始 | — |
+| PRJ-001 | ProjectileData 与 Subsystem | 已完成 | `Combat/Projectile/*`：Handle registry、Spec/数值快照、Actor 复制、exactly-once Finish 与结构化日志完成；自动化与独立场景链路通过 |
+| PRJ-002 | Linear Projectile | 已完成 | substep sphere sweep、稳定排序、AlreadyHit、穿透与 world block 完成；`LinearAndTrackingPolicies` 通过 |
+| PRJ-003 | Tracking 与 Attack Projectile | 已完成 | Tracking 目标丢失策略、AttackHandle finalize 与旧生命隔离完成；`AttackRecordFinalize` 通过；ADR-034 已关闭 GAP-023 |
+| PRJ-004 | Projectile Spawn/Wait Task | 已完成 | Linear/Tracking Spawn Task、Wait 的 OnHit/OnFizzled/OnFinished、fire-and-forget 与 cancel-with-source 完成并通过回归 |
+| THK-001 | Thinker | 已完成 | 无 Tick Actor、Scheduler delay/pulse/duration、稳定 AoE 查询与 cleanup 完成；`SchedulerPreemptionAndHookCleanup` 通过 |
+| MOT-001 | MotionComponent | 已完成 | H/V 通道、严格高优先级抢占、SafeMove、Nav 投影、Order 恢复与日志完成；抢占及 Hook cleanup 自动化通过 |
+| ADP-001 | TwinStick Projectile/AoE 适配 | 已完成 | 模板 Actor 已移除 `ProjectileImpact` 直连和 AoE Actor Timer gameplay，降级为纯表现/Combat Scheduler；全量回归通过 |
+| DEMO-501 | Dragon Slave | 已完成 | `UCombatDragonSlaveAbility` 与 DataDriven 穿透 Linear Projectile 完成；`DragonSlaveAndMeatHook` 通过 |
+| DEMO-502 | Meat Hook | 已完成 | `UCombatMeatHookAbility`、首命中 Damage、Hook Modifier 与 Horizontal Motion 清理完成；成功/冲突清理均通过 |
 
 ## 9. M6：复杂技能集
 
@@ -179,8 +179,8 @@
 | M1 | 2026-08-25 | 已验收 | 中文注释规范与 M1 源码注释已补齐 | 2026-08-25 | 已授权 M2（2026-08-25） |
 | M2 | 2026-08-25 | 已验收 | 无 | 2026-08-26 | 已授权 M3（2026-08-26） |
 | M3 | 2026-08-26 | 已验收 | 无 | 2026-08-26 | 已授权 M4（2026-08-26） |
-| M4 | 2026-08-26 | 已验收 | 无 | 2026-08-26 | 未授权 |
-| M5 | — | 未提交 | — | — | 未授权 |
+| M4 | 2026-08-26 | 已验收 | 无 | 2026-08-26 | 已授权 M5（2026-08-26） |
+| M5 | 2026-08-26 | 已验收 | 无 | 2026-08-26 | 未授权 |
 | M6 | — | 未提交 | — | — | 未授权 |
 | M7 | — | 未提交 | — | — | 未授权 |
 | M8 | — | 未提交 | — | — | 不适用 |
@@ -208,6 +208,10 @@
 | 2026-08-26 | 用户授权开始 M4；ORD-001 切换为进行中 | M4 / ORD-001 |
 | 2026-08-26 | 完成 M4 全部 8 项；关闭 GAP-010；Editor、源码 Server/Client Target 构建成功，`Combat.` 自动化 23/23、独立监听服务器实际追击与连续近战 smoke 通过；G4 通过并提交用户验收 | M4 / ORD-001..004 / ATK-001..004 / GAP-010 / G4 |
 | 2026-08-26 | 用户确认 M4 验收通过并要求提交；保持 M5 未开始，等待单独授权 | M4 |
+| 2026-08-26 | 用户授权开始 M5；PRJ-001 切换为进行中 | M5 / PRJ-001 |
+| 2026-08-26 | 完成 M5 九项源码、中文注释、L_CombatTest 场景 smoke 与 4 组专项自动化；Installed UE 5.8.1 `-NoLink` 编译全部修改成功；源码 UE 5.8.0 Development Server/Client 各 29/29 构建成功；运行中的 Editor 仍占用项目 DLL，正式 Editor 链接、Automation 与联机 smoke 待关闭后执行 | M5 / PRJ-001..DEMO-502 |
+| 2026-08-26 | Editor 关闭后完成 Installed UE 5.8.1 正式链接；`Combat.` 冷启动自动化 27/27、独立监听服务器 Projectile spawn/hit/finish 与客户端握手 smoke 通过；G5 通过，M5 转为待验收 | M5 / PRJ-001..DEMO-502 / G5 |
+| 2026-08-26 | 用户确认 M5 验收通过并要求提交；保持 M6 未开始，等待单独授权 | M5 |
 
 ## 14. 更新规则
 

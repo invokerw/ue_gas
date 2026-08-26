@@ -7,6 +7,7 @@
 #include "Combat/Attributes/CombatAttributeSet.h"
 #include "Combat/Core/CombatTags.h"
 #include "Combat/Modifiers/CombatModifierComponent.h"
+#include "Combat/Motion/CombatMotionComponent.h"
 #include "Combat/Order/CombatOrderComponent.h"
 #include "Combat/Scheduling/CombatSchedulerSubsystem.h"
 #include "Combat/Unit/CombatRegenerationComponent.h"
@@ -47,6 +48,10 @@ bool UCombatUnitLifecycleComponent::RequestDeath(
 	if (UCombatAttackComponent* Attacks = Unit->GetCombatAttackComponent())
 	{
 		Attacks->HandleOwnerDeath();
+	}
+	if (UCombatMotionComponent* Motion = Unit->GetCombatMotionComponent())
+	{
+		Motion->HandleOwnerDeath();
 	}
 	if (UCharacterMovementComponent* Movement = Unit->GetCharacterMovement())
 	{
@@ -114,6 +119,10 @@ bool UCombatUnitLifecycleComponent::RespawnAtLocation(const FVector NewLocation)
 	if (UCombatAttackComponent* Attacks = Unit->GetCombatAttackComponent())
 	{
 		Attacks->HandleOwnerRespawn();
+	}
+	if (UCombatMotionComponent* Motion = Unit->GetCombatMotionComponent())
+	{
+		Motion->HandleOwnerRespawn();
 	}
 	if (UCombatOrderComponent* Orders = Unit->GetCombatOrderComponent())
 	{

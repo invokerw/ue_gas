@@ -8,6 +8,7 @@
 #include "Combat/Attack/CombatAttackTypes.h"
 #include "Combat/Combat/CombatTransactionTypes.h"
 #include "Combat/Core/CombatTypes.h"
+#include "Combat/Motion/CombatMotionTypes.h"
 #include "Combat/Scheduling/CombatSchedulerSubsystem.h"
 
 #include "CombatModifierRuntime.generated.h"
@@ -112,6 +113,10 @@ public:
 	const UCombatModifierData* GetModifierData() const { return ModifierData; }
 	/** 返回 Runtime 是否仍处于 ActiveModifiers 容器中。 */
 	bool IsActive() const { return bActive; }
+	/** 返回 Apply 时是否注入一次性 Motion 请求。 */
+	bool HasInitialMotionRequest() const { return bHasInitialMotionRequest; }
+	/** 返回新建 Runtime 使用的不可变 Motion 快照。 */
+	const FCombatMotionRequest& GetInitialMotionRequest() const { return InitialMotionRequest; }
 
 protected:
 	/** C++ 默认生命周期与 Hook 实现均为空，派生类只重写所需阶段。 */
@@ -168,4 +173,8 @@ private:
 	FCombatScheduleHandle ExpireSchedule;
 	/** 防止销毁路径重复执行。 */
 	bool bActive = false;
+	/** Apply 请求是否携带一次性 Motion 快照。 */
+	bool bHasInitialMotionRequest = false;
+	/** 只供派生 Runtime 在 OnCreated 消费的强制位移请求。 */
+	FCombatMotionRequest InitialMotionRequest;
 };

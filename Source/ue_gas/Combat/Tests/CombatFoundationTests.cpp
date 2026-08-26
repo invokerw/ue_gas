@@ -92,7 +92,12 @@ bool FCombatConfigurationTest::RunTest(const FString& Parameters)
 		Order_Failure_TargetInvalid, Order_Failure_OutOfRange, Order_Failure_InvalidRequest,
 		Order_Failure_StaleCallback, Order_Failure_RetryExhausted, Failure_Attack_NotReady,
 		Failure_Attack_Blocked, Failure_Attack_StaleHandle, Failure_Attack_Evaded,
-		RNG_Attack_Crit, RNG_Modifier_Proc
+		RNG_Attack_Crit, RNG_Modifier_Proc, Event_Combat_ProjectileSpawned,
+		Event_Combat_ProjectileHit, Event_Combat_ProjectileFinished, Event_Combat_ThinkerPulse,
+		Event_Combat_ThinkerFinished, Event_Combat_MotionStarted, Event_Combat_MotionFinished,
+		Failure_Projectile_StaleHandle, Failure_Projectile_Blocked, Failure_Projectile_TargetLost,
+		Failure_Projectile_Timeout, Failure_Thinker_StaleHandle, Failure_Motion_ChannelBusy, Failure_Motion_Blocked,
+		Failure_Motion_StaleHandle
 	};
 	for (const FGameplayTag& Tag : NativeTags)
 	{
@@ -662,11 +667,15 @@ bool FCombatDeferredEventsTest::RunTest(const FString& Parameters)
 	FCombatAttackHandle DefaultAttackHandle;
 	FCombatOrderHandle DefaultOrderHandle;
 	FCombatProjectileHandle DefaultProjectileHandle;
+	FCombatThinkerHandle DefaultThinkerHandle;
+	FCombatMotionHandle DefaultMotionHandle;
 	FCombatScheduleHandle DefaultScheduleHandle;
 	TestFalse(TEXT("Default modifier handle is invalid"), DefaultModifierHandle.IsValid());
 	TestFalse(TEXT("Default attack handle is invalid"), DefaultAttackHandle.IsValid());
 	TestFalse(TEXT("Default order handle is invalid"), DefaultOrderHandle.IsValid());
 	TestFalse(TEXT("Default projectile handle is invalid"), DefaultProjectileHandle.IsValid());
+	TestFalse(TEXT("Default thinker handle is invalid"), DefaultThinkerHandle.IsValid());
+	TestFalse(TEXT("Default motion handle is invalid"), DefaultMotionHandle.IsValid());
 	TestFalse(TEXT("Default schedule handle is invalid"), DefaultScheduleHandle.IsValid());
 	FCombatAttackHandle AttackHandle;
 	AttackHandle.Key = { 5, 1, 2 };

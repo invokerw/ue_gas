@@ -11,6 +11,7 @@
 
 class ACombatUnitCharacter;
 class UCombatModifierData;
+class UCombatProjectileData;
 
 /** Cost 与 Cooldown 可以选择的三个冻结提交阶段。 */
 UENUM(BlueprintType)
@@ -56,11 +57,11 @@ enum class ECombatAbilityActionType : uint8
 	ApplyModifier,
 	/** 向目标 ASC 发送 GameplayEvent。 */
 	SendGameplayEvent,
-	/** M5 才启用，M3 明确拒绝。 */
+	/** 生成服务器权威直线 Projectile。 */
 	SpawnLinearProjectile,
-	/** M5 才启用，M3 明确拒绝。 */
+	/** 生成服务器权威追踪 Projectile。 */
 	SpawnTrackingProjectile,
-	/** M5 才启用，M3 明确拒绝。 */
+	/** 创建由 Combat Scheduler 驱动的区域 Thinker。 */
 	CreateThinker
 };
 
@@ -82,7 +83,7 @@ struct UE_GAS_API FCombatAbilityAction
 {
 	GENERATED_BODY()
 
-	/** 选择 Damage、Heal、Modifier、Event 或尚未启用的未来动作。 */
+	/** 选择 Damage、Heal、Modifier、Event、Projectile 或 Thinker 动作。 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Ability|Action") ECombatAbilityActionType Type = ECombatAbilityActionType::Damage;
 	/** 选择本动作的权威目标集合。 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Ability|Action") ECombatAbilityActionTarget Target = ECombatAbilityActionTarget::UnitTarget;
@@ -96,6 +97,22 @@ struct UE_GAS_API FCombatAbilityAction
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Ability|Action") FName RadiusKey;
 	/** SendGameplayEvent 使用的事件标签。 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Ability|Action") FGameplayTag EventTag;
+	/** SpawnLinear/TrackingProjectile 使用的稳定 ProjectileData。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Ability|Action") TObjectPtr<UCombatProjectileData> ProjectileData = nullptr;
+	/** Projectile 从 SpecialValues 读取速度覆盖的可选键。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Ability|Action") FName ProjectileSpeedKey;
+	/** Projectile 从 SpecialValues 读取最大距离覆盖的可选键。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Ability|Action") FName ProjectileRangeKey;
+	/** CreateThinker 从 SpecialValues 读取持续时间的键。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Ability|Action") FName DurationKey;
+	/** CreateThinker 从 SpecialValues 读取 pulse 间隔的键；None 表示只 pulse 一次。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Ability|Action") FName IntervalKey;
+	/** Projectile 命中后是否把 Modifier 与拖向 Source 的 Motion 请求一起快照。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Ability|Action") bool bMotionToSource = false;
+	/** Hook Motion 从 SpecialValues 读取速度的键。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Ability|Action") FName MotionSpeedKey;
+	/** Hook Motion 获取水平通道时使用的优先级。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Ability|Action") int32 MotionPriority = 100;
 };
 
 /** 每次 Instanced Ability 保存的服务器权威激活快照。 */
@@ -130,6 +147,6 @@ struct UE_GAS_API FCombatAbilityActionResult
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Ability") bool bSuccess = false;
 	/** 失败时第一条稳定原因标签。 */
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Ability") FGameplayTag FailureTag;
-	/** 成功产生 Damage/Heal/Modifier/Event 的目标次数。 */
+	/** 成功产生同步目标效果或异步 Projectile/Thinker 实例的次数。 */
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Ability") int32 AffectedTargetCount = 0;
 };

@@ -73,3 +73,22 @@ private:
 	/** 只在提交成功后递增；未胜出和失败候选保持不变。 */
 	int32 SuccessfulClaimCount = 0;
 };
+
+/** Meat Hook 命中后获取高优先级 Horizontal Motion，并在任意结束路径移除自身。 */
+UCLASS()
+class UE_GAS_API UCombatHookDragRuntime : public UCombatModifierRuntime
+{
+	GENERATED_BODY()
+
+protected:
+	/** 消费 Apply 注入的 Motion 快照；获取失败立即请求移除。 */
+	virtual void OnCreated_Implementation() override;
+	/** Modifier 提前结束时解绑并释放仍活动的 Motion。 */
+	virtual void OnDestroyed_Implementation() override;
+
+private:
+	/** 只处理属于本 Runtime 的 exactly-once Motion 结束结果。 */
+	void HandleMotionFinished(const FCombatMotionResult& Result);
+	/** 当前持有的 Motion 句柄。 */
+	FCombatMotionHandle MotionHandle;
+};

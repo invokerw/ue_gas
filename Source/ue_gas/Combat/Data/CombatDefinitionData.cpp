@@ -262,22 +262,59 @@ bool UCombatAbilityData::ValidateRuntime(FString& OutDiagnostic) const
 	for (const FCombatAbilityAction& Action : Actions)
 	{
 		if (bUnitTarget && TargetLostPolicy == ECombatTargetLostPolicy::UseLastKnownPoint
-			&& Action.Target == ECombatAbilityActionTarget::UnitTarget)
+			&& Action.Target == ECombatAbilityActionTarget::UnitTarget
+			&& (Action.Type == ECombatAbilityActionType::Damage
+				|| Action.Type == ECombatAbilityActionType::Heal
+				|| Action.Type == ECombatAbilityActionType::ApplyModifier
+				|| Action.Type == ECombatAbilityActionType::SendGameplayEvent
+				|| Action.Type == ECombatAbilityActionType::SpawnTrackingProjectile))
 		{
 			OutDiagnostic = TEXT("UseLastKnownPoint cannot execute a UnitTarget action after target loss");
 			return false;
 		}
-		if (Action.Type == ECombatAbilityActionType::SpawnLinearProjectile
-			|| Action.Type == ECombatAbilityActionType::SpawnTrackingProjectile
-			|| Action.Type == ECombatAbilityActionType::CreateThinker)
+		const bool bProjectileAction = Action.Type == ECombatAbilityActionType::SpawnLinearProjectile
+			|| Action.Type == ECombatAbilityActionType::SpawnTrackingProjectile;
+		if (bProjectileAction && !Action.ProjectileData)
 		{
-			OutDiagnostic = TEXT("Projectile and Thinker actions are unsupported before M5");
+			OutDiagnostic = TEXT("Projectile action requires ProjectileData");
 			return false;
 		}
-		if ((Action.Type == ECombatAbilityActionType::Damage || Action.Type == ECombatAbilityActionType::Heal)
+		if (bProjectileAction
+			&& ((!Action.ProjectileSpeedKey.IsNone() && !SpecialValues.Contains(Action.ProjectileSpeedKey))
+				|| (!Action.ProjectileRangeKey.IsNone() && !SpecialValues.Contains(Action.ProjectileRangeKey))
+				|| (!Action.RadiusKey.IsNone() && !SpecialValues.Contains(Action.RadiusKey))))
+		{
+			OutDiagnostic = TEXT("Projectile override keys must reference existing specials");
+			return false;
+		}
+		if (bProjectileAction && Action.bMotionToSource
+			&& (!Action.ModifierData || Action.MotionSpeedKey.IsNone()
+				|| !SpecialValues.Contains(Action.MotionSpeedKey)))
+		{
+			OutDiagnostic = TEXT("Projectile hook motion requires ModifierData and a motion speed special");
+			return false;
+		}
+		if ((Action.Type == ECombatAbilityActionType::Damage
+				|| Action.Type == ECombatAbilityActionType::Heal
+				|| bProjectileAction
+				|| Action.Type == ECombatAbilityActionType::CreateThinker)
 			&& (!SpecialValues.Contains(Action.MagnitudeKey) || Action.MagnitudeKey.IsNone()))
 		{
-			OutDiagnostic = TEXT("Damage/Heal action requires a valid magnitude special key");
+			OutDiagnostic = TEXT("Damage/Heal/Projectile/Thinker action requires a valid magnitude special key");
+			return false;
+		}
+		if (Action.Type == ECombatAbilityActionType::SpawnTrackingProjectile
+			&& (Action.Target != ECombatAbilityActionTarget::UnitTarget || !bUnitTarget))
+		{
+			OutDiagnostic = TEXT("Tracking Projectile requires UnitTarget behavior and action target");
+			return false;
+		}
+		if (Action.Type == ECombatAbilityActionType::CreateThinker
+			&& (Action.RadiusKey.IsNone() || !SpecialValues.Contains(Action.RadiusKey)
+				|| Action.DurationKey.IsNone() || !SpecialValues.Contains(Action.DurationKey)
+				|| (!Action.IntervalKey.IsNone() && !SpecialValues.Contains(Action.IntervalKey))))
+		{
+			OutDiagnostic = TEXT("Thinker requires radius/duration specials and an optional valid interval special");
 			return false;
 		}
 		if (Action.Type == ECombatAbilityActionType::ApplyModifier && !Action.ModifierData)
@@ -290,7 +327,8 @@ bool UCombatAbilityData::ValidateRuntime(FString& OutDiagnostic) const
 			OutDiagnostic = TEXT("SendGameplayEvent action requires a valid EventTag");
 			return false;
 		}
-		if (Action.Target == ECombatAbilityActionTarget::UnitsInRadius
+		if (!bProjectileAction && Action.Type != ECombatAbilityActionType::CreateThinker
+			&& Action.Target == ECombatAbilityActionTarget::UnitsInRadius
 			&& (Action.RadiusKey.IsNone() || !SpecialValues.Contains(Action.RadiusKey)))
 		{
 			OutDiagnostic = TEXT("UnitsInRadius action requires a radius special key");
@@ -376,6 +414,22 @@ EDataValidationResult UCombatModifierData::IsDataValid(FDataValidationContext& C
 			Context.AddError(FText::FromString(TEXT("Modifier contains an invalid Runtime parameter")));
 			Result = EDataValidationResult::Invalid;
 		}
+	}
+	return Result;
+}
+
+EDataValidationResult UCombatProjectileData::IsDataValid(FDataValidationContext& Context) const
+{
+	EDataValidationResult Result = Super::IsDataValid(Context);
+	if (!FMath::IsFinite(Speed) || Speed <= 0.0f
+		|| !FMath::IsFinite(Radius) || Radius < 0.0f
+		|| !FMath::IsFinite(MaxDistance) || MaxDistance <= 0.0f
+		|| !FMath::IsFinite(MaxLifetime) || MaxLifetime < 0.0f
+		|| !FMath::IsFinite(MaxSimulationStep) || MaxSimulationStep < 1.0f
+		|| CollisionProfileName.IsNone())
+	{
+		Context.AddError(FText::FromString(TEXT("Projectile movement, lifetime, substep or collision profile is invalid")));
+		Result = EDataValidationResult::Invalid;
 	}
 	return Result;
 }

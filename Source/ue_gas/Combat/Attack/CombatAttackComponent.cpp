@@ -12,6 +12,7 @@
 #include "Combat/Data/CombatDefinitionData.h"
 #include "Combat/Log/CombatEventSubsystem.h"
 #include "Combat/Modifiers/CombatModifierComponent.h"
+#include "Combat/Projectile/CombatProjectileSubsystem.h"
 #include "Combat/Scheduling/CombatSchedulerSubsystem.h"
 #include "Combat/Targeting/CombatTargetingSubsystem.h"
 #include "Combat/Unit/CombatUnitCharacter.h"
@@ -156,6 +157,27 @@ FCombatAttackResult UCombatAttackComponent::StartMeleeAttack(
 FCombatAttackResult UCombatAttackComponent::FinalizeAttack(const FCombatAttackHandle Handle)
 {
 	return FinalizeAttackInternal(Handle);
+}
+
+FCombatAttackResult UCombatAttackComponent::FinalizeAttackFromProjectile(
+	const FCombatAttackHandle Handle,
+	ACombatUnitCharacter* ImpactTarget)
+{
+	return FinalizeAttackInternal(Handle, true, ImpactTarget);
+}
+
+bool UCombatAttackComponent::FailLaunchedAttackFromProjectile(
+	const FCombatAttackHandle Handle,
+	const FGameplayTag FailureTag)
+{
+	const FCombatAttackRecord* Record = FindRecord(Handle);
+	if (!Record || Record->State != ECombatAttackState::Launched)
+	{
+		return false;
+	}
+	AbortRecord(Handle, ECombatAttackOutcome::TargetInvalid,
+		FailureTag.IsValid() ? FailureTag : CombatTags::Failure_Projectile_TargetLost.GetTag());
+	return true;
 }
 
 bool UCombatAttackComponent::CancelWindupForOrder(
@@ -313,7 +335,35 @@ void UCombatAttackComponent::HandleAttackPoint(
 	{
 		AttackReadyDelegate.Broadcast(Record->OrderHandle);
 	}
-	// M4 近战在 attack point 立即 impact；M5 远程分支将在这里生成只持 Handle 的 Projectile。
+	const UCombatUnitData* UnitData = Record->Attacker.IsValid() ? Record->Attacker->GetUnitData() : nullptr;
+	if (UnitData && UnitData->AttackProjectileData)
+	{
+		// 远程普攻只把 AttackHandle 交给弹体；伤害、闪避、暴击仍由唯一 AttackRecord 结算。
+		FCombatProjectileSpec ProjectileSpec;
+		ProjectileSpec.ProjectileData = UnitData->AttackProjectileData;
+		ProjectileSpec.Source = Record->Attacker.Get();
+		ProjectileSpec.Target = Record->Target.Get();
+		ProjectileSpec.SpawnLocation = ProjectileSpec.Source
+			? ProjectileSpec.Source->GetActorLocation() : FVector::ZeroVector;
+		ProjectileSpec.Direction = ProjectileSpec.Target
+			? ProjectileSpec.Target->GetActorLocation() - ProjectileSpec.SpawnLocation : FVector::ForwardVector;
+		ProjectileSpec.MovementType = ECombatProjectileMovementType::Tracking;
+		ProjectileSpec.TargetLostPolicy = UnitData->AttackProjectileData->TargetLostPolicy;
+		ProjectileSpec.HitPolicy = UnitData->AttackProjectileData->HitPolicy;
+		ProjectileSpec.ParentEvent = Record->EventContext;
+		ProjectileSpec.SourceContext.DirectSourceType = ECombatDirectSourceType::Attack;
+		ProjectileSpec.AttackHandle = Handle;
+		UCombatProjectileSubsystem* Projectiles = GetWorld()->GetSubsystem<UCombatProjectileSubsystem>();
+		const FCombatProjectileResult SpawnResult = Projectiles
+			? Projectiles->SpawnProjectile(ProjectileSpec) : FCombatProjectileResult();
+		if (!SpawnResult.bSuccess)
+		{
+			AbortRecord(Handle, ECombatAttackOutcome::DamageFailed,
+				SpawnResult.FailureTag.IsValid() ? SpawnResult.FailureTag : CombatTags::Failure_ActionUnsupported.GetTag());
+		}
+		return;
+	}
+	// 没有 ProjectileData 的单位保持 M4 近战语义，在 attack point 立即 impact。
 	FinalizeAttackInternal(Handle);
 }
 
@@ -332,7 +382,10 @@ void UCombatAttackComponent::HandleAttackReady(
 	AttackReadyDelegate.Broadcast(OrderHandle);
 }
 
-FCombatAttackResult UCombatAttackComponent::FinalizeAttackInternal(const FCombatAttackHandle Handle)
+FCombatAttackResult UCombatAttackComponent::FinalizeAttackInternal(
+	const FCombatAttackHandle Handle,
+	const bool bProjectileImpact,
+	ACombatUnitCharacter* ImpactTarget)
 {
 	FCombatAttackRecord* Record = FindRecord(Handle);
 	if (!Record || Record->State != ECombatAttackState::Launched)
@@ -345,8 +398,16 @@ FCombatAttackResult UCombatAttackComponent::FinalizeAttackInternal(const FCombat
 	ACombatUnitCharacter* Attacker = Record->Attacker.Get();
 	ACombatUnitCharacter* Target = Record->Target.Get();
 	UCombatTargetingSubsystem* Targeting = GetWorld()->GetSubsystem<UCombatTargetingSubsystem>();
+	FCombatTargetingRules ImpactRules = MakeAttackTargetingRules();
+	if (bProjectileImpact)
+	{
+		// 飞行路径已经承担距离与 LOS；impact 只复核原目标、阵营、生命与可选状态。
+		ImpactRules.CastRange = TNumericLimits<float>::Max() * 0.5f;
+		ImpactRules.bRequireLineOfSight = false;
+	}
 	if (!Attacker || !Target || Target->GetLifeGeneration() != Record->TargetLifeGeneration || !Targeting
-		|| !Targeting->ValidateUnitTarget(Attacker, Target, MakeAttackTargetingRules()).bValid)
+		|| (bProjectileImpact && ImpactTarget != Target)
+		|| !Targeting->ValidateUnitTarget(Attacker, Target, ImpactRules).bValid)
 	{
 		return AbortRecord(Handle, ECombatAttackOutcome::TargetInvalid, CombatTags::Order_Failure_TargetInvalid);
 	}

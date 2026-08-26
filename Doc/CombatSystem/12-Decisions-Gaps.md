@@ -47,6 +47,9 @@
 | ADR-030 | 已定 | M4 AttackTiming v1 使用 IAS 20..700、BAT 等比缩放、0.20..10.00 s interval，并以 Scheduler 绝对时间决定 attack point/ready | 关闭 GAP-010；Montage/Notify 只投影表现 |
 | ADR-031 | 已定 | Order 的 EQS/Move/Ability/Attack 回调必须同时匹配 OrderHandle、具体请求句柄与 Unit life generation | replace/Stop/Respawn 后旧异步结果不能推进新 Order |
 | ADR-032 | 已定 | 法球按稳定 Modifier 顺序执行无副作用 CanClaim，再按 exclusive group 提交 winner 并快照 OnHit | 未胜出不扣资源，提交失败可降级且旧 Record 不被升级重解释 |
+| ADR-033 | 已定 | Projectile 由 WorldSubsystem registry 持有，权威 Actor 只做连续 substep sweep 与位置复制，全部结束路径汇入幂等 Finish | fire-and-forget 不依赖 Ability 实例，穿透/高速/teardown 共用同一生命周期 |
+| ADR-034 | 已定 | Tracking 对旧生命、Dead/Dying/Respawning、Untargetable、OutOfGame 按 Data 选择 Fizzle 或 LastKnown；Invulnerable 留到 impact 判定 | 关闭 GAP-023，避免已有弹体对目标状态各自猜测 |
+| ADR-035 | 已定 | MotionComponent 分离 Horizontal/Vertical 独占通道，严格高优先级抢占；Thinker gameplay 时间只走 Scheduler | 保证中断 exactly-once、Order 恢复和 AoE 时序单一权威 |
 
 ## 3. 本轮查漏补缺摘要
 
@@ -93,7 +96,7 @@
 | GAP-012 | 已关闭（ADR-024） | Health/Mana regen 的周期、暂停和死亡行为 | 0.25 s Scheduler Coalesce；Health 走 HealSubsystem；Mana 走 Instant GE；非 Alive 暂停 | M2/ATR-001 |
 | GAP-013 | 已关闭（ADR-025） | Death 后 cooldown、Mana、非 RemoveOnDeath Modifier、奖励归属 | 保留 Spec/cooldown/AutoCast/非死亡移除 Modifier；Mana 复活至 Max；M2 仅记录归属 | M2/LIFE-001 |
 | GAP-016 | 开放 | SpellBlock、Break、Debuff immunity、Dispel immunity 等高级状态 | 各自定义为 Target/Ability/Modifier 阶段规则，不用一个 MagicImmune Tag 包办 | M6/EXT-602 |
-| GAP-023 | 开放 | Untargetable/Invulnerable/OutOfGame 对已有 Tracking Projectile 的影响 | 每种 ProjectileData 明确 fizzle/last-known/continue snapshot policy | M5/PRJ-003 |
+| GAP-023 | 已关闭（ADR-034） | Untargetable/Invulnerable/OutOfGame 对已有 Tracking Projectile 的影响 | Dead/生命代次变化/Untargetable/OutOfGame 按 Data 选择 Fizzle 或 LastKnown；Invulnerable 继续跟踪并在 impact 走统一目标/伤害判定；见 [22 §4](22-M5-Projectile-Motion-Decision.md#4-tracking-目标丢失关闭-gap-023) | 2026-08-26 / PRJ-003 |
 | GAP-024 | 已关闭（ADR-029） | CDR/耗蓝缩减在 cooldown 已开始后的动态变化 | Cost/CDR 在 commit point 快照；已开始 cooldown 不重排；同 Stage Cost/Cooldown 整体预检 | M3/ABL-003 |
 
 ## 6. P1：内容、网络与工具扩展

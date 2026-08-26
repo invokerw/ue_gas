@@ -42,6 +42,10 @@ public:
 	void HandleOwnerDeath();
 	/** Respawn 后保持空队列，允许新生命接受 Order。 */
 	void HandleOwnerRespawn();
+	/** 强制位移开始时取消旧 AI Move 并暂停当前有效队首。 */
+	void HandleOwnerMotionStarted();
+	/** 全部强制位移结束后只重新 Pump 当前 generation 的队首。 */
+	void HandleOwnerMotionFinished();
 
 	/** 返回当前状态。 */
 	UFUNCTION(BlueprintPure, Category="Combat|Order") ECombatOrderState GetCurrentState() const { return CurrentState; }

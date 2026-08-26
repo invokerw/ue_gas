@@ -9,6 +9,7 @@
 #include "Combat/Combat/CombatTransactionTypes.h"
 #include "Combat/Core/CombatDeferredOperationQueue.h"
 #include "Combat/Data/CombatDefinitionData.h"
+#include "Combat/Motion/CombatMotionTypes.h"
 
 #include "CombatModifierComponent.generated.h"
 
@@ -40,6 +41,10 @@ struct UE_GAS_API FCombatModifierApplyRequest
 	UPROPERTY(BlueprintReadWrite, Category="Combat|Modifier") float DurationOverride = -1.0f;
 	/** Intrinsic Modifier 使用的 AbilitySpec owner key；普通 Modifier 保持无效。 */
 	UPROPERTY(BlueprintReadWrite, Category="Combat|Modifier") FGameplayAbilitySpecHandle AbilityOwnerHandle;
+	/** true 时把一次性 Motion 请求注入新建 Runtime。 */
+	UPROPERTY(BlueprintReadWrite, Category="Combat|Modifier") bool bHasInitialMotionRequest = false;
+	/** Meat Hook 等 Runtime 在 OnCreated 消费的强制位移快照。 */
+	UPROPERTY(BlueprintReadWrite, Category="Combat|Modifier") FCombatMotionRequest InitialMotionRequest;
 };
 
 /** ApplyModifier 返回的成功状态、句柄与刷新信息。 */

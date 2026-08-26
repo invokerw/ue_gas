@@ -6,6 +6,7 @@
 #include "Combat/Combat/CombatEffectUtilities.h"
 #include "Combat/Core/CombatTags.h"
 #include "Combat/Data/CombatDefinitionData.h"
+#include "Combat/Motion/CombatMotionComponent.h"
 #include "Combat/Unit/CombatUnitCharacter.h"
 
 void UCombatMagicShieldRuntime::OnCreated_Implementation()
@@ -145,4 +146,51 @@ bool UCombatDemoOrbRuntime::OnAttackClaimed_Implementation(
 	++SuccessfulClaimCount;
 	OutSnapshot = MoveTemp(Snapshot);
 	return true;
+}
+
+void UCombatHookDragRuntime::OnCreated_Implementation()
+{
+	ACombatUnitCharacter* Target = GetTargetUnit();
+	UCombatMotionComponent* Motion = Target ? Target->GetCombatMotionComponent() : nullptr;
+	if (!Motion || !HasInitialMotionRequest())
+	{
+		RequestRemoveSelf();
+		return;
+	}
+	Motion->OnMotionFinished().AddUObject(this, &UCombatHookDragRuntime::HandleMotionFinished);
+	const FCombatMotionResult Result = Motion->TryAcquireMotion(GetInitialMotionRequest());
+	if (!Result.bSuccess)
+	{
+		Motion->OnMotionFinished().RemoveAll(this);
+		RequestRemoveSelf();
+		return;
+	}
+	MotionHandle = Result.Handle;
+}
+
+void UCombatHookDragRuntime::OnDestroyed_Implementation()
+{
+	ACombatUnitCharacter* Target = GetTargetUnit();
+	if (UCombatMotionComponent* Motion = Target ? Target->GetCombatMotionComponent() : nullptr)
+	{
+		Motion->OnMotionFinished().RemoveAll(this);
+		if (Motion->IsMotionActive(MotionHandle))
+		{
+			Motion->ReleaseMotion(MotionHandle, ECombatMotionFinishReason::Cancelled);
+		}
+	}
+	MotionHandle = FCombatMotionHandle();
+}
+
+void UCombatHookDragRuntime::HandleMotionFinished(const FCombatMotionResult& Result)
+{
+	if (MotionHandle.IsValid() && Result.Handle == MotionHandle)
+	{
+		MotionHandle = FCombatMotionHandle();
+		if (ACombatUnitCharacter* Target = GetTargetUnit())
+		{
+			Target->GetCombatMotionComponent()->OnMotionFinished().RemoveAll(this);
+		}
+		RequestRemoveSelf();
+	}
 }

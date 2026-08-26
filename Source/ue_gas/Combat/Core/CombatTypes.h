@@ -222,6 +222,42 @@ struct UE_GAS_API FCombatProjectileHandle
 	FString ToString() const { return Key.ToString(TEXT("Projectile")); }
 	/** 比较两个弹体句柄的完整身份。 */
 	bool operator==(const FCombatProjectileHandle& Other) const { return Key == Other.Key; }
+	/** 返回两个弹体句柄是否不同。 */
+	bool operator!=(const FCombatProjectileHandle& Other) const { return !(*this == Other); }
+};
+
+/** 标识一个由 ThinkerSubsystem 持有的权威区域对象。 */
+USTRUCT(BlueprintType)
+struct UE_GAS_API FCombatThinkerHandle
+{
+	GENERATED_BODY()
+	/** Thinker 的共享身份键。 */
+	UPROPERTY(BlueprintReadOnly, Category="Combat|Handle") FCombatHandleKey Key;
+	/** 返回 Thinker 句柄是否有效。 */
+	bool IsValid() const { return Key.IsValid(); }
+	/** 返回适合日志输出的 Thinker 句柄文本。 */
+	FString ToString() const { return Key.ToString(TEXT("Thinker")); }
+	/** 比较两个 Thinker 句柄的完整身份。 */
+	bool operator==(const FCombatThinkerHandle& Other) const { return Key == Other.Key; }
+	/** 返回两个 Thinker 句柄是否不同。 */
+	bool operator!=(const FCombatThinkerHandle& Other) const { return !(*this == Other); }
+};
+
+/** 标识一个绑定 Unit life generation 的强制位移请求。 */
+USTRUCT(BlueprintType)
+struct UE_GAS_API FCombatMotionHandle
+{
+	GENERATED_BODY()
+	/** Motion 的共享身份键。 */
+	UPROPERTY(BlueprintReadOnly, Category="Combat|Handle") FCombatHandleKey Key;
+	/** 返回 Motion 句柄及其生命代次是否有效。 */
+	bool IsValid() const { return Key.IsValid() && Key.LifeGeneration != 0; }
+	/** 返回适合日志输出的 Motion 句柄文本。 */
+	FString ToString() const { return Key.ToString(TEXT("Motion")); }
+	/** 比较两个 Motion 句柄的完整身份。 */
+	bool operator==(const FCombatMotionHandle& Other) const { return Key == Other.Key; }
+	/** 返回两个 Motion 句柄是否不同。 */
+	bool operator!=(const FCombatMotionHandle& Other) const { return !(*this == Other); }
 };
 
 /** 标识一个 Combat Scheduler 槽位。 */

@@ -11,8 +11,10 @@
 #include "Combat/Data/CombatDefinitionData.h"
 #include "Combat/Log/CombatEventSubsystem.h"
 #include "Combat/Modifiers/CombatModifierComponent.h"
+#include "Combat/Projectile/CombatProjectileSubsystem.h"
 #include "Combat/Scheduling/CombatSchedulerSubsystem.h"
 #include "Combat/Targeting/CombatTargetingSubsystem.h"
+#include "Combat/Thinker/CombatThinkerSubsystem.h"
 #include "Combat/Unit/CombatUnitCharacter.h"
 
 UCombatGameplayAbility::UCombatGameplayAbility()
@@ -215,6 +217,16 @@ void UCombatGameplayAbility::EndAbility(
 		ChannelTask->EndTask();
 		ChannelTask = nullptr;
 	}
+	if (AbilityData && AbilityData->bCancelProjectilesWithAbility
+		&& CombatContext.Caster && CombatContext.EventContext.RootEventId.IsValid())
+	{
+		// 默认弹体与技能实例解耦；只有资产显式选择绑定时才按本 Activation 批量取消。
+		if (UCombatProjectileSubsystem* Projectiles = GetWorld()->GetSubsystem<UCombatProjectileSubsystem>())
+		{
+			Projectiles->CancelProjectilesForAbility(
+				CombatContext.Caster, CombatContext.EventContext.RootEventId);
+		}
+	}
 	EmitLifecycleEvent(CombatTags::Event_Combat_AbilityEnded, FGameplayTag(),
 		bWasCancelled ? TEXT("Ended Cancelled=1") : TEXT("Ended Cancelled=0"));
 	Super::EndAbility(Handle, ActorInfo, ActivationInfo, bReplicateEndAbility, bWasCancelled);
@@ -253,12 +265,116 @@ FCombatAbilityActionResult UCombatGameplayAbility::ExecuteDataDrivenActions()
 
 	for (const FCombatAbilityAction& Action : AbilityData->Actions)
 	{
-		if (Action.Type == ECombatAbilityActionType::SpawnLinearProjectile
-			|| Action.Type == ECombatAbilityActionType::SpawnTrackingProjectile
-			|| Action.Type == ECombatAbilityActionType::CreateThinker)
+		const bool bProjectileAction = Action.Type == ECombatAbilityActionType::SpawnLinearProjectile
+			|| Action.Type == ECombatAbilityActionType::SpawnTrackingProjectile;
+		if (bProjectileAction)
 		{
-			Result.FailureTag = CombatTags::Failure_ActionUnsupported;
-			return Result;
+			const float Magnitude = GetSpecialValue(Action.MagnitudeKey);
+			if (!Action.ProjectileData || !FCombatNumericPolicyV1::IsValidNonNegativeRequest(Magnitude))
+			{
+				Result.FailureTag = CombatTags::Failure_InvalidNumber;
+				return Result;
+			}
+			FCombatProjectileSpec Spec;
+			Spec.ProjectileData = Action.ProjectileData;
+			Spec.Source = Caster;
+			Spec.SpawnLocation = Caster->GetActorLocation();
+			Spec.Direction = CombatContext.TargetLocation - Spec.SpawnLocation;
+			if (Spec.Direction.IsNearlyZero())
+			{
+				Spec.Direction = Caster->GetActorForwardVector();
+			}
+			Spec.MovementType = Action.Type == ECombatAbilityActionType::SpawnTrackingProjectile
+				? ECombatProjectileMovementType::Tracking : ECombatProjectileMovementType::Linear;
+			Spec.Target = Spec.MovementType == ECombatProjectileMovementType::Tracking
+				? CombatContext.TargetActor.Get() : nullptr;
+			Spec.TargetLostPolicy = Action.ProjectileData->TargetLostPolicy;
+			Spec.HitPolicy = Action.ProjectileData->HitPolicy;
+			Spec.SpeedOverride = Action.ProjectileSpeedKey.IsNone()
+				? -1.0f : GetSpecialValue(Action.ProjectileSpeedKey);
+			Spec.RadiusOverride = Action.RadiusKey.IsNone()
+				? -1.0f : GetSpecialValue(Action.RadiusKey);
+			Spec.MaxDistanceOverride = Action.ProjectileRangeKey.IsNone()
+				? -1.0f : GetSpecialValue(Action.ProjectileRangeKey);
+			FCombatProjectileImpactAction Impact;
+			Impact.Type = ECombatProjectileImpactActionType::Damage;
+			Impact.Magnitude = Magnitude;
+			Impact.DamageType = Action.DamageType;
+			Spec.ImpactActions.Add(Impact);
+			if (Action.ModifierData)
+			{
+				const float MotionSpeed = Action.MotionSpeedKey.IsNone()
+					? 0.0f : GetSpecialValue(Action.MotionSpeedKey);
+				if (Action.bMotionToSource
+					&& (!FMath::IsFinite(MotionSpeed) || MotionSpeed <= 0.0f))
+				{
+					Result.FailureTag = CombatTags::Failure_InvalidNumber;
+					return Result;
+				}
+				FCombatProjectileImpactAction ModifierImpact;
+				ModifierImpact.Type = ECombatProjectileImpactActionType::ApplyModifier;
+				ModifierImpact.ModifierData = Action.ModifierData;
+				ModifierImpact.bMotionToSource = Action.bMotionToSource;
+				ModifierImpact.MotionSpeed = MotionSpeed;
+				ModifierImpact.MotionPriority = Action.MotionPriority;
+				Spec.ImpactActions.Add(ModifierImpact);
+			}
+			Spec.ParentEvent = CombatContext.EventContext;
+			Spec.SourceContext = SourceContext;
+			Spec.AbilityActivationId = CombatContext.EventContext.RootEventId;
+			Spec.bCancelWithSourceAbility = AbilityData->bCancelProjectilesWithAbility;
+			UCombatProjectileSubsystem* Projectiles = GetWorld()->GetSubsystem<UCombatProjectileSubsystem>();
+			const FCombatProjectileResult SpawnResult = Projectiles
+				? Projectiles->SpawnProjectile(Spec) : FCombatProjectileResult();
+			if (!SpawnResult.bSuccess)
+			{
+				Result.FailureTag = SpawnResult.FailureTag.IsValid()
+					? SpawnResult.FailureTag : CombatTags::Failure_ActionUnsupported.GetTag();
+				return Result;
+			}
+			++Result.AffectedTargetCount;
+			continue;
+		}
+
+		if (Action.Type == ECombatAbilityActionType::CreateThinker)
+		{
+			const float Radius = GetSpecialValue(Action.RadiusKey);
+			const float DamagePerPulse = GetSpecialValue(Action.MagnitudeKey);
+			const float Duration = GetSpecialValue(Action.DurationKey);
+			const float Interval = Action.IntervalKey.IsNone() ? 0.0f : GetSpecialValue(Action.IntervalKey);
+			if (!FCombatNumericPolicyV1::IsValidNonNegativeRequest(Radius)
+				|| !FCombatNumericPolicyV1::IsValidNonNegativeRequest(DamagePerPulse)
+				|| !FCombatNumericPolicyV1::IsValidNonNegativeRequest(Duration)
+				|| !FCombatNumericPolicyV1::IsValidNonNegativeRequest(Interval))
+			{
+				Result.FailureTag = CombatTags::Failure_InvalidNumber;
+				return Result;
+			}
+			FCombatThinkerSpec Spec;
+			Spec.Source = Caster;
+			Spec.Location = Action.Target == ECombatAbilityActionTarget::Caster
+				? Caster->GetActorLocation() : CombatContext.TargetLocation;
+			Spec.Radius = Radius;
+			Spec.PulseInterval = Interval;
+			Spec.Duration = Duration;
+			Spec.DamagePerPulse = DamagePerPulse;
+			Spec.DamageType = Action.DamageType;
+			Spec.ModifierPerPulse = Action.ModifierData;
+			Spec.TargetingRules = AbilityData->TargetingRules;
+			Spec.ParentEvent = CombatContext.EventContext;
+			Spec.SourceContext = SourceContext;
+			Spec.AbilityActivationId = CombatContext.EventContext.RootEventId;
+			UCombatThinkerSubsystem* Thinkers = GetWorld()->GetSubsystem<UCombatThinkerSubsystem>();
+			const FCombatThinkerResult CreateResult = Thinkers
+				? Thinkers->CreateThinker(Spec) : FCombatThinkerResult();
+			if (!CreateResult.bSuccess)
+			{
+				Result.FailureTag = CreateResult.FailureTag.IsValid()
+					? CreateResult.FailureTag : CombatTags::Failure_ActionUnsupported.GetTag();
+				return Result;
+			}
+			++Result.AffectedTargetCount;
+			continue;
 		}
 
 		TArray<ACombatUnitCharacter*> Targets;
