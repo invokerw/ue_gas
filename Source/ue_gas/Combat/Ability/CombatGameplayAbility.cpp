@@ -134,6 +134,7 @@ void UCombatGameplayAbility::ActivateAbility(
 	bChannelEnded = false;
 	bOrderReleased = false;
 	bEnding = false;
+	LastInterruptFailureTag = FGameplayTag();
 	LastActionResult = FCombatAbilityActionResult();
 	CombatContext = FCombatAbilityActivationContext();
 	CombatContext.EventContext = Events->CreateRootEvent();
@@ -204,11 +205,8 @@ void UCombatGameplayAbility::EndAbility(
 			bChannelEnded = true;
 			EmitLifecycleEvent(CombatTags::Event_Combat_AbilityChannelEnded, FGameplayTag(), TEXT("ChannelEnded Interrupted=1"));
 		}
-		if (bChannelStarted && !bOrderReleased)
-		{
-			bOrderReleased = true;
-			EmitLifecycleEvent(CombatTags::Event_Combat_AbilityOrderReleased, FGameplayTag(), TEXT("OrderReleased"));
-		}
+		ReleaseCombatOrder(false, LastInterruptFailureTag.IsValid()
+			? LastInterruptFailureTag : CombatTags::Order_Failure_Cancelled.GetTag());
 	}
 	if (ChannelTask)
 	{
@@ -407,8 +405,7 @@ void UCombatGameplayAbility::HandleCastPoint(const FCombatScheduledTickContext& 
 		}
 		return;
 	}
-	bOrderReleased = true;
-	EmitLifecycleEvent(CombatTags::Event_Combat_AbilityOrderReleased, FGameplayTag(), TEXT("OrderReleased"));
+	ReleaseCombatOrder(true, FGameplayTag());
 	FinishSuccessfully();
 }
 
@@ -434,8 +431,7 @@ void UCombatGameplayAbility::HandleChannelFinished()
 	}
 	if (!bOrderReleased)
 	{
-		bOrderReleased = true;
-		EmitLifecycleEvent(CombatTags::Event_Combat_AbilityOrderReleased, FGameplayTag(), TEXT("OrderReleased"));
+		ReleaseCombatOrder(true, FGameplayTag());
 	}
 	FinishSuccessfully();
 }
@@ -496,8 +492,28 @@ void UCombatGameplayAbility::FinishSuccessfully()
 
 void UCombatGameplayAbility::InterruptAbility(const FGameplayTag& FailureTag, const FString& Diagnostic)
 {
+	LastInterruptFailureTag = FailureTag;
 	EmitLifecycleEvent(CombatTags::Event_Combat_AbilityInterrupted, FailureTag, Diagnostic);
 	EndAbility(GetCurrentAbilitySpecHandle(), GetCurrentActorInfo(), GetCurrentActivationInfo(), true, true);
+}
+
+void UCombatGameplayAbility::ReleaseCombatOrder(const bool bSuccess, const FGameplayTag& FailureTag)
+{
+	if (bOrderReleased)
+	{
+		return;
+	}
+	bOrderReleased = true;
+	EmitLifecycleEvent(CombatTags::Event_Combat_AbilityOrderReleased, FailureTag,
+		bSuccess ? TEXT("OrderReleased Success=1") : TEXT("OrderReleased Success=0"));
+	if (UCombatAbilitySystemComponent* Asc = GetCombatAsc())
+	{
+		Asc->NotifyCombatAbilityOrderReleased(
+			GetCurrentAbilitySpecHandle(),
+			bSuccess,
+			FailureTag,
+			AbilityData ? AbilityData->ChannelInterruptOrderPolicy : ECombatChannelInterruptOrderPolicy::Continue);
+	}
 }
 
 void UCombatGameplayAbility::EmitLifecycleEvent(

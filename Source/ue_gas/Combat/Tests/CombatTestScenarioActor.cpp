@@ -2,15 +2,18 @@
 
 #include "Combat/Ability/CombatAbilitySystemComponent.h"
 #include "Combat/Ability/CombatGameplayAbility.h"
+#include "Combat/Attack/CombatAttackComponent.h"
 #include "Combat/Attributes/CombatAttributeSet.h"
 #include "Combat/Core/CombatTags.h"
 #include "Combat/Log/CombatEventSubsystem.h"
 #include "Combat/Modifiers/CombatModifierComponent.h"
+#include "Combat/Order/CombatOrderComponent.h"
 #include "Combat/Targeting/CombatTargetingSubsystem.h"
 #include "Combat/Unit/CombatRegenerationComponent.h"
 #include "Combat/Unit/CombatUnitCharacter.h"
 #include "Combat/Unit/CombatUnitLifecycleComponent.h"
 #include "Engine/World.h"
+#include "TimerManager.h"
 
 ACombatTestScenarioActor::ACombatTestScenarioActor()
 {
@@ -32,6 +35,10 @@ void ACombatTestScenarioActor::BeginPlay()
 
 void ACombatTestScenarioActor::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+	if (GetWorld())
+	{
+		GetWorldTimerManager().ClearTimer(M4AttackScenarioTimer);
+	}
 	if (EndPlayReason == EEndPlayReason::Destroyed)
 	{
 		DestroyScenario();
@@ -82,6 +89,38 @@ void ACombatTestScenarioActor::SpawnScenario()
 		bAllAlive ? TEXT("Present") : TEXT("Missing"),
 		bM2CoreReady ? TEXT("Ready") : TEXT("Invalid"),
 		bM3AbilityReady ? TEXT("Ready") : TEXT("Invalid"));
+
+	// Character 先在平台顶面完成落地，再基于稳定 feet location 生成 NavMesh 路径。
+	GetWorldTimerManager().SetTimer(
+		M4AttackScenarioTimer, this, &ACombatTestScenarioActor::StartM4AttackScenario, 1.0f, false);
+}
+
+void ACombatTestScenarioActor::StartM4AttackScenario()
+{
+	const bool bM4OrderAttackReady = HasAuthority() && SpawnedUnits.Num() == 2
+		&& IsValid(SpawnedUnits[0]) && IsValid(SpawnedUnits[1])
+		&& SpawnedUnits[0]->GetCombatOrderComponent() && SpawnedUnits[0]->GetCombatAttackComponent()
+		&& SpawnedUnits[1]->GetCombatOrderComponent() && SpawnedUnits[1]->GetCombatAttackComponent();
+	FCombatOrderResult AttackOrderResult;
+	if (bM4OrderAttackReady)
+	{
+		FCombatOrderRequest AttackOrder;
+		AttackOrder.Type = ECombatOrderType::AttackTarget;
+		AttackOrder.TargetUnit = SpawnedUnits[1];
+		AttackOrderResult = SpawnedUnits[0]->GetCombatOrderComponent()->IssueOrder(AttackOrder, false);
+	}
+	UE_LOG(LogCombat, Display,
+		TEXT("M4ScenarioReady Units=%d OrderAttackComponents=%s AttackOrderAccepted=%s Order=%s State=%d Source=%s Target=%s"),
+		SpawnedUnits.Num(),
+		bM4OrderAttackReady ? TEXT("Ready") : TEXT("Invalid"),
+		AttackOrderResult.bSuccess ? TEXT("Yes") : TEXT("No"),
+		*AttackOrderResult.Handle.ToString(),
+		SpawnedUnits.Num() > 0 && SpawnedUnits[0] && SpawnedUnits[0]->GetCombatOrderComponent()
+			? static_cast<int32>(SpawnedUnits[0]->GetCombatOrderComponent()->GetCurrentState()) : -1,
+		SpawnedUnits.Num() > 0 && SpawnedUnits[0]
+			? *SpawnedUnits[0]->GetActorLocation().ToCompactString() : TEXT("Invalid"),
+		SpawnedUnits.Num() > 1 && SpawnedUnits[1]
+			? *SpawnedUnits[1]->GetActorLocation().ToCompactString() : TEXT("Invalid"));
 }
 
 void ACombatTestScenarioActor::DestroyScenario()
@@ -90,6 +129,7 @@ void ACombatTestScenarioActor::DestroyScenario()
 	{
 		return;
 	}
+	GetWorldTimerManager().ClearTimer(M4AttackScenarioTimer);
 	for (ACombatUnitCharacter* Unit : SpawnedUnits)
 	{
 		if (IsValid(Unit))
@@ -119,7 +159,8 @@ ACombatUnitCharacter* ACombatTestScenarioActor::SpawnUnit(const FVector& Relativ
 {
 	FActorSpawnParameters Parameters;
 	Parameters.Owner = this;
-	Parameters.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	// 测试地图包含带厚度的 StaticMesh；让 UE 先寻找非穿透位置，避免 CharacterMovement 被初始重叠锁死。
+	Parameters.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
 	const FVector SpawnLocation = GetActorTransform().TransformPosition(RelativeOffset);
 	ACombatUnitCharacter* Unit = GetWorld()->SpawnActor<ACombatUnitCharacter>(UnitClass, SpawnLocation, GetActorRotation(), Parameters);
 	if (Unit && Unit->GetCombatTeamId() != FCombatTeamId(TeamValue))

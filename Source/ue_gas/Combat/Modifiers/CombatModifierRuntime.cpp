@@ -24,6 +24,26 @@ void UCombatModifierRuntime::OnAbilityExecuted_Implementation(
 	(void)Context;
 }
 
+FName UCombatModifierRuntime::GetAttackOrbExclusiveGroup_Implementation() const
+{
+	return NAME_None;
+}
+
+bool UCombatModifierRuntime::CanClaimAttack_Implementation(const FCombatAttackCandidateContext& Context) const
+{
+	(void)Context;
+	return false;
+}
+
+bool UCombatModifierRuntime::OnAttackClaimed_Implementation(
+	const FCombatAttackCandidateContext& Context,
+	FCombatOrbSnapshot& OutSnapshot)
+{
+	(void)Context;
+	(void)OutSnapshot;
+	return false;
+}
+
 bool UCombatModifierRuntime::RequestRemoveSelf()
 {
 	return OwningComponent && bActive ? OwningComponent->RemoveModifier(Handle) : false;

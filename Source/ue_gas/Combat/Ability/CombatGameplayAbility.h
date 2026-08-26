@@ -96,6 +96,8 @@ private:
 	void FinishSuccessfully();
 	/** 通过 GAS CancelAbility 进入统一 EndAbility 中断路径。 */
 	void InterruptAbility(const FGameplayTag& FailureTag, const FString& Diagnostic);
+	/** exactly-once 发出生命周期日志并同步通知 ASC 上的 Order 观察者。 */
+	void ReleaseCombatOrder(bool bSuccess, const FGameplayTag& FailureTag);
 	/** 写入一个同 ActivationId exactly-once 的生命周期结构化日志。 */
 	void EmitLifecycleEvent(const FGameplayTag& EventType, const FGameplayTag& FailureTag, const FString& Diagnostic);
 	/** 返回当前激活的 Combat ASC。 */
@@ -127,4 +129,6 @@ private:
 	bool bOrderReleased = false;
 	/** 防止 EndAbility 清理过程递归进入。 */
 	bool bEnding = false;
+	/** 保存本次中断原因，供 EndAbility 释放 Order 时返回稳定 FailureTag。 */
+	FGameplayTag LastInterruptFailureTag;
 };

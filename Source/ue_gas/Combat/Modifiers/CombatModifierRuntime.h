@@ -5,6 +5,7 @@
 #include "GameplayEffectTypes.h"
 #include "UObject/Object.h"
 
+#include "Combat/Attack/CombatAttackTypes.h"
 #include "Combat/Combat/CombatTransactionTypes.h"
 #include "Combat/Core/CombatTypes.h"
 #include "Combat/Scheduling/CombatSchedulerSubsystem.h"
@@ -68,6 +69,16 @@ public:
 	UFUNCTION(BlueprintNativeEvent, Category="Combat|Modifier|Ability")
 	void OnAbilityExecuted(const FPrimaryAssetId& AbilityDefinitionId, const FCombatEventContext& Context);
 
+	/** 返回法球 exclusive group；None 表示该 Runtime 不参与普攻仲裁。 */
+	UFUNCTION(BlueprintNativeEvent, BlueprintPure, Category="Combat|Modifier|Attack")
+	FName GetAttackOrbExclusiveGroup() const;
+	/** 无副作用检查当前 Runtime 是否可以成为本轮法球候选。 */
+	UFUNCTION(BlueprintNativeEvent, BlueprintPure, Category="Combat|Modifier|Attack")
+	bool CanClaimAttack(const FCombatAttackCandidateContext& Context) const;
+	/** winner 提交资源并生成快照；返回 false 时同组继续尝试下一候选。 */
+	UFUNCTION(BlueprintNativeEvent, Category="Combat|Modifier|Attack")
+	bool OnAttackClaimed(const FCombatAttackCandidateContext& Context, FCombatOrbSnapshot& OutSnapshot);
+
 	/** 请求在当前 Hook 阶段结束后移除自身 ActiveGE 与 Runtime。 */
 	UFUNCTION(BlueprintCallable, Category="Combat|Modifier")
 	bool RequestRemoveSelf();
@@ -118,6 +129,10 @@ protected:
 	virtual void OnPostDealHeal_Implementation(const FCombatHealEvent& Event);
 	virtual void OnPostTakeHeal_Implementation(const FCombatHealEvent& Event);
 	virtual void OnAbilityExecuted_Implementation(const FPrimaryAssetId& AbilityDefinitionId, const FCombatEventContext& Context);
+	/** 默认 Runtime 不是法球且不会提交 AttackRecord。 */
+	virtual FName GetAttackOrbExclusiveGroup_Implementation() const;
+	virtual bool CanClaimAttack_Implementation(const FCombatAttackCandidateContext& Context) const;
+	virtual bool OnAttackClaimed_Implementation(const FCombatAttackCandidateContext& Context, FCombatOrbSnapshot& OutSnapshot);
 
 private:
 	/** 仅 ModifierComponent 可以建立或更新一一映射的内部状态。 */

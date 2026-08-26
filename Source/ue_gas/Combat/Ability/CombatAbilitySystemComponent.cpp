@@ -542,6 +542,15 @@ void UCombatAbilitySystemComponent::CancelCombatAbilitiesBlockedByStatus(const F
 	}
 }
 
+void UCombatAbilitySystemComponent::NotifyCombatAbilityOrderReleased(
+	const FGameplayAbilitySpecHandle Handle,
+	const bool bSuccess,
+	const FGameplayTag FailureTag,
+	const ECombatChannelInterruptOrderPolicy InterruptPolicy)
+{
+	AbilityOrderReleasedDelegate.Broadcast(Handle, bSuccess, FailureTag, InterruptPolicy);
+}
+
 void UCombatAbilitySystemComponent::OnTagUpdated(const FGameplayTag& Tag, const bool bTagExists)
 {
 	Super::OnTagUpdated(Tag, bTagExists);

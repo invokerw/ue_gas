@@ -455,6 +455,63 @@ void UCombatModifierComponent::ExecuteAbilityExecuted(
 	DeferredOperations.EndPhase();
 }
 
+void UCombatModifierComponent::ClaimAttackOrbs(
+	const FCombatAttackCandidateContext& Context,
+	TArray<FCombatOrbSnapshot>& OutSnapshots)
+{
+	OutSnapshots.Reset();
+	TSet<FName> ClaimedGroups;
+	DeferredOperations.BeginPhase(TEXT("AttackOrbClaim"), FCombatEventId());
+	// MakeSortedSnapshot 已冻结 Priority desc / ApplySequence asc；提交失败时自然落到同组下一候选。
+	// OnAttackClaimed 返回 true 代表资源提交已经发生，此后必须锁定该组，不能因错误快照再尝试下一个候选。
+	for (UCombatModifierRuntime* Runtime : MakeSortedSnapshot())
+	{
+		if (!Runtime || !Runtime->IsActive())
+		{
+			continue;
+		}
+		const FName Group = Runtime->GetAttackOrbExclusiveGroup();
+		if (Group.IsNone() || ClaimedGroups.Contains(Group) || !Runtime->CanClaimAttack(Context))
+		{
+			continue;
+		}
+
+		FCombatOrbSnapshot Snapshot;
+		Snapshot.ExclusiveGroup = Group;
+		if (!Runtime->OnAttackClaimed(Context, Snapshot))
+		{
+			continue;
+		}
+
+		// 成功提交后只做无副作用的快照净化；这样即使扩展实现返回坏数据，也不会对同组资源二次提交。
+		if (!FMath::IsFinite(Snapshot.BonusDamage) || Snapshot.BonusDamage < 0.0f)
+		{
+			UE_LOG(LogCombat, Warning,
+				TEXT("Combat orb returned invalid BonusDamage after commit; value was reset Modifier=%s"),
+				*Runtime->GetHandle().ToString());
+			Snapshot.BonusDamage = 0.0f;
+		}
+		for (int32 ActionIndex = Snapshot.OnHitActions.Num() - 1; ActionIndex >= 0; --ActionIndex)
+		{
+			const FCombatOnHitAction& Action = Snapshot.OnHitActions[ActionIndex];
+			if (!FMath::IsFinite(Action.Magnitude) || Action.Magnitude < 0.0f
+				|| !FMath::IsFinite(Action.DurationOverride)
+				|| (Action.Type == ECombatOnHitActionType::ApplyModifier && !Action.ModifierData))
+			{
+				UE_LOG(LogCombat, Warning,
+					TEXT("Combat orb returned invalid OnHit action after commit; action was removed Modifier=%s Index=%d"),
+					*Runtime->GetHandle().ToString(), ActionIndex);
+				Snapshot.OnHitActions.RemoveAt(ActionIndex, 1, EAllowShrinking::No);
+			}
+		}
+		Snapshot.ExclusiveGroup = Group;
+		Snapshot.SourceModifier = Runtime->GetHandle();
+		ClaimedGroups.Add(Group);
+		OutSnapshots.Add(MoveTemp(Snapshot));
+	}
+	DeferredOperations.EndPhase();
+}
+
 void UCombatModifierComponent::HandleOwnerDeath()
 {
 	TArray<UCombatModifierRuntime*> Snapshot;

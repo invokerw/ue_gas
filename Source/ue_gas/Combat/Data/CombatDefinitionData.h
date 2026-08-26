@@ -160,6 +160,30 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Unit", meta=(ClampMin="0", Units="cm"))
 	float CapsuleRadiusOverride = 0.0f;
 
+	/** AttackSpeed=100 时从起手到 AttackLaunched 的基础前摇秒数。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Unit|Attack", meta=(ClampMin="0", Units="s"))
+	float BaseAttackPoint = 0.3f;
+
+	/** 普攻起手前允许的最大 XY 朝向误差；Order 会先服务器转向再复核。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Unit|Attack", meta=(ClampMin="0", ClampMax="180", Units="deg"))
+	float AttackFacingToleranceDegrees = 15.0f;
+
+	/** true 时允许 CharacterMovement 仍在移动时直接创建 AttackRecord。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Unit|Attack")
+	bool bAllowAttackWhileMoving = false;
+
+	/** 普攻起手与 impact 是否复用 CombatTargeting LOS。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Unit|Attack")
+	bool bRequireAttackLineOfSight = false;
+
+	/** 创建 AttackRecord 时快照的基础暴击概率。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Unit|Attack", meta=(ClampMin="0", ClampMax="1"))
+	float CriticalStrikeChance = 0.0f;
+
+	/** Crit roll 成功后乘到主攻击伤害的基础倍率。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Unit|Attack", meta=(ClampMin="1"))
+	float CriticalStrikeMultiplier = 2.0f;
+
 	/** Unit 初始化时按顺序授予的 AbilitySet 软引用。 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Unit")
 	TArray<TSoftObjectPtr<UCombatAbilitySet>> AbilitySets;
@@ -168,7 +192,7 @@ public:
 	virtual FPrimaryAssetType GetCombatPrimaryAssetType() const override;
 
 #if WITH_EDITOR
-	/** 检查基础属性、初始队伍、胶囊和 AbilitySet 引用。 */
+	/** 检查基础属性、攻击策略、初始队伍、胶囊和 AbilitySet 引用。 */
 	virtual EDataValidationResult IsDataValid(FDataValidationContext& Context) const override;
 #endif
 };

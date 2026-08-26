@@ -5,6 +5,7 @@
 #include "GameplayAbilitySpec.h"
 #include "GameplayEffectTypes.h"
 
+#include "Combat/Attack/CombatAttackTypes.h"
 #include "Combat/Combat/CombatTransactionTypes.h"
 #include "Combat/Core/CombatDeferredOperationQueue.h"
 #include "Combat/Data/CombatDefinitionData.h"
@@ -102,6 +103,8 @@ public:
 	void ExecutePostTakeHeal(const FCombatHealEvent& Event);
 	/** 技能进入 SpellStarted 后向来源 Unit 的 Modifier 稳定派发一次。 */
 	void ExecuteAbilityExecuted(const FPrimaryAssetId& AbilityDefinitionId, const FCombatEventContext& Context);
+	/** 以两阶段协议按 exclusive group 提交法球 winner，并返回不可变快照。 */
+	void ClaimAttackOrbs(const FCombatAttackCandidateContext& Context, TArray<FCombatOrbSnapshot>& OutSnapshots);
 
 	/** 生命周期进入 Dying 时移除死亡清理 Modifier，并暂停保留 Runtime 的 Hook/Think。 */
 	void HandleOwnerDeath();

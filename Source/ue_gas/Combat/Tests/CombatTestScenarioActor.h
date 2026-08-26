@@ -17,7 +17,7 @@ public:
 	/** 配置测试 Actor 的默认 UnitClass，并关闭运行时 Tick。 */
 	ACombatTestScenarioActor();
 
-	/** 在 Authority 上生成 Team 1/2 各一名 Unit，并输出 M3 场景状态日志。 */
+	/** 在 Authority 上生成 Team 1/2 各一名 Unit，并输出 M4 组件与 AttackTarget 场景日志。 */
 	UFUNCTION(BlueprintCallable, CallInEditor, Category="Combat|Test")
 	void SpawnScenario();
 
@@ -43,11 +43,11 @@ public:
 
 	/** Team 1 相对测试 Actor 的生成偏移。 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Combat|Test")
-	FVector TeamOneOffset = FVector(-300.0, 0.0, 100.0);
+	FVector TeamOneOffset = FVector(50.0, 0.0, 288.0);
 
 	/** Team 2 相对测试 Actor 的生成偏移。 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Combat|Test")
-	FVector TeamTwoOffset = FVector(300.0, 0.0, 100.0);
+	FVector TeamTwoOffset = FVector(300.0, 0.0, 288.0);
 
 protected:
 	/** 根据 bAutoSpawnOnBeginPlay 在游戏 World 中建立测试场景。 */
@@ -58,8 +58,12 @@ protected:
 private:
 	/** 在 Authority 上按相对偏移生成单个 Unit 并设置 TeamId。 */
 	ACombatUnitCharacter* SpawnUnit(const FVector& RelativeOffset, uint8 TeamValue);
+	/** 等待 Character 落地后发出 M4 AttackTarget Order，并输出场景验收日志。 */
+	void StartM4AttackScenario();
 
 	/** 当前由本 Actor 生成并负责销毁的 Unit。 */
 	UPROPERTY(Transient)
 	TArray<TObjectPtr<ACombatUnitCharacter>> SpawnedUnits;
+	/** 延迟到单位落地后再发攻击 Order，避免使用生成帧中的空中导航位置。 */
+	FTimerHandle M4AttackScenarioTimer;
 };

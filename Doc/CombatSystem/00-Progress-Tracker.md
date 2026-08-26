@@ -1,8 +1,8 @@
 # 00 开发进度台账
 
 > 最后更新：2026-08-26
-> 当前里程碑：M3 已验收（等待 M4 授权）
-> 总进度：45/82 Task 完成，4/9 里程碑由用户验收
+> 当前里程碑：M4 已验收（等待 M5 授权）
+> 总进度：53/82 Task 完成，5/9 里程碑由用户验收
 
 本文件是项目执行状态的唯一来源。[10 实施路线图](10-Implementation-Roadmap.md)定义任务内容和依赖，本文件记录实际状态、验证证据和用户验收结论。
 
@@ -38,7 +38,7 @@
 | M1 | GAS 基座 | 13/13 | 通过 | 已验收 | 2026-08-25 / 2026-08-25 | 源码 UE 5.8.0 Server/Client Target 构建通过；独立 Server/Game 进程连接 smoke 通过；M2 已授权并完成实现 |
 | M2 | 战斗内核 | 15/15 | 通过 | 已验收 | 2026-08-25 / 2026-08-26 | G2 通过；Editor/Server/Client 构建、Automation 12/12 和独立联机 smoke 通过；M3 已授权；见 [17](17-M2-Acceptance.md) |
 | M3 | 可施法切片 | 10/10 | 通过 | 已验收 | 2026-08-26 / 2026-08-26 | Editor/Server/Client 构建、Automation 17/17 和独立联机 smoke 通过；用户验收通过；见 [19](19-M3-Acceptance.md) |
-| M4 | Order 与普攻 | 0/8 | 未开始 | 未开始 | — | — |
+| M4 | Order 与普攻 | 8/8 | 通过 | 已验收 | 2026-08-26 / 2026-08-26 | Editor/Server/Client 构建、Automation 23/23 和独立联机追击/连续近战 smoke 通过；用户验收通过；见 [21](21-M4-Acceptance.md) |
 | M5 | Projectile、Thinker 与 Motion | 0/9 | 未开始 | 未开始 | — | — |
 | M6 | 复杂技能集 | 0/6 | 未开始 | 未开始 | — | — |
 | M7 | 联机、UI、工具和性能 | 0/9 | 未开始 | 未开始 | — | — |
@@ -113,14 +113,14 @@
 
 | Task | 需求名称 | 状态 | 完成证据/备注 |
 | --- | --- | --- | --- |
-| ORD-001 | OrderComponent | 未开始 | — |
-| ORD-002 | Strategy 移动适配 | 未开始 | — |
-| ORD-003 | 动态目标追击 | 未开始 | — |
-| ORD-004 | Ability 与 Order 接入 | 未开始 | — |
-| ATK-001 | Attack Registry | 未开始 | — |
-| ATK-002 | 攻击前摇与 Ready | 未开始 | 到期：GAP-010 |
-| ATK-003 | 近战攻击循环 | 未开始 | — |
-| ATK-004 | 法球仲裁 | 未开始 | — |
+| ORD-001 | OrderComponent | 已完成 | `CombatOrderTypes.h`、`CombatOrderComponent.*`；FIFO、replace、Stop、generation、结果与过期回调自动化通过 |
+| ORD-002 | Strategy 移动适配 | 已完成 | AI Move、可选 EQS、Request/Path/Handle/LifeGeneration 防护与结果分类完成；旧回调和成功 PartialPath 用例通过 |
+| ORD-003 | 动态目标追击 | 已完成 | Scheduler 0.10 s 复核、50 cm 重发、最长时间与重试上限、移动结束距离重验完成；独立服务器实际 NavMesh 追击通过 |
+| ORD-004 | Ability 与 Order 接入 | 已完成 | ASC `OrderReleased` 接口与 Cast Order 接入完成；正常/取消释放均不等待 backswing/cooldown，用例通过 |
+| ATK-001 | Attack Registry | 已完成 | `CombatAttackComponent.*`、`CombatAttackTypes.h`；唯一 registry、幂等终结、EndPlay/Death/Respawn 与旧生命 Handle 用例通过 |
+| ATK-002 | 攻击前摇与 Ready | 已完成 | `CombatAttackTimingPolicy.*`；Policy v1、绝对 ready、ScheduleOnce、前摇取消与 15° 朝向完成；关闭 GAP-010 |
+| ATK-003 | 近战攻击循环 | 已完成 | `AttackTarget` 持续 Order、距离/LOS/状态重验、Damage 公共入口完成；自动化与独立联机连续两次 50 伤害通过 |
+| ATK-004 | 法球仲裁 | 已完成 | Modifier 稳定两阶段 `CanClaim/OnAttackClaimed`、exclusive group、资源提交和 OnHit 快照完成；资源只扣一次与快照用例通过 |
 
 ## 8. M5：Projectile、Thinker 与 Motion
 
@@ -178,8 +178,8 @@
 | M0 | 2026-08-24 | 已验收 | 无 | 2026-08-24 | 已授权 M1（2026-08-24） |
 | M1 | 2026-08-25 | 已验收 | 中文注释规范与 M1 源码注释已补齐 | 2026-08-25 | 已授权 M2（2026-08-25） |
 | M2 | 2026-08-25 | 已验收 | 无 | 2026-08-26 | 已授权 M3（2026-08-26） |
-| M3 | 2026-08-26 | 已验收 | 无 | 2026-08-26 | 未授权 |
-| M4 | — | 未提交 | — | — | 未授权 |
+| M3 | 2026-08-26 | 已验收 | 无 | 2026-08-26 | 已授权 M4（2026-08-26） |
+| M4 | 2026-08-26 | 已验收 | 无 | 2026-08-26 | 未授权 |
 | M5 | — | 未提交 | — | — | 未授权 |
 | M6 | — | 未提交 | — | — | 未授权 |
 | M7 | — | 未提交 | — | — | 未授权 |
@@ -205,6 +205,9 @@
 | 2026-08-26 | 用户授权开始 M3；冻结 Target visibility、Ability gameplay timing 与 commit snapshot 决策，TGT-001 切换为进行中 | M3 / TGT-001 / ADR-027..029 |
 | 2026-08-26 | 完成 M3 全部 10 项；Editor、源码 Server/Client Target 构建成功，`Combat.` 自动化 17/17、独立监听服务器联机 smoke 通过；G3 通过并提交用户验收 | M3 / TGT-001 / ABL-001..006 / DEMO-301..303 / G3 |
 | 2026-08-26 | 用户确认 M3 验收通过并要求提交；保持 M4 未开始，等待单独授权 | M3 |
+| 2026-08-26 | 用户授权开始 M4；ORD-001 切换为进行中 | M4 / ORD-001 |
+| 2026-08-26 | 完成 M4 全部 8 项；关闭 GAP-010；Editor、源码 Server/Client Target 构建成功，`Combat.` 自动化 23/23、独立监听服务器实际追击与连续近战 smoke 通过；G4 通过并提交用户验收 | M4 / ORD-001..004 / ATK-001..004 / GAP-010 / G4 |
+| 2026-08-26 | 用户确认 M4 验收通过并要求提交；保持 M5 未开始，等待单独授权 | M4 |
 
 ## 14. 更新规则
 

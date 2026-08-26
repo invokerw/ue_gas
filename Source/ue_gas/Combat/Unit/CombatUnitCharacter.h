@@ -9,8 +9,10 @@
 #include "CombatUnitCharacter.generated.h"
 
 class UCombatAbilitySystemComponent;
+class UCombatAttackComponent;
 class UCombatAttributeSet;
 class UCombatModifierComponent;
+class UCombatOrderComponent;
 class UCombatRegenerationComponent;
 class UCombatUnitData;
 class UCombatUnitLifecycleComponent;
@@ -38,6 +40,10 @@ public:
 	UCombatUnitLifecycleComponent* GetCombatLifecycleComponent() const { return CombatLifecycleComponent; }
 	/** 返回 Scheduler 驱动的恢复组件。 */
 	UCombatRegenerationComponent* GetCombatRegenerationComponent() const { return CombatRegenerationComponent; }
+	/** 返回唯一 AttackRecord registry 与普攻时序组件。 */
+	UCombatAttackComponent* GetCombatAttackComponent() const { return CombatAttackComponent; }
+	/** 返回统一 Move/Cast/Attack FIFO 状态机组件。 */
+	UCombatOrderComponent* GetCombatOrderComponent() const { return CombatOrderComponent; }
 
 	/** 返回当前复制的战斗队伍。 */
 	FCombatTeamId GetCombatTeamId() const { return TeamId; }
@@ -68,6 +74,8 @@ public:
 	virtual void PossessedBy(AController* NewController) override;
 	/** 失去 Controller 时重新评估 ActorInfo，避免保留陈旧 Owner。 */
 	virtual void UnPossessed() override;
+	/** Controller 变化时刷新 OrderComponent 的 PathFollowing delegate。 */
+	virtual void NotifyControllerChanged() override;
 	/** Actor 结束时清空 ASC ActorInfo，终止跨生命周期引用。 */
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
@@ -120,6 +128,12 @@ protected:
 	/** Unit 的 Health/Mana 恢复调度组件。 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Combat|Components")
 	TObjectPtr<UCombatRegenerationComponent> CombatRegenerationComponent;
+	/** Unit 的唯一 AttackRecord registry 与 attack timing 执行器。 */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Combat|Components")
+	TObjectPtr<UCombatAttackComponent> CombatAttackComponent;
+	/** Unit 的服务器权威 Order FIFO 与异步状态机。 */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Combat|Components")
+	TObjectPtr<UCombatOrderComponent> CombatOrderComponent;
 
 	/** 服务器初始化使用的稳定 Unit 定义。 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Combat|Unit")

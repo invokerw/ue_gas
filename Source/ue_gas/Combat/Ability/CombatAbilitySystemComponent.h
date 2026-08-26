@@ -9,6 +9,14 @@
 
 #include "CombatAbilitySystemComponent.generated.h"
 
+/** Ability 释放其 Order 占用时向 OrderComponent 广播的同步结果。 */
+DECLARE_MULTICAST_DELEGATE_FourParams(
+	FOnCombatAbilityOrderReleased,
+	FGameplayAbilitySpecHandle,
+	bool,
+	FGameplayTag,
+	ECombatChannelInterruptOrderPolicy);
+
 /** 扩展 GAS ASC，统一维护 Combat ActorInfo 的初始化与清理契约。 */
 UCLASS(ClassGroup=(Combat), meta=(BlueprintSpawnableComponent))
 class UE_GAS_API UCombatAbilitySystemComponent : public UAbilitySystemComponent
@@ -85,6 +93,14 @@ public:
 	void ReconcileIntrinsicModifiers();
 	/** 状态 Tag 新增时取消被该状态阻断的活动 Ability，并保留 IgnoreSilence 例外。 */
 	void CancelCombatAbilitiesBlockedByStatus(FGameplayTag StatusTag);
+	/** Ability 正常释放或中断时 exactly-once 通知当前 OrderComponent。 */
+	void NotifyCombatAbilityOrderReleased(
+		FGameplayAbilitySpecHandle Handle,
+		bool bSuccess,
+		FGameplayTag FailureTag,
+		ECombatChannelInterruptOrderPolicy InterruptPolicy);
+	/** 返回 Ability OrderReleased 同步委托。 */
+	FOnCombatAbilityOrderReleased& OnCombatAbilityOrderReleased() { return AbilityOrderReleasedDelegate; }
 
 protected:
 	/** ASC Tag count 变化的统一入口，驱动状态响应并在新增阻断状态时取消 Ability。 */
@@ -112,4 +128,6 @@ private:
 	TMap<FGameplayAbilitySpecHandle, FCombatModifierHandle> IntrinsicModifierHandles;
 	/** 每个 Spec 只强引用最近一次动态 Duration GE 定义，避免历史 cooldown 定义累积。 */
 	UPROPERTY(Transient) TMap<FGameplayAbilitySpecHandle, TObjectPtr<class UGameplayEffect>> CooldownEffectDefinitions;
+	/** 当前 ASC 上全部 Combat Ability 共用的 Order 释放观察者。 */
+	FOnCombatAbilityOrderReleased AbilityOrderReleasedDelegate;
 };

@@ -2,11 +2,13 @@
 
 #include "Combat/Ability/CombatAbilitySystemComponent.h"
 #include "Combat/Ability/CombatGameplayAbility.h"
+#include "Combat/Attack/CombatAttackComponent.h"
 #include "Combat/Attributes/CombatAttributeSet.h"
 #include "Combat/Combat/CombatEffectUtilities.h"
 #include "Combat/Core/CombatTags.h"
 #include "Combat/Data/CombatDefinitionData.h"
 #include "Combat/Modifiers/CombatModifierComponent.h"
+#include "Combat/Order/CombatOrderComponent.h"
 #include "Combat/Unit/CombatRegenerationComponent.h"
 #include "Combat/Unit/CombatUnitLifecycleComponent.h"
 #include "Components/CapsuleComponent.h"
@@ -25,7 +27,12 @@ ACombatUnitCharacter::ACombatUnitCharacter()
 	CombatModifierComponent = CreateDefaultSubobject<UCombatModifierComponent>(TEXT("CombatModifiers"));
 	CombatLifecycleComponent = CreateDefaultSubobject<UCombatUnitLifecycleComponent>(TEXT("CombatLifecycle"));
 	CombatRegenerationComponent = CreateDefaultSubobject<UCombatRegenerationComponent>(TEXT("CombatRegeneration"));
+	CombatAttackComponent = CreateDefaultSubobject<UCombatAttackComponent>(TEXT("CombatAttack"));
+	CombatOrderComponent = CreateDefaultSubobject<UCombatOrderComponent>(TEXT("CombatOrders"));
+	AutoPossessAI = EAutoPossessAI::PlacedInWorldOrSpawned;
 	GetCapsuleComponent()->SetCollisionProfileName(TEXT("CombatUnit"));
+	// Strategy 单位的 AI 路径使用输入加速度驱动，确保 PathFollowing 通过 PawnMovement 正式消费移动请求。
+	GetCharacterMovement()->GetNavMovementProperties()->bUseAccelerationForPaths = true;
 }
 
 UAbilitySystemComponent* ACombatUnitCharacter::GetAbilitySystemComponent() const
@@ -58,7 +65,13 @@ bool ACombatUnitCharacter::InitializeFromUnitData(UCombatUnitData* InUnitData)
 		return InitializedUnitDefinitionId == RequestedId;
 	}
 	FString StatsDiagnostic;
-	if (!InUnitData->BaseStats.IsValid(&StatsDiagnostic) || !InUnitData->InitialTeamId.IsValid())
+	if (!InUnitData->BaseStats.IsValid(&StatsDiagnostic) || !InUnitData->InitialTeamId.IsValid()
+		|| !FMath::IsFinite(InUnitData->BaseAttackPoint) || InUnitData->BaseAttackPoint < 0.0f
+		|| !FMath::IsFinite(InUnitData->AttackFacingToleranceDegrees)
+		|| InUnitData->AttackFacingToleranceDegrees < 0.0f || InUnitData->AttackFacingToleranceDegrees > 180.0f
+		|| !FMath::IsFinite(InUnitData->CriticalStrikeChance)
+		|| InUnitData->CriticalStrikeChance < 0.0f || InUnitData->CriticalStrikeChance > 1.0f
+		|| !FMath::IsFinite(InUnitData->CriticalStrikeMultiplier) || InUnitData->CriticalStrikeMultiplier < 1.0f)
 	{
 		return false;
 	}
@@ -202,6 +215,15 @@ void ACombatUnitCharacter::UnPossessed()
 	RefreshAbilityActorInfo();
 }
 
+void ACombatUnitCharacter::NotifyControllerChanged()
+{
+	Super::NotifyControllerChanged();
+	if (CombatOrderComponent)
+	{
+		CombatOrderComponent->RefreshControllerBinding();
+	}
+}
+
 void ACombatUnitCharacter::BeginPlay()
 {
 	Super::BeginPlay();
@@ -314,6 +336,15 @@ void ACombatUnitCharacter::RefreshStatusResponse()
 	else
 	{
 		GetCapsuleComponent()->SetCollisionProfileName(TEXT("CombatUnit"));
+	}
+	// Dying/Dead 的清理由 LifecycleComponent 以固定屏障顺序调用，避免复制投影重复提升 generation。
+	if (LifeState == ECombatLifeState::Alive && CombatAttackComponent)
+	{
+		CombatAttackComponent->HandleOwnerStatusChanged();
+	}
+	if (LifeState == ECombatLifeState::Alive && CombatOrderComponent)
+	{
+		CombatOrderComponent->HandleOwnerStatusChanged();
 	}
 }
 

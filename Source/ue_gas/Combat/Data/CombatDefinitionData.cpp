@@ -315,6 +315,15 @@ EDataValidationResult UCombatUnitData::IsDataValid(FDataValidationContext& Conte
 		Context.AddError(FText::FromString(TEXT("Unit team or capsule radius is invalid")));
 		Result = EDataValidationResult::Invalid;
 	}
+	if (!FMath::IsFinite(BaseAttackPoint) || BaseAttackPoint < 0.0f
+		|| !FMath::IsFinite(AttackFacingToleranceDegrees) || AttackFacingToleranceDegrees < 0.0f
+		|| AttackFacingToleranceDegrees > 180.0f
+		|| !FMath::IsFinite(CriticalStrikeChance) || CriticalStrikeChance < 0.0f || CriticalStrikeChance > 1.0f
+		|| !FMath::IsFinite(CriticalStrikeMultiplier) || CriticalStrikeMultiplier < 1.0f)
+	{
+		Context.AddError(FText::FromString(TEXT("Unit attack point, facing tolerance or critical policy is invalid")));
+		Result = EDataValidationResult::Invalid;
+	}
 	for (const TSoftObjectPtr<UCombatAbilitySet>& AbilitySet : AbilitySets)
 	{
 		if (AbilitySet.IsNull())

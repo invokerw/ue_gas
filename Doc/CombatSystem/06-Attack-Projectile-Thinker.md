@@ -76,7 +76,7 @@ AttackComponent 统一计算：
 - 动画播放速率由同一计算结果投影，动画结束不作为权威 attack point。
 - 转向、目标角度容差和移动中能否起手是 UnitData/Attack policy，不由 montage 临时决定。
 
-公式、上限和转向策略在 M4 前关闭 [GAP-010](12-Decisions-Gaps.md)。
+M4 已按 `AttackTiming Policy v1` 落地公式、上限和转向策略并关闭 [GAP-010](12-Decisions-Gaps.md)；完整公式见 [20 §4](20-M4-Order-Attack-Decision.md#4-attacktiming-policy-v1关闭-gap-010)。
 
 ## 4. 法球仲裁
 
@@ -85,7 +85,9 @@ AttackComponent 统一计算：
 1. 按 `Priority -> ApplySequence` 收集候选，调用无副作用 `CanClaimAttack`。
 2. 每个 exclusive orb group 选择 winner。
 3. 对 winner 调 `OnAttackClaimed` 提交魔法/冷却，并把 bonus、DamageType、ProjectileData 和 OnHitActions 写入 Record 快照。
-4. 提交失败继续尝试下一个候选；未胜出者不得扣资源或改变状态。
+4. 提交失败继续尝试下一个候选；未胜出者不得扣资源或改变状态。`OnAttackClaimed=true` 代表提交已发生并锁定分组，后续输出即使需要净化也不再尝试同组候选，防止重复消费。
+
+M4 已实现近战 AttackRecord、时序、RNG、Damage 与法球快照；本文件后续 Projectile/Thinker 部分仍属于 M5 范围。
 
 命中时只执行 Record 中的 OnHitActions，不重新读取可能已升级/移除的 Ability 实例。是否允许多个非互斥 proc 叠加由 group/tag 规则声明。
 

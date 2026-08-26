@@ -44,6 +44,9 @@
 | ADR-027 | 已定 | M3 VisibilityPolicy 固定为 None；LOS 可显式开启；客户端只提交 Actor/位置且命中列表始终由服务器重算 | 关闭 GAP-008，保留后续 VisionProvider 扩展点 |
 | ADR-028 | 已定 | Cast/Channel gameplay 时间只由 Combat Scheduler 驱动；Montage/Notify 仅作可校准表现，不能触发唯一结算 | 关闭 GAP-011，统一中断和清理语义 |
 | ADR-029 | 已定 | ManaCost 与 CDR 在各自 commit point 快照；已开始 cooldown 不因后续 CDR 改变而重排 | 关闭 GAP-024，冻结分阶段提交语义 |
+| ADR-030 | 已定 | M4 AttackTiming v1 使用 IAS 20..700、BAT 等比缩放、0.20..10.00 s interval，并以 Scheduler 绝对时间决定 attack point/ready | 关闭 GAP-010；Montage/Notify 只投影表现 |
+| ADR-031 | 已定 | Order 的 EQS/Move/Ability/Attack 回调必须同时匹配 OrderHandle、具体请求句柄与 Unit life generation | replace/Stop/Respawn 后旧异步结果不能推进新 Order |
+| ADR-032 | 已定 | 法球按稳定 Modifier 顺序执行无副作用 CanClaim，再按 exclusive group 提交 winner 并快照 OnHit | 未胜出不扣资源，提交失败可降级且旧 Record 不被升级重解释 |
 
 ## 3. 本轮查漏补缺摘要
 
@@ -85,7 +88,7 @@
 | --- | --- | --- | --- | --- |
 | GAP-005 | 已关闭（ADR-026） | StatusResistance 是否改变 Duration、tick interval、总伤害 | 只缩短明确可缩短 Debuff Duration；Think interval 不变；边界 tick 按缩短后的 ExpireAt | M2/MOD-004 |
 | GAP-008 | 已关闭（ADR-027） | Vision/Fog/Invisible/TrueSight 与施法、攻击、弹体目标合法性 | M3 固定 `VisibilityPolicy=None`；服务器重算 Actor/位置/AoE，API 保留可见性策略扩展点 | M3/TGT-001 |
-| GAP-010 | 开放 | BAT/AttackSpeed/attack point、移动起手、转向角 | 集中 AttackTiming policy；Scheduler 时间权威，Montage 速率只投影 | M4/ATK-002 |
+| GAP-010 | 已关闭（ADR-030） | BAT/AttackSpeed/attack point、移动起手、转向角 | 公式、clamp、移动起手、15° 朝向与动画边界见 [20](20-M4-Order-Attack-Decision.md#4-attacktiming-policy-v1关闭-gap-010) | 2026-08-26 / ATK-002 |
 | GAP-011 | 已关闭（ADR-028） | Montage notify 与 gameplay 时间的关系、被打断时动画清理 | gameplay 只使用 Scheduler；notify 仅作表现校准；所有退出路径统一停止表现并清理 Task/Schedule | M3/ABL-003 |
 | GAP-012 | 已关闭（ADR-024） | Health/Mana regen 的周期、暂停和死亡行为 | 0.25 s Scheduler Coalesce；Health 走 HealSubsystem；Mana 走 Instant GE；非 Alive 暂停 | M2/ATR-001 |
 | GAP-013 | 已关闭（ADR-025） | Death 后 cooldown、Mana、非 RemoveOnDeath Modifier、奖励归属 | 保留 Spec/cooldown/AutoCast/非死亡移除 Modifier；Mana 复活至 Max；M2 仅记录归属 | M2/LIFE-001 |

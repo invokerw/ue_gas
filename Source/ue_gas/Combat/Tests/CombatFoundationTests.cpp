@@ -72,6 +72,11 @@ bool FCombatConfigurationTest::RunTest(const FString& Parameters)
 		Event_Combat_ModifierRemoved, Event_Combat_UnitDeath,
 		Event_Combat_UnitRespawned, Event_Combat_TeamChanged, Event_Combat_AbilityGranted,
 		Event_Combat_AbilityRemoved, Event_Combat_AbilityLevelChanged, Event_Combat_AutoCastChanged,
+		Event_Combat_AbilityCastStarted, Event_Combat_AbilitySpellStarted,
+		Event_Combat_AbilityChannelEnded, Event_Combat_AbilityOrderReleased,
+		Event_Combat_AbilityInterrupted, Event_Combat_AbilityEnded,
+		Event_Combat_AbilityActionFailed, Event_Combat_OrderStateChanged,
+		Event_Combat_AttackLaunched, Event_Combat_AttackLanded, Event_Combat_AttackFailed,
 		Failure_Authority, Failure_InvalidNumber, Failure_ActionUnsupported, Failure_Target_Invalid,
 		Failure_Target_TeamInvalid, Failure_Target_SelfNotAllowed, Failure_Target_FriendlyNotAllowed,
 		Failure_Target_HostileNotAllowed, Failure_Target_NeutralNotAllowed, Failure_Target_Dying,
@@ -79,9 +84,14 @@ bool FCombatConfigurationTest::RunTest(const FString& Parameters)
 		Failure_Target_OutOfGame, Failure_Target_Invulnerable, Failure_Target_MagicImmune,
 		Failure_Target_OutOfRange, Failure_Target_LocationInvalid, Failure_Target_LineOfSightBlocked,
 		Failure_Life_NotAlive, Failure_Life_InvalidTransition, Failure_Ability_DuplicateDefinition,
-		Failure_Ability_InvalidLevel, Failure_Ability_NotGranted, Order_Failure_Cancelled,
+		Failure_Ability_InvalidLevel, Failure_Ability_NotGranted, Failure_Ability_InvalidTargetData,
+		Failure_Ability_Cost, Failure_Ability_Cooldown, Failure_Ability_CommitFailed,
+		Failure_Ability_AlreadyActive, Failure_Ability_UnitStateBlocked, Order_Failure_Cancelled,
 		Order_Failure_QueueFull, Order_Failure_PathFailed, Order_Failure_Blocked,
 		Order_Failure_AbilityRejected, Order_Failure_UnitStateBlocked, RNG_Attack_Evasion,
+		Order_Failure_TargetInvalid, Order_Failure_OutOfRange, Order_Failure_InvalidRequest,
+		Order_Failure_StaleCallback, Order_Failure_RetryExhausted, Failure_Attack_NotReady,
+		Failure_Attack_Blocked, Failure_Attack_StaleHandle, Failure_Attack_Evaded,
 		RNG_Attack_Crit, RNG_Modifier_Proc
 	};
 	for (const FGameplayTag& Tag : NativeTags)

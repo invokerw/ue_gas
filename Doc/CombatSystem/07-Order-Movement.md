@@ -85,7 +85,7 @@ Queued
 
 - Point：`AAIController::MoveTo` + `FAIMoveRequest`。
 - 多单位目标分散：复用 EQS 选择候选位置。
-- Unit/Attack/Cast 追击：MoveTo 动态目标附近，Scheduler Coalesce 低频复查；目标位移超过阈值时提前唤醒。
+- Unit/Attack/Cast 追击：MoveTo 保存的服务器目标位置，Scheduler Coalesce 低频复查；目标位移超过阈值时重发请求。成功的 PartialPath 也必须用当前 gameplay 距离重验。
 - 有效距离统一考虑双方碰撞半径、AttackRange/CastRangeBonus、技能距离和容差。
 - 到达后重新验证，不以客户端距离或旧 EQS 结果作为权威。
 
@@ -111,6 +111,8 @@ Queued
 - 分别处理 Success、AlreadyAtGoal、Blocked、Aborted、Invalid、PartialPath。
 - 只有匹配当前请求的成功结果能推进队列。
 - 在 NotifyControllerChanged/EndPlay 解绑旧 PathFollowing delegate，初始化必须幂等。
+
+M4 已按上述约束实现 `UCombatOrderComponent`。CharacterMovement 使用 acceleration-driven PathFollowing 输入；Move 回调出现一帧残余速度时进入同一有界重试，避免把正常到达误判成永久移动阻止。实际监听服务器 NavMesh 追击、到达、转向和连续近战已通过 smoke。
 
 ## 6. 碰撞、避让和临时阻挡
 

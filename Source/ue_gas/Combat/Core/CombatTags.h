@@ -76,6 +76,10 @@ namespace CombatTags
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Combat_AbilityInterrupted)
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Combat_AbilityEnded)
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Combat_AbilityActionFailed)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Combat_OrderStateChanged)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Combat_AttackLaunched)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Combat_AttackLanded)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Combat_AttackFailed)
 
 	/** 公共操作、Target 与 Ability 校验失败标签。 */
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Failure_Authority)
@@ -116,6 +120,15 @@ namespace CombatTags
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Order_Failure_Blocked)
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Order_Failure_AbilityRejected)
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Order_Failure_UnitStateBlocked)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Order_Failure_TargetInvalid)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Order_Failure_OutOfRange)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Order_Failure_InvalidRequest)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Order_Failure_StaleCallback)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Order_Failure_RetryExhausted)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Failure_Attack_NotReady)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Failure_Attack_Blocked)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Failure_Attack_StaleHandle)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Failure_Attack_Evaded)
 
 	/** keyed RNG 的稳定随机域标签。 */
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(RNG_Attack_Evasion)

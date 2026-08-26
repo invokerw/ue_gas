@@ -48,3 +48,28 @@ protected:
 	/** 按 reflection_pct 和真实 AppliedDamage 反射给原来源。 */
 	virtual void OnPostTakeDamage_Implementation(const FCombatDamageEvent& Event) override;
 };
+
+/** M4 基础法球 Runtime：无副作用预检，winner 提交 Mana 并写入伤害/OnHit 快照。 */
+UCLASS(Blueprintable)
+class UE_GAS_API UCombatDemoOrbRuntime : public UCombatModifierRuntime
+{
+	GENERATED_BODY()
+
+public:
+	/** 返回测试和调试可观察的 winner 提交次数。 */
+	UFUNCTION(BlueprintPure, Category="Combat|Demo|Orb") int32 GetSuccessfulClaimCount() const { return SuccessfulClaimCount; }
+
+protected:
+	/** 第一版示例统一参与 Orb.Primary exclusive group。 */
+	virtual FName GetAttackOrbExclusiveGroup_Implementation() const override;
+	/** 只读检查 orb_enabled、数值与当前 Mana，不产生任何资源副作用。 */
+	virtual bool CanClaimAttack_Implementation(const FCombatAttackCandidateContext& Context) const override;
+	/** 再次原子预检后扣除 Mana，并输出 bonus/on-hit 的不可变快照。 */
+	virtual bool OnAttackClaimed_Implementation(
+		const FCombatAttackCandidateContext& Context,
+		FCombatOrbSnapshot& OutSnapshot) override;
+
+private:
+	/** 只在提交成功后递增；未胜出和失败候选保持不变。 */
+	int32 SuccessfulClaimCount = 0;
+};
