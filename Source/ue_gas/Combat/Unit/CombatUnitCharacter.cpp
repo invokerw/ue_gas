@@ -1,8 +1,16 @@
 #include "Combat/Unit/CombatUnitCharacter.h"
 
 #include "Combat/Ability/CombatAbilitySystemComponent.h"
+#include "Combat/Attributes/CombatAttributeSet.h"
+#include "Combat/Combat/CombatEffectUtilities.h"
 #include "Combat/Core/CombatTags.h"
+#include "Combat/Data/CombatDefinitionData.h"
+#include "Combat/Modifiers/CombatModifierComponent.h"
+#include "Combat/Unit/CombatRegenerationComponent.h"
+#include "Combat/Unit/CombatUnitLifecycleComponent.h"
 #include "Components/CapsuleComponent.h"
+#include "GameFramework/CharacterMovementComponent.h"
+#include "GameplayEffectTypes.h"
 #include "Net/UnrealNetwork.h"
 
 ACombatUnitCharacter::ACombatUnitCharacter()
@@ -11,6 +19,11 @@ ACombatUnitCharacter::ACombatUnitCharacter()
 	SetReplicateMovement(true);
 
 	CombatAbilitySystemComponent = CreateDefaultSubobject<UCombatAbilitySystemComponent>(TEXT("CombatAbilitySystem"));
+	CombatAttributeSet = CreateDefaultSubobject<UCombatAttributeSet>(TEXT("CombatAttributes"));
+	CombatAbilitySystemComponent->AddAttributeSetSubobject(CombatAttributeSet.Get());
+	CombatModifierComponent = CreateDefaultSubobject<UCombatModifierComponent>(TEXT("CombatModifiers"));
+	CombatLifecycleComponent = CreateDefaultSubobject<UCombatUnitLifecycleComponent>(TEXT("CombatLifecycle"));
+	CombatRegenerationComponent = CreateDefaultSubobject<UCombatRegenerationComponent>(TEXT("CombatRegeneration"));
 	GetCapsuleComponent()->SetCollisionProfileName(TEXT("CombatUnit"));
 }
 
@@ -29,6 +42,128 @@ bool ACombatUnitCharacter::SetCombatTeamId(const FCombatTeamId NewTeamId)
 	OnRep_TeamId();
 	ForceNetUpdate();
 	return true;
+}
+
+bool ACombatUnitCharacter::InitializeFromUnitData(UCombatUnitData* InUnitData)
+{
+	if (!HasAuthority() || !InUnitData || !InUnitData->GetPrimaryAssetId().IsValid()
+		|| !UCombatDefinitionData::IsValidDefinitionName(InUnitData->DefinitionName))
+	{
+		return false;
+	}
+	const FPrimaryAssetId RequestedId = InUnitData->GetPrimaryAssetId();
+	if (InitializedUnitDefinitionId.IsValid())
+	{
+		return InitializedUnitDefinitionId == RequestedId;
+	}
+	FString StatsDiagnostic;
+	if (!InUnitData->BaseStats.IsValid(&StatsDiagnostic) || !InUnitData->InitialTeamId.IsValid())
+	{
+		return false;
+	}
+
+	// 先加载并完整校验 AbilitySet，避免属性已写入后才发现授予表非法。
+	TArray<UCombatAbilitySet*> LoadedSets;
+	TSet<UClass*> PendingAbilityClasses;
+	for (const TSoftObjectPtr<UCombatAbilitySet>& SetReference : InUnitData->AbilitySets)
+	{
+		UCombatAbilitySet* AbilitySet = SetReference.LoadSynchronous();
+		if (!AbilitySet)
+		{
+			return false;
+		}
+		LoadedSets.Add(AbilitySet);
+		for (const FCombatAbilitySetEntry& Entry : AbilitySet->Abilities)
+		{
+			UClass* AbilityClass = Entry.AbilityClass.Get();
+			if (!AbilityClass || Entry.InitialLevel < 1 || PendingAbilityClasses.Contains(AbilityClass)
+				|| CombatAbilitySystemComponent->FindAbilitySpecFromClass(AbilityClass))
+			{
+				return false;
+			}
+			PendingAbilityClasses.Add(AbilityClass);
+		}
+	}
+
+	UnitData = InUnitData;
+	if (TeamId != InUnitData->InitialTeamId)
+	{
+		SetCombatTeamId(InUnitData->InitialTeamId);
+	}
+	if (InUnitData->CapsuleRadiusOverride > 0.0f)
+	{
+		GetCapsuleComponent()->SetCapsuleRadius(InUnitData->CapsuleRadiusOverride);
+	}
+	const FCombatUnitBaseStats& Stats = InUnitData->BaseStats;
+	// Max 属性排在 Current 属性之前，使同一 Instant 初始化 GE 按新上限完成 clamp。
+	const TArray<TPair<FGameplayAttribute, float>> InitialAttributes = {
+		{ UCombatAttributeSet::GetMaxHealthAttribute(), Stats.MaxHealth },
+		{ UCombatAttributeSet::GetHealthAttribute(), Stats.MaxHealth },
+		{ UCombatAttributeSet::GetMaxManaAttribute(), Stats.MaxMana },
+		{ UCombatAttributeSet::GetManaAttribute(), Stats.MaxMana },
+		{ UCombatAttributeSet::GetArmorAttribute(), Stats.Armor },
+		{ UCombatAttributeSet::GetMagicResistAttribute(), Stats.MagicResist },
+		{ UCombatAttributeSet::GetEvasionAttribute(), Stats.Evasion },
+		{ UCombatAttributeSet::GetAttackDamageAttribute(), Stats.AttackDamage },
+		{ UCombatAttributeSet::GetAttackSpeedAttribute(), Stats.AttackSpeed },
+		{ UCombatAttributeSet::GetBaseAttackTimeAttribute(), Stats.BaseAttackTime },
+		{ UCombatAttributeSet::GetAttackRangeAttribute(), Stats.AttackRange },
+		{ UCombatAttributeSet::GetMoveSpeedAttribute(), Stats.MoveSpeed },
+		{ UCombatAttributeSet::GetHealthRegenAttribute(), Stats.HealthRegen },
+		{ UCombatAttributeSet::GetManaRegenAttribute(), Stats.ManaRegen },
+		{ UCombatAttributeSet::GetLifestealPctAttribute(), Stats.LifestealPct },
+		{ UCombatAttributeSet::GetSpellAmplifyPctAttribute(), Stats.SpellAmplifyPct },
+		{ UCombatAttributeSet::GetCooldownReductionPctAttribute(), Stats.CooldownReductionPct },
+		{ UCombatAttributeSet::GetCastRangeBonusAttribute(), Stats.CastRangeBonus },
+		{ UCombatAttributeSet::GetStatusResistancePctAttribute(), Stats.StatusResistancePct },
+		{ UCombatAttributeSet::GetHealAmplifyPctAttribute(), Stats.HealAmplifyPct },
+		{ UCombatAttributeSet::GetHealReceivedPctAttribute(), Stats.HealReceivedPct }
+	};
+	if (!CombatEffectUtilities::ApplyAttributeOverrides(this, *CombatAbilitySystemComponent, InitialAttributes))
+	{
+		return false;
+	}
+
+	for (const UCombatAbilitySet* AbilitySet : LoadedSets)
+	{
+		for (const FCombatAbilitySetEntry& Entry : AbilitySet->Abilities)
+		{
+			const FGameplayAbilitySpecHandle Handle = CombatAbilitySystemComponent->GiveAbility(
+				FGameplayAbilitySpec(Entry.AbilityClass, Entry.InitialLevel));
+			CombatAbilitySystemComponent->SetInitialAutoCastState(Handle, Entry.bAutoCastEnabled);
+		}
+	}
+	InitializedUnitDefinitionId = RequestedId;
+	// 组件 BeginPlay 可能早于运行时 UnitData 注入；这里幂等确保恢复任务已按新属性建立。
+	if (CombatRegenerationComponent)
+	{
+		CombatRegenerationComponent->HandleOwnerRespawn();
+	}
+	RefreshStatusResponse();
+	return true;
+}
+
+bool ACombatUnitCharacter::IsMovementBlocked() const
+{
+	return LifeState != ECombatLifeState::Alive || !CombatAbilitySystemComponent
+		|| CombatAbilitySystemComponent->HasMatchingGameplayTag(CombatTags::State_Stunned)
+		|| CombatAbilitySystemComponent->HasMatchingGameplayTag(CombatTags::State_Rooted)
+		|| CombatAbilitySystemComponent->HasMatchingGameplayTag(CombatTags::State_Hexed)
+		|| CombatAbilitySystemComponent->HasMatchingGameplayTag(CombatTags::State_Frozen);
+}
+
+bool ACombatUnitCharacter::IsAttackBlocked() const
+{
+	return IsMovementBlocked() || CombatAbilitySystemComponent->HasMatchingGameplayTag(CombatTags::State_Disarmed);
+}
+
+bool ACombatUnitCharacter::IsAbilityBlocked() const
+{
+	return LifeState != ECombatLifeState::Alive || !CombatAbilitySystemComponent
+		|| CombatAbilitySystemComponent->HasMatchingGameplayTag(CombatTags::State_Stunned)
+		|| CombatAbilitySystemComponent->HasMatchingGameplayTag(CombatTags::State_Silenced)
+		|| CombatAbilitySystemComponent->HasMatchingGameplayTag(CombatTags::State_Hexed)
+		|| CombatAbilitySystemComponent->HasMatchingGameplayTag(CombatTags::State_Frozen);
 }
 
 void ACombatUnitCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -56,6 +191,26 @@ void ACombatUnitCharacter::BeginPlay()
 	Super::BeginPlay();
 	RefreshAbilityActorInfo();
 	RefreshLifeStateTag();
+	if (CombatAbilitySystemComponent)
+	{
+		const FGameplayTag StatusTags[] = {
+			CombatTags::State_Stunned, CombatTags::State_Silenced, CombatTags::State_Rooted,
+			CombatTags::State_Disarmed, CombatTags::State_Hexed, CombatTags::State_NoUnitCollision,
+			CombatTags::State_Frozen
+		};
+		for (const FGameplayTag& Tag : StatusTags)
+		{
+			CombatAbilitySystemComponent->RegisterGameplayTagEvent(Tag, EGameplayTagEventType::NewOrRemoved)
+				.AddUObject(this, &ACombatUnitCharacter::HandleStatusTagChanged);
+		}
+		CombatAbilitySystemComponent->GetGameplayAttributeValueChangeDelegate(UCombatAttributeSet::GetMoveSpeedAttribute())
+			.AddUObject(this, &ACombatUnitCharacter::HandleMoveSpeedChanged);
+	}
+	if (HasAuthority() && UnitData)
+	{
+		InitializeFromUnitData(UnitData);
+	}
+	RefreshStatusResponse();
 }
 
 void ACombatUnitCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
@@ -87,6 +242,7 @@ void ACombatUnitCharacter::OnRep_TeamId()
 void ACombatUnitCharacter::OnRep_LifeState()
 {
 	RefreshLifeStateTag();
+	RefreshStatusResponse();
 }
 
 void ACombatUnitCharacter::RefreshAbilityActorInfo()
@@ -119,4 +275,67 @@ void ACombatUnitCharacter::RefreshLifeStateTag()
 	case ECombatLifeState::Respawning: CombatAbilitySystemComponent->AddLooseGameplayTag(CombatTags::State_Respawning); break;
 	default: break;
 	}
+}
+
+void ACombatUnitCharacter::RefreshStatusResponse()
+{
+	if (!CombatAbilitySystemComponent)
+	{
+		return;
+	}
+	UCharacterMovementComponent* Movement = GetCharacterMovement();
+	if (Movement)
+	{
+		Movement->MaxWalkSpeed = CombatAbilitySystemComponent->GetNumericAttribute(UCombatAttributeSet::GetMoveSpeedAttribute());
+		if (IsMovementBlocked())
+		{
+			Movement->StopMovementImmediately();
+			Movement->DisableMovement();
+		}
+		else if (Movement->MovementMode == MOVE_None)
+		{
+			Movement->SetMovementMode(MOVE_Walking);
+		}
+	}
+	if (LifeState == ECombatLifeState::Dead || LifeState == ECombatLifeState::Dying)
+	{
+		GetCapsuleComponent()->SetCollisionProfileName(TEXT("CombatCorpse"));
+	}
+	else if (CombatAbilitySystemComponent->HasMatchingGameplayTag(CombatTags::State_NoUnitCollision))
+	{
+		GetCapsuleComponent()->SetCollisionProfileName(TEXT("CombatUnitNoCollision"));
+	}
+	else
+	{
+		GetCapsuleComponent()->SetCollisionProfileName(TEXT("CombatUnit"));
+	}
+}
+
+void ACombatUnitCharacter::HandleStatusTagChanged(const FGameplayTag Tag, const int32 NewCount)
+{
+	if (NewCount > 0 && (Tag == CombatTags::State_Stunned || Tag == CombatTags::State_Hexed
+		|| Tag == CombatTags::State_Frozen) && CombatAbilitySystemComponent)
+	{
+		CombatAbilitySystemComponent->CancelAllAbilities();
+	}
+	RefreshStatusResponse();
+}
+
+void ACombatUnitCharacter::HandleMoveSpeedChanged(const FOnAttributeChangeData& ChangeData)
+{
+	if (UCharacterMovementComponent* Movement = GetCharacterMovement())
+	{
+		Movement->MaxWalkSpeed = FMath::Max(0.0f, ChangeData.NewValue);
+	}
+}
+
+void ACombatUnitCharacter::SetLifeStateFromLifecycle(const ECombatLifeState NewState)
+{
+	LifeState = NewState;
+	OnRep_LifeState();
+}
+
+void ACombatUnitCharacter::IncrementLifeGenerationFromLifecycle()
+{
+	++LifeGeneration;
 }

@@ -7,12 +7,22 @@ DEFINE_LOG_CATEGORY(LogCombat);
 FString FCombatLogRecord::ToString() const
 {
 	return FString::Printf(
-		TEXT("Seq=%llu Event=%s Root=%s Depth=%d Type=%s Failure=%s Detail=%s"),
+		TEXT("Schema=%d Formula=%d Seq=%llu Event=%s Root=%s Depth=%d Type=%s Source=%d Target=%d Life=%lld Requested=%.3f Mitigated=%.3f Absorbed=%.3f Applied=%.3f Flags=%s Failure=%s Detail=%s"),
+		SchemaVersion,
+		FormulaVersion,
 		Sequence,
 		*Context.EventId.ToString(),
 		*Context.RootEventId.ToString(),
 		Context.Depth,
 		*EventType.ToString(),
+		SourceActorId,
+		TargetActorId,
+		static_cast<long long>(UnitLifeGeneration),
+		RequestedAmount,
+		MitigatedAmount,
+		AbsorbedAmount,
+		AppliedAmount,
+		*Flags.ToStringSimple(),
 		*FailureTag.ToString(),
 		*Diagnostic);
 }

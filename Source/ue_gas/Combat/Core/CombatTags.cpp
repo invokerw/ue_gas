@@ -52,6 +52,8 @@ namespace CombatTags
 
 	UE_DEFINE_GAMEPLAY_TAG(Event_Combat_DamageApplied, "Event.Combat.DamageApplied")
 	UE_DEFINE_GAMEPLAY_TAG(Event_Combat_HealApplied, "Event.Combat.HealApplied")
+	UE_DEFINE_GAMEPLAY_TAG(Event_Combat_ModifierApplied, "Event.Combat.ModifierApplied")
+	UE_DEFINE_GAMEPLAY_TAG(Event_Combat_ModifierRemoved, "Event.Combat.ModifierRemoved")
 	UE_DEFINE_GAMEPLAY_TAG(Event_Combat_UnitDeath, "Event.Combat.UnitDeath")
 	UE_DEFINE_GAMEPLAY_TAG(Event_Combat_UnitRespawned, "Event.Combat.UnitRespawned")
 	UE_DEFINE_GAMEPLAY_TAG(Event_Combat_TeamChanged, "Event.Combat.TeamChanged")

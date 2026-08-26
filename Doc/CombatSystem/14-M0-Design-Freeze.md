@@ -303,7 +303,7 @@ Damage.Flag.BypassMagicImmune / HPLoss / NoSpellAmplification
 Damage.Flag.Reflection / NoLifesteal / NoCrit
 Data.Damage.Final / Data.Heal.Final
 
-Event.Combat.DamageApplied / HealApplied / UnitDeath / UnitRespawned / TeamChanged
+Event.Combat.DamageApplied / HealApplied / ModifierApplied / ModifierRemoved / UnitDeath / UnitRespawned / TeamChanged
 Event.Combat.AbilityGranted / AbilityRemoved / AbilityLevelChanged / AutoCastChanged
 
 Combat.Failure.Authority / InvalidNumber / ActionUnsupported

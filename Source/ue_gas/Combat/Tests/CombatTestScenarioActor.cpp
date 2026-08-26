@@ -1,9 +1,13 @@
 #include "Combat/Tests/CombatTestScenarioActor.h"
 
 #include "Combat/Ability/CombatAbilitySystemComponent.h"
+#include "Combat/Attributes/CombatAttributeSet.h"
 #include "Combat/Core/CombatTags.h"
 #include "Combat/Log/CombatEventSubsystem.h"
+#include "Combat/Modifiers/CombatModifierComponent.h"
+#include "Combat/Unit/CombatRegenerationComponent.h"
 #include "Combat/Unit/CombatUnitCharacter.h"
+#include "Combat/Unit/CombatUnitLifecycleComponent.h"
 #include "Engine/World.h"
 
 ACombatTestScenarioActor::ACombatTestScenarioActor()
@@ -53,6 +57,7 @@ void ACombatTestScenarioActor::SpawnScenario()
 	int32 TeamTwoCount = 0;
 	bool bAllActorInfoInitialized = SpawnedUnits.Num() == 2;
 	bool bAllAlive = SpawnedUnits.Num() == 2;
+	bool bM2CoreReady = SpawnedUnits.Num() == 2;
 	for (const ACombatUnitCharacter* Unit : SpawnedUnits)
 	{
 		TeamOneCount += Unit->GetCombatTeamId() == FCombatTeamId(1) ? 1 : 0;
@@ -60,13 +65,18 @@ void ACombatTestScenarioActor::SpawnScenario()
 		const UCombatAbilitySystemComponent* AbilitySystem = Unit->GetCombatAbilitySystemComponent();
 		bAllActorInfoInitialized &= AbilitySystem && AbilitySystem->IsCombatActorInfoInitialized();
 		bAllAlive &= AbilitySystem && AbilitySystem->HasMatchingGameplayTag(CombatTags::State_Alive);
+		bM2CoreReady &= Unit->GetCombatAttributeSet() && Unit->GetCombatModifierComponent()
+			&& Unit->GetCombatLifecycleComponent() && Unit->GetCombatRegenerationComponent()
+			&& AbilitySystem
+			&& AbilitySystem->GetNumericAttribute(UCombatAttributeSet::GetMaxHealthAttribute()) >= 1.0f;
 	}
 
 	UE_LOG(LogCombat, Display,
-		TEXT("M1ScenarioReady Units=%d Team1=%d Team2=%d ASCActorInfo=%s State.Alive=%s"),
+		TEXT("M2ScenarioReady Units=%d Team1=%d Team2=%d ASCActorInfo=%s State.Alive=%s CoreComponents=%s"),
 		SpawnedUnits.Num(), TeamOneCount, TeamTwoCount,
 		bAllActorInfoInitialized ? TEXT("Ready") : TEXT("Invalid"),
-		bAllAlive ? TEXT("Present") : TEXT("Missing"));
+		bAllAlive ? TEXT("Present") : TEXT("Missing"),
+		bM2CoreReady ? TEXT("Ready") : TEXT("Invalid"));
 }
 
 void ACombatTestScenarioActor::DestroyScenario()

@@ -9,6 +9,12 @@
 #include "CombatUnitCharacter.generated.h"
 
 class UCombatAbilitySystemComponent;
+class UCombatAttributeSet;
+class UCombatModifierComponent;
+class UCombatRegenerationComponent;
+class UCombatUnitData;
+class UCombatUnitLifecycleComponent;
+struct FOnAttributeChangeData;
 
 /** 具备服务器权威 Team/Life 状态和自持 ASC 的基础战斗单位。 */
 UCLASS(Blueprintable)
@@ -24,6 +30,14 @@ public:
 	virtual UAbilitySystemComponent* GetAbilitySystemComponent() const override;
 	/** 返回强类型 Combat ASC。 */
 	UCombatAbilitySystemComponent* GetCombatAbilitySystemComponent() const { return CombatAbilitySystemComponent; }
+	/** 返回 Unit 注册到 ASC 的 Combat AttributeSet。 */
+	UCombatAttributeSet* GetCombatAttributeSet() const { return CombatAttributeSet; }
+	/** 返回 ActiveGE/Runtime 一一映射组件。 */
+	UCombatModifierComponent* GetCombatModifierComponent() const { return CombatModifierComponent; }
+	/** 返回服务器权威生命状态机组件。 */
+	UCombatUnitLifecycleComponent* GetCombatLifecycleComponent() const { return CombatLifecycleComponent; }
+	/** 返回 Scheduler 驱动的恢复组件。 */
+	UCombatRegenerationComponent* GetCombatRegenerationComponent() const { return CombatRegenerationComponent; }
 
 	/** 返回当前复制的战斗队伍。 */
 	FCombatTeamId GetCombatTeamId() const { return TeamId; }
@@ -31,6 +45,18 @@ public:
 	ECombatLifeState GetLifeState() const { return LifeState; }
 	/** 返回当前生命代次，用于淘汰复活前创建的回调。 */
 	uint32 GetLifeGeneration() const { return LifeGeneration; }
+	/** 返回当前 UnitData；未配置时为空。 */
+	const UCombatUnitData* GetUnitData() const { return UnitData; }
+
+	/** 服务器从 UnitData 幂等初始化基础属性、队伍、胶囊和 AbilitySet。 */
+	UFUNCTION(BlueprintCallable, Category="Combat|Unit")
+	bool InitializeFromUnitData(UCombatUnitData* InUnitData);
+	/** 返回当前状态标签是否禁止移动。 */
+	UFUNCTION(BlueprintPure, Category="Combat|State") bool IsMovementBlocked() const;
+	/** 返回当前状态标签是否禁止普通攻击。 */
+	UFUNCTION(BlueprintPure, Category="Combat|State") bool IsAttackBlocked() const;
+	/** 返回当前状态标签是否禁止普通 Ability 激活。 */
+	UFUNCTION(BlueprintPure, Category="Combat|State") bool IsAbilityBlocked() const;
 
 	/** 仅在 Authority 上设置有效 TeamId，并广播 TeamChanged 结构化事件。 */
 	UFUNCTION(BlueprintCallable, Category="Combat|Team")
@@ -65,10 +91,41 @@ protected:
 	void RefreshAbilityActorInfo();
 	/** 移除旧生命标签并添加与 LifeState 一致的 Native Tag。 */
 	void RefreshLifeStateTag();
+	/** 根据状态 Tag count 更新移动、碰撞和 Ability 取消响应。 */
+	void RefreshStatusResponse();
+	/** 任一控制状态 Tag count 改变时重新计算组合响应。 */
+	void HandleStatusTagChanged(const FGameplayTag Tag, int32 NewCount);
+	/** MoveSpeed 聚合值改变时投影到 CharacterMovement。 */
+	void HandleMoveSpeedChanged(const FOnAttributeChangeData& ChangeData);
+	/** 仅 LifecycleComponent 可以执行服务器状态转换。 */
+	void SetLifeStateFromLifecycle(ECombatLifeState NewState);
+	/** 仅 LifecycleComponent 可以为新生命递增 generation。 */
+	void IncrementLifeGenerationFromLifecycle();
+
+	/** 生命周期组件需要访问受保护状态转换入口。 */
+	friend class UCombatUnitLifecycleComponent;
 
 	/** Unit 自持并复制的 Combat ASC。 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Combat|Components")
 	TObjectPtr<UCombatAbilitySystemComponent> CombatAbilitySystemComponent;
+	/** ASC 持有并复制的完整基础战斗属性集合。 */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Combat|Components")
+	TObjectPtr<UCombatAttributeSet> CombatAttributeSet;
+	/** Unit 的 Modifier ActiveGE/Runtime 管理组件。 */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Combat|Components")
+	TObjectPtr<UCombatModifierComponent> CombatModifierComponent;
+	/** Unit 的 Alive/Dying/Dead/Respawning 状态机组件。 */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Combat|Components")
+	TObjectPtr<UCombatUnitLifecycleComponent> CombatLifecycleComponent;
+	/** Unit 的 Health/Mana 恢复调度组件。 */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Combat|Components")
+	TObjectPtr<UCombatRegenerationComponent> CombatRegenerationComponent;
+
+	/** 服务器初始化使用的稳定 Unit 定义。 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Combat|Unit")
+	TObjectPtr<UCombatUnitData> UnitData;
+	/** 成功初始化后缓存 DefinitionId，阻止不同定义重复写入同一 Unit。 */
+	FPrimaryAssetId InitializedUnitDefinitionId;
 
 	/** 服务器权威并复制的当前战斗队伍。 */
 	UPROPERTY(EditAnywhere, ReplicatedUsing=OnRep_TeamId, BlueprintReadOnly, Category="Combat|Team")

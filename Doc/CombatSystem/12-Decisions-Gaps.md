@@ -38,6 +38,9 @@
 | ADR-021 | 已定 | 运行时单位为 cm；固定 Combat Channel/Profile、XY edge range、5 cm tolerance 和统一 LOS | 关闭 GAP-009，Target/Order/Projectile 共享几何语义 |
 | ADR-022 | 已定 | 核心语义使用 Native Tag v1；定义资产使用固定 Combat PrimaryAssetType + 显式 lower_snake DefinitionName | 关闭 GAP-004，身份不随路径漂移且可在 cook 阻止冲突 |
 | ADR-023 | 已定 | M0 冻结包是 M1 公共字段输入，修改需显式 supersede/schema migration | 防止实现阶段重新引入 `TODO decide later` |
+| ADR-024 | 已定 | Health/Mana regen 使用 0.25 s Scheduler Coalesce；Health 走 HealSubsystem，非 Alive 暂停且不补结 | 关闭 GAP-012，恢复量不随帧率漂移 |
+| ADR-025 | 已定 | Death/Respawn 保留 AbilitySpec、cooldown、AutoCast 和非死亡移除 Modifier；Mana 复活至 Max；M2 只记录奖励归属事件 | 关闭 GAP-013，冻结最小生命状态机产品语义 |
+| ADR-026 | 已定 | 状态抗性只缩短显式可抵抗 Debuff Duration；Think interval 不变；边界 tick 使用缩短后的 ExpireAt | 关闭 GAP-005，冻结周期与 Refresh 边界 |
 
 ## 3. 本轮查漏补缺摘要
 
@@ -77,12 +80,12 @@
 
 | Gap | 状态 | 缺口 | 建议基线 | 最迟节点 |
 | --- | --- | --- | --- | --- |
-| GAP-005 | 开放 | StatusResistance 是否改变 Duration、tick interval、总伤害 | 只缩短明确可缩短 Debuff Duration；Think interval 不变；边界 tick 按缩短后的 ExpireAt | M2/MOD-004 |
+| GAP-005 | 已关闭（ADR-026） | StatusResistance 是否改变 Duration、tick interval、总伤害 | 只缩短明确可缩短 Debuff Duration；Think interval 不变；边界 tick 按缩短后的 ExpireAt | M2/MOD-004 |
 | GAP-008 | 开放 | Vision/Fog/Invisible/TrueSight 与施法、攻击、弹体目标合法性 | 第一版若不做 FOW，明确 `VisibilityPolicy=None`；API/FailureTag 预留，不能使用客户端可见性 | M3/TGT-001 |
 | GAP-010 | 开放 | BAT/AttackSpeed/attack point、移动起手、转向角 | 集中 AttackTiming policy；Scheduler 时间权威，Montage 速率只投影 | M4/ATK-002 |
 | GAP-011 | 开放 | Montage notify 与 gameplay 时间的关系、被打断时动画清理 | gameplay 使用 Scheduler；notify 只作可校准表现，不作为唯一结算触发 | M3/ABL-003 |
-| GAP-012 | 开放 | Health/Mana regen 的周期、暂停和死亡行为 | 非事件型恢复可用聚合属性 + Scheduler Coalesce；实际 Heal 若需 Hook 则走 HealSubsystem | M2/ATR-001 |
-| GAP-013 | 开放 | Death 后 cooldown、Mana、非 RemoveOnDeath Modifier、奖励归属 | 最小状态机先实现；具体保留/重置和奖励事件由产品表配置 | M2/LIFE-001 |
+| GAP-012 | 已关闭（ADR-024） | Health/Mana regen 的周期、暂停和死亡行为 | 0.25 s Scheduler Coalesce；Health 走 HealSubsystem；Mana 走 Instant GE；非 Alive 暂停 | M2/ATR-001 |
+| GAP-013 | 已关闭（ADR-025） | Death 后 cooldown、Mana、非 RemoveOnDeath Modifier、奖励归属 | 保留 Spec/cooldown/AutoCast/非死亡移除 Modifier；Mana 复活至 Max；M2 仅记录归属 | M2/LIFE-001 |
 | GAP-016 | 开放 | SpellBlock、Break、Debuff immunity、Dispel immunity 等高级状态 | 各自定义为 Target/Ability/Modifier 阶段规则，不用一个 MagicImmune Tag 包办 | M6/EXT-602 |
 | GAP-023 | 开放 | Untargetable/Invulnerable/OutOfGame 对已有 Tracking Projectile 的影响 | 每种 ProjectileData 明确 fizzle/last-known/continue snapshot policy | M5/PRJ-003 |
 | GAP-024 | 开放 | CDR/耗蓝缩减在 cooldown 已开始后的动态变化 | 第一版提交时快照 duration/cost；运行中属性变化不重排已有 cooldown | M3/ABL-003 |

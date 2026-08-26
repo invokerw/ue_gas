@@ -2,14 +2,53 @@
 
 #include "CoreMinimal.h"
 #include "Engine/DataAsset.h"
+#include "GameplayEffectTypes.h"
 #include "GameplayTagContainer.h"
 
+#include "Combat/Attributes/CombatAttributeSet.h"
 #include "Combat/Core/CombatTypes.h"
 
 #include "CombatDefinitionData.generated.h"
 
 class UGameplayAbility;
 class UCombatAbilitySet;
+class UCombatModifierRuntime;
+
+/** 定义 Modifier 被驱散时需要的最低驱散强度。 */
+UENUM(BlueprintType)
+enum class ECombatModifierDispelRule : uint8
+{
+	/** Basic 或 Strong Dispel 都可以移除。 */
+	Basic,
+	/** 只有 Strong Dispel 可以移除。 */
+	StrongOnly,
+	/** 任何 Dispel 都不能移除。 */
+	NotDispellable
+};
+
+/** 定义刷新 Modifier 后周期相位如何处理。 */
+UENUM(BlueprintType)
+enum class ECombatModifierRefreshPolicy : uint8
+{
+	/** 保留现有 Think 相位，只更新层数与 ExpireAt。 */
+	PreservePhase,
+	/** 从刷新时刻重新开始 Think 间隔。 */
+	ResetInterval
+};
+
+/** 描述 Modifier ActiveGE 对一个 Attribute 的聚合修改。 */
+USTRUCT(BlueprintType)
+struct UE_GAS_API FCombatModifierAttributeChange
+{
+	GENERATED_BODY()
+
+	/** 待修改的 GAS Attribute。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Modifier") FGameplayAttribute Attribute;
+	/** Additive、Multiplicitive 等 GAS 聚合操作。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Modifier") TEnumAsByte<EGameplayModOp::Type> ModifierOp = EGameplayModOp::Additive;
+	/** 写入动态 GameplayEffect 的静态 magnitude。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Modifier") float Magnitude = 0.0f;
+};
 
 /** 描述一个旧 DefinitionId 到新 DefinitionId 的显式版本迁移。 */
 USTRUCT(BlueprintType)
@@ -107,6 +146,10 @@ class UE_GAS_API UCombatUnitData : public UCombatDefinitionData
 	GENERATED_BODY()
 
 public:
+	/** 服务器初始化时写入 AttributeSet 的基础数值。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Unit")
+	FCombatUnitBaseStats BaseStats;
+
 	/** Unit 生成时使用的初始战斗队伍。 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Unit")
 	FCombatTeamId InitialTeamId = FCombatTeamId(1);
@@ -121,6 +164,11 @@ public:
 
 	/** 返回 CombatUnit PrimaryAssetType。 */
 	virtual FPrimaryAssetType GetCombatPrimaryAssetType() const override;
+
+#if WITH_EDITOR
+	/** 检查基础属性、初始队伍、胶囊和 AbilitySet 引用。 */
+	virtual EDataValidationResult IsDataValid(FDataValidationContext& Context) const override;
+#endif
 };
 
 /** 定义 GameplayAbility 类、等级上限、行为标签与等级数值。 */
@@ -162,6 +210,10 @@ class UE_GAS_API UCombatModifierData : public UCombatDefinitionData
 	GENERATED_BODY()
 
 public:
+	/** 与 ActiveGE 一一对应的 C++/Blueprint Runtime 类型。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Modifier")
+	TSubclassOf<UCombatModifierRuntime> RuntimeClass;
+
 	/** Hook 排序的第一关键字，数值越大越先执行。 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Modifier")
 	int32 Priority = 0;
@@ -170,12 +222,57 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Modifier", meta=(ClampMin="0", Units="s"))
 	float ThinkInterval = 0.0f;
 
+	/** 0 表示无限持续；正数由 Combat Scheduler 管理绝对过期时间。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Modifier", meta=(ClampMin="0", Units="s"))
+	float Duration = 0.0f;
+
+	/** 同一来源和定义最多允许的 Runtime 层数。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Modifier", meta=(ClampMin="1"))
+	int32 MaxStacks = 1;
+
+	/** 刷新已存在 Runtime 时采用的周期相位策略。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Modifier")
+	ECombatModifierRefreshPolicy RefreshPolicy = ECombatModifierRefreshPolicy::PreservePhase;
+
+	/** 恰好位于 ExpireAt 的周期 tick 是否执行。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Modifier")
+	bool bTickOnExpire = false;
+
+	/** 标记该 Modifier 是否属于 Debuff。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Modifier")
+	bool bIsDebuff = false;
+
+	/** Debuff 持续时间是否按目标当前 StatusResistancePct 缩短。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Modifier", meta=(EditCondition="bIsDebuff"))
+	bool bDurationAffectedByStatusResistance = false;
+
+	/** 该 Modifier 对 Basic/Strong Dispel 的响应规则。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Modifier")
+	ECombatModifierDispelRule DispelRule = ECombatModifierDispelRule::Basic;
+
+	/** ActiveGE 在 Runtime 存活期间聚合的 Attribute 修改。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Modifier")
+	TArray<FCombatModifierAttributeChange> AttributeChanges;
+
+	/** ActiveGE 在 Runtime 存活期间贡献的可计数状态标签。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Modifier")
+	FGameplayTagContainer GrantedTags;
+
+	/** Runtime 使用的只读参数，例如 shield_amount、damage_per_tick。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Modifier")
+	TMap<FName, float> RuntimeParameters;
+
 	/** Unit 进入死亡清理时是否移除该 Modifier。 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Modifier")
 	bool bRemoveOnDeath = true;
 
 	/** 返回 CombatModifier PrimaryAssetType。 */
 	virtual FPrimaryAssetType GetCombatPrimaryAssetType() const override;
+
+#if WITH_EDITOR
+	/** 检查周期、持续、层数、属性修改和 Runtime 参数。 */
+	virtual EDataValidationResult IsDataValid(FDataValidationContext& Context) const override;
+#endif
 };
 
 /** 定义弹体的基础运动、半径、最大距离与碰撞 Profile。 */

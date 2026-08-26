@@ -21,4 +21,12 @@ public:
 	void ClearCombatActorInfo();
 	/** 返回 ActorInfo 是否同时具有有效 Owner 与 Avatar。 */
 	bool IsCombatActorInfoInitialized() const;
+	/** UnitData 初次授予 Ability 后记录服务器权威 AutoCast 初始状态。 */
+	bool SetInitialAutoCastState(FGameplayAbilitySpecHandle Handle, bool bEnabled);
+	/** 返回指定 AbilitySpec 当前记录的 AutoCast 状态。 */
+	bool IsAutoCastEnabled(FGameplayAbilitySpecHandle Handle) const;
+
+private:
+	/** M2 只建立 per-Spec 权威状态；M3 的切换 RPC 和复制投影复用该映射。 */
+	TMap<FGameplayAbilitySpecHandle, bool> AutoCastStates;
 };

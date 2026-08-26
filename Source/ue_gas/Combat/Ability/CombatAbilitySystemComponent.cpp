@@ -32,3 +32,24 @@ bool UCombatAbilitySystemComponent::IsCombatActorInfoInitialized() const
 {
 	return AbilityActorInfo.IsValid() && AbilityActorInfo->OwnerActor.IsValid() && AbilityActorInfo->AvatarActor.IsValid();
 }
+
+bool UCombatAbilitySystemComponent::SetInitialAutoCastState(
+	const FGameplayAbilitySpecHandle Handle,
+	const bool bEnabled)
+{
+	if (!Handle.IsValid() || !FindAbilitySpecFromHandle(Handle))
+	{
+		return false;
+	}
+	AutoCastStates.FindOrAdd(Handle) = bEnabled;
+	return true;
+}
+
+bool UCombatAbilitySystemComponent::IsAutoCastEnabled(const FGameplayAbilitySpecHandle Handle) const
+{
+	if (const bool* State = AutoCastStates.Find(Handle))
+	{
+		return *State;
+	}
+	return false;
+}

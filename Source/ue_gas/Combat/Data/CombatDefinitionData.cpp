@@ -210,6 +210,31 @@ FPrimaryAssetType UCombatProjectileData::GetCombatPrimaryAssetType() const { ret
 FPrimaryAssetType UCombatAbilitySet::GetCombatPrimaryAssetType() const { return CombatPrimaryAssetTypes::AbilitySet; }
 
 #if WITH_EDITOR
+EDataValidationResult UCombatUnitData::IsDataValid(FDataValidationContext& Context) const
+{
+	EDataValidationResult Result = Super::IsDataValid(Context);
+	FString Diagnostic;
+	if (!BaseStats.IsValid(&Diagnostic))
+	{
+		Context.AddError(FText::FromString(Diagnostic));
+		Result = EDataValidationResult::Invalid;
+	}
+	if (!InitialTeamId.IsValid() || !FMath::IsFinite(CapsuleRadiusOverride) || CapsuleRadiusOverride < 0.0f)
+	{
+		Context.AddError(FText::FromString(TEXT("Unit team or capsule radius is invalid")));
+		Result = EDataValidationResult::Invalid;
+	}
+	for (const TSoftObjectPtr<UCombatAbilitySet>& AbilitySet : AbilitySets)
+	{
+		if (AbilitySet.IsNull())
+		{
+			Context.AddError(FText::FromString(TEXT("UnitData contains an empty AbilitySet reference")));
+			Result = EDataValidationResult::Invalid;
+		}
+	}
+	return Result;
+}
+
 EDataValidationResult UCombatAbilityData::IsDataValid(FDataValidationContext& Context) const
 {
 	EDataValidationResult Result = Super::IsDataValid(Context);
@@ -228,6 +253,39 @@ EDataValidationResult UCombatAbilityData::IsDataValid(FDataValidationContext& Co
 		if (Pair.Key.IsNone() || !Pair.Value.IsValidForMaxLevel(MaxLevel))
 		{
 			Context.AddError(FText::FromString(FString::Printf(TEXT("Invalid special value '%s'"), *Pair.Key.ToString())));
+			Result = EDataValidationResult::Invalid;
+		}
+	}
+	return Result;
+}
+
+EDataValidationResult UCombatModifierData::IsDataValid(FDataValidationContext& Context) const
+{
+	EDataValidationResult Result = Super::IsDataValid(Context);
+	if (!FMath::IsFinite(ThinkInterval) || ThinkInterval < 0.0f
+		|| !FMath::IsFinite(Duration) || Duration < 0.0f || MaxStacks < 1)
+	{
+		Context.AddError(FText::FromString(TEXT("Modifier timing or stack values are invalid")));
+		Result = EDataValidationResult::Invalid;
+	}
+	if (bDurationAffectedByStatusResistance && !bIsDebuff)
+	{
+		Context.AddError(FText::FromString(TEXT("Only a debuff can be affected by status resistance")));
+		Result = EDataValidationResult::Invalid;
+	}
+	for (const FCombatModifierAttributeChange& Change : AttributeChanges)
+	{
+		if (!Change.Attribute.IsValid() || !FMath::IsFinite(Change.Magnitude))
+		{
+			Context.AddError(FText::FromString(TEXT("Modifier contains an invalid Attribute change")));
+			Result = EDataValidationResult::Invalid;
+		}
+	}
+	for (const TPair<FName, float>& Parameter : RuntimeParameters)
+	{
+		if (Parameter.Key.IsNone() || !FMath::IsFinite(Parameter.Value))
+		{
+			Context.AddError(FText::FromString(TEXT("Modifier contains an invalid Runtime parameter")));
 			Result = EDataValidationResult::Invalid;
 		}
 	}

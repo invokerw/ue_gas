@@ -1,8 +1,8 @@
 # 00 开发进度台账
 
-> 最后更新：2026-08-25
-> 当前里程碑：M1 已验收（等待 M2 单独授权）
-> 总进度：20/82 Task 完成，2/9 里程碑由用户验收
+> 最后更新：2026-08-26
+> 当前里程碑：M2 已验收，等待 M3 授权
+> 总进度：35/82 Task 完成，3/9 里程碑由用户验收
 
 本文件是项目执行状态的唯一来源。[10 实施路线图](10-Implementation-Roadmap.md)定义任务内容和依赖，本文件记录实际状态、验证证据和用户验收结论。
 
@@ -35,8 +35,8 @@
 | 里程碑 | 名称 | Task 进度 | Gate | 用户验收 | 完成/验收日期 | 备注 |
 | --- | --- | ---: | --- | --- | --- | --- |
 | M0 | 设计冻结 | 7/7 | 通过 | 已验收 | 2026-08-24 / 2026-08-24 | M1 已授权 |
-| M1 | GAS 基座 | 13/13 | 通过 | 已验收 | 2026-08-25 / 2026-08-25 | 源码 UE 5.8.0 Server/Client Target 构建通过；独立 Server/Game 进程连接 smoke 通过；M2 未授权 |
-| M2 | 战斗内核 | 0/15 | 未开始 | 未开始 | — | — |
+| M1 | GAS 基座 | 13/13 | 通过 | 已验收 | 2026-08-25 / 2026-08-25 | 源码 UE 5.8.0 Server/Client Target 构建通过；独立 Server/Game 进程连接 smoke 通过；M2 已授权并完成实现 |
+| M2 | 战斗内核 | 15/15 | 通过 | 已验收 | 2026-08-25 / 2026-08-26 | G2 通过；Editor/Server/Client 构建、Automation 12/12 和独立联机 smoke 通过；见 [17](17-M2-Acceptance.md) |
 | M3 | 可施法切片 | 0/10 | 未开始 | 未开始 | — | — |
 | M4 | Order 与普攻 | 0/8 | 未开始 | 未开始 | — | — |
 | M5 | Projectile、Thinker 与 Motion | 0/9 | 未开始 | 未开始 | — | — |
@@ -78,21 +78,21 @@
 
 | Task | 需求名称 | 状态 | 完成证据/备注 |
 | --- | --- | --- | --- |
-| ATR-001 | AttributeSet | 未开始 | 到期：GAP-012 |
-| ATR-002 | Unit 初始化 | 未开始 | — |
-| LIFE-001 | Unit 生命状态组件 | 未开始 | 到期：GAP-013 |
-| CMB-001 | Combat 事务结果槽 | 未开始 | — |
-| CMB-002 | Damage Calculator | 未开始 | — |
-| CMB-003 | DamageSubsystem | 未开始 | — |
-| CMB-004 | HealSubsystem | 未开始 | — |
-| MOD-001 | ModifierData 与 Runtime | 未开始 | — |
-| MOD-002 | ModifierComponent | 未开始 | — |
-| MOD-003 | 稳定排序与 Deferred Hook | 未开始 | — |
-| MOD-004 | 周期、刷新与驱散 | 未开始 | 到期：GAP-005 |
-| MOD-005 | 状态响应 | 未开始 | — |
-| DEMO-201 | Magic Shield | 未开始 | — |
-| DEMO-202 | DOT、Slow 与 Stun | 未开始 | — |
-| OBS-002 | Combat Result Log | 未开始 | — |
+| ATR-001 | AttributeSet | 已完成 | `CombatAttributeSet.*`、`CombatRegenerationComponent.*`；21 项聚合/Meta Attribute、clamp、0.25 s Coalesce 恢复与死亡暂停测试通过；关闭 GAP-012 |
+| ATR-002 | Unit 初始化 | 已完成 | `CombatUnitCharacter.*`、`CombatDefinitionData.*`、`CombatAbilitySystemComponent.*`；批量初始化 GE、AbilitySet/AutoCast、幂等与非法资产拒绝通过 |
+| LIFE-001 | Unit 生命状态组件 | 已完成 | `CombatUnitLifecycleComponent.*`；同步 Death、旧生命调度取消、保留 Modifier、合法 Respawn 与 generation 递增通过；关闭 GAP-013 |
+| CMB-001 | Combat 事务结果槽 | 已完成 | `CombatTransactionSubsystem.*`；EventId 槽位 Begin/Report/Consume exactly-once 与错误生命周期拒绝通过 |
+| CMB-002 | Damage Calculator | 已完成 | `CombatDamageCalculator.*`；正负护甲、魔抗、Pure、SpellAmp/NoSpellAmplification 与非法数值测试通过 |
+| CMB-003 | DamageSubsystem | 已完成 | `CombatDamageSubsystem.*`；权限/生命状态、免疫/绕过、HPLoss、Shield、致死、反伤与吸血闭环通过 |
+| CMB-004 | HealSubsystem | 已完成 | `CombatHealSubsystem.*`；HealAmp/HealReceived、clamp、overheal、满血 Applied=0、Dead 不复活与非法输入通过 |
+| MOD-001 | ModifierData 与 Runtime | 已完成 | `CombatDefinitionData.*`、`CombatModifierRuntime.*`；生命周期、Hook、实例状态和数据校验接口完成 |
+| MOD-002 | ModifierComponent | 已完成 | `CombatModifierComponent.*`；一 Runtime 对应一 Active GE，Handle/ownership、叠层与刷新测试通过 |
+| MOD-003 | 稳定排序与 Deferred Hook | 已完成 | Priority desc/ApplySequence asc 快照与阶段后 FIFO 操作完成；同优先级双 Shield 稳定顺序通过 |
+| MOD-004 | 周期、刷新与驱散 | 已完成 | Scheduler Think/Expire、PreservePhase/ResetInterval、边界 tick、StatusResistance、Basic/Strong Dispel 通过；关闭 GAP-005 |
+| MOD-005 | 状态响应 | 已完成 | Tag count 驱动移动、攻击、Ability 与碰撞响应；多来源 Stun 计数和 Slow Attribute 测试通过 |
+| DEMO-201 | Magic Shield | 已完成 | `UCombatMagicShieldRuntime`；GE 魔抗同步、blocked/HPLoss 不耗盾、耗尽 deferred remove 和多盾顺序通过 |
+| DEMO-202 | DOT、Slow 与 Stun | 已完成 | `UCombatPeriodicDamageRuntime` 与数据驱动 Attribute/Tag Modifier；到期边界、驱散、死亡/复活行为通过 |
+| OBS-002 | Combat Result Log | 已完成 | Damage/Heal/Death/Respawn/Modifier 结构化日志，含 Schema/Formula、RootEvent、Source/Target、LifeGeneration、数值槽与 Flags；follow-up 链测试通过 |
 
 ## 6. M3：可施法切片
 
@@ -176,8 +176,8 @@
 | 里程碑 | 提交验收日期 | 用户结论 | 修正要求 | 最终验收日期 | 下一阶段授权 |
 | --- | --- | --- | --- | --- | --- |
 | M0 | 2026-08-24 | 已验收 | 无 | 2026-08-24 | 已授权 M1（2026-08-24） |
-| M1 | 2026-08-25 | 已验收 | 中文注释规范与 M1 源码注释已补齐 | 2026-08-25 | 未授权 |
-| M2 | — | 未提交 | — | — | 未授权 |
+| M1 | 2026-08-25 | 已验收 | 中文注释规范与 M1 源码注释已补齐 | 2026-08-25 | 已授权 M2（2026-08-25） |
+| M2 | 2026-08-25 | 已验收 | 无 | 2026-08-26 | 未授权 |
 | M3 | — | 未提交 | — | — | 未授权 |
 | M4 | — | 未提交 | — | — | 未授权 |
 | M5 | — | 未提交 | — | — | 未授权 |
@@ -199,6 +199,9 @@
 | 2026-08-25 | 增加生成代码中文注释规范：项目自有的新建/实质修改代码必须注释类、结构、枚举、函数和关键字段，并纳入 Gate 与 Issue Definition of Done | 全部后续代码任务 |
 | 2026-08-25 | 按新规范回填全部 M1 自有源码中文注释；Editor/Server/Client Target 编译通过，`Combat.Foundation` 回归 7/7 通过 | M1 / 中文注释整改 |
 | 2026-08-25 | 用户确认 M1 验收通过并要求提交；保持 M2 未开始，等待单独授权 | M1 |
+| 2026-08-25 | 用户授权开始 M2；ATR-001 切换为进行中 | M2 / ATR-001 |
+| 2026-08-25 | 完成 M2 全部 15 项；关闭 GAP-005/012/013；Editor、源码 Server/Client Target 构建成功，`Combat.` 自动化 12/12、独立监听服务器联机 smoke 通过；G2 通过并提交用户验收 | M2 / ATR-001..OBS-002 / GAP-005/012/013 / G2 |
+| 2026-08-26 | 用户确认 M2 验收通过并要求提交；保持 M3 未开始，等待单独授权 | M2 |
 
 ## 14. 更新规则
 

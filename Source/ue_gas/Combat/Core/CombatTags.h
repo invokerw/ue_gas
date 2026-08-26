@@ -60,6 +60,8 @@ namespace CombatTags
 	/** Combat 结构化事件类型标签。 */
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Combat_DamageApplied)
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Combat_HealApplied)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Combat_ModifierApplied)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Combat_ModifierRemoved)
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Combat_UnitDeath)
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Combat_UnitRespawned)
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Combat_TeamChanged)
