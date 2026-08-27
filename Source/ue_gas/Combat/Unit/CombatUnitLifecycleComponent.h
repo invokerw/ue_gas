@@ -27,8 +27,8 @@ public:
 	/** 仅 Authority 接受 Alive 单位的死亡请求，并同步完成 Dying 清理和 Dead。 */
 	bool RequestDeath(const FCombatEventContext& CauseEvent, ACombatUnitCharacter* Killer);
 	/** 仅 Authority 接受 Dead 单位的复活请求，验证位置后建立新生命代次。 */
-	UFUNCTION(BlueprintCallable, Category="Combat|Life")
-	bool RespawnAtLocation(FVector NewLocation);
+	UFUNCTION(BlueprintCallable, Category="Combat|Life", meta=(DisplayName="在指定位置复活", ToolTip="仅在服务器接受死亡单位的复活请求，验证位置后建立新的生命代次。"))
+	bool RespawnAtLocation(UPARAM(DisplayName="复活位置") FVector NewLocation);
 
 	/** 返回 exactly-once 死亡广播。 */
 	FOnCombatUnitDied& OnDied() { return DiedDelegate; }

@@ -59,11 +59,12 @@ bool FCombatConfigurationTest::RunTest(const FString& Parameters)
 		State_Alive, State_Dying, State_Dead, State_Respawning, State_Stunned, State_Silenced,
 		State_Rooted, State_Disarmed, State_Hexed, State_Invisible, State_Invulnerable,
 		State_OutOfGame, State_MagicImmune, State_Untargetable, State_NoUnitCollision,
-		State_NoHealthBar, State_Frozen, Ability_Behavior_NoTarget, Ability_Behavior_UnitTarget,
+		State_NoHealthBar, State_Frozen, State_SpellBlock, State_Broken, State_DebuffImmune,
+		State_DispelImmune, Ability_Behavior_NoTarget, Ability_Behavior_UnitTarget,
 		Ability_Behavior_PointTarget, Ability_Behavior_Passive, Ability_Behavior_Channelled,
 		Ability_Behavior_AoE, Ability_Behavior_Attack, Ability_Behavior_AutoCast,
 		Ability_Behavior_IgnoreSilence, Ability_Behavior_IgnoreMagicImmune,
-		Ability_Behavior_IgnoreUntargetable, TargetTeam_None, TargetTeam_Enemy,
+		Ability_Behavior_IgnoreUntargetable, Ability_Behavior_SpellBlockable, TargetTeam_None, TargetTeam_Enemy,
 		TargetTeam_Friendly, TargetTeam_Both, Damage_Type_Physical, Damage_Type_Magical,
 		Damage_Type_Pure, Damage_Flag_BypassMagicImmune, Damage_Flag_HPLoss,
 		Damage_Flag_NoSpellAmplification, Damage_Flag_Reflection, Damage_Flag_NoLifesteal,
@@ -95,9 +96,12 @@ bool FCombatConfigurationTest::RunTest(const FString& Parameters)
 		RNG_Attack_Crit, RNG_Modifier_Proc, Event_Combat_ProjectileSpawned,
 		Event_Combat_ProjectileHit, Event_Combat_ProjectileFinished, Event_Combat_ThinkerPulse,
 		Event_Combat_ThinkerFinished, Event_Combat_MotionStarted, Event_Combat_MotionFinished,
+		Event_Combat_AbilitySpellBlocked, Event_Combat_AuraStarted, Event_Combat_AuraReconciled,
+		Event_Combat_AuraFinished, Event_Combat_BlockerChanged,
 		Failure_Projectile_StaleHandle, Failure_Projectile_Blocked, Failure_Projectile_TargetLost,
 		Failure_Projectile_Timeout, Failure_Thinker_StaleHandle, Failure_Motion_ChannelBusy, Failure_Motion_Blocked,
-		Failure_Motion_StaleHandle
+		Failure_Motion_StaleHandle, Failure_Ability_SpellBlocked, Failure_Modifier_DebuffImmune,
+		Failure_Modifier_DispelImmune, Failure_Aura_StaleHandle, Failure_Aura_Broken
 	};
 	for (const FGameplayTag& Tag : NativeTags)
 	{
@@ -669,6 +673,7 @@ bool FCombatDeferredEventsTest::RunTest(const FString& Parameters)
 	FCombatProjectileHandle DefaultProjectileHandle;
 	FCombatThinkerHandle DefaultThinkerHandle;
 	FCombatMotionHandle DefaultMotionHandle;
+	FCombatAuraHandle DefaultAuraHandle;
 	FCombatScheduleHandle DefaultScheduleHandle;
 	TestFalse(TEXT("Default modifier handle is invalid"), DefaultModifierHandle.IsValid());
 	TestFalse(TEXT("Default attack handle is invalid"), DefaultAttackHandle.IsValid());
@@ -676,6 +681,7 @@ bool FCombatDeferredEventsTest::RunTest(const FString& Parameters)
 	TestFalse(TEXT("Default projectile handle is invalid"), DefaultProjectileHandle.IsValid());
 	TestFalse(TEXT("Default thinker handle is invalid"), DefaultThinkerHandle.IsValid());
 	TestFalse(TEXT("Default motion handle is invalid"), DefaultMotionHandle.IsValid());
+	TestFalse(TEXT("Default aura handle is invalid"), DefaultAuraHandle.IsValid());
 	TestFalse(TEXT("Default schedule handle is invalid"), DefaultScheduleHandle.IsValid());
 	FCombatAttackHandle AttackHandle;
 	AttackHandle.Key = { 5, 1, 2 };

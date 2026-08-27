@@ -3,9 +3,13 @@
 #include "Combat/Ability/CombatAbilitySystemComponent.h"
 #include "Combat/Ability/CombatGameplayAbility.h"
 #include "Combat/Attack/CombatAttackComponent.h"
+#include "Combat/Aura/CombatAuraSubsystem.h"
 #include "Combat/Attributes/CombatAttributeSet.h"
 #include "Combat/Core/CombatTags.h"
 #include "Combat/Data/CombatDefinitionData.h"
+#include "Combat/Demo/CombatDemoAbilities.h"
+#include "Combat/Demo/CombatDemoModifierRuntimes.h"
+#include "Combat/Demo/CombatFissureBlocker.h"
 #include "Combat/Log/CombatEventSubsystem.h"
 #include "Combat/Modifiers/CombatModifierComponent.h"
 #include "Combat/Order/CombatOrderComponent.h"
@@ -15,6 +19,7 @@
 #include "Combat/Unit/CombatRegenerationComponent.h"
 #include "Combat/Unit/CombatUnitCharacter.h"
 #include "Combat/Unit/CombatUnitLifecycleComponent.h"
+#include "Combat/Validation/CombatSkillTemplateValidator.h"
 #include "Engine/World.h"
 #include "TimerManager.h"
 
@@ -172,6 +177,52 @@ void ACombatTestScenarioActor::StartM5ProjectileScenario()
 		bMotionReady ? TEXT("Ready") : TEXT("Invalid"),
 		SpawnResult.bSuccess ? TEXT("Yes") : TEXT("No"),
 		*SpawnResult.Handle.ToString());
+	StartM6ContentScenario();
+}
+
+void ACombatTestScenarioActor::StartM6ContentScenario()
+{
+	UCombatAuraSubsystem* Auras = GetWorld()
+		? GetWorld()->GetSubsystem<UCombatAuraSubsystem>() : nullptr;
+	const bool bUnitsReady = HasAuthority() && SpawnedUnits.Num() == 2
+		&& IsValid(SpawnedUnits[0]) && IsValid(SpawnedUnits[1]);
+	FCombatAuraResult AuraResult;
+	if (bUnitsReady && Auras)
+	{
+		// 使用普通无限 Modifier 验证真实 Aura registry、Targeting 与 child reconcile 链路。
+		ScenarioAuraChildData = NewObject<UCombatModifierData>(this);
+		ScenarioAuraChildData->DefinitionName = TEXT("m6_scenario_aura_child");
+		ScenarioAuraChildData->bIsDebuff = true;
+		ScenarioAuraChildData->Duration = 0.0f;
+		FCombatAuraSpec AuraSpec;
+		AuraSpec.Owner = SpawnedUnits[0];
+		AuraSpec.Radius = 2000.0f;
+		AuraSpec.ReconcileInterval = 0.25f;
+		AuraSpec.TargetingRules.TargetTeamTag = CombatTags::TargetTeam_Enemy;
+		AuraSpec.ChildModifierData = ScenarioAuraChildData;
+		AuraResult = Auras->StartAura(AuraSpec);
+		ScenarioAuraHandle = AuraResult.Handle;
+	}
+
+	const bool bFrostArrowsReady = UCombatFrostArrowsAbility::StaticClass() != nullptr
+		&& UCombatFrostArrowsRuntime::StaticClass() != nullptr;
+	const bool bFissureReady = UCombatFissureAbility::StaticClass() != nullptr
+		&& ACombatFissureBlocker::StaticClass() != nullptr;
+	const bool bAdvancedStatusReady = UCombatSpellBlockRuntime::StaticClass() != nullptr
+		&& CombatTags::State_SpellBlock.GetTag().IsValid() && CombatTags::State_Broken.GetTag().IsValid()
+		&& CombatTags::State_DebuffImmune.GetTag().IsValid() && CombatTags::State_DispelImmune.GetTag().IsValid();
+	const bool bTemplateValidatorReady = !FCombatSkillTemplateValidator::GetForbiddenBypassPatterns().IsEmpty();
+	const int32 AuraChildCount = Auras ? Auras->GetChildCount(ScenarioAuraHandle) : 0;
+	UE_LOG(LogCombat, Display,
+		TEXT("M6ScenarioReady FrostArrows=%s Fissure=%s AuraRuntime=%s AuraStarted=%s AuraChildren=%d AdvancedStatus=%s TemplateValidator=%s Handle=%s"),
+		bFrostArrowsReady ? TEXT("Ready") : TEXT("Invalid"),
+		bFissureReady ? TEXT("Ready") : TEXT("Invalid"),
+		Auras ? TEXT("Ready") : TEXT("Invalid"),
+		AuraResult.bSuccess ? TEXT("Yes") : TEXT("No"),
+		AuraChildCount,
+		bAdvancedStatusReady ? TEXT("Ready") : TEXT("Invalid"),
+		bTemplateValidatorReady ? TEXT("Ready") : TEXT("Invalid"),
+		*AuraResult.Handle.ToString());
 }
 
 void ACombatTestScenarioActor::DestroyScenario()
@@ -181,6 +232,13 @@ void ACombatTestScenarioActor::DestroyScenario()
 		return;
 	}
 	GetWorldTimerManager().ClearTimer(M4AttackScenarioTimer);
+	if (UCombatAuraSubsystem* Auras = GetWorld()
+		? GetWorld()->GetSubsystem<UCombatAuraSubsystem>() : nullptr)
+	{
+		Auras->CancelAura(ScenarioAuraHandle);
+	}
+	ScenarioAuraHandle = FCombatAuraHandle();
+	ScenarioAuraChildData = nullptr;
 	if (UCombatProjectileSubsystem* Projectiles = GetWorld()
 		? GetWorld()->GetSubsystem<UCombatProjectileSubsystem>() : nullptr)
 	{

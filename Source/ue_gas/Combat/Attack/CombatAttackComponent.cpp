@@ -133,6 +133,10 @@ FCombatAttackResult UCombatAttackComponent::StartMeleeAttack(
 			Record.DamageType = Orb.DamageType;
 		}
 		Record.OnHitActions.Append(Orb.OnHitActions);
+		if (!Record.ProjectileDataOverride && Orb.ProjectileDataOverride)
+		{
+			Record.ProjectileDataOverride = Orb.ProjectileDataOverride;
+		}
 	}
 	Record.State = ECombatAttackState::Windup;
 	const FCombatAttackHandle Handle = Record.Handle;
@@ -336,11 +340,13 @@ void UCombatAttackComponent::HandleAttackPoint(
 		AttackReadyDelegate.Broadcast(Record->OrderHandle);
 	}
 	const UCombatUnitData* UnitData = Record->Attacker.IsValid() ? Record->Attacker->GetUnitData() : nullptr;
-	if (UnitData && UnitData->AttackProjectileData)
+	UCombatProjectileData* ProjectileData = Record->ProjectileDataOverride
+		? Record->ProjectileDataOverride.Get() : (UnitData ? UnitData->AttackProjectileData.Get() : nullptr);
+	if (ProjectileData)
 	{
 		// 远程普攻只把 AttackHandle 交给弹体；伤害、闪避、暴击仍由唯一 AttackRecord 结算。
 		FCombatProjectileSpec ProjectileSpec;
-		ProjectileSpec.ProjectileData = UnitData->AttackProjectileData;
+		ProjectileSpec.ProjectileData = ProjectileData;
 		ProjectileSpec.Source = Record->Attacker.Get();
 		ProjectileSpec.Target = Record->Target.Get();
 		ProjectileSpec.SpawnLocation = ProjectileSpec.Source
@@ -348,8 +354,8 @@ void UCombatAttackComponent::HandleAttackPoint(
 		ProjectileSpec.Direction = ProjectileSpec.Target
 			? ProjectileSpec.Target->GetActorLocation() - ProjectileSpec.SpawnLocation : FVector::ForwardVector;
 		ProjectileSpec.MovementType = ECombatProjectileMovementType::Tracking;
-		ProjectileSpec.TargetLostPolicy = UnitData->AttackProjectileData->TargetLostPolicy;
-		ProjectileSpec.HitPolicy = UnitData->AttackProjectileData->HitPolicy;
+		ProjectileSpec.TargetLostPolicy = ProjectileData->TargetLostPolicy;
+		ProjectileSpec.HitPolicy = ProjectileData->HitPolicy;
 		ProjectileSpec.ParentEvent = Record->EventContext;
 		ProjectileSpec.SourceContext.DirectSourceType = ECombatDirectSourceType::Attack;
 		ProjectileSpec.AttackHandle = Handle;
@@ -532,6 +538,7 @@ float UCombatAttackComponent::ExecuteOnHitActions(
 			Request.Source = Source;
 			Request.ModifierData = Action.ModifierData;
 			Request.DurationOverride = Action.DurationOverride;
+			Request.RuntimeParameterOverrides = Action.RuntimeParameterOverrides;
 			Target->GetCombatModifierComponent()->ApplyModifier(Request);
 		}
 	}

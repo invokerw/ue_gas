@@ -18,8 +18,10 @@ class UE_GAS_API UAbilityTask_SpawnLinearProjectile : public UAbilityTask
 
 public:
 	/** 创建只负责一次 Spawn 的 AbilityTask。 */
-	UFUNCTION(BlueprintCallable, Category="Combat|Ability|Tasks", meta=(DisplayName="Spawn Combat Linear Projectile", HidePin="OwningAbility", DefaultToSelf="OwningAbility", BlueprintInternalUseOnly="true"))
-	static UAbilityTask_SpawnLinearProjectile* SpawnLinearProjectile(UGameplayAbility* OwningAbility, FCombatProjectileSpec Spec);
+	UFUNCTION(BlueprintCallable, Category="Combat|Ability|Tasks", meta=(DisplayName="生成战斗直线弹体", ToolTip="校验弹体规格并通过统一子系统生成直线弹体。", HidePin="OwningAbility", DefaultToSelf="OwningAbility", BlueprintInternalUseOnly="true"))
+	static UAbilityTask_SpawnLinearProjectile* SpawnLinearProjectile(
+		UPARAM(DisplayName="所属技能") UGameplayAbility* OwningAbility,
+		UPARAM(DisplayName="弹体规格") FCombatProjectileSpec Spec);
 	/** 调用 ProjectileSubsystem 并广播成功或失败一次。 */
 	virtual void Activate() override;
 
@@ -41,8 +43,10 @@ class UE_GAS_API UAbilityTask_SpawnTrackingProjectile : public UAbilityTask
 
 public:
 	/** 创建只负责一次 Spawn 的 Tracking AbilityTask。 */
-	UFUNCTION(BlueprintCallable, Category="Combat|Ability|Tasks", meta=(DisplayName="Spawn Combat Tracking Projectile", HidePin="OwningAbility", DefaultToSelf="OwningAbility", BlueprintInternalUseOnly="true"))
-	static UAbilityTask_SpawnTrackingProjectile* SpawnTrackingProjectile(UGameplayAbility* OwningAbility, FCombatProjectileSpec Spec);
+	UFUNCTION(BlueprintCallable, Category="Combat|Ability|Tasks", meta=(DisplayName="生成战斗追踪弹体", ToolTip="校验目标与弹体规格并通过统一子系统生成追踪弹体。", HidePin="OwningAbility", DefaultToSelf="OwningAbility", BlueprintInternalUseOnly="true"))
+	static UAbilityTask_SpawnTrackingProjectile* SpawnTrackingProjectile(
+		UPARAM(DisplayName="所属技能") UGameplayAbility* OwningAbility,
+		UPARAM(DisplayName="弹体规格") FCombatProjectileSpec Spec);
 	/** 调用 ProjectileSubsystem 并广播成功或失败一次。 */
 	virtual void Activate() override;
 
@@ -64,8 +68,10 @@ class UE_GAS_API UAbilityTask_WaitProjectileResult : public UAbilityTask
 
 public:
 	/** 创建只观察指定 Handle 的等待 Task。 */
-	UFUNCTION(BlueprintCallable, Category="Combat|Ability|Tasks", meta=(DisplayName="Wait Combat Projectile Result", HidePin="OwningAbility", DefaultToSelf="OwningAbility", BlueprintInternalUseOnly="true"))
-	static UAbilityTask_WaitProjectileResult* WaitProjectileResult(UGameplayAbility* OwningAbility, FCombatProjectileHandle Handle);
+	UFUNCTION(BlueprintCallable, Category="Combat|Ability|Tasks", meta=(DisplayName="等待战斗弹体结果", ToolTip="观察指定弹体句柄的唯一结束结果；技能结束时只解绑，不取消弹体。", HidePin="OwningAbility", DefaultToSelf="OwningAbility", BlueprintInternalUseOnly="true"))
+	static UAbilityTask_WaitProjectileResult* WaitProjectileResult(
+		UPARAM(DisplayName="所属技能") UGameplayAbility* OwningAbility,
+		UPARAM(DisplayName="弹体句柄") FCombatProjectileHandle Handle);
 	/** 验证 Handle 并绑定全局 Finish 委托。 */
 	virtual void Activate() override;
 	/** Ability End/Task Destroy 时幂等解绑。 */

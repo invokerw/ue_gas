@@ -26,66 +26,78 @@ class UE_GAS_API UCombatModifierRuntime : public UObject
 
 public:
 	/** Runtime 与 ActiveGE 建立一一映射后调用一次。 */
-	UFUNCTION(BlueprintNativeEvent, Category="Combat|Modifier")
+	UFUNCTION(BlueprintNativeEvent, Category="Combat|Modifier", meta=(DisplayName="Modifier 已创建", ToolTip="Runtime 与 ActiveGE 建立一一映射后调用一次。"))
 	void OnCreated();
 	/** 同定义再次施加并刷新层数/持续时间后调用。 */
-	UFUNCTION(BlueprintNativeEvent, Category="Combat|Modifier")
+	UFUNCTION(BlueprintNativeEvent, Category="Combat|Modifier", meta=(DisplayName="Modifier 已刷新", ToolTip="同定义再次施加并刷新层数或持续时间后调用。"))
 	void OnRefreshed();
 	/** ActiveGE 移除前调用一次，供 Runtime 释放内部状态。 */
-	UFUNCTION(BlueprintNativeEvent, Category="Combat|Modifier")
+	UFUNCTION(BlueprintNativeEvent, Category="Combat|Modifier", meta=(DisplayName="Modifier 将销毁", ToolTip="ActiveGE 移除前调用一次，用于释放 Runtime 内部状态。"))
 	void OnDestroyed();
 	/** Combat Scheduler 到达逻辑周期时调用。 */
-	UFUNCTION(BlueprintNativeEvent, Category="Combat|Modifier")
-	void OnThink(const FCombatScheduledTickContext& TickContext);
+	UFUNCTION(BlueprintNativeEvent, Category="Combat|Modifier", meta=(DisplayName="Modifier 周期执行", ToolTip="Combat Scheduler 到达逻辑周期时调用。"))
+	void OnThink(UPARAM(DisplayName="周期上下文") const FCombatScheduledTickContext& TickContext);
 
 	/** 来源单位 Modifier 的伤害增幅 Hook。 */
-	UFUNCTION(BlueprintNativeEvent, Category="Combat|Modifier|Damage")
-	void OnPreDealDamage(UPARAM(ref) FCombatDamageEvent& Event);
+	UFUNCTION(BlueprintNativeEvent, Category="Combat|Modifier|Damage", meta=(DisplayName="造成伤害前", ToolTip="来源单位在伤害增幅阶段调用，可修改伤害事件。"))
+	void OnPreDealDamage(UPARAM(ref, DisplayName="伤害事件") FCombatDamageEvent& Event);
 	/** 目标单位抗性前的伤害 Hook。 */
-	UFUNCTION(BlueprintNativeEvent, Category="Combat|Modifier|Damage")
-	void OnPreTakeDamage(UPARAM(ref) FCombatDamageEvent& Event);
+	UFUNCTION(BlueprintNativeEvent, Category="Combat|Modifier|Damage", meta=(DisplayName="承受伤害前", ToolTip="目标单位在抗性结算前调用，可修改伤害事件。"))
+	void OnPreTakeDamage(UPARAM(ref, DisplayName="伤害事件") FCombatDamageEvent& Event);
 	/** 目标单位抗性后的 Shield/Block Hook。 */
-	UFUNCTION(BlueprintNativeEvent, Category="Combat|Modifier|Damage")
-	void OnDamageBlock(UPARAM(ref) FCombatDamageEvent& Event);
+	UFUNCTION(BlueprintNativeEvent, Category="Combat|Modifier|Damage", meta=(DisplayName="格挡伤害", ToolTip="目标单位在抗性结算后调用，用于护盾和格挡。"))
+	void OnDamageBlock(UPARAM(ref, DisplayName="伤害事件") FCombatDamageEvent& Event);
 	/** 来源单位获得真实伤害结果后的 Hook。 */
-	UFUNCTION(BlueprintNativeEvent, Category="Combat|Modifier|Damage")
-	void OnPostDealDamage(const FCombatDamageEvent& Event);
+	UFUNCTION(BlueprintNativeEvent, Category="Combat|Modifier|Damage", meta=(DisplayName="造成伤害后", ToolTip="来源单位获得真实伤害结果后调用。"))
+	void OnPostDealDamage(UPARAM(DisplayName="伤害事件") const FCombatDamageEvent& Event);
 	/** 目标单位获得真实伤害结果后的 Hook。 */
-	UFUNCTION(BlueprintNativeEvent, Category="Combat|Modifier|Damage")
-	void OnPostTakeDamage(const FCombatDamageEvent& Event);
+	UFUNCTION(BlueprintNativeEvent, Category="Combat|Modifier|Damage", meta=(DisplayName="承受伤害后", ToolTip="目标单位获得真实伤害结果后调用。"))
+	void OnPostTakeDamage(UPARAM(DisplayName="伤害事件") const FCombatDamageEvent& Event);
 
 	/** 来源单位治疗增幅前的 Hook。 */
-	UFUNCTION(BlueprintNativeEvent, Category="Combat|Modifier|Heal")
-	void OnPreDealHeal(UPARAM(ref) FCombatHealEvent& Event);
+	UFUNCTION(BlueprintNativeEvent, Category="Combat|Modifier|Heal", meta=(DisplayName="造成治疗前", ToolTip="来源单位在治疗增幅前调用，可修改治疗事件。"))
+	void OnPreDealHeal(UPARAM(ref, DisplayName="治疗事件") FCombatHealEvent& Event);
 	/** 目标单位接受治疗前的 Hook。 */
-	UFUNCTION(BlueprintNativeEvent, Category="Combat|Modifier|Heal")
-	void OnPreTakeHeal(UPARAM(ref) FCombatHealEvent& Event);
+	UFUNCTION(BlueprintNativeEvent, Category="Combat|Modifier|Heal", meta=(DisplayName="接受治疗前", ToolTip="目标单位在接受治疗前调用，可修改治疗事件。"))
+	void OnPreTakeHeal(UPARAM(ref, DisplayName="治疗事件") FCombatHealEvent& Event);
 	/** 来源单位获得真实治疗结果后的 Hook。 */
-	UFUNCTION(BlueprintNativeEvent, Category="Combat|Modifier|Heal")
-	void OnPostDealHeal(const FCombatHealEvent& Event);
+	UFUNCTION(BlueprintNativeEvent, Category="Combat|Modifier|Heal", meta=(DisplayName="造成治疗后", ToolTip="来源单位获得真实治疗结果后调用。"))
+	void OnPostDealHeal(UPARAM(DisplayName="治疗事件") const FCombatHealEvent& Event);
 	/** 目标单位获得真实治疗结果后的 Hook。 */
-	UFUNCTION(BlueprintNativeEvent, Category="Combat|Modifier|Heal")
-	void OnPostTakeHeal(const FCombatHealEvent& Event);
+	UFUNCTION(BlueprintNativeEvent, Category="Combat|Modifier|Heal", meta=(DisplayName="接受治疗后", ToolTip="目标单位获得真实治疗结果后调用。"))
+	void OnPostTakeHeal(UPARAM(DisplayName="治疗事件") const FCombatHealEvent& Event);
 	/** 来源 Unit 的 Ability 已通过 commit 并进入 SpellStarted 时调用。 */
-	UFUNCTION(BlueprintNativeEvent, Category="Combat|Modifier|Ability")
-	void OnAbilityExecuted(const FPrimaryAssetId& AbilityDefinitionId, const FCombatEventContext& Context);
+	UFUNCTION(BlueprintNativeEvent, Category="Combat|Modifier|Ability", meta=(DisplayName="技能已执行", ToolTip="来源单位的技能提交并进入 SpellStarted 时调用。"))
+	void OnAbilityExecuted(
+		UPARAM(DisplayName="技能定义 ID") const FPrimaryAssetId& AbilityDefinitionId,
+		UPARAM(DisplayName="事件上下文") const FCombatEventContext& Context);
 
 	/** 返回法球 exclusive group；None 表示该 Runtime 不参与普攻仲裁。 */
-	UFUNCTION(BlueprintNativeEvent, BlueprintPure, Category="Combat|Modifier|Attack")
+	UFUNCTION(BlueprintNativeEvent, BlueprintPure, Category="Combat|Modifier|Attack", meta=(DisplayName="获取法球互斥组", ToolTip="返回法球互斥组；None 表示该 Runtime 不参与普通攻击法球仲裁。"))
 	FName GetAttackOrbExclusiveGroup() const;
 	/** 无副作用检查当前 Runtime 是否可以成为本轮法球候选。 */
-	UFUNCTION(BlueprintNativeEvent, BlueprintPure, Category="Combat|Modifier|Attack")
-	bool CanClaimAttack(const FCombatAttackCandidateContext& Context) const;
+	UFUNCTION(BlueprintNativeEvent, BlueprintPure, Category="Combat|Modifier|Attack", meta=(DisplayName="可声明本次攻击", ToolTip="无副作用检查当前 Runtime 是否可以成为本轮法球候选。"))
+	bool CanClaimAttack(UPARAM(DisplayName="攻击候选上下文") const FCombatAttackCandidateContext& Context) const;
 	/** winner 提交资源并生成快照；返回 false 时同组继续尝试下一候选。 */
-	UFUNCTION(BlueprintNativeEvent, Category="Combat|Modifier|Attack")
-	bool OnAttackClaimed(const FCombatAttackCandidateContext& Context, FCombatOrbSnapshot& OutSnapshot);
+	UFUNCTION(BlueprintNativeEvent, Category="Combat|Modifier|Attack", meta=(DisplayName="法球已声明攻击", ToolTip="法球胜出后提交资源并生成不可变快照；返回 false 时尝试同组下一候选。"))
+	bool OnAttackClaimed(
+		UPARAM(DisplayName="攻击候选上下文") const FCombatAttackCandidateContext& Context,
+		UPARAM(ref, DisplayName="输出法球快照") FCombatOrbSnapshot& OutSnapshot);
+	/** 返回当前 Runtime 是否消耗并阻挡本次 UnitTarget Ability。 */
+	UFUNCTION(BlueprintNativeEvent, Category="Combat|Modifier|Ability", meta=(DisplayName="尝试格挡技能", ToolTip="在 SpellStarted 提交后检查并消耗当前 Runtime，以阻挡一个显式可格挡技能。"))
+	bool TryBlockAbility(
+		UPARAM(DisplayName="技能定义 ID") const FPrimaryAssetId& AbilityDefinitionId,
+		UPARAM(DisplayName="施法者") ACombatUnitCharacter* Caster,
+		UPARAM(DisplayName="事件上下文") const FCombatEventContext& Context);
 
 	/** 请求在当前 Hook 阶段结束后移除自身 ActiveGE 与 Runtime。 */
-	UFUNCTION(BlueprintCallable, Category="Combat|Modifier")
+	UFUNCTION(BlueprintCallable, Category="Combat|Modifier", meta=(DisplayName="请求移除自身", ToolTip="请求在当前 Hook 阶段结束后移除自身对应的 ActiveGE 与 Runtime。"))
 	bool RequestRemoveSelf();
 	/** 读取 ModifierData 的只读 Runtime 参数，缺失时返回默认值。 */
-	UFUNCTION(BlueprintPure, Category="Combat|Modifier")
-	float GetRuntimeParameter(FName Key, float DefaultValue = 0.0f) const;
+	UFUNCTION(BlueprintPure, Category="Combat|Modifier", meta=(DisplayName="获取 Modifier 运行时参数", ToolTip="读取冻结后的 Runtime 参数；键不存在时返回默认值。"))
+	float GetRuntimeParameter(
+		UPARAM(DisplayName="参数键") FName Key,
+		UPARAM(DisplayName="默认值") float DefaultValue = 0.0f) const;
 
 	/** 返回 Runtime 的稳定外部句柄。 */
 	FCombatModifierHandle GetHandle() const { return Handle; }
@@ -138,6 +150,8 @@ protected:
 	virtual FName GetAttackOrbExclusiveGroup_Implementation() const;
 	virtual bool CanClaimAttack_Implementation(const FCombatAttackCandidateContext& Context) const;
 	virtual bool OnAttackClaimed_Implementation(const FCombatAttackCandidateContext& Context, FCombatOrbSnapshot& OutSnapshot);
+	/** 默认 Runtime 不提供 SpellBlock。 */
+	virtual bool TryBlockAbility_Implementation(const FPrimaryAssetId& AbilityDefinitionId, ACombatUnitCharacter* Caster, const FCombatEventContext& Context);
 
 private:
 	/** 仅 ModifierComponent 可以建立或更新一一映射的内部状态。 */
@@ -177,4 +191,6 @@ private:
 	bool bHasInitialMotionRequest = false;
 	/** 只供派生 Runtime 在 OnCreated 消费的强制位移请求。 */
 	FCombatMotionRequest InitialMotionRequest;
+	/** Apply 时冻结并优先于 ModifierData 的 Runtime 参数。 */
+	TMap<FName, float> RuntimeParameterOverrides;
 };

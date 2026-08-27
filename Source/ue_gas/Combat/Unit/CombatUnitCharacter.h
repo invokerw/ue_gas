@@ -58,18 +58,18 @@ public:
 	const UCombatUnitData* GetUnitData() const { return UnitData; }
 
 	/** 服务器从 UnitData 幂等初始化基础属性、队伍、胶囊和 AbilitySet。 */
-	UFUNCTION(BlueprintCallable, Category="Combat|Unit")
-	bool InitializeFromUnitData(UCombatUnitData* InUnitData);
+	UFUNCTION(BlueprintCallable, Category="Combat|Unit", meta=(DisplayName="从单位数据初始化", ToolTip="仅在服务器从 UnitData 幂等初始化基础属性、队伍、碰撞体和 AbilitySet。"))
+	bool InitializeFromUnitData(UPARAM(DisplayName="单位数据") UCombatUnitData* InUnitData);
 	/** 返回当前状态标签是否禁止移动。 */
-	UFUNCTION(BlueprintPure, Category="Combat|State") bool IsMovementBlocked() const;
+	UFUNCTION(BlueprintPure, Category="Combat|State", meta=(DisplayName="移动是否被禁止", ToolTip="返回当前聚合状态标签是否禁止自主移动。")) bool IsMovementBlocked() const;
 	/** 返回当前状态标签是否禁止普通攻击。 */
-	UFUNCTION(BlueprintPure, Category="Combat|State") bool IsAttackBlocked() const;
+	UFUNCTION(BlueprintPure, Category="Combat|State", meta=(DisplayName="普通攻击是否被禁止", ToolTip="返回当前聚合状态标签是否禁止普通攻击。")) bool IsAttackBlocked() const;
 	/** 返回当前状态标签是否禁止普通 Ability 激活。 */
-	UFUNCTION(BlueprintPure, Category="Combat|State") bool IsAbilityBlocked() const;
+	UFUNCTION(BlueprintPure, Category="Combat|State", meta=(DisplayName="普通技能是否被禁止", ToolTip="返回当前聚合状态标签是否禁止普通 Ability 激活。")) bool IsAbilityBlocked() const;
 
 	/** 仅在 Authority 上设置有效 TeamId，并广播 TeamChanged 结构化事件。 */
-	UFUNCTION(BlueprintCallable, Category="Combat|Team")
-	bool SetCombatTeamId(FCombatTeamId NewTeamId);
+	UFUNCTION(BlueprintCallable, Category="Combat|Team", meta=(DisplayName="设置战斗队伍", ToolTip="仅在服务器设置有效队伍 ID，并广播结构化的队伍变更事件。"))
+	bool SetCombatTeamId(UPARAM(DisplayName="新队伍 ID") FCombatTeamId NewTeamId);
 
 	/** 注册 Team、LifeState 与 LifeGeneration 的复制字段。 */
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
@@ -92,7 +92,7 @@ protected:
 
 	/** TeamId 复制后输出 TeamChanged 诊断日志。 */
 	UFUNCTION()
-	void OnRep_TeamId();
+	void OnRep_TeamId(FCombatTeamId PreviousTeamId);
 
 	/** LifeState 复制后同步 ASC 的唯一生命状态标签。 */
 	UFUNCTION()

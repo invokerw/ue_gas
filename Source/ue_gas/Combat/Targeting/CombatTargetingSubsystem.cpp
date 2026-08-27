@@ -239,6 +239,68 @@ TArray<ACombatUnitCharacter*> UCombatTargetingSubsystem::QueryUnitsInRadius(
 	return Result;
 }
 
+TArray<ACombatUnitCharacter*> UCombatTargetingSubsystem::QueryUnitsAlongSegment(
+	ACombatUnitCharacter* Source,
+	const FVector Start,
+	const FVector End,
+	const float HalfWidth,
+	const FCombatTargetingRules& Rules) const
+{
+	TArray<ACombatUnitCharacter*> Result;
+	if (!Source || Start.ContainsNaN() || End.ContainsNaN()
+		|| !FMath::IsFinite(HalfWidth) || HalfWidth < 0.0f)
+	{
+		return Result;
+	}
+	const FVector2D Start2D(Start.X, Start.Y);
+	const FVector2D End2D(End.X, End.Y);
+	const FVector2D Segment = End2D - Start2D;
+	const double SegmentLengthSquared = Segment.SquaredLength();
+	if (SegmentLengthSquared <= UE_DOUBLE_SMALL_NUMBER)
+	{
+		return QueryUnitsInRadius(Source, Start, HalfWidth, Rules);
+	}
+
+	struct FLineCandidate
+	{
+		ACombatUnitCharacter* Unit = nullptr;
+		double Along = 0.0;
+	};
+	TArray<FLineCandidate> Candidates;
+	TSet<TWeakObjectPtr<ACombatUnitCharacter>> Seen;
+	for (TActorIterator<ACombatUnitCharacter> It(GetWorld()); It; ++It)
+	{
+		ACombatUnitCharacter* Candidate = *It;
+		if (!Candidate || Seen.Contains(Candidate)
+			|| !ValidateUnitTargetInternal(Source, Candidate, Rules, false).bValid)
+		{
+			continue;
+		}
+		const FVector Location = Candidate->GetActorLocation();
+		const FVector2D ToCandidate(Location.X - Start.X, Location.Y - Start.Y);
+		const double Along = FMath::Clamp(FVector2D::DotProduct(ToCandidate, Segment) / SegmentLengthSquared, 0.0, 1.0);
+		const FVector2D Closest = Start2D + Segment * Along;
+		const float CandidateRadius = Candidate->GetCapsuleComponent()->GetScaledCapsuleRadius();
+		if (FVector2D::Distance(FVector2D(Location.X, Location.Y), Closest) > HalfWidth + CandidateRadius)
+		{
+			continue;
+		}
+		Seen.Add(Candidate);
+		Candidates.Add({ Candidate, Along });
+	}
+	Candidates.Sort([](const FLineCandidate& Left, const FLineCandidate& Right)
+	{
+		return !FMath::IsNearlyEqual(Left.Along, Right.Along, 1.0e-6)
+			? Left.Along < Right.Along
+			: Left.Unit->GetUniqueID() < Right.Unit->GetUniqueID();
+	});
+	for (const FLineCandidate& Candidate : Candidates)
+	{
+		Result.Add(Candidate.Unit);
+	}
+	return Result;
+}
+
 bool UCombatTargetingSubsystem::HasLineOfSight(
 	ACombatUnitCharacter& Source,
 	const FVector& AimPoint,

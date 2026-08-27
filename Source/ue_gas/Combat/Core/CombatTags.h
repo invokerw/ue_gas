@@ -23,6 +23,10 @@ namespace CombatTags
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_NoUnitCollision)
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_NoHealthBar)
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Frozen)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_SpellBlock)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Broken)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_DebuffImmune)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_DispelImmune)
 
 	/** Ability 行为与目标模式标签。 */
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Ability_Behavior_NoTarget)
@@ -36,6 +40,7 @@ namespace CombatTags
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Ability_Behavior_IgnoreSilence)
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Ability_Behavior_IgnoreMagicImmune)
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Ability_Behavior_IgnoreUntargetable)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Ability_Behavior_SpellBlockable)
 
 	/** Ability 允许选择的队伍关系标签。 */
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(TargetTeam_None)
@@ -87,6 +92,11 @@ namespace CombatTags
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Combat_ThinkerFinished)
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Combat_MotionStarted)
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Combat_MotionFinished)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Combat_AbilitySpellBlocked)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Combat_AuraStarted)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Combat_AuraReconciled)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Combat_AuraFinished)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Combat_BlockerChanged)
 
 	/** 公共操作、Target 与 Ability 校验失败标签。 */
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Failure_Authority)
@@ -144,6 +154,11 @@ namespace CombatTags
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Failure_Motion_ChannelBusy)
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Failure_Motion_Blocked)
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Failure_Motion_StaleHandle)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Failure_Ability_SpellBlocked)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Failure_Modifier_DebuffImmune)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Failure_Modifier_DispelImmune)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Failure_Aura_StaleHandle)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Failure_Aura_Broken)
 
 	/** keyed RNG 的稳定随机域标签。 */
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(RNG_Attack_Evasion)

@@ -290,6 +290,29 @@ void UCombatOrderComponent::HandleOwnerMotionFinished()
 	}
 }
 
+void UCombatOrderComponent::HandleGameplayBlockerChanged(const FBox& BlockerBounds)
+{
+	ACombatUnitCharacter* Unit = GetOwnerUnit();
+	if (!Unit || !CurrentOrder.IsSet()
+		|| (CurrentState != ECombatOrderState::Moving && CurrentState != ECombatOrderState::Chasing
+			&& CurrentState != ECombatOrderState::Querying))
+	{
+		return;
+	}
+	const float Radius = Unit->GetCapsuleComponent()->GetScaledCapsuleRadius();
+	const FBox ExpandedBounds = BlockerBounds.ExpandBy(FVector(Radius, Radius, 0.0));
+	const FVector Start = Unit->GetActorLocation();
+	const FVector End = CurrentMoveGoal;
+	if (!ExpandedBounds.IsInsideOrOn(Start)
+		&& !FMath::LineBoxIntersection(ExpandedBounds, Start, End, End - Start))
+	{
+		return;
+	}
+	CancelMovementAsync();
+	TransitionTo(ECombatOrderState::Validating, FGameplayTag(), TEXT("Gameplay blocker changed; repath current order"));
+	PumpCurrentOrder();
+}
+
 FCombatOrderHandle UCombatOrderComponent::GetCurrentOrderHandle() const
 {
 	return CurrentOrder.IsSet() ? CurrentOrder->Handle : FCombatOrderHandle();
@@ -300,7 +323,18 @@ bool UCombatOrderComponent::CompleteMovementForTesting(
 	const bool bSuccess,
 	const bool bPartial)
 {
+	return CompleteMovementAttemptForTesting(
+		Handle, NavigationAttemptGeneration, bSuccess, bPartial);
+}
+
+bool UCombatOrderComponent::CompleteMovementAttemptForTesting(
+	const FCombatOrderHandle Handle,
+	const uint32 AttemptGeneration,
+	const bool bSuccess,
+	const bool bPartial)
+{
 	if (!bNavigationDeferredForTesting || !CurrentOrder.IsSet() || CurrentOrder->Handle != Handle
+		|| AttemptGeneration != NavigationAttemptGeneration
 		|| (CurrentState != ECombatOrderState::Moving && CurrentState != ECombatOrderState::Chasing
 			&& CurrentState != ECombatOrderState::Querying))
 	{
@@ -622,6 +656,8 @@ bool UCombatOrderComponent::BeginMovement(const bool bChasing)
 		return false;
 	}
 	CancelMovementAsync();
+	++NavigationAttemptGeneration;
+	if (NavigationAttemptGeneration == 0) { NavigationAttemptGeneration = 1; }
 	CurrentMoveGoal = CurrentOrder->Request.TargetUnit
 		? CurrentOrder->Request.TargetUnit->GetActorLocation() : CurrentOrder->Request.TargetLocation;
 	LastChaseTargetLocation = CurrentMoveGoal;

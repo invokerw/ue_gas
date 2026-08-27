@@ -11,6 +11,7 @@
 
 class ACombatUnitCharacter;
 class UCombatModifierData;
+class UCombatProjectileData;
 
 /** 描述一条 AttackRecord 当前所处的权威生命周期阶段。 */
 UENUM(BlueprintType)
@@ -70,6 +71,8 @@ struct UE_GAS_API FCombatOnHitAction
 	UPROPERTY(BlueprintReadWrite, Category="Combat|Attack|OnHit") TObjectPtr<UCombatModifierData> ModifierData = nullptr;
 	/** ApplyModifier 的持续时间覆盖；小于 0 使用定义值。 */
 	UPROPERTY(BlueprintReadWrite, Category="Combat|Attack|OnHit") float DurationOverride = -1.0f;
+	/** ApplyModifier 创建 Runtime 与动态 GE 时使用的不可变参数覆盖。 */
+	UPROPERTY(BlueprintReadWrite, Category="Combat|Attack|OnHit", meta=(DisplayName="运行时参数覆盖", ToolTip="施加 OnHit Modifier 时冻结的参数覆盖；同名键覆盖 Modifier 定义值。")) TMap<FName, float> RuntimeParameterOverrides;
 };
 
 /** Modifier 无副作用评估法球候选时读取的攻击上下文。 */
@@ -106,6 +109,8 @@ struct UE_GAS_API FCombatOrbSnapshot
 	UPROPERTY(BlueprintReadWrite, Category="Combat|Attack|Orb") ECombatDamageType DamageType = ECombatDamageType::Physical;
 	/** 命中后按快照顺序执行的公共动作。 */
 	UPROPERTY(BlueprintReadWrite, Category="Combat|Attack|Orb") TArray<FCombatOnHitAction> OnHitActions;
+	/** 非空时覆盖 UnitData 的普攻弹体定义，并随 Record 冻结。 */
+	UPROPERTY(BlueprintReadWrite, Category="Combat|Attack|Orb", meta=(DisplayName="弹体定义覆盖", ToolTip="非空时由法球覆盖 UnitData 的普通攻击弹体定义，并随攻击记录冻结。")) TObjectPtr<UCombatProjectileData> ProjectileDataOverride = nullptr;
 };
 
 /** AttackTiming policy 对同一次前摇计算出的完整冻结结果。 */
@@ -162,6 +167,8 @@ struct UE_GAS_API FCombatAttackRecord
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Attack") TArray<FCombatOrbSnapshot> ClaimedOrbs;
 	/** 从 winner 复制出的不可变 OnHit 动作。 */
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Attack") TArray<FCombatOnHitAction> OnHitActions;
+	/** 法球 winner 选择的普攻弹体；为空时回退 UnitData。 */
+	UPROPERTY(BlueprintReadOnly, Category="Combat|Attack", meta=(DisplayName="弹体定义覆盖", ToolTip="法球胜者冻结到本次攻击记录的弹体定义；为空时回退 UnitData。")) TObjectPtr<UCombatProjectileData> ProjectileDataOverride = nullptr;
 	/** 当前 exactly-once 状态。 */
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Attack") ECombatAttackState State = ECombatAttackState::Pending;
 	/** 起手时的绝对服务器 World Game Time。 */

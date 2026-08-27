@@ -4,6 +4,7 @@
 
 #include "Combat/Ability/CombatGameplayAbility.h"
 #include "Combat/Attributes/CombatAttributeSet.h"
+#include "Combat/Aura/CombatAuraSubsystem.h"
 #include "Combat/Combat/CombatEffectUtilities.h"
 #include "Combat/Core/CombatNumericPolicy.h"
 #include "Combat/Core/CombatTags.h"
@@ -561,6 +562,13 @@ void UCombatAbilitySystemComponent::OnTagUpdated(const FGameplayTag& Tag, const 
 	if (ACombatUnitCharacter* Unit = GetCombatAvatar())
 	{
 		Unit->RefreshStatusResponse();
+		if (Tag == CombatTags::State_Broken)
+		{
+			if (UCombatAuraSubsystem* Auras = GetWorld() ? GetWorld()->GetSubsystem<UCombatAuraSubsystem>() : nullptr)
+			{
+				Auras->NotifyUnitChanged(Unit);
+			}
+		}
 	}
 }
 

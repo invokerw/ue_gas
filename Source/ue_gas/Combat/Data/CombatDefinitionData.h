@@ -53,6 +53,8 @@ struct UE_GAS_API FCombatModifierAttributeChange
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Modifier") TEnumAsByte<EGameplayModOp::Type> ModifierOp = EGameplayModOp::Additive;
 	/** 写入动态 GameplayEffect 的静态 magnitude。 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Modifier") float Magnitude = 0.0f;
+	/** 非 None 时优先从 Apply 请求的 RuntimeParameterOverrides 读取 magnitude。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Modifier", meta=(DisplayName="幅值参数键", ToolTip="非 None 时优先从本次施加请求的运行时参数覆盖中读取属性修改幅值。")) FName MagnitudeParameterKey;
 };
 
 /** 描述一个旧 DefinitionId 到新 DefinitionId 的显式版本迁移。 */
@@ -267,6 +269,14 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Ability")
 	TObjectPtr<UCombatModifierData> IntrinsicModifier = nullptr;
 
+	/** Attack 法球 winner 可快照到 AttackRecord 的弹体覆盖。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Ability|Attack", meta=(DisplayName="法球弹体定义", ToolTip="该技能的法球胜出时冻结到攻击记录中的弹体覆盖；为空时使用单位默认弹体。"))
+	TObjectPtr<UCombatProjectileData> AttackOrbProjectileData = nullptr;
+
+	/** Attack 法球命中后施加的 Modifier，例如 Frost Arrows slow。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Ability|Attack", meta=(DisplayName="法球命中 Modifier", ToolTip="该技能的法球命中后施加的 Modifier，例如 Frost Arrows 的减速。"))
+	TObjectPtr<UCombatModifierData> AttackOrbOnHitModifierData = nullptr;
+
 	/** 读取指定等级的 special；缺失键返回 DefaultValue。 */
 	float GetSpecialValue(FName Key, int32 Level, float DefaultValue = 0.0f) const;
 	/** 在运行时和自动化中执行与 Editor validator 相同的 M3 schema 校验。 */
@@ -343,6 +353,10 @@ public:
 	/** Unit 进入死亡清理时是否移除该 Modifier。 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Modifier")
 	bool bRemoveOnDeath = true;
+
+	/** State.Broken 存在时是否暂停该 Runtime 的 Hook/法球行为。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Modifier", meta=(DisplayName="受 Break 禁用", ToolTip="启用后，目标具有 State.Broken 时暂停该 Runtime 的 Hook、周期和法球行为。"))
+	bool bDisabledByBreak = false;
 
 	/** 返回 CombatModifier PrimaryAssetType。 */
 	virtual FPrimaryAssetType GetCombatPrimaryAssetType() const override;

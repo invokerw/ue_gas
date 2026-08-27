@@ -211,6 +211,7 @@ bool UCombatAbilityData::ValidateRuntime(FString& OutDiagnostic) const
 	const bool bNoTarget = BehaviorTags.HasTagExact(CombatTags::Ability_Behavior_NoTarget);
 	const bool bUnitTarget = BehaviorTags.HasTagExact(CombatTags::Ability_Behavior_UnitTarget);
 	const bool bPointTarget = BehaviorTags.HasTagExact(CombatTags::Ability_Behavior_PointTarget);
+	const bool bAttackBehavior = BehaviorTags.HasTagExact(CombatTags::Ability_Behavior_Attack);
 	if (static_cast<int32>(bNoTarget) + static_cast<int32>(bUnitTarget) + static_cast<int32>(bPointTarget) != 1)
 	{
 		OutDiagnostic = TEXT("AbilityData must contain exactly one target behavior");
@@ -222,6 +223,16 @@ bool UCombatAbilityData::ValidateRuntime(FString& OutDiagnostic) const
 	if ((bUnitTarget && !bValidTeamTag) || (bNoTarget && TargetingRules.TargetTeamTag != CombatTags::TargetTeam_None))
 	{
 		OutDiagnostic = TEXT("TargetTeam tag does not match the target behavior");
+		return false;
+	}
+	if ((AttackOrbProjectileData || AttackOrbOnHitModifierData) && !bAttackBehavior)
+	{
+		OutDiagnostic = TEXT("Attack orb references require Ability.Behavior.Attack");
+		return false;
+	}
+	if (BehaviorTags.HasTagExact(CombatTags::Ability_Behavior_SpellBlockable) && !bUnitTarget)
+	{
+		OutDiagnostic = TEXT("Ability.Behavior.SpellBlockable requires UnitTarget");
 		return false;
 	}
 	if (!FMath::IsFinite(TargetingRules.CastRange) || TargetingRules.CastRange < 0.0f

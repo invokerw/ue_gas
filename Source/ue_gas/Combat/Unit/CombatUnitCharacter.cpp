@@ -4,9 +4,11 @@
 #include "Combat/Ability/CombatGameplayAbility.h"
 #include "Combat/Attack/CombatAttackComponent.h"
 #include "Combat/Attributes/CombatAttributeSet.h"
+#include "Combat/Aura/CombatAuraSubsystem.h"
 #include "Combat/Combat/CombatEffectUtilities.h"
 #include "Combat/Core/CombatTags.h"
 #include "Combat/Data/CombatDefinitionData.h"
+#include "Combat/Log/CombatEventSubsystem.h"
 #include "Combat/Modifiers/CombatModifierComponent.h"
 #include "Combat/Motion/CombatMotionComponent.h"
 #include "Combat/Order/CombatOrderComponent.h"
@@ -48,8 +50,9 @@ bool ACombatUnitCharacter::SetCombatTeamId(const FCombatTeamId NewTeamId)
 	{
 		return false;
 	}
+	const FCombatTeamId PreviousTeamId = TeamId;
 	TeamId = NewTeamId;
-	OnRep_TeamId();
+	OnRep_TeamId(PreviousTeamId);
 	ForceNetUpdate();
 	return true;
 }
@@ -245,6 +248,13 @@ void ACombatUnitCharacter::BeginPlay()
 
 void ACombatUnitCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+	if (HasAuthority())
+	{
+		if (UCombatAuraSubsystem* Auras = GetWorld() ? GetWorld()->GetSubsystem<UCombatAuraSubsystem>() : nullptr)
+		{
+			Auras->NotifyUnitEndPlay(this);
+		}
+	}
 	if (CombatAbilitySystemComponent)
 	{
 		CombatAbilitySystemComponent->ClearCombatActorInfo();
@@ -264,15 +274,43 @@ void ACombatUnitCharacter::OnRep_Controller()
 	RefreshAbilityActorInfo();
 }
 
-void ACombatUnitCharacter::OnRep_TeamId()
+void ACombatUnitCharacter::OnRep_TeamId(const FCombatTeamId PreviousTeamId)
 {
-	// Team-dependent systems subscribe here in M3. The replicated value is already authoritative.
+	if (!HasAuthority())
+	{
+		return;
+	}
+	if (UCombatAuraSubsystem* Auras = GetWorld() ? GetWorld()->GetSubsystem<UCombatAuraSubsystem>() : nullptr)
+	{
+		Auras->NotifyUnitChanged(this);
+	}
+	if (UCombatEventSubsystem* Events = GetWorld() ? GetWorld()->GetSubsystem<UCombatEventSubsystem>() : nullptr)
+	{
+		FCombatLogRecord Record;
+		Record.Context = Events->CreateRootEvent();
+		Record.EventType = CombatTags::Event_Combat_TeamChanged;
+		Record.SourceActorId = GetUniqueID();
+		Record.TargetActorId = GetUniqueID();
+		Record.UnitLifeGeneration = LifeGeneration;
+		Record.RequestedAmount = static_cast<float>(PreviousTeamId.Value);
+		Record.AppliedAmount = static_cast<float>(TeamId.Value);
+		Record.Diagnostic = FString::Printf(TEXT("Team %s -> %s"),
+			*PreviousTeamId.ToString(), *TeamId.ToString());
+		Events->Emit(Record);
+	}
 }
 
 void ACombatUnitCharacter::OnRep_LifeState()
 {
 	RefreshLifeStateTag();
 	RefreshStatusResponse();
+	if (HasAuthority())
+	{
+		if (UCombatAuraSubsystem* Auras = GetWorld() ? GetWorld()->GetSubsystem<UCombatAuraSubsystem>() : nullptr)
+		{
+			Auras->NotifyUnitChanged(this);
+		}
+	}
 }
 
 void ACombatUnitCharacter::RefreshAbilityActorInfo()

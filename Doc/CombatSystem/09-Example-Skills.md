@@ -11,7 +11,7 @@
 | Magic Shield | ActiveGE/Runtime、Block、deferred removal、稳定顺序 | M2 |
 | Lina Dragon Slave | Point target、线性查询/Projectile、多目标 Damage、快照 | M5 |
 | Pudge Meat Hook | Linear Projectile、首命中、Modifier、Horizontal Motion、Order 恢复 | M5 |
-| Drow Frost Arrows | Intrinsic Modifier、AutoCast、法球仲裁、资源提交、on-hit 快照 | M4/M5 |
+| Drow Frost Arrows | Intrinsic Modifier、AutoCast、法球仲裁、资源提交、on-hit/Projectile 快照 | M6 |
 | Earthshaker Fissure | 线伤、stun、knockback、Thinker、阻挡/repath | M6 |
 
 先实现前三个测试技能建立最小纵向切片，再做具有复杂表现的英雄技能。
@@ -117,10 +117,10 @@ Modifier：
 
 流程：
 
-1. `CanClaimAttack` 检查 autocast、沉默、资源和 exclusive group，只声明候选。
-2. winner 的 `OnAttackClaimed` 提交资源，并把 bonus、ProjectileData、slow action 和 special 快照写入 Record。
+1. `UCombatFrostArrowsRuntime::CanClaimAttack` 从 `AbilityOwnerHandle` 查找当前 Spec，检查 AutoCast、Silenced、Broken、等级 special、Mana 和 `Orb.Primary`，只声明候选。
+2. winner 的 `OnAttackClaimed` 原子提交 Mana，并把 bonus、ProjectileData、slow Modifier/duration/`slow_pct` 参数覆盖快照写入 Record。
 3. 远程 Projectile 只持 AttackHandle。
-4. Landed 后执行 Record 中 slow action，不重新读 Ability 当前等级。
+4. Landed 后使用 Record 的 runtime parameter override 施加 slow，不重新读 Ability 当前等级或 DataAsset 当前值。
 
 验收：
 
@@ -133,12 +133,12 @@ Modifier：
 技能：
 
 - PointTarget，线性范围伤害 + stun + knockback。
-- 中线生成 `ACombatThinker_FissureBlocker`。
+- 中线生成 visual-only `ACombatThinker` 与 `ACombatFissureBlocker`。
 
 迭代：
 
-1. M6a：伤害、stun、knockback 和视觉 Thinker，不阻挡导航。
-2. M6b：物理阻挡体，停止受影响 MoveTo 并触发 repath。
+1. M6a（已实现）：`QueryUnitsAlongSegment` 稳定去重，伤害、stun、knockback 分别进入公共 Damage/Modifier/Motion 管线；视觉 Thinker 不拥有 gameplay 结算。
+2. M6b（已实现）：物理 blocker 创建/移除时通知路径穿过 bounds 的 Move/Chase，保持 OrderHandle 并递增 navigation attempt generation 后 repath。
 3. 扩展：Runtime NavModifier，持续时间结束安全移除并刷新导航。
 
 验收：
@@ -156,3 +156,4 @@ Modifier：
 - 每个示例附 Automation Spec、PIE 操作说明和预期 Combat Event 序列。
 - DataAsset、GameplayEffect、蓝图和测试地图优先通过 UE MCP 创建/检查，并记录精确资产路径、编译结果和回读值。
 - 示例通过对应 Gate 后才可作为后续技能模板。
+- M6 示例复制前还必须通过 [25 M6 技能模板检查表](25-M6-Skill-Template-Checklist.md)。

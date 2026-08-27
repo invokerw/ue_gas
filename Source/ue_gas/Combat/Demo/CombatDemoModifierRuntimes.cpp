@@ -148,6 +148,95 @@ bool UCombatDemoOrbRuntime::OnAttackClaimed_Implementation(
 	return true;
 }
 
+FName UCombatFrostArrowsRuntime::GetAttackOrbExclusiveGroup_Implementation() const
+{
+	return TEXT("Orb.Primary");
+}
+
+bool UCombatFrostArrowsRuntime::CanClaimAttack_Implementation(
+	const FCombatAttackCandidateContext& Context) const
+{
+	const ACombatUnitCharacter* Source = GetTargetUnit();
+	const UCombatAbilitySystemComponent* Asc = Source ? Source->GetCombatAbilitySystemComponent() : nullptr;
+	const FGameplayAbilitySpecHandle AbilityHandle = GetAbilityOwnerHandle();
+	const FGameplayAbilitySpec* Spec = Asc && AbilityHandle.IsValid()
+		? Asc->FindAbilitySpecFromHandle(AbilityHandle) : nullptr;
+	const UCombatAbilityData* AbilityData = Asc ? Asc->GetCombatAbilityData(AbilityHandle) : nullptr;
+	if (Context.Attacker != Source || !Asc || !Spec || !AbilityData
+		|| !Asc->IsAutoCastEnabled(AbilityHandle)
+		|| Asc->HasMatchingGameplayTag(CombatTags::State_Silenced)
+		|| Asc->HasMatchingGameplayTag(CombatTags::State_Broken))
+	{
+		return false;
+	}
+	const float ManaCost = AbilityData->GetSpecialValue(TEXT("mana_cost"), Spec->Level);
+	const float BonusDamage = AbilityData->GetSpecialValue(TEXT("bonus_damage"), Spec->Level);
+	const float SlowDuration = AbilityData->GetSpecialValue(TEXT("slow_duration"), Spec->Level);
+	const float SlowPct = AbilityData->GetSpecialValue(TEXT("slow_pct"), Spec->Level);
+	return FMath::IsFinite(ManaCost) && ManaCost >= 0.0f
+		&& FMath::IsFinite(BonusDamage) && BonusDamage >= 0.0f
+		&& FMath::IsFinite(SlowDuration) && SlowDuration >= 0.0f
+		&& FMath::IsFinite(SlowPct) && SlowPct >= 0.0f
+		&& Asc->GetNumericAttribute(UCombatAttributeSet::GetManaAttribute()) + KINDA_SMALL_NUMBER >= ManaCost;
+}
+
+bool UCombatFrostArrowsRuntime::OnAttackClaimed_Implementation(
+	const FCombatAttackCandidateContext& Context,
+	FCombatOrbSnapshot& OutSnapshot)
+{
+	ACombatUnitCharacter* Source = GetTargetUnit();
+	UCombatAbilitySystemComponent* Asc = Source ? Source->GetCombatAbilitySystemComponent() : nullptr;
+	const FGameplayAbilitySpecHandle AbilityHandle = GetAbilityOwnerHandle();
+	const FGameplayAbilitySpec* Spec = Asc && AbilityHandle.IsValid()
+		? Asc->FindAbilitySpecFromHandle(AbilityHandle) : nullptr;
+	const UCombatAbilityData* AbilityData = Asc ? Asc->GetCombatAbilityData(AbilityHandle) : nullptr;
+	if (!CanClaimAttack(Context) || !Asc || !Spec || !AbilityData)
+	{
+		return false;
+	}
+
+	FCombatOrbSnapshot Snapshot;
+	Snapshot.ExclusiveGroup = TEXT("Orb.Primary");
+	Snapshot.BonusDamage = AbilityData->GetSpecialValue(TEXT("bonus_damage"), Spec->Level);
+	Snapshot.ProjectileDataOverride = AbilityData->AttackOrbProjectileData;
+	const float SlowDuration = AbilityData->GetSpecialValue(TEXT("slow_duration"), Spec->Level);
+	const float SlowPct = AbilityData->GetSpecialValue(TEXT("slow_pct"), Spec->Level);
+	if (AbilityData->AttackOrbOnHitModifierData && SlowDuration > 0.0f)
+	{
+		FCombatOnHitAction& SlowAction = Snapshot.OnHitActions.AddDefaulted_GetRef();
+		SlowAction.Type = ECombatOnHitActionType::ApplyModifier;
+		SlowAction.ModifierData = AbilityData->AttackOrbOnHitModifierData;
+		SlowAction.DurationOverride = SlowDuration;
+		// special 使用正数表达减速比例，GAS Multiplicitive magnitude 使用剩余倍率。
+		SlowAction.RuntimeParameterOverrides.Add(TEXT("slow_pct"), FMath::Clamp(1.0f - SlowPct, 0.0f, 1.0f));
+	}
+
+	const float ManaCost = AbilityData->GetSpecialValue(TEXT("mana_cost"), Spec->Level);
+	if (ManaCost > 0.0f && !CombatEffectUtilities::ApplyAttributeAdditive(
+		Source, *Asc, UCombatAttributeSet::GetManaAttribute(), -ManaCost))
+	{
+		return false;
+	}
+	++SuccessfulClaimCount;
+	OutSnapshot = MoveTemp(Snapshot);
+	return true;
+}
+
+bool UCombatSpellBlockRuntime::TryBlockAbility_Implementation(
+	const FPrimaryAssetId& AbilityDefinitionId,
+	ACombatUnitCharacter* Caster,
+	const FCombatEventContext& Context)
+{
+	(void)AbilityDefinitionId;
+	(void)Context;
+	if (!Caster || !GetTargetUnit() || Caster == GetTargetUnit())
+	{
+		return false;
+	}
+	RequestRemoveSelf();
+	return true;
+}
+
 void UCombatHookDragRuntime::OnCreated_Implementation()
 {
 	ACombatUnitCharacter* Target = GetTargetUnit();

@@ -6,6 +6,9 @@
 
 #include "CombatDemoAbilities.generated.h"
 
+class ACombatFissureBlocker;
+class UCombatModifierData;
+
 /** M3 无目标自我治疗纵向切片使用的 Ability Class。 */
 UCLASS()
 class UE_GAS_API UCombatSelfHealAbility : public UCombatGameplayAbility
@@ -39,6 +42,54 @@ UCLASS()
 class UE_GAS_API UCombatMeatHookAbility : public UCombatGameplayAbility
 {
 	GENERATED_BODY()
+};
+
+/** M6 Frost Arrows：Passive/Attack/AutoCast Ability，实际法球行为由 Intrinsic Runtime 提供。 */
+UCLASS()
+class UE_GAS_API UCombatFrostArrowsAbility : public UCombatGameplayAbility
+{
+	GENERATED_BODY()
+};
+
+/** M6 Earthshaker Fissure：统一执行线伤、Stun、Knockback、视觉 Thinker 与物理 blocker。 */
+UCLASS()
+class UE_GAS_API UCombatFissureAbility : public UCombatGameplayAbility
+{
+	GENERATED_BODY()
+
+public:
+	/** 默认 blocker 使用无 Tick 的 ACombatFissureBlocker。 */
+	UCombatFissureAbility();
+	/** Spec 授予时把 Fissure 专属 CDO 引用同步到 InstancedPerActor 实例。 */
+	virtual void OnGiveAbility(
+		const FGameplayAbilityActorInfo* ActorInfo,
+		const FGameplayAbilitySpec& Spec) override;
+	/** 返回最近一次服务器线段去重后的目标数。 */
+	UFUNCTION(BlueprintPure, Category="Combat|Demo|Fissure", meta=(DisplayName="获取最近裂沟目标数", ToolTip="返回最近一次服务器线段查询去重后的目标数量。")) int32 GetLastTargetCount() const { return LastTargetCount; }
+	/** 返回最近一次成功提交的 Knockback Motion 数。 */
+	UFUNCTION(BlueprintPure, Category="Combat|Demo|Fissure", meta=(DisplayName="获取最近裂沟击退数", ToolTip="返回最近一次成功提交的击退 Motion 数量。")) int32 GetLastMotionCount() const { return LastMotionCount; }
+	/** 返回最近一次是否创建视觉 Thinker。 */
+	UFUNCTION(BlueprintPure, Category="Combat|Demo|Fissure", meta=(DisplayName="最近裂沟是否创建视觉 Thinker", ToolTip="返回最近一次裂沟是否成功创建仅视觉 Thinker。")) bool WasVisualThinkerCreated() const { return bVisualThinkerCreated; }
+	/** 返回最近一次是否创建物理 blocker。 */
+	UFUNCTION(BlueprintPure, Category="Combat|Demo|Fissure", meta=(DisplayName="最近裂沟是否创建阻挡物", ToolTip="返回最近一次裂沟是否成功创建物理阻挡 Actor。")) bool WasBlockerCreated() const { return bBlockerCreated; }
+
+	/** Fissure Stun 使用的普通 Debuff 定义。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Demo|Fissure", meta=(DisplayName="眩晕 Modifier 定义", ToolTip="裂沟命中单位时施加的普通减益 Modifier。"))
+	TObjectPtr<UCombatModifierData> StunModifierData = nullptr;
+	/** 第一版物理 blocker Actor 类型。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Demo|Fissure", meta=(DisplayName="阻挡物类型", ToolTip="裂沟创建的物理阻挡 Actor 类型；为空时使用默认实现。"))
+	TSubclassOf<ACombatFissureBlocker> BlockerClass;
+
+protected:
+	/** SpellStarted 时以公共子系统完成一条确定性 Fissure 切片。 */
+	virtual void ReceiveSpellStart_Implementation(const FCombatAbilityActivationContext& Context) override;
+
+private:
+	/** 最近一次施法的可观察结果，不参与 gameplay 权威。 */
+	int32 LastTargetCount = 0;
+	int32 LastMotionCount = 0;
+	bool bVisualThinkerCreated = false;
+	bool bBlockerCreated = false;
 };
 
 /** M3 Scheduler Channel 自动化使用的可观察 Ability Class。 */

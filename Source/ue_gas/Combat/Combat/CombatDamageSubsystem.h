@@ -15,8 +15,8 @@ class UE_GAS_API UCombatDamageSubsystem : public UWorldSubsystem
 
 public:
 	/** 同步执行完整 Damage 流水线并返回 AttributeSet 的真实 Health delta。 */
-	UFUNCTION(BlueprintCallable, Category="Combat|Damage")
-	FCombatDamageResult DealDamage(const FCombatDamageRequest& Request);
+	UFUNCTION(BlueprintCallable, Category="Combat|Damage", meta=(DisplayName="造成战斗伤害", ToolTip="在服务器同步执行完整伤害流水线，并返回目标生命值的真实变化。"))
+	FCombatDamageResult DealDamage(UPARAM(DisplayName="伤害请求") const FCombatDamageRequest& Request);
 
 private:
 	/** 创建根事件或受深度上限约束的子事件。 */

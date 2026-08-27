@@ -50,6 +50,8 @@
 | ADR-033 | 已定 | Projectile 由 WorldSubsystem registry 持有，权威 Actor 只做连续 substep sweep 与位置复制，全部结束路径汇入幂等 Finish | fire-and-forget 不依赖 Ability 实例，穿透/高速/teardown 共用同一生命周期 |
 | ADR-034 | 已定 | Tracking 对旧生命、Dead/Dying/Respawning、Untargetable、OutOfGame 按 Data 选择 Fizzle 或 LastKnown；Invulnerable 留到 impact 判定 | 关闭 GAP-023，避免已有弹体对目标状态各自猜测 |
 | ADR-035 | 已定 | MotionComponent 分离 Horizontal/Vertical 独占通道，严格高优先级抢占；Thinker gameplay 时间只走 Scheduler | 保证中断 exactly-once、Order 恢复和 AoE 时序单一权威 |
+| ADR-036 | 已定 | Aura 使用每 World registry + Scheduler Coalesce + Targeting 查询，对普通 child Modifier 做 `Target -> Handle/LifeGeneration` 幂等 reconcile | 关闭 GAP-014；统一进入/离开/换队/死亡/Break/EndPlay 清理，不引入 Actor Tick 或蓝图阵营旁路 |
+| ADR-037 | 已定 | SpellBlock、Break、Debuff Immunity、Dispel Immunity 使用独立 Tag，并分别落在 Ability commit 后、Runtime Hook、Modifier Apply、Dispel 阶段 | 关闭 GAP-016；防止一个 MagicImmune Tag 混淆资源提交、既有状态与移除语义 |
 
 ## 3. 本轮查漏补缺摘要
 
@@ -95,7 +97,7 @@
 | GAP-011 | 已关闭（ADR-028） | Montage notify 与 gameplay 时间的关系、被打断时动画清理 | gameplay 只使用 Scheduler；notify 仅作表现校准；所有退出路径统一停止表现并清理 Task/Schedule | M3/ABL-003 |
 | GAP-012 | 已关闭（ADR-024） | Health/Mana regen 的周期、暂停和死亡行为 | 0.25 s Scheduler Coalesce；Health 走 HealSubsystem；Mana 走 Instant GE；非 Alive 暂停 | M2/ATR-001 |
 | GAP-013 | 已关闭（ADR-025） | Death 后 cooldown、Mana、非 RemoveOnDeath Modifier、奖励归属 | 保留 Spec/cooldown/AutoCast/非死亡移除 Modifier；Mana 复活至 Max；M2 仅记录归属 | M2/LIFE-001 |
-| GAP-016 | 开放 | SpellBlock、Break、Debuff immunity、Dispel immunity 等高级状态 | 各自定义为 Target/Ability/Modifier 阶段规则，不用一个 MagicImmune Tag 包办 | M6/EXT-602 |
+| GAP-016 | 已关闭（ADR-037） | SpellBlock、Break、Debuff immunity、Dispel immunity 等高级状态 | 阶段矩阵与交互见 [24 §5](24-M6-Content-Decision.md#5-高级状态矩阵关闭-gap-016-的基线)；四类独立 Tag/Failure/Event，不用 MagicImmune 包办 | 2026-08-26 / EXT-602 |
 | GAP-023 | 已关闭（ADR-034） | Untargetable/Invulnerable/OutOfGame 对已有 Tracking Projectile 的影响 | Dead/生命代次变化/Untargetable/OutOfGame 按 Data 选择 Fizzle 或 LastKnown；Invulnerable 继续跟踪并在 impact 走统一目标/伤害判定；见 [22 §4](22-M5-Projectile-Motion-Decision.md#4-tracking-目标丢失关闭-gap-023) | 2026-08-26 / PRJ-003 |
 | GAP-024 | 已关闭（ADR-029） | CDR/耗蓝缩减在 cooldown 已开始后的动态变化 | Cost/CDR 在 commit point 快照；已开始 cooldown 不重排；同 Stage Cost/Cooldown 整体预检 | M3/ABL-003 |
 
@@ -103,7 +105,7 @@
 
 | Gap | 状态 | 缺口 | 建议基线 | 最迟节点 |
 | --- | --- | --- | --- | --- |
-| GAP-014 | 建议基线 | Aura 没有 owner/target 生命周期 | Scheduler/overlap 候选 + Target->child GE reconcile；进入/离开/死亡幂等 | M6/EXT-601 |
+| GAP-014 | 已关闭（ADR-036） | Aura 没有 owner/target 生命周期 | 每 World registry、Scheduler Coalesce、统一 Targeting 与普通 child Modifier reconcile；完整规则见 [24 §4](24-M6-Content-Decision.md#4-aura关闭-gap-014-的基线) | 2026-08-26 / EXT-601 |
 | GAP-015 | 开放 | Summon/illusion 的 Owner、Team、ASC、Order 权限 | 独立 Unit + 独立 ASC；CommandingController 与 gameplay owner 分离 | 引入召唤物前 |
 | GAP-017 | 明确延期 | 物品、背包、技能点、天赋、经验和经济 | 不属于第一版；通过 AbilitySet/Modifier 公共 API 留扩展口 | M8 后 |
 | GAP-018 | 开放 | 目标容量/帧/带宽预算和池化触发阈值 | M7 先定压测场景/指标，再按 profiler 引入 pooling/FastArray 优化 | M7/PERF-701 |

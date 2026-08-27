@@ -127,6 +127,8 @@ P0：
 P1：
 
 - Aura 进入/离开/队伍变化/Owner 死亡的 child reconcile。
+- Break 移除 Aura child、解除后恢复；Debuff/Dispel Immunity 只作用于各自入口且不追溯清理。
+- SpellBlock 在 SpellStarted commit 后、公共 Action 前消费；非 SpellBlockable 技能不消费。
 - StatusResistance 的 Duration/Think 规则。
 - 大量 Runtime 的调度和 deferred queue 性能。
 
@@ -257,6 +259,14 @@ P1：
 - 预期 Combat Event 序列和关键 Result 值。
 
 示例资产只有通过本矩阵后才能复制为新技能模板。
+
+M6 额外固定以下自动化入口：
+
+- `Combat.ContentExtension.FrostArrows.OrbProjectileSnapshot`：法球 winner、Mana、Projectile/slow 参数快照和 landed-only OnHit。
+- `Combat.ContentExtension.Fissure.LineControlBlockerRepath`：线段稳定目标、Damage/Stun/Motion、visual Thinker、blocker 与旧 attempt 淘汰。
+- `Combat.ContentExtension.Aura.OwnerChildReconcile`：进入/离开、换队、Break、Owner 生命周期和取消无残留。
+- `Combat.ContentExtension.Status.AdvancedInteractionMatrix`：SpellBlock、Break、Debuff Immunity 与 Dispel Immunity 的阶段矩阵。
+- `Combat.ContentExtension.Tool.SkillTemplateValidator`：Class/Data 身份、schema、必需 special/行为、Definition 唯一、事件序列和旁路模式。
 
 ## 14. Gate 映射
 

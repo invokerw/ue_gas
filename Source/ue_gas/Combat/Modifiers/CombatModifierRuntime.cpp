@@ -44,6 +44,17 @@ bool UCombatModifierRuntime::OnAttackClaimed_Implementation(
 	return false;
 }
 
+bool UCombatModifierRuntime::TryBlockAbility_Implementation(
+	const FPrimaryAssetId& AbilityDefinitionId,
+	ACombatUnitCharacter* Caster,
+	const FCombatEventContext& Context)
+{
+	(void)AbilityDefinitionId;
+	(void)Caster;
+	(void)Context;
+	return false;
+}
+
 bool UCombatModifierRuntime::RequestRemoveSelf()
 {
 	return OwningComponent && bActive ? OwningComponent->RemoveModifier(Handle) : false;
@@ -51,6 +62,10 @@ bool UCombatModifierRuntime::RequestRemoveSelf()
 
 float UCombatModifierRuntime::GetRuntimeParameter(const FName Key, const float DefaultValue) const
 {
+	if (const float* Override = RuntimeParameterOverrides.Find(Key))
+	{
+		return *Override;
+	}
 	if (!ModifierData)
 	{
 		return DefaultValue;

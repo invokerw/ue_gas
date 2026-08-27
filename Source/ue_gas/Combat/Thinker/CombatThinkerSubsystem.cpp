@@ -160,13 +160,14 @@ void UCombatThinkerSubsystem::HandlePulse(
 	}
 	ACombatUnitCharacter* Source = Record->Spec.Source;
 	UCombatTargetingSubsystem* Targeting = GetWorld()->GetSubsystem<UCombatTargetingSubsystem>();
-	if (!IsValid(Source) || !Targeting)
+	if (!IsValid(Source) || (!Targeting && !Record->Spec.bVisualOnly))
 	{
 		FinishThinker(Handle, ECombatThinkerFinishReason::Cancelled, CombatTags::Failure_Target_Invalid);
 		return;
 	}
-	const TArray<ACombatUnitCharacter*> Targets = Targeting->QueryUnitsInRadius(
-		Source, Record->Spec.Location, Record->Spec.Radius, Record->Spec.TargetingRules);
+	const TArray<ACombatUnitCharacter*> Targets = Record->Spec.bVisualOnly
+		? TArray<ACombatUnitCharacter*>()
+		: Targeting->QueryUnitsInRadius(Source, Record->Spec.Location, Record->Spec.Radius, Record->Spec.TargetingRules);
 	int32 PulseTargets = 0;
 	for (ACombatUnitCharacter* Target : Targets)
 	{

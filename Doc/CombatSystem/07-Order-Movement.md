@@ -125,11 +125,11 @@ M0 已冻结 Combat 几何单位和 Profile：所有距离为 cm、速度为 cm/
 
 Fissure 等临时阻挡分三阶段：
 
-1. 第一版：物理阻挡体 + 对相关 MoveTo 调 StopMovement/Pump 触发 repath。
+1. 第一版（M6 已实现）：`ACombatFissureBlocker` 物理阻挡体 + 对路径穿过 blocker bounds 的 Move/Chase 主动取消当前 MoveRequest，并 Pump 同一 OrderHandle 触发 repath；每次尝试递增 attempt generation，旧回调不能推进新尝试。
 2. 第二版：Runtime Navigation Generation + NavModifier，创建/销毁时主动请求相关单位重寻路。
 3. 第三版：高频临时阻挡使用局部避障/代价系统，避免频繁重建 NavMesh。
 
-第一版正确性不能依赖异步 NavMesh 已经完成重建。
+第一版正确性不依赖异步 NavMesh 已经完成重建；blocker 创建与 Scheduler 到期移除都会通知受影响 Order。
 
 ## 7. 队伍控制和 RPC
 

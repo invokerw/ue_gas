@@ -8,6 +8,7 @@
 #include "CombatTestScenarioActor.generated.h"
 
 class ACombatUnitCharacter;
+class UCombatModifierData;
 class UCombatProjectileData;
 
 /** 为 L_CombatTest 提供可重复生成和清理的双队战斗场景入口。 */
@@ -20,7 +21,7 @@ public:
 	/** 配置测试 Actor 的默认 UnitClass，并关闭运行时 Tick。 */
 	ACombatTestScenarioActor();
 
-	/** 在 Authority 上生成 Team 1/2 各一名 Unit，并输出 M4/M5 场景日志。 */
+	/** 在 Authority 上生成 Team 1/2 各一名 Unit，并输出 M4/M5/M6 场景日志。 */
 	UFUNCTION(BlueprintCallable, CallInEditor, Category="Combat|Test")
 	void SpawnScenario();
 
@@ -65,6 +66,8 @@ private:
 	void StartM4AttackScenario();
 	/** 生成一枚追踪测试弹体，并检查 Projectile、Thinker 与 Motion 运行时就绪。 */
 	void StartM5ProjectileScenario();
+	/** 启动一条真实 Aura，并检查 M6 示例与扩展运行时就绪。 */
+	void StartM6ContentScenario();
 
 	/** 当前由本 Actor 生成并负责销毁的 Unit。 */
 	UPROPERTY(Transient)
@@ -76,4 +79,9 @@ private:
 	TObjectPtr<UCombatProjectileData> ScenarioProjectileData;
 	/** 当前 M5 场景弹体，重建场景时显式取消。 */
 	FCombatProjectileHandle ScenarioProjectileHandle;
+	/** M6 Aura 使用的瞬态 child Modifier 定义，保证 Aura 活动期间不会被 GC。 */
+	UPROPERTY(Transient)
+	TObjectPtr<UCombatModifierData> ScenarioAuraChildData;
+	/** 当前 M6 场景 Aura，重建场景时显式取消。 */
+	FCombatAuraHandle ScenarioAuraHandle;
 };

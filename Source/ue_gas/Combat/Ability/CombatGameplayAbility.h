@@ -25,11 +25,14 @@ public:
 	/** 返回 Class CDO 单向引用的稳定 AbilityData。 */
 	const UCombatAbilityData* GetAbilityData() const { return AbilityData; }
 	/** 按当前 AbilitySpec.Level 读取 DataAsset special。 */
-	UFUNCTION(BlueprintPure, Category="Combat|Ability") float GetSpecialValue(FName Key) const;
+	UFUNCTION(BlueprintPure, Category="Combat|Ability", meta=(DisplayName="获取技能特殊值", ToolTip="按当前 AbilitySpec 等级读取 AbilityData 中的特殊值；键不存在时返回 0。"))
+	float GetSpecialValue(UPARAM(DisplayName="特殊值键") FName Key) const;
 	/** 返回当前激活的只读服务器快照。 */
-	UFUNCTION(BlueprintPure, Category="Combat|Ability") const FCombatAbilityActivationContext& GetCombatContext() const { return CombatContext; }
+	UFUNCTION(BlueprintPure, Category="Combat|Ability", meta=(DisplayName="获取战斗技能上下文", ToolTip="返回当前激活冻结的服务器权威上下文。"))
+	const FCombatAbilityActivationContext& GetCombatContext() const { return CombatContext; }
 	/** 返回本次 SpellStarted 的 DataDriven Action 聚合结果。 */
-	UFUNCTION(BlueprintPure, Category="Combat|Ability") const FCombatAbilityActionResult& GetLastActionResult() const { return LastActionResult; }
+	UFUNCTION(BlueprintPure, Category="Combat|Ability", meta=(DisplayName="获取最近技能动作结果", ToolTip="返回本次 SpellStarted 数据驱动动作的聚合结果。"))
+	const FCombatAbilityActionResult& GetLastActionResult() const { return LastActionResult; }
 	/** 返回 Cast/Channel 是否仍持有活动 Scheduler 任务，供生命周期测试。 */
 	bool HasActiveCombatSchedule() const;
 	/** Spec 授予时把 Class CDO 的唯一 AbilityData 显式同步到 InstancedPerActor 实例。 */
@@ -59,17 +62,21 @@ public:
 		bool bWasCancelled) override;
 
 	/** SpellStarted 时供蓝图扩展复杂行为；公共动作已经由基类统一执行。 */
-	UFUNCTION(BlueprintNativeEvent, Category="Combat|Ability")
-	void ReceiveSpellStart(const FCombatAbilityActivationContext& Context);
+	UFUNCTION(BlueprintNativeEvent, Category="Combat|Ability", meta=(DisplayName="技能正式开始", ToolTip="技能进入 SpellStarted 后调用；基类公共动作已在此之前统一执行。"))
+	void ReceiveSpellStart(UPARAM(DisplayName="技能上下文") const FCombatAbilityActivationContext& Context);
 	/** 每个确定性 Channel tick 调用。 */
-	UFUNCTION(BlueprintNativeEvent, Category="Combat|Ability")
-	void ReceiveChannelTick(const FCombatAbilityActivationContext& Context, const FCombatScheduledTickContext& TickContext);
+	UFUNCTION(BlueprintNativeEvent, Category="Combat|Ability", meta=(DisplayName="技能引导周期", ToolTip="每个由 Combat Scheduler 驱动的确定性引导周期调用。"))
+	void ReceiveChannelTick(
+		UPARAM(DisplayName="技能上下文") const FCombatAbilityActivationContext& Context,
+		UPARAM(DisplayName="周期上下文") const FCombatScheduledTickContext& TickContext);
 	/** Channel 正常完成或中断时 exactly-once 调用。 */
-	UFUNCTION(BlueprintNativeEvent, Category="Combat|Ability")
-	void ReceiveChannelFinish(const FCombatAbilityActivationContext& Context, bool bInterrupted);
+	UFUNCTION(BlueprintNativeEvent, Category="Combat|Ability", meta=(DisplayName="技能引导结束", ToolTip="引导正常完成或被中断时仅调用一次。"))
+	void ReceiveChannelFinish(
+		UPARAM(DisplayName="技能上下文") const FCombatAbilityActivationContext& Context,
+		UPARAM(DisplayName="是否中断") bool bInterrupted);
 
 	/** Ability Class CDO 单向绑定的配置资产；DataAsset 不反向引用 Class。 */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Ability")
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Ability", meta=(DisplayName="技能数据", ToolTip="Ability Class CDO 单向绑定的配置资产；DataAsset 不反向引用 Ability Class。"))
 	TObjectPtr<UCombatAbilityData> AbilityData;
 
 protected:

@@ -15,8 +15,8 @@ class UE_GAS_API UCombatHealSubsystem : public UWorldSubsystem
 
 public:
 	/** 同步执行完整 Heal 流水线并返回 AttributeSet 的真实 Health delta。 */
-	UFUNCTION(BlueprintCallable, Category="Combat|Heal")
-	FCombatHealResult Heal(const FCombatHealRequest& Request);
+	UFUNCTION(BlueprintCallable, Category="Combat|Heal", meta=(DisplayName="执行战斗治疗", ToolTip="在服务器同步执行完整治疗流水线，并返回目标生命值的真实变化。"))
+	FCombatHealResult Heal(UPARAM(DisplayName="治疗请求") const FCombatHealRequest& Request);
 
 private:
 	/** 创建根事件或受深度上限约束的子事件。 */

@@ -260,6 +260,23 @@ struct UE_GAS_API FCombatMotionHandle
 	bool operator!=(const FCombatMotionHandle& Other) const { return !(*this == Other); }
 };
 
+/** 标识一个由 AuraSubsystem 持有并绑定 Owner 生命代次的 Aura。 */
+USTRUCT(BlueprintType)
+struct UE_GAS_API FCombatAuraHandle
+{
+	GENERATED_BODY()
+	/** Aura 的共享身份键。 */
+	UPROPERTY(BlueprintReadOnly, Category="Combat|Handle") FCombatHandleKey Key;
+	/** 返回 Aura 句柄及 Owner 生命代次是否有效。 */
+	bool IsValid() const { return Key.IsValid() && Key.LifeGeneration != 0; }
+	/** 返回适合日志输出的 Aura 句柄文本。 */
+	FString ToString() const { return Key.ToString(TEXT("Aura")); }
+	/** 比较两个 Aura 句柄的完整身份。 */
+	bool operator==(const FCombatAuraHandle& Other) const { return Key == Other.Key; }
+	/** 返回两个 Aura 句柄是否不同。 */
+	bool operator!=(const FCombatAuraHandle& Other) const { return !(*this == Other); }
+};
+
 /** 标识一个 Combat Scheduler 槽位。 */
 USTRUCT(BlueprintType)
 struct UE_GAS_API FCombatScheduleHandle

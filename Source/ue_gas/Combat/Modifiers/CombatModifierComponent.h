@@ -34,17 +34,19 @@ struct UE_GAS_API FCombatModifierApplyRequest
 	GENERATED_BODY()
 
 	/** 提供 Runtime、ActiveGE 和周期规则的定义。 */
-	UPROPERTY(BlueprintReadWrite, Category="Combat|Modifier") TObjectPtr<UCombatModifierData> ModifierData = nullptr;
+	UPROPERTY(BlueprintReadWrite, Category="Combat|Modifier", meta=(DisplayName="Modifier 定义", ToolTip="提供 Runtime、ActiveGE 和周期规则的 Modifier 数据资产。")) TObjectPtr<UCombatModifierData> ModifierData = nullptr;
 	/** 施加 Modifier 的来源单位。 */
-	UPROPERTY(BlueprintReadWrite, Category="Combat|Modifier") TObjectPtr<ACombatUnitCharacter> Source = nullptr;
+	UPROPERTY(BlueprintReadWrite, Category="Combat|Modifier", meta=(DisplayName="来源单位", ToolTip="施加该 Modifier 的战斗单位。")) TObjectPtr<ACombatUnitCharacter> Source = nullptr;
 	/** 小于 0 使用定义 Duration；0 表示本次无限；正数覆盖定义持续时间。 */
-	UPROPERTY(BlueprintReadWrite, Category="Combat|Modifier") float DurationOverride = -1.0f;
+	UPROPERTY(BlueprintReadWrite, Category="Combat|Modifier", meta=(DisplayName="持续时间覆盖", ToolTip="小于 0 使用定义值；0 表示无限；正数覆盖定义持续时间。", Units="s")) float DurationOverride = -1.0f;
 	/** Intrinsic Modifier 使用的 AbilitySpec owner key；普通 Modifier 保持无效。 */
-	UPROPERTY(BlueprintReadWrite, Category="Combat|Modifier") FGameplayAbilitySpecHandle AbilityOwnerHandle;
+	UPROPERTY(BlueprintReadWrite, Category="Combat|Modifier", meta=(DisplayName="所属技能句柄", ToolTip="Intrinsic Modifier 使用的 AbilitySpec 所有者键；普通 Modifier 保持无效。")) FGameplayAbilitySpecHandle AbilityOwnerHandle;
 	/** true 时把一次性 Motion 请求注入新建 Runtime。 */
-	UPROPERTY(BlueprintReadWrite, Category="Combat|Modifier") bool bHasInitialMotionRequest = false;
+	UPROPERTY(BlueprintReadWrite, Category="Combat|Modifier", meta=(DisplayName="包含初始位移请求", ToolTip="启用后把一次性 Motion 请求注入新建 Runtime。")) bool bHasInitialMotionRequest = false;
 	/** Meat Hook 等 Runtime 在 OnCreated 消费的强制位移快照。 */
-	UPROPERTY(BlueprintReadWrite, Category="Combat|Modifier") FCombatMotionRequest InitialMotionRequest;
+	UPROPERTY(BlueprintReadWrite, Category="Combat|Modifier", meta=(DisplayName="初始位移请求", ToolTip="Runtime 在创建阶段消费的强制位移快照。")) FCombatMotionRequest InitialMotionRequest;
+	/** 为本次 Apply 冻结 Runtime 参数和参数化 Attribute magnitude。 */
+	UPROPERTY(BlueprintReadWrite, Category="Combat|Modifier", meta=(DisplayName="运行时参数覆盖", ToolTip="为本次施加冻结 Runtime 参数和参数化属性幅值；同名键覆盖定义值。")) TMap<FName, float> RuntimeParameterOverrides;
 };
 
 /** ApplyModifier 返回的成功状态、句柄与刷新信息。 */
@@ -54,13 +56,13 @@ struct UE_GAS_API FCombatModifierApplyResult
 	GENERATED_BODY()
 
 	/** ActiveGE 与 Runtime 是否成功创建或刷新。 */
-	UPROPERTY(BlueprintReadOnly, Category="Combat|Modifier") bool bSuccess = false;
+	UPROPERTY(BlueprintReadOnly, Category="Combat|Modifier", meta=(DisplayName="成功", ToolTip="ActiveGE 与 Runtime 是否成功创建或刷新。")) bool bSuccess = false;
 	/** true 表示复用了现有的一一映射。 */
-	UPROPERTY(BlueprintReadOnly, Category="Combat|Modifier") bool bRefreshed = false;
+	UPROPERTY(BlueprintReadOnly, Category="Combat|Modifier", meta=(DisplayName="已刷新", ToolTip="是否复用了现有的 ActiveGE 与 Runtime 一一映射。")) bool bRefreshed = false;
 	/** 新建或刷新 Runtime 的稳定句柄。 */
-	UPROPERTY(BlueprintReadOnly, Category="Combat|Modifier") FCombatModifierHandle Handle;
+	UPROPERTY(BlueprintReadOnly, Category="Combat|Modifier", meta=(DisplayName="Modifier 句柄", ToolTip="新建或刷新 Runtime 的稳定句柄。")) FCombatModifierHandle Handle;
 	/** 失败时的机器可判定原因。 */
-	UPROPERTY(BlueprintReadOnly, Category="Combat|Modifier") FGameplayTag FailureTag;
+	UPROPERTY(BlueprintReadOnly, Category="Combat|Modifier", meta=(DisplayName="失败标签", ToolTip="失败时可由程序稳定判定的原因标签。")) FGameplayTag FailureTag;
 };
 
 /** 管理 Unit 的 ActiveGE/Runtime 一一映射、稳定 Hook、周期、刷新和驱散。 */
@@ -74,16 +76,21 @@ public:
 	UCombatModifierComponent();
 
 	/** 在 Authority 上施加或刷新 Modifier。 */
-	UFUNCTION(BlueprintCallable, Category="Combat|Modifier")
-	FCombatModifierApplyResult ApplyModifier(const FCombatModifierApplyRequest& Request);
+	UFUNCTION(BlueprintCallable, Category="Combat|Modifier", meta=(DisplayName="施加 Modifier", ToolTip="在服务器施加或刷新 Modifier，并返回句柄与失败原因。"))
+	FCombatModifierApplyResult ApplyModifier(UPARAM(DisplayName="施加请求") const FCombatModifierApplyRequest& Request);
 	/** 按句柄移除一对 ActiveGE/Runtime；Hook 内调用会延迟到阶段结束。 */
-	UFUNCTION(BlueprintCallable, Category="Combat|Modifier")
-	bool RemoveModifier(FCombatModifierHandle Handle);
+	UFUNCTION(BlueprintCallable, Category="Combat|Modifier", meta=(DisplayName="移除 Modifier", ToolTip="按稳定句柄移除 ActiveGE 与 Runtime；在 Hook 内调用时延迟到阶段结束。"))
+	bool RemoveModifier(UPARAM(DisplayName="Modifier 句柄") FCombatModifierHandle Handle);
 	/** 对稳定快照执行 Basic 或 Strong Dispel，并返回移除数量。 */
-	UFUNCTION(BlueprintCallable, Category="Combat|Modifier")
-	int32 Dispel(ECombatDispelStrength Strength, bool bDebuffsOnly = true);
+	UFUNCTION(BlueprintCallable, Category="Combat|Modifier", meta=(DisplayName="驱散 Modifier", ToolTip="按稳定快照执行基础或强力驱散，并返回实际移除数量。"))
+	int32 Dispel(
+		UPARAM(DisplayName="驱散强度") ECombatDispelStrength Strength,
+		UPARAM(DisplayName="仅驱散减益") bool bDebuffsOnly = true);
+	/** 返回最近一次 Dispel 被高级状态拒绝的原因。 */
+	UFUNCTION(BlueprintPure, Category="Combat|Modifier", meta=(DisplayName="获取最近驱散失败标签", ToolTip="返回最近一次驱散被高级状态拒绝的稳定原因；没有失败时为空。"))
+	FGameplayTag GetLastDispelFailureTag() const { return LastDispelFailureTag; }
 	/** 返回当前 ActiveGE/Runtime 一一映射数量。 */
-	UFUNCTION(BlueprintPure, Category="Combat|Modifier")
+	UFUNCTION(BlueprintPure, Category="Combat|Modifier", meta=(DisplayName="获取活动 Modifier 数量", ToolTip="返回当前 ActiveGE 与 Runtime 一一映射的数量。"))
 	int32 GetActiveModifierCount() const { return ActiveModifiers.Num(); }
 	/** 按句柄查找只读 Runtime。 */
 	UCombatModifierRuntime* FindRuntime(FCombatModifierHandle Handle) const;
@@ -110,6 +117,8 @@ public:
 	void ExecuteAbilityExecuted(const FPrimaryAssetId& AbilityDefinitionId, const FCombatEventContext& Context);
 	/** 以两阶段协议按 exclusive group 提交法球 winner，并返回不可变快照。 */
 	void ClaimAttackOrbs(const FCombatAttackCandidateContext& Context, TArray<FCombatOrbSnapshot>& OutSnapshots);
+	/** SpellStarted commit 后按稳定优先级消耗一个 SpellBlock Runtime。 */
+	bool TryConsumeSpellBlock(const FPrimaryAssetId& AbilityDefinitionId, ACombatUnitCharacter* Caster, const FCombatEventContext& Context);
 
 	/** 生命周期进入 Dying 时移除死亡清理 Modifier，并暂停保留 Runtime 的 Hook/Think。 */
 	void HandleOwnerDeath();
@@ -122,7 +131,10 @@ private:
 	/** 创建动态无限 ActiveGE 并建立 Runtime 一一映射。 */
 	FCombatModifierApplyResult ApplyNewModifier(const FCombatModifierApplyRequest& Request, float EffectiveDuration);
 	/** 刷新现有 Runtime 的层数、过期时间和周期相位。 */
-	FCombatModifierApplyResult RefreshModifier(UCombatModifierRuntime& Runtime, float EffectiveDuration);
+	FCombatModifierApplyResult RefreshModifier(
+		UCombatModifierRuntime& Runtime,
+		const FCombatModifierApplyRequest& Request,
+		float EffectiveDuration);
 	/** 立即移除一一映射；调用者负责确保不在 Hook 遍历中。 */
 	bool RemoveModifierImmediate(FCombatModifierHandle Handle, bool bCallDestroyed = true);
 	/** 返回同来源、同定义且仍活动的 Runtime。 */
@@ -156,4 +168,6 @@ private:
 	uint64 NextApplySequence = 1;
 	/** 非 Alive 阶段禁止 Hook 与 Think。 */
 	bool bHooksPaused = false;
+	/** 最近一次 Dispel 的高级状态拒绝原因；成功或正常无目标时为空。 */
+	FGameplayTag LastDispelFailureTag;
 };

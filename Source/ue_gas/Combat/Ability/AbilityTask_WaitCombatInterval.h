@@ -20,11 +20,11 @@ class UE_GAS_API UAbilityTask_WaitCombatInterval : public UAbilityTask
 
 public:
 	/** 创建 interval/duration 均为正数的受管理 Channel Task。 */
-	UFUNCTION(BlueprintCallable, Category="Combat|Ability|Tasks", meta=(DisplayName="Wait Combat Interval", HidePin="OwningAbility", DefaultToSelf="OwningAbility", BlueprintInternalUseOnly="true"))
+	UFUNCTION(BlueprintCallable, Category="Combat|Ability|Tasks", meta=(DisplayName="等待战斗引导周期", ToolTip="使用 Combat Scheduler 驱动固定间隔和总时长均为正数的引导任务。", HidePin="OwningAbility", DefaultToSelf="OwningAbility", BlueprintInternalUseOnly="true"))
 	static UAbilityTask_WaitCombatInterval* WaitCombatInterval(
-		UGameplayAbility* OwningAbility,
-		float Interval,
-		float Duration);
+		UPARAM(DisplayName="所属技能") UGameplayAbility* OwningAbility,
+		UPARAM(DisplayName="周期间隔") float Interval,
+		UPARAM(DisplayName="总时长") float Duration);
 
 	/** 注册 repeating tick 与高优先级 finish task。 */
 	virtual void Activate() override;

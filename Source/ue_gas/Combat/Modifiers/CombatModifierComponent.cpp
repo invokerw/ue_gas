@@ -35,6 +35,23 @@ FCombatModifierApplyResult UCombatModifierComponent::ApplyModifier(const FCombat
 		Result.FailureTag = CombatTags::Failure_InvalidNumber;
 		return Result;
 	}
+	for (const TPair<FName, float>& Override : Request.RuntimeParameterOverrides)
+	{
+		if (Override.Key.IsNone() || !FMath::IsFinite(Override.Value))
+		{
+			Result.FailureTag = CombatTags::Failure_InvalidNumber;
+			return Result;
+		}
+	}
+	if (Request.ModifierData->bIsDebuff)
+	{
+		const UCombatAbilitySystemComponent* TargetAsc = Target->GetCombatAbilitySystemComponent();
+		if (TargetAsc && TargetAsc->HasMatchingGameplayTag(CombatTags::State_DebuffImmune))
+		{
+			Result.FailureTag = CombatTags::Failure_Modifier_DebuffImmune;
+			return Result;
+		}
+	}
 
 	// Hook 内不修改 ActiveModifiers；FIFO 在当前最外层阶段结束后执行真实 Apply。
 	if (DeferredOperations.IsInPhase())
@@ -51,7 +68,7 @@ FCombatModifierApplyResult UCombatModifierComponent::ApplyModifier(const FCombat
 	const float EffectiveDuration = CalculateEffectiveDuration(Request);
 	if (UCombatModifierRuntime* Existing = FindRefreshCandidate(Request))
 	{
-		return RefreshModifier(*Existing, EffectiveDuration);
+		return RefreshModifier(*Existing, Request, EffectiveDuration);
 	}
 	return ApplyNewModifier(Request, EffectiveDuration);
 }
@@ -96,7 +113,15 @@ FCombatModifierApplyResult UCombatModifierComponent::ApplyNewModifier(
 		FGameplayModifierInfo& Modifier = EffectDefinition->Modifiers.AddDefaulted_GetRef();
 		Modifier.Attribute = Change.Attribute;
 		Modifier.ModifierOp = Change.ModifierOp;
-		Modifier.ModifierMagnitude = FGameplayEffectModifierMagnitude(FScalableFloat(Change.Magnitude));
+		const float* Override = Change.MagnitudeParameterKey.IsNone()
+			? nullptr : Request.RuntimeParameterOverrides.Find(Change.MagnitudeParameterKey);
+		const float Magnitude = Override ? *Override : Change.Magnitude;
+		if (!FMath::IsFinite(Magnitude))
+		{
+			Result.FailureTag = CombatTags::Failure_InvalidNumber;
+			return Result;
+		}
+		Modifier.ModifierMagnitude = FGameplayEffectModifierMagnitude(FScalableFloat(Magnitude));
 	}
 
 	UCombatAbilitySystemComponent* SourceAsc = Request.Source->GetCombatAbilitySystemComponent();
@@ -124,6 +149,7 @@ FCombatModifierApplyResult UCombatModifierComponent::ApplyNewModifier(
 	Runtime->AbilityOwnerHandle = Request.AbilityOwnerHandle;
 	Runtime->bHasInitialMotionRequest = Request.bHasInitialMotionRequest;
 	Runtime->InitialMotionRequest = Request.InitialMotionRequest;
+	Runtime->RuntimeParameterOverrides = Request.RuntimeParameterOverrides;
 	Runtime->TargetUnit = Target;
 	Runtime->Handle.Key.Id = NextHandleId++;
 	Runtime->Handle.Key.Generation = 1;
@@ -157,6 +183,7 @@ FCombatModifierApplyResult UCombatModifierComponent::ApplyNewModifier(
 
 FCombatModifierApplyResult UCombatModifierComponent::RefreshModifier(
 	UCombatModifierRuntime& Runtime,
+	const FCombatModifierApplyRequest& Request,
 	const float EffectiveDuration)
 {
 	FCombatModifierApplyResult Result;
@@ -175,6 +202,20 @@ FCombatModifierApplyResult UCombatModifierComponent::RefreshModifier(
 		Result.FailureTag = CombatTags::Failure_Target_Invalid;
 		return Result;
 	}
+	for (int32 Index = 0; Index < Data->AttributeChanges.Num() && Index < Runtime.EffectDefinition->Modifiers.Num(); ++Index)
+	{
+		const FCombatModifierAttributeChange& Change = Data->AttributeChanges[Index];
+		const float* Override = Change.MagnitudeParameterKey.IsNone()
+			? nullptr : Request.RuntimeParameterOverrides.Find(Change.MagnitudeParameterKey);
+		const float Magnitude = Override ? *Override : Change.Magnitude;
+		if (!FMath::IsFinite(Magnitude))
+		{
+			Result.FailureTag = CombatTags::Failure_InvalidNumber;
+			return Result;
+		}
+		Runtime.EffectDefinition->Modifiers[Index].ModifierMagnitude =
+			FGameplayEffectModifierMagnitude(FScalableFloat(Magnitude));
+	}
 	FGameplayEffectSpec RefreshSpec(Runtime.EffectDefinition, SourceAsc->MakeEffectContext(), 1.0f);
 	RefreshSpec.DynamicGrantedTags.AppendTags(Data->GrantedTags);
 	const FActiveGameplayEffectHandle RefreshedHandle = TargetAsc->ApplyGameplayEffectSpecToSelf(RefreshSpec);
@@ -185,6 +226,7 @@ FCombatModifierApplyResult UCombatModifierComponent::RefreshModifier(
 	}
 
 	Runtime.StackCount = FMath::Clamp(Runtime.StackCount + 1, 1, FMath::Max(1, Data->MaxStacks));
+	Runtime.RuntimeParameterOverrides = Request.RuntimeParameterOverrides;
 	Runtime.ExpireAt = EffectiveDuration > 0.0f && GetWorld()
 		? GetWorld()->GetTimeSeconds() + EffectiveDuration : 0.0;
 	const bool bResetThink = Data->RefreshPolicy == ECombatModifierRefreshPolicy::ResetInterval;
@@ -252,6 +294,7 @@ bool UCombatModifierComponent::RemoveModifierImmediate(const FCombatModifierHand
 
 int32 UCombatModifierComponent::Dispel(const ECombatDispelStrength Strength, const bool bDebuffsOnly)
 {
+	LastDispelFailureTag = FGameplayTag();
 	if (DeferredOperations.IsInPhase())
 	{
 		TWeakObjectPtr<UCombatModifierComponent> WeakThis(this);
@@ -259,6 +302,13 @@ int32 UCombatModifierComponent::Dispel(const ECombatDispelStrength Strength, con
 		{
 			if (WeakThis.IsValid()) { WeakThis->Dispel(Strength, bDebuffsOnly); }
 		});
+		return 0;
+	}
+	const ACombatUnitCharacter* Target = GetOwnerUnit();
+	const UCombatAbilitySystemComponent* Asc = Target ? Target->GetCombatAbilitySystemComponent() : nullptr;
+	if (Asc && Asc->HasMatchingGameplayTag(CombatTags::State_DispelImmune))
+	{
+		LastDispelFailureTag = CombatTags::Failure_Modifier_DispelImmune;
 		return 0;
 	}
 
@@ -409,9 +459,16 @@ TArray<UCombatModifierRuntime*> UCombatModifierComponent::MakeSortedSnapshot() c
 	{
 		return Snapshot;
 	}
+	const ACombatUnitCharacter* Target = GetOwnerUnit();
+	const UCombatAbilitySystemComponent* Asc = Target ? Target->GetCombatAbilitySystemComponent() : nullptr;
+	const bool bBroken = Asc && Asc->HasMatchingGameplayTag(CombatTags::State_Broken);
 	for (UCombatModifierRuntime* Runtime : ActiveModifiers)
 	{
-		if (Runtime && Runtime->IsActive()) { Snapshot.Add(Runtime); }
+		const UCombatModifierData* Data = Runtime ? Runtime->GetModifierData() : nullptr;
+		if (Runtime && Runtime->IsActive() && !(bBroken && Data && Data->bDisabledByBreak))
+		{
+			Snapshot.Add(Runtime);
+		}
 	}
 	Snapshot.StableSort([](const UCombatModifierRuntime& A, const UCombatModifierRuntime& B)
 	{
@@ -503,8 +560,14 @@ void UCombatModifierComponent::ClaimAttackOrbs(
 		for (int32 ActionIndex = Snapshot.OnHitActions.Num() - 1; ActionIndex >= 0; --ActionIndex)
 		{
 			const FCombatOnHitAction& Action = Snapshot.OnHitActions[ActionIndex];
+			bool bInvalidOverride = false;
+			for (const TPair<FName, float>& Override : Action.RuntimeParameterOverrides)
+			{
+				bInvalidOverride |= Override.Key.IsNone() || !FMath::IsFinite(Override.Value);
+			}
 			if (!FMath::IsFinite(Action.Magnitude) || Action.Magnitude < 0.0f
 				|| !FMath::IsFinite(Action.DurationOverride)
+				|| bInvalidOverride
 				|| (Action.Type == ECombatOnHitActionType::ApplyModifier && !Action.ModifierData))
 			{
 				UE_LOG(LogCombat, Warning,
@@ -519,6 +582,25 @@ void UCombatModifierComponent::ClaimAttackOrbs(
 		OutSnapshots.Add(MoveTemp(Snapshot));
 	}
 	DeferredOperations.EndPhase();
+}
+
+bool UCombatModifierComponent::TryConsumeSpellBlock(
+	const FPrimaryAssetId& AbilityDefinitionId,
+	ACombatUnitCharacter* Caster,
+	const FCombatEventContext& Context)
+{
+	bool bBlocked = false;
+	DeferredOperations.BeginPhase(TEXT("SpellBlock"), Context.EventId);
+	for (UCombatModifierRuntime* Runtime : MakeSortedSnapshot())
+	{
+		if (Runtime && Runtime->TryBlockAbility(AbilityDefinitionId, Caster, Context))
+		{
+			bBlocked = true;
+			break;
+		}
+	}
+	DeferredOperations.EndPhase();
+	return bBlocked;
 }
 
 void UCombatModifierComponent::HandleOwnerDeath()

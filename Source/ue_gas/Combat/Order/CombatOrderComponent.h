@@ -27,11 +27,13 @@ public:
 	UCombatOrderComponent();
 
 	/** 接受一个权威 Order；bQueue=false 会提升 generation 并替换全部旧行为。 */
-	UFUNCTION(BlueprintCallable, Category="Combat|Order")
-	FCombatOrderResult IssueOrder(const FCombatOrderRequest& Request, bool bQueue = false);
+	UFUNCTION(BlueprintCallable, Category="Combat|Order", meta=(DisplayName="下达战斗命令", ToolTip="向服务器权威 FIFO 状态机提交命令；不入队时会替换全部旧行为。"))
+	FCombatOrderResult IssueOrder(
+		UPARAM(DisplayName="命令请求") const FCombatOrderRequest& Request,
+		UPARAM(DisplayName="加入队列") bool bQueue = false);
 	/** 提升 generation，取消全部当前行为并清空 pending FIFO。 */
-	UFUNCTION(BlueprintCallable, Category="Combat|Order")
-	void StopAllOrders(FGameplayTag Reason);
+	UFUNCTION(BlueprintCallable, Category="Combat|Order", meta=(DisplayName="停止全部战斗命令", ToolTip="取消当前行为、清空待处理队列，并使旧异步回调失效。"))
+	void StopAllOrders(UPARAM(DisplayName="停止原因") FGameplayTag Reason);
 	/** 只允许当前状态机入口推动验证、移动、Cast 或 Attack。 */
 	void PumpCurrentOrder();
 	/** Controller 变化后幂等解绑旧 PathFollowing 并绑定新实例。 */
@@ -46,13 +48,18 @@ public:
 	void HandleOwnerMotionStarted();
 	/** 全部强制位移结束后只重新 Pump 当前 generation 的队首。 */
 	void HandleOwnerMotionFinished();
+	/** 临时 gameplay blocker 创建/销毁时，对相交移动路径主动取消旧请求并重寻路。 */
+	void HandleGameplayBlockerChanged(const FBox& BlockerBounds);
 
 	/** 返回当前状态。 */
-	UFUNCTION(BlueprintPure, Category="Combat|Order") ECombatOrderState GetCurrentState() const { return CurrentState; }
+	UFUNCTION(BlueprintPure, Category="Combat|Order", meta=(DisplayName="获取当前命令状态", ToolTip="返回战斗命令状态机的当前状态。"))
+	ECombatOrderState GetCurrentState() const { return CurrentState; }
 	/** 返回当前 OrderHandle；空闲时无效。 */
-	UFUNCTION(BlueprintPure, Category="Combat|Order") FCombatOrderHandle GetCurrentOrderHandle() const;
+	UFUNCTION(BlueprintPure, Category="Combat|Order", meta=(DisplayName="获取当前命令句柄", ToolTip="返回当前命令的稳定句柄；空闲时句柄无效。"))
+	FCombatOrderHandle GetCurrentOrderHandle() const;
 	/** 返回 pending FIFO 数量，不包含当前项。 */
-	UFUNCTION(BlueprintPure, Category="Combat|Order") int32 GetPendingOrderCount() const { return PendingOrders.Num(); }
+	UFUNCTION(BlueprintPure, Category="Combat|Order", meta=(DisplayName="获取待处理命令数量", ToolTip="返回待处理 FIFO 数量，不包含当前命令。"))
+	int32 GetPendingOrderCount() const { return PendingOrders.Num(); }
 	/** 返回可选 EQS Context 使用的当前权威移动目的点。 */
 	FVector GetCurrentMoveGoal() const { return CurrentMoveGoal; }
 	/** 返回当前 Order 完成委托。 */
@@ -62,6 +69,14 @@ public:
 	void SetNavigationDeferredForTesting(bool bDeferred) { bNavigationDeferredForTesting = bDeferred; }
 	/** 自动化模拟当前 Move 回调；Handle 不匹配时必须无副作用返回 false。 */
 	bool CompleteMovementForTesting(FCombatOrderHandle Handle, bool bSuccess, bool bPartial = false);
+	/** 自动化连同导航 attempt generation 注入回调，用于证明 repath 后旧尝试失效。 */
+	bool CompleteMovementAttemptForTesting(
+		FCombatOrderHandle Handle,
+		uint32 AttemptGeneration,
+		bool bSuccess,
+		bool bPartial = false);
+	/** 返回当前导航尝试代次，供 blocker/repath 自动化记录旧值。 */
+	uint32 GetNavigationAttemptGenerationForTesting() const { return NavigationAttemptGeneration; }
 
 	/** 可选的 Strategy 风格目的点 EQS；为空时直接使用 AI MoveTo。 */
 	UPROPERTY(EditAnywhere, Category="Combat|Order|Movement") TObjectPtr<UEnvQuery> MoveDestinationQuery;
@@ -166,6 +181,8 @@ private:
 	FAIRequestID ActiveMoveRequestId = FAIRequestID::InvalidRequest;
 	FCombatOrderHandle ActiveMoveOrderHandle;
 	FNavPathSharedPtr ActiveMovePath;
+	/** 每次 BeginMovement 递增，使同 OrderHandle 的旧 blocker 前回调也会失效。 */
+	uint32 NavigationAttemptGeneration = 1;
 	/** 已绑定 OnRequestFinished 的组件；Controller 变化时先解绑。 */
 	TWeakObjectPtr<UPathFollowingComponent> BoundPathFollowing;
 	/** 当前 EQS/Move 使用的目标位置和最近一次追击目标位置。 */

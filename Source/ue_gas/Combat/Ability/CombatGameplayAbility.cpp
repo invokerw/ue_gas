@@ -493,6 +493,20 @@ void UCombatGameplayAbility::HandleCastPoint(const FCombatScheduledTickContext& 
 	}
 	bSpellStarted = true;
 	EmitLifecycleEvent(CombatTags::Event_Combat_AbilitySpellStarted, FGameplayTag(), TEXT("SpellStarted"));
+	if (AbilityData->BehaviorTags.HasTagExact(CombatTags::Ability_Behavior_SpellBlockable)
+		&& CombatContext.TargetActor
+		&& CombatContext.TargetActor->GetCombatModifierComponent()->TryConsumeSpellBlock(
+			AbilityData->GetPrimaryAssetId(), CombatContext.Caster, CombatContext.EventContext))
+	{
+		// SpellBlock 位于 SpellStarted commit 之后，因此 Cost/Cooldown 保持已提交，但技能动作不会发生。
+		LastActionResult = FCombatAbilityActionResult();
+		LastActionResult.FailureTag = CombatTags::Failure_Ability_SpellBlocked;
+		EmitLifecycleEvent(CombatTags::Event_Combat_AbilitySpellBlocked,
+			CombatTags::Failure_Ability_SpellBlocked, TEXT("SpellBlocked before Ability Action"));
+		ReleaseCombatOrder(true, FGameplayTag());
+		FinishSuccessfully();
+		return;
+	}
 	ReceiveSpellStart(CombatContext);
 	LastActionResult = ExecuteDataDrivenActions();
 	if (!LastActionResult.bSuccess)

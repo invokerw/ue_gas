@@ -45,6 +45,8 @@ struct UE_GAS_API FCombatThinkerSpec
 	UPROPERTY(BlueprintReadWrite, Category="Combat|Thinker", meta=(ClampMin="0", Units="s")) float Duration = 0.0f;
 	/** 每个目标每个逻辑 pulse 的伤害。 */
 	UPROPERTY(BlueprintReadWrite, Category="Combat|Thinker", meta=(ClampMin="0")) float DamagePerPulse = 0.0f;
+	/** true 时 Thinker 只承担复制/表现生命周期，不查询或结算 gameplay 目标。 */
+	UPROPERTY(BlueprintReadWrite, Category="Combat|Thinker", meta=(DisplayName="仅视觉表现", ToolTip="启用后 Thinker 只维护复制与表现生命周期，不查询目标，也不结算伤害或 Modifier。")) bool bVisualOnly = false;
 	/** pulse 伤害类型。 */
 	UPROPERTY(BlueprintReadWrite, Category="Combat|Thinker") ECombatDamageType DamageType = ECombatDamageType::Magical;
 	/** 非空时每个 pulse 通过 ModifierComponent 施加或刷新该定义。 */

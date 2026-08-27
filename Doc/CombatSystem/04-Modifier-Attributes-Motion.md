@@ -179,15 +179,15 @@ ModifierData 保存：
 
 ## 9. Aura 补齐
 
-原设计未定义 Aura 所有权。第一版建议：
+M6 已按 [24 M6 复杂技能集决策](24-M6-Content-Decision.md#4-aura关闭-gap-014-的基线)补齐 Aura 所有权：
 
-- Aura Owner Runtime 由 Scheduler 使用 Coalesce 低频查询目标，或由可靠 overlap 集合提供候选。
-- 每个受影响目标持有普通 child Modifier；Aura Runtime 保存 `Target -> ActiveGEHandle`，不用每帧重复 Apply。
-- 进入、离开、死亡、队伍变化、Owner 销毁都走幂等 reconcile。
+- `UCombatAuraSubsystem` 是每个 World 的唯一 registry；记录 Owner/LifeGeneration、Targeting 规则、调度和 child 映射。
+- Scheduler 使用 Coalesce 低频查询目标；每个受影响目标持有普通 child Modifier，registry 保存 `Target -> ModifierHandle/LifeGeneration`，不用每帧重复 Apply。
+- 进入、离开、死亡、队伍变化、Owner 销毁、Break/解除 Break 都走幂等 reconcile。
 - child Modifier 的来源 Context 保存 Aura Owner 和 DefinitionId；驱散规则由 child 定义决定。
 - Aura 查询必须使用统一 Targeting/Team 规则，不能在蓝图里自行比较队伍。
 
-Aura 作为 M7 扩展，不阻塞第一条纵向切片。
+Aura 已由 M6/EXT-601 实现并关闭 GAP-014；自动化覆盖 add/remove/repair、换队、Break、Owner 死亡和取消清理。
 
 ## 10. Motion Controller
 

@@ -1,8 +1,8 @@
 # 00 开发进度台账
 
-> 最后更新：2026-08-26
-> 当前里程碑：M5 已验收，等待 M6 授权
-> 总进度：62/82 Task 完成，6/9 里程碑由用户验收
+> 最后更新：2026-08-27
+> 当前里程碑：M6 已验收（复杂技能集）
+> 总进度：68/82 Task 完成，7/9 里程碑由用户验收
 
 本文件是项目执行状态的唯一来源。[10 实施路线图](10-Implementation-Roadmap.md)定义任务内容和依赖，本文件记录实际状态、验证证据和用户验收结论。
 
@@ -40,7 +40,7 @@
 | M3 | 可施法切片 | 10/10 | 通过 | 已验收 | 2026-08-26 / 2026-08-26 | Editor/Server/Client 构建、Automation 17/17 和独立联机 smoke 通过；用户验收通过；见 [19](19-M3-Acceptance.md) |
 | M4 | Order 与普攻 | 8/8 | 通过 | 已验收 | 2026-08-26 / 2026-08-26 | Editor/Server/Client 构建、Automation 23/23 和独立联机追击/连续近战 smoke 通过；用户验收通过；见 [21](21-M4-Acceptance.md) |
 | M5 | Projectile、Thinker 与 Motion | 9/9 | 通过 | 已验收 | 2026-08-26 / 2026-08-26 | Editor/Server/Client 构建、Automation 27/27 和独立联机 Projectile spawn/hit/finish smoke 通过；用户验收通过；见 [23](23-M5-Acceptance.md) |
-| M6 | 复杂技能集 | 0/6 | 未开始 | 未开始 | — | — |
+| M6 | 复杂技能集 | 6/6 | 通过 | 已验收 | 2026-08-26 / 2026-08-27 | Editor/Server/Client 构建、Automation 32/32、独立联机 M6 场景 smoke 通过；中文可见说明整改后用户验收通过；见 [26](26-M6-Acceptance.md) |
 | M7 | 联机、UI、工具和性能 | 0/9 | 未开始 | 未开始 | — | — |
 | M8 | 候选发布 | 0/5 | 未开始 | 未开始 | — | — |
 
@@ -140,12 +140,12 @@
 
 | Task | 需求名称 | 状态 | 完成证据/备注 |
 | --- | --- | --- | --- |
-| DEMO-601 | Frost Arrows | 未开始 | — |
-| DEMO-602 | Fissure A：伤害、控制与视觉 | 未开始 | — |
-| DEMO-603 | Fissure B：阻挡与 Repath | 未开始 | — |
-| EXT-601 | Aura 基础 | 未开始 | 到期：GAP-014 |
-| EXT-602 | 高级状态规则 | 未开始 | 到期：GAP-016 |
-| TOOL-601 | 技能模板检查 | 未开始 | — |
+| DEMO-601 | Frost Arrows | 已完成 | `UCombatFrostArrowsRuntime` 完成 AutoCast/等级/Break/Mana 预检、winner 唯一提交和 Projectile/slow 参数 AttackRecord 快照；自动化通过 |
+| DEMO-602 | Fissure A：伤害、控制与视觉 | 已完成 | `QueryUnitsAlongSegment` 稳定去重；Damage/Stun/Motion 公共入口和 visual-only Thinker 通过自动化 |
+| DEMO-603 | Fissure B：阻挡与 Repath | 已完成 | 无 Tick `ACombatFissureBlocker`、Scheduler 生命周期、路径相交主动 repath 与 navigation attempt generation 旧回调淘汰通过 |
+| EXT-601 | Aura 基础 | 已完成 | 每 World registry、Scheduler Coalesce、Targeting child reconcile、Break/换队/死亡/EndPlay 清理通过；ADR-036 关闭 GAP-014 |
+| EXT-602 | 高级状态规则 | 已完成 | SpellBlock、Break、Debuff Immunity、Dispel Immunity 独立阶段矩阵通过；ADR-037 关闭 GAP-016 |
+| TOOL-601 | 技能模板检查 | 已完成 | `FCombatSkillTemplateValidator`、旁路模式、Definition/schema/事件顺序自动化及 [25](25-M6-Skill-Template-Checklist.md) 完成 |
 
 ## 10. M7：联机、UI、工具和性能
 
@@ -180,8 +180,8 @@
 | M2 | 2026-08-25 | 已验收 | 无 | 2026-08-26 | 已授权 M3（2026-08-26） |
 | M3 | 2026-08-26 | 已验收 | 无 | 2026-08-26 | 已授权 M4（2026-08-26） |
 | M4 | 2026-08-26 | 已验收 | 无 | 2026-08-26 | 已授权 M5（2026-08-26） |
-| M5 | 2026-08-26 | 已验收 | 无 | 2026-08-26 | 未授权 |
-| M6 | — | 未提交 | — | — | 未授权 |
+| M5 | 2026-08-26 | 已验收 | 无 | 2026-08-26 | 已授权 M6（2026-08-26） |
+| M6 | 2026-08-26 | 已验收 | Native GameplayTag 中文说明与蓝图可见中文注释已补齐 | 2026-08-27 | 未授权 |
 | M7 | — | 未提交 | — | — | 未授权 |
 | M8 | — | 未提交 | — | — | 不适用 |
 
@@ -212,6 +212,10 @@
 | 2026-08-26 | 完成 M5 九项源码、中文注释、L_CombatTest 场景 smoke 与 4 组专项自动化；Installed UE 5.8.1 `-NoLink` 编译全部修改成功；源码 UE 5.8.0 Development Server/Client 各 29/29 构建成功；运行中的 Editor 仍占用项目 DLL，正式 Editor 链接、Automation 与联机 smoke 待关闭后执行 | M5 / PRJ-001..DEMO-502 |
 | 2026-08-26 | Editor 关闭后完成 Installed UE 5.8.1 正式链接；`Combat.` 冷启动自动化 27/27、独立监听服务器 Projectile spawn/hit/finish 与客户端握手 smoke 通过；G5 通过，M5 转为待验收 | M5 / PRJ-001..DEMO-502 / G5 |
 | 2026-08-26 | 用户确认 M5 验收通过并要求提交；保持 M6 未开始，等待单独授权 | M5 |
+| 2026-08-26 | 用户授权开始 M6；梳理 G6 六项任务与 GAP-014/GAP-016 到期约束，DEMO-601 切换为进行中 | M6 / DEMO-601 |
+| 2026-08-26 | 完成 M6 全部 6 项；关闭 GAP-014/GAP-016；Editor、源码 Server/Client Target 构建成功，`Combat.` 自动化 32/32、独立监听服务器 M6 Aura 场景与客户端连接 smoke 通过；G6 通过并提交用户验收 | M6 / DEMO-601..TOOL-601 / GAP-014/GAP-016 / G6 |
+| 2026-08-27 | 按验收反馈将 144 个 Native GameplayTag 定义统一为 `UE_DEFINE_GAMEPLAY_TAG_COMMENT` 并补齐中文说明；生产蓝图节点、事件、Pin 与 M6 配置字段补充中文 `DisplayName`/`ToolTip`；Editor 正式编译及 `Combat.` 自动化 32/32 通过 | M6 / 中文可见说明整改 |
+| 2026-08-27 | 用户确认 M6 验收通过并要求提交；保持 M7 未开始，等待单独授权 | M6 |
 
 ## 14. 更新规则
 
