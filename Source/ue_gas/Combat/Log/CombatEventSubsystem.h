@@ -84,6 +84,9 @@ class UE_GAS_API UCombatEventSubsystem : public UWorldSubsystem
 	GENERATED_BODY()
 
 public:
+	/** 当前结构化 Combat Event 字段布局版本。 */
+	static constexpr int32 CurrentSchemaVersion = 1;
+
 	/** 创建深度为 0 且 RootEventId 等于自身的新根事件。 */
 	FCombatEventContext CreateRootEvent();
 	/** 从有效父事件创建子事件；超过 MaxDepth 时返回无效上下文。 */
@@ -93,6 +96,10 @@ public:
 
 	/** 返回当前 World 的只读最近日志缓冲区。 */
 	const TArray<FCombatLogRecord>& GetRecentRecords() const { return RecentRecords; }
+	/** 按根事件 ID 返回当前诊断窗口内的完整因果链，并保持提交顺序。 */
+	TArray<FCombatLogRecord> GetRecordsForRootEvent(FCombatEventId RootEventId) const;
+	/** 返回 World 生命周期内累计提交的日志数量，不受环形窗口淘汰影响。 */
+	uint64 GetTotalEmittedRecordCount() const { return NextLogSequence - 1; }
 	/** 返回日志提交委托，供 UI 和测试订阅。 */
 	FOnCombatLogRecord& OnRecord() { return RecordDelegate; }
 

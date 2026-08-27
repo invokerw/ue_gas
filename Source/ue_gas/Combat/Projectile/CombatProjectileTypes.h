@@ -148,6 +148,9 @@ struct UE_GAS_API FCombatProjectileSpec
 	UPROPERTY(BlueprintReadWrite, Category="Combat|Projectile") FCombatEventId AbilityActivationId;
 	/** true 时 Ability End 可按 ActivationId 取消；默认 fire-and-forget。 */
 	UPROPERTY(BlueprintReadWrite, Category="Combat|Projectile") bool bCancelWithSourceAbility = false;
+	/** 可选客户端预测视觉键；只用于表现 reconcile，不参与命中和伤害。 */
+	UPROPERTY(BlueprintReadWrite, Category="Combat|Projectile", meta=(DisplayName="预测视觉键", ToolTip="大于 0 时用于服务器弹体首次复制后替换同键客户端预测视觉；不参与 gameplay。"))
+	int32 PredictionKey = 0;
 };
 
 /** Spawn 或 exactly-once Finish 返回的结构化结果。 */

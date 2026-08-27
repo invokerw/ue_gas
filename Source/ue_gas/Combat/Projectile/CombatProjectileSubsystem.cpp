@@ -127,7 +127,7 @@ FCombatProjectileResult UCombatProjectileSubsystem::SpawnProjectile(const FComba
 		Result.FailureTag = CombatTags::Failure_ActionUnsupported;
 		return Result;
 	}
-	Actor->InitializeProjectile(Record.Handle, Data->GetPrimaryAssetId(), Record.Radius);
+	Actor->InitializeProjectile(Record.Handle, Data->GetPrimaryAssetId(), Record.Radius, Spec.PredictionKey);
 	Record.Actor = Actor;
 	const FCombatProjectileHandle Handle = Record.Handle;
 	ActiveProjectiles.Add(Handle.Key.Id, MoveTemp(Record));

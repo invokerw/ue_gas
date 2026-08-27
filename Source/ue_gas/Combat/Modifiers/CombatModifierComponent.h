@@ -10,12 +10,16 @@
 #include "Combat/Core/CombatDeferredOperationQueue.h"
 #include "Combat/Data/CombatDefinitionData.h"
 #include "Combat/Motion/CombatMotionTypes.h"
+#include "Combat/View/CombatUnitViewTypes.h"
 
 #include "CombatModifierComponent.generated.h"
 
 class ACombatUnitCharacter;
 class UCombatModifierRuntime;
 class UGameplayEffect;
+
+/** Modifier 集合创建、刷新或移除后通知 View 与诊断工具。 */
+DECLARE_MULTICAST_DELEGATE(FOnCombatModifierCollectionChanged);
 
 /** 表示本次 Dispel 请求允许移除的最高 Modifier 规则。 */
 UENUM(BlueprintType)
@@ -94,6 +98,10 @@ public:
 	int32 GetActiveModifierCount() const { return ActiveModifiers.Num(); }
 	/** 按句柄查找只读 Runtime。 */
 	UCombatModifierRuntime* FindRuntime(FCombatModifierHandle Handle) const;
+	/** 构建不含 Runtime UObject 的稳定 UI View 快照。 */
+	void BuildModifierViews(TArray<FCombatModifierView>& OutViews) const;
+	/** 返回 Modifier 集合变化观察委托。 */
+	FOnCombatModifierCollectionChanged& OnModifierCollectionChanged() { return ModifierCollectionChangedDelegate; }
 
 	/** 依稳定快照执行来源伤害前置 Hook。 */
 	void ExecutePreDealDamage(FCombatDamageEvent& Event);
@@ -128,6 +136,8 @@ public:
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 private:
+	/** 先同步刷新所属 Unit 的复制 View，再通知其他诊断观察者。 */
+	void NotifyModifierCollectionChanged();
 	/** 创建动态无限 ActiveGE 并建立 Runtime 一一映射。 */
 	FCombatModifierApplyResult ApplyNewModifier(const FCombatModifierApplyRequest& Request, float EffectiveDuration);
 	/** 刷新现有 Runtime 的层数、过期时间和周期相位。 */
@@ -170,4 +180,6 @@ private:
 	bool bHooksPaused = false;
 	/** 最近一次 Dispel 的高级状态拒绝原因；成功或正常无目标时为空。 */
 	FGameplayTag LastDispelFailureTag;
+	/** View 与诊断工具订阅的集合变化委托。 */
+	FOnCombatModifierCollectionChanged ModifierCollectionChangedDelegate;
 };

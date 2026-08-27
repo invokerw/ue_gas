@@ -25,6 +25,7 @@ public class ue_gas : ModuleRules
 			"GameplayTags",
 			"GameplayTasks",
 			"AssetRegistry",
+			"Json",
 			"NetCore",
 			"Niagara",
 			"UMG",

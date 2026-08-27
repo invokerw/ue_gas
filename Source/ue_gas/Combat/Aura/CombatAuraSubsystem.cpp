@@ -171,6 +171,16 @@ bool UCombatAuraSubsystem::IsAuraActive(const FCombatAuraHandle Handle) const
 	return Record && Record->Handle == Handle && Handle.Key.Generation == AuraGeneration;
 }
 
+int32 UCombatAuraSubsystem::GetTotalChildCount() const
+{
+	int32 Total = 0;
+	for (const TPair<uint64, FCombatAuraRuntimeRecord>& Pair : ActiveAuras)
+	{
+		Total += Pair.Value.Children.Num();
+	}
+	return Total;
+}
+
 int32 UCombatAuraSubsystem::GetChildCount(const FCombatAuraHandle Handle) const
 {
 	const FCombatAuraRuntimeRecord* Record = ActiveAuras.Find(Handle.Key.Id);

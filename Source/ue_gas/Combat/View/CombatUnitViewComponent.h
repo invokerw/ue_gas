@@ -1,0 +1,75 @@
+#pragma once
+
+#include "CoreMinimal.h"
+#include "Components/ActorComponent.h"
+
+#include "Combat/View/CombatUnitViewTypes.h"
+
+#include "CombatUnitViewComponent.generated.h"
+
+class ACombatUnitCharacter;
+struct FOnAttributeChangeData;
+
+/** 将服务器 Unit、Ability 与 Modifier 状态投影为 UI 安全的扁平复制 View。 */
+UCLASS(ClassGroup=(Combat), meta=(BlueprintSpawnableComponent))
+class UE_GAS_API UCombatUnitViewComponent : public UActorComponent
+{
+	GENERATED_BODY()
+
+public:
+	/** 默认关闭 Tick，并启用 Unit View 与 FastArray 复制。 */
+	UCombatUnitViewComponent();
+
+	/** 返回当前客户端或服务器的单位 View。 */
+	UFUNCTION(BlueprintPure, Category="Combat|View", meta=(DisplayName="获取战斗单位 View", ToolTip="返回 UI 使用的服务器权威扁平单位投影。"))
+	const FCombatUnitView& GetUnitView() const { return UnitView; }
+	/** 返回当前可见 Modifier 快照。 */
+	UFUNCTION(BlueprintPure, Category="Combat|View", meta=(DisplayName="获取可见 Modifier", ToolTip="返回 FastArray 当前可见条目的只读副本，不包含 Runtime UObject。"))
+	TArray<FCombatModifierView> GetVisibleModifiers() const { return ModifierViews.Items; }
+	/** 使用服务器时间计算一个 View 的剩余持续时间；无限持续返回 -1。 */
+	UFUNCTION(BlueprintPure, Category="Combat|View", meta=(DisplayName="计算 Modifier 剩余时间", ToolTip="按服务器结束时间计算剩余秒数；无限持续返回 -1。"))
+	float GetModifierRemainingTime(UPARAM(DisplayName="Modifier View") const FCombatModifierView& View) const;
+
+	/** Unit View 字段变化时广播。 */
+	UPROPERTY(BlueprintAssignable, Category="Combat|View", meta=(DisplayName="单位 View 已变化", ToolTip="单位身份、生命、属性或技能投影变化时广播。")) FCombatUnitViewChangedDelegate OnUnitViewChanged;
+	/** Modifier FastArray 增删改时广播。 */
+	UPROPERTY(BlueprintAssignable, Category="Combat|View", meta=(DisplayName="Modifier View 已变化", ToolTip="可见 Modifier FastArray 增删改时广播。")) FCombatUnitViewChangedDelegate OnModifierViewsChanged;
+
+	/** 服务器从 Unit/Attribute 当前状态刷新基础投影。 */
+	void RefreshUnitView();
+	/** 服务器从 ModifierComponent 当前稳定快照增量刷新 FastArray。 */
+	void RefreshModifierViews();
+	/** Ability CastStarted 时写入当前 UI 时间窗。 */
+	void NotifyAbilityStarted(
+		const FPrimaryAssetId& DefinitionId,
+		FCombatEventId ActivationId,
+		double StartTime,
+		double EndTime,
+		bool bChanneling);
+	/** Ability End 时只清理匹配的激活 ID。 */
+	void NotifyAbilityEnded(FCombatEventId ActivationId);
+	/** FastArray 回调统一入口。 */
+	void HandleModifierViewsReplicated();
+
+	/** 注册 View 复制字段。 */
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+	/** 绑定 Attribute 与 Modifier 变化源并建立初始 View。 */
+	virtual void BeginPlay() override;
+	/** 解绑全部原生委托。 */
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
+
+private:
+	/** 基础 View 复制后通知 UI。 */
+	UFUNCTION() void OnRep_UnitView();
+	/** 任一可见 Attribute 变化时刷新全部基础数值。 */
+	void HandleAttributeChanged(const FOnAttributeChangeData& ChangeData);
+	/** 返回组件所属 Combat Unit。 */
+	ACombatUnitCharacter* GetOwnerUnit() const;
+
+	/** 所有客户端统一接收的单位基础投影。 */
+	UPROPERTY(ReplicatedUsing=OnRep_UnitView)
+	FCombatUnitView UnitView;
+	/** 所有客户端统一接收的 Modifier FastArray。 */
+	UPROPERTY(Replicated)
+	FCombatModifierViewArray ModifierViews;
+};

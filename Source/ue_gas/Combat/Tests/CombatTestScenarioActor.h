@@ -21,36 +21,36 @@ public:
 	/** 配置测试 Actor 的默认 UnitClass，并关闭运行时 Tick。 */
 	ACombatTestScenarioActor();
 
-	/** 在 Authority 上生成 Team 1/2 各一名 Unit，并输出 M4/M5/M6 场景日志。 */
-	UFUNCTION(BlueprintCallable, CallInEditor, Category="Combat|Test")
+	/** 在 Authority 上生成 Team 1/2 各一名 Unit，并输出 M4-M7 场景日志。 */
+	UFUNCTION(BlueprintCallable, CallInEditor, Category="Combat|Test", meta=(DisplayName="生成战斗测试场景", ToolTip="在 Authority 上生成 Team 1/2 测试单位并启动 M4-M7 自动场景链。"))
 	void SpawnScenario();
 
 	/** 销毁当前场景 Actor 生成的全部 Unit，并清空跟踪数组。 */
-	UFUNCTION(BlueprintCallable, CallInEditor, Category="Combat|Test")
+	UFUNCTION(BlueprintCallable, CallInEditor, Category="Combat|Test", meta=(DisplayName="销毁战斗测试场景", ToolTip="销毁本场景 Actor 创建的全部战斗单位并清空跟踪状态。"))
 	void DestroyScenario();
 
 	/** 先清理旧 Unit，再按当前配置重新生成双队场景。 */
-	UFUNCTION(BlueprintCallable, CallInEditor, Category="Combat|Test")
+	UFUNCTION(BlueprintCallable, CallInEditor, Category="Combat|Test", meta=(DisplayName="重建战斗测试场景", ToolTip="先清理旧场景，再按当前配置重新生成双队测试单位。"))
 	void RespawnScenario();
 
 	/** 返回仍然有效的已生成 Unit 数量。 */
-	UFUNCTION(BlueprintPure, Category="Combat|Test")
+	UFUNCTION(BlueprintPure, Category="Combat|Test", meta=(DisplayName="获取测试单位数", ToolTip="返回当前仍有效且由本场景 Actor 管理的战斗单位数量。"))
 	int32 GetSpawnedUnitCount() const;
 
 	/** BeginPlay 时是否自动创建双队场景。 */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Combat|Test")
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Combat|Test", meta=(DisplayName="开始游戏时自动生成", ToolTip="启用后 Authority BeginPlay 会自动创建测试单位并启动场景链。"))
 	bool bAutoSpawnOnBeginPlay = true;
 
 	/** 场景生成使用的 Combat Unit 类。 */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Combat|Test")
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Combat|Test", meta=(DisplayName="测试单位类", ToolTip="测试场景生成的 Combat Unit 类。"))
 	TSubclassOf<ACombatUnitCharacter> UnitClass;
 
 	/** Team 1 相对测试 Actor 的生成偏移。 */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Combat|Test")
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Combat|Test", meta=(DisplayName="队伍一生成偏移", ToolTip="Team 1 单位相对测试场景 Actor 的生成位置。"))
 	FVector TeamOneOffset = FVector(50.0, 0.0, 288.0);
 
 	/** Team 2 相对测试 Actor 的生成偏移。 */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Combat|Test")
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Combat|Test", meta=(DisplayName="队伍二生成偏移", ToolTip="Team 2 单位相对测试场景 Actor 的生成位置。"))
 	FVector TeamTwoOffset = FVector(300.0, 0.0, 288.0);
 
 protected:
@@ -68,12 +68,26 @@ private:
 	void StartM5ProjectileScenario();
 	/** 启动一条真实 Aura，并检查 M6 示例与扩展运行时就绪。 */
 	void StartM6ContentScenario();
+	/** 等待玩家连接后建立 Mixed/Minimal 矩阵，并输出 M7 网络、View、诊断与容量快照。 */
+	void StartM7NetworkScenario();
+	/** 带 -CombatM7ClientSmoke 的客户端向自己拥有的单位提交一个安全 Order 批次。 */
+	void StartM7ClientRpcSmoke();
+	/** 每 30 秒输出 Dedicated 帧时、带宽、容量和统一预算结果。 */
+	void LogM7PerformanceSnapshot();
+	/** 带 -CombatM7CapacitySmoke 时把场景扩展到 64 Unit / 256 Modifier 冻结边界。 */
+	bool ExpandM7CapacityScenario();
 
 	/** 当前由本 Actor 生成并负责销毁的 Unit。 */
 	UPROPERTY(Transient)
 	TArray<TObjectPtr<ACombatUnitCharacter>> SpawnedUnits;
 	/** 延迟到单位落地后再发攻击 Order，避免使用生成帧中的空中导航位置。 */
 	FTimerHandle M4AttackScenarioTimer;
+	/** 等待 Dedicated 玩家完成登录后再冻结 owning connection 复制矩阵。 */
+	FTimerHandle M7NetworkScenarioTimer;
+	/** 客户端等待 Owner 与 Unit View 完成初始复制后再发送 smoke RPC。 */
+	FTimerHandle M7ClientRpcTimer;
+	/** Dedicated soak 周期性能快照计时器。 */
+	FTimerHandle M7PerformanceTimer;
 	/** M5 场景使用的瞬态 Projectile 定义，保证弹体飞行期间不会被 GC。 */
 	UPROPERTY(Transient)
 	TObjectPtr<UCombatProjectileData> ScenarioProjectileData;
@@ -84,4 +98,7 @@ private:
 	TObjectPtr<UCombatModifierData> ScenarioAuraChildData;
 	/** 当前 M6 场景 Aura，重建场景时显式取消。 */
 	FCombatAuraHandle ScenarioAuraHandle;
+	/** 容量 soak 动态 Modifier 定义的强引用，保证 60 秒运行期间不会被 GC。 */
+	UPROPERTY(Transient)
+	TArray<TObjectPtr<UCombatModifierData>> ScenarioCapacityModifierData;
 };

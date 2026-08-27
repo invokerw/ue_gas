@@ -10,17 +10,26 @@
 #include "Combat/Demo/CombatDemoAbilities.h"
 #include "Combat/Demo/CombatDemoModifierRuntimes.h"
 #include "Combat/Demo/CombatFissureBlocker.h"
+#include "Combat/Debug/CombatDebugSubsystem.h"
 #include "Combat/Log/CombatEventSubsystem.h"
 #include "Combat/Modifiers/CombatModifierComponent.h"
 #include "Combat/Order/CombatOrderComponent.h"
+#include "Combat/Network/CombatNetworkSecuritySubsystem.h"
+#include "Combat/Performance/CombatPerformanceBudget.h"
 #include "Combat/Projectile/CombatProjectileSubsystem.h"
 #include "Combat/Targeting/CombatTargetingSubsystem.h"
 #include "Combat/Thinker/CombatThinkerSubsystem.h"
 #include "Combat/Unit/CombatRegenerationComponent.h"
 #include "Combat/Unit/CombatUnitCharacter.h"
 #include "Combat/Unit/CombatUnitLifecycleComponent.h"
+#include "Combat/View/CombatUnitViewComponent.h"
+#include "Combat/Validation/CombatAssetValidationCommandlet.h"
 #include "Combat/Validation/CombatSkillTemplateValidator.h"
 #include "Engine/World.h"
+#include "EngineUtils.h"
+#include "GameFramework/PlayerController.h"
+#include "Misc/CommandLine.h"
+#include "Misc/Parse.h"
 #include "TimerManager.h"
 
 ACombatTestScenarioActor::ACombatTestScenarioActor()
@@ -39,6 +48,11 @@ void ACombatTestScenarioActor::BeginPlay()
 	{
 		SpawnScenario();
 	}
+	else if (!HasAuthority() && FParse::Param(FCommandLine::Get(), TEXT("CombatM7ClientSmoke")))
+	{
+		GetWorldTimerManager().SetTimer(
+			M7ClientRpcTimer, this, &ACombatTestScenarioActor::StartM7ClientRpcSmoke, 5.0f, false);
+	}
 }
 
 void ACombatTestScenarioActor::EndPlay(const EEndPlayReason::Type EndPlayReason)
@@ -46,6 +60,9 @@ void ACombatTestScenarioActor::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	if (GetWorld())
 	{
 		GetWorldTimerManager().ClearTimer(M4AttackScenarioTimer);
+		GetWorldTimerManager().ClearTimer(M7NetworkScenarioTimer);
+		GetWorldTimerManager().ClearTimer(M7ClientRpcTimer);
+		GetWorldTimerManager().ClearTimer(M7PerformanceTimer);
 	}
 	if (EndPlayReason == EEndPlayReason::Destroyed)
 	{
@@ -223,6 +240,175 @@ void ACombatTestScenarioActor::StartM6ContentScenario()
 		bAdvancedStatusReady ? TEXT("Ready") : TEXT("Invalid"),
 		bTemplateValidatorReady ? TEXT("Ready") : TEXT("Invalid"),
 		*AuraResult.Handle.ToString());
+	GetWorldTimerManager().SetTimer(
+		M7NetworkScenarioTimer, this, &ACombatTestScenarioActor::StartM7NetworkScenario, 3.0f, false);
+}
+
+void ACombatTestScenarioActor::StartM7NetworkScenario()
+{
+	if (!HasAuthority() || SpawnedUnits.Num() < 2)
+	{
+		return;
+	}
+
+	TArray<APlayerController*> Players;
+	for (TActorIterator<APlayerController> It(GetWorld()); It; ++It)
+	{
+		if (IsValid(*It))
+		{
+			Players.Add(*It);
+		}
+	}
+	Players.Sort([](const APlayerController& A, const APlayerController& B) { return A.GetUniqueID() < B.GetUniqueID(); });
+	if (Players.Num() < 2)
+	{
+		UE_LOG(LogCombat, Display, TEXT("M7ScenarioWaiting Players=%d Required=2"), Players.Num());
+		GetWorldTimerManager().SetTimer(
+			M7NetworkScenarioTimer, this, &ACombatTestScenarioActor::StartM7NetworkScenario, 1.0f, false);
+		return;
+	}
+	for (int32 Index = 0; Index < FMath::Min(Players.Num(), 2); ++Index)
+	{
+		// 前序 M4 对战可能已击杀 Team 2；联机冒烟前复活，确保两端都能验证业务 Order 已执行。
+		if (SpawnedUnits[Index]->GetLifeState() == ECombatLifeState::Dead)
+		{
+			SpawnedUnits[Index]->GetCombatLifecycleComponent()->RespawnAtLocation(SpawnedUnits[Index]->GetActorLocation());
+		}
+		SpawnedUnits[Index]->SetCommandingPlayerController(Players[Index]);
+	}
+	// 保留至少一个无 PlayerController Owner 的单位，验证纯 AI 走 Minimal。
+	if (SpawnedUnits.Num() == 2)
+	{
+		if (ACombatUnitCharacter* AiUnit = SpawnUnit(TeamOneOffset + FVector(0.0, 350.0, 0.0), 1))
+		{
+			SpawnedUnits.Add(AiUnit);
+		}
+	}
+	const bool bCapacityFixtureReady = ExpandM7CapacityScenario();
+
+	int32 MixedUnits = 0;
+	int32 MinimalUnits = 0;
+	int32 ReadyViews = 0;
+	for (const ACombatUnitCharacter* Unit : SpawnedUnits)
+	{
+		MixedUnits += Unit && Unit->GetEffectiveAscReplicationPolicy() == ECombatAscReplicationPolicy::Mixed ? 1 : 0;
+		MinimalUnits += Unit && Unit->GetEffectiveAscReplicationPolicy() == ECombatAscReplicationPolicy::Minimal ? 1 : 0;
+		ReadyViews += Unit && Unit->GetCombatUnitViewComponent() ? 1 : 0;
+	}
+	const UCombatDebugSubsystem* Debug = GetWorld()->GetSubsystem<UCombatDebugSubsystem>();
+	const UCombatNetworkSecuritySubsystem* Security = GetWorld()->GetSubsystem<UCombatNetworkSecuritySubsystem>();
+	const UCombatAssetValidationSettings* Validation = GetDefault<UCombatAssetValidationSettings>();
+	const FCombatRuntimeMetrics Metrics = Debug ? Debug->CaptureMetrics() : FCombatRuntimeMetrics();
+	const FCombatPerformanceBudgetResult BudgetResult = FCombatPerformanceBudgetEvaluator::Evaluate(Metrics, FCombatPerformanceBudget());
+	UE_LOG(LogCombat, Display,
+		TEXT("M7ScenarioReady Players=%d Units=%d Mixed=%d Minimal=%d UnitViews=%d Security=%s Debug=%s ValidationVersion=%d CapacityFixture=%s CapacityBudget=%s Metrics={%s}"),
+		Players.Num(), SpawnedUnits.Num(), MixedUnits, MinimalUnits, ReadyViews,
+		Security ? TEXT("Ready") : TEXT("Invalid"), Debug ? TEXT("Ready") : TEXT("Invalid"),
+		Validation ? Validation->ContentVersion : 0,
+		bCapacityFixtureReady ? TEXT("Ready") : TEXT("Invalid"),
+		BudgetResult.bPassed ? TEXT("Pass") : TEXT("Fail"), *Metrics.ToString());
+	LogM7PerformanceSnapshot();
+	GetWorldTimerManager().SetTimer(
+		M7PerformanceTimer, this, &ACombatTestScenarioActor::LogM7PerformanceSnapshot, 30.0f, true);
+}
+
+void ACombatTestScenarioActor::StartM7ClientRpcSmoke()
+{
+	if (HasAuthority())
+	{
+		return;
+	}
+	APlayerController* LocalController = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr;
+	for (TActorIterator<ACombatUnitCharacter> It(GetWorld()); It; ++It)
+	{
+		if (It->GetOwner() != LocalController)
+		{
+			continue;
+		}
+		FCombatOrderBatchRequest Request;
+		Request.RequestId = 7001 + static_cast<int32>(LocalController ? LocalController->GetUniqueID() % 100000u : 0u);
+		FCombatOrderRequest& Order = Request.Orders.AddDefaulted_GetRef();
+		// Stop 不依赖 NavMesh、位置误差或既有命令状态，适合作为双客户端 RPC 冒烟的确定性业务载荷。
+		Order.Type = ECombatOrderType::Stop;
+		It->ServerIssueOrderBatch(Request);
+		UE_LOG(LogCombat, Display, TEXT("M7ClientRpcSmoke Submitted RequestId=%d Unit=%s"), Request.RequestId, *It->GetName());
+		return;
+	}
+	UE_LOG(LogCombat, Display, TEXT("M7ClientRpcSmoke WaitingForOwnedUnit"));
+	GetWorldTimerManager().SetTimer(
+		M7ClientRpcTimer, this, &ACombatTestScenarioActor::StartM7ClientRpcSmoke, 1.0f, false);
+}
+
+void ACombatTestScenarioActor::LogM7PerformanceSnapshot()
+{
+	if (!HasAuthority() || !GetWorld())
+	{
+		return;
+	}
+	const UCombatDebugSubsystem* Debug = GetWorld()->GetSubsystem<UCombatDebugSubsystem>();
+	const FCombatRuntimeMetrics Metrics = Debug ? Debug->CaptureMetrics() : FCombatRuntimeMetrics();
+	const FCombatPerformanceBudgetResult Result = FCombatPerformanceBudgetEvaluator::Evaluate(Metrics, FCombatPerformanceBudget());
+	UE_LOG(LogCombat, Display, TEXT("M7Performance Budget=%s Violations=%s Metrics={%s}"),
+		Result.bPassed ? TEXT("Pass") : TEXT("Fail"),
+		Result.Violations.IsEmpty() ? TEXT("None") : *FString::Join(Result.Violations, TEXT(" | ")),
+		*Metrics.ToString());
+}
+
+bool ACombatTestScenarioActor::ExpandM7CapacityScenario()
+{
+	if (!FParse::Param(FCommandLine::Get(), TEXT("CombatM7CapacitySmoke")))
+	{
+		return true;
+	}
+	// 容量边界需要精确 256 个 Modifier；先移除前序 M6 Aura 及其 child，再建立稳定负载。
+	if (UCombatAuraSubsystem* Auras = GetWorld()->GetSubsystem<UCombatAuraSubsystem>())
+	{
+		Auras->CancelAura(ScenarioAuraHandle);
+	}
+	ScenarioAuraHandle = FCombatAuraHandle();
+	ScenarioAuraChildData = nullptr;
+
+	constexpr int32 TargetUnits = 64;
+	constexpr int32 ModifiersPerUnit = 4;
+	while (SpawnedUnits.Num() < TargetUnits)
+	{
+		const int32 Index = SpawnedUnits.Num();
+		const FVector Offset(
+			800.0 + static_cast<double>(Index % 8) * 180.0,
+			-700.0 + static_cast<double>(Index / 8) * 180.0,
+			288.0);
+		ACombatUnitCharacter* Unit = SpawnUnit(Offset, static_cast<uint8>((Index % 2) + 1));
+		if (!Unit)
+		{
+			UE_LOG(LogCombat, Error, TEXT("M7CapacityFixture SpawnFailed Index=%d"), Index);
+			return false;
+		}
+		SpawnedUnits.Add(Unit);
+	}
+
+	ScenarioCapacityModifierData.Reserve(TargetUnits * ModifiersPerUnit);
+	for (int32 UnitIndex = 0; UnitIndex < TargetUnits; ++UnitIndex)
+	{
+		ACombatUnitCharacter* Unit = SpawnedUnits[UnitIndex];
+		for (int32 ModifierIndex = 0; ModifierIndex < ModifiersPerUnit; ++ModifierIndex)
+		{
+			UCombatModifierData* Data = NewObject<UCombatModifierData>(this);
+			Data->DefinitionName = FName(*FString::Printf(TEXT("m7_capacity_soak_%02d_%d"), UnitIndex, ModifierIndex));
+			Data->Duration = 0.0f;
+			Data->bIsDebuff = false;
+			ScenarioCapacityModifierData.Add(Data);
+			FCombatModifierApplyRequest Request;
+			Request.Source = Unit;
+			Request.ModifierData = Data;
+			if (!Unit->GetCombatModifierComponent()->ApplyModifier(Request).bSuccess)
+			{
+				UE_LOG(LogCombat, Error, TEXT("M7CapacityFixture ModifierFailed Unit=%d Modifier=%d"), UnitIndex, ModifierIndex);
+				return false;
+			}
+		}
+	}
+	UE_LOG(LogCombat, Display, TEXT("M7CapacityFixtureReady Units=%d Modifiers=%d"), TargetUnits, TargetUnits * ModifiersPerUnit);
+	return true;
 }
 
 void ACombatTestScenarioActor::DestroyScenario()
@@ -232,6 +418,9 @@ void ACombatTestScenarioActor::DestroyScenario()
 		return;
 	}
 	GetWorldTimerManager().ClearTimer(M4AttackScenarioTimer);
+	GetWorldTimerManager().ClearTimer(M7NetworkScenarioTimer);
+	GetWorldTimerManager().ClearTimer(M7ClientRpcTimer);
+	GetWorldTimerManager().ClearTimer(M7PerformanceTimer);
 	if (UCombatAuraSubsystem* Auras = GetWorld()
 		? GetWorld()->GetSubsystem<UCombatAuraSubsystem>() : nullptr)
 	{
@@ -246,6 +435,7 @@ void ACombatTestScenarioActor::DestroyScenario()
 	}
 	ScenarioProjectileHandle = FCombatProjectileHandle();
 	ScenarioProjectileData = nullptr;
+	ScenarioCapacityModifierData.Reset();
 	for (ACombatUnitCharacter* Unit : SpawnedUnits)
 	{
 		if (IsValid(Unit))

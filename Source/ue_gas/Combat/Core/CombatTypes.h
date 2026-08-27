@@ -179,6 +179,9 @@ struct UE_GAS_API FCombatModifierHandle
 	bool operator==(const FCombatModifierHandle& Other) const { return Key == Other.Key; }
 };
 
+/** 为 Modifier 句柄生成包含 generation 与生命代次的哈希。 */
+FORCEINLINE uint32 GetTypeHash(const FCombatModifierHandle& Handle) { return GetTypeHash(Handle.Key); }
+
 /** 标识一次绑定单位生命代次的攻击记录。 */
 USTRUCT(BlueprintType)
 struct UE_GAS_API FCombatAttackHandle
@@ -194,6 +197,9 @@ struct UE_GAS_API FCombatAttackHandle
 	bool operator==(const FCombatAttackHandle& Other) const { return Key == Other.Key; }
 };
 
+/** 为 Attack 句柄生成包含 generation 与生命代次的哈希。 */
+FORCEINLINE uint32 GetTypeHash(const FCombatAttackHandle& Handle) { return GetTypeHash(Handle.Key); }
+
 /** 标识一条绑定单位生命代次的 Order。 */
 USTRUCT(BlueprintType)
 struct UE_GAS_API FCombatOrderHandle
@@ -208,6 +214,9 @@ struct UE_GAS_API FCombatOrderHandle
 	/** 比较两个 Order 句柄的完整身份。 */
 	bool operator==(const FCombatOrderHandle& Other) const { return Key == Other.Key; }
 };
+
+/** 为 Order 句柄生成包含 generation 与生命代次的哈希。 */
+FORCEINLINE uint32 GetTypeHash(const FCombatOrderHandle& Handle) { return GetTypeHash(Handle.Key); }
 
 /** 标识一个由 Subsystem 持有的弹体实例。 */
 USTRUCT(BlueprintType)
@@ -226,6 +235,9 @@ struct UE_GAS_API FCombatProjectileHandle
 	bool operator!=(const FCombatProjectileHandle& Other) const { return !(*this == Other); }
 };
 
+/** 为 Projectile 句柄生成包含 generation 与生命代次的哈希。 */
+FORCEINLINE uint32 GetTypeHash(const FCombatProjectileHandle& Handle) { return GetTypeHash(Handle.Key); }
+
 /** 标识一个由 ThinkerSubsystem 持有的权威区域对象。 */
 USTRUCT(BlueprintType)
 struct UE_GAS_API FCombatThinkerHandle
@@ -242,6 +254,9 @@ struct UE_GAS_API FCombatThinkerHandle
 	/** 返回两个 Thinker 句柄是否不同。 */
 	bool operator!=(const FCombatThinkerHandle& Other) const { return !(*this == Other); }
 };
+
+/** 为 Thinker 句柄生成包含 generation 与生命代次的哈希。 */
+FORCEINLINE uint32 GetTypeHash(const FCombatThinkerHandle& Handle) { return GetTypeHash(Handle.Key); }
 
 /** 标识一个绑定 Unit life generation 的强制位移请求。 */
 USTRUCT(BlueprintType)
@@ -260,6 +275,9 @@ struct UE_GAS_API FCombatMotionHandle
 	bool operator!=(const FCombatMotionHandle& Other) const { return !(*this == Other); }
 };
 
+/** 为 Motion 句柄生成包含 generation 与生命代次的哈希。 */
+FORCEINLINE uint32 GetTypeHash(const FCombatMotionHandle& Handle) { return GetTypeHash(Handle.Key); }
+
 /** 标识一个由 AuraSubsystem 持有并绑定 Owner 生命代次的 Aura。 */
 USTRUCT(BlueprintType)
 struct UE_GAS_API FCombatAuraHandle
@@ -276,6 +294,9 @@ struct UE_GAS_API FCombatAuraHandle
 	/** 返回两个 Aura 句柄是否不同。 */
 	bool operator!=(const FCombatAuraHandle& Other) const { return !(*this == Other); }
 };
+
+/** 为 Aura 句柄生成包含 generation 与生命代次的哈希。 */
+FORCEINLINE uint32 GetTypeHash(const FCombatAuraHandle& Handle) { return GetTypeHash(Handle.Key); }
 
 /** 标识一个 Combat Scheduler 槽位。 */
 USTRUCT(BlueprintType)

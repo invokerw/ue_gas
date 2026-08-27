@@ -10,6 +10,7 @@
 #include "Combat/Modifiers/CombatModifierRuntime.h"
 #include "Combat/Scheduling/CombatSchedulerSubsystem.h"
 #include "Combat/Unit/CombatUnitCharacter.h"
+#include "Combat/View/CombatUnitViewComponent.h"
 
 UCombatModifierComponent::UCombatModifierComponent()
 {
@@ -178,6 +179,7 @@ FCombatModifierApplyResult UCombatModifierComponent::ApplyNewModifier(
 
 	Result.bSuccess = true;
 	Result.Handle = Runtime->Handle;
+	NotifyModifierCollectionChanged();
 	return Result;
 }
 
@@ -237,6 +239,7 @@ FCombatModifierApplyResult UCombatModifierComponent::RefreshModifier(
 	Result.bSuccess = true;
 	Result.bRefreshed = true;
 	Result.Handle = Runtime.Handle;
+	NotifyModifierCollectionChanged();
 	return Result;
 }
 
@@ -287,9 +290,23 @@ bool UCombatModifierComponent::RemoveModifierImmediate(const FCombatModifierHand
 		// ActiveSpec 已删除后同步释放动态定义的强引用，避免长期累计无用 UObject。
 		RuntimeEffectDefinitions.RemoveSingleSwap(Runtime->EffectDefinition);
 		Runtime->EffectDefinition = nullptr;
+		NotifyModifierCollectionChanged();
 		return true;
 	}
 	return false;
+}
+
+void UCombatModifierComponent::NotifyModifierCollectionChanged()
+{
+	// 动态 Spawn 的自动化 World 可能不派发组件 BeginPlay 委托绑定；显式刷新也让生产顺序更清晰。
+	if (ACombatUnitCharacter* Unit = GetOwnerUnit())
+	{
+		if (UCombatUnitViewComponent* View = Unit->GetCombatUnitViewComponent())
+		{
+			View->RefreshModifierViews();
+		}
+	}
+	ModifierCollectionChangedDelegate.Broadcast();
 }
 
 int32 UCombatModifierComponent::Dispel(const ECombatDispelStrength Strength, const bool bDebuffsOnly)
@@ -341,6 +358,26 @@ UCombatModifierRuntime* UCombatModifierComponent::FindRuntime(const FCombatModif
 		}
 	}
 	return nullptr;
+}
+
+void UCombatModifierComponent::BuildModifierViews(TArray<FCombatModifierView>& OutViews) const
+{
+	OutViews.Reset();
+	for (const UCombatModifierRuntime* Runtime : MakeSortedSnapshot())
+	{
+		const UCombatModifierData* Data = Runtime ? Runtime->GetModifierData() : nullptr;
+		if (!Runtime || !Data || !Data->GetPrimaryAssetId().IsValid())
+		{
+			continue;
+		}
+		FCombatModifierView& View = OutViews.AddDefaulted_GetRef();
+		View.Handle = Runtime->GetHandle();
+		View.DefinitionId = Data->GetPrimaryAssetId();
+		View.StackCount = Runtime->GetStackCount();
+		View.ServerEndTime = Runtime->GetExpireAt();
+		View.bIsDebuff = Data->bIsDebuff;
+		View.bDispellable = Data->DispelRule != ECombatModifierDispelRule::NotDispellable;
+	}
 }
 
 UCombatModifierRuntime* UCombatModifierComponent::FindRefreshCandidate(const FCombatModifierApplyRequest& Request) const

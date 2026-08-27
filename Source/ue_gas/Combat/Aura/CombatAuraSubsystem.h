@@ -53,6 +53,8 @@ public:
 	int32 GetChildCount(FCombatAuraHandle Handle) const;
 	/** 返回 World 当前活动 Aura 数量。 */
 	int32 GetActiveAuraCount() const { return ActiveAuras.Num(); }
+	/** 返回全部活动 Aura 当前持有的 child Modifier 总数。 */
+	int32 GetTotalChildCount() const;
 	/** 返回最近一次 exactly-once Finish。 */
 	const FCombatAuraResult& GetLastFinishedResult() const { return LastFinishedResult; }
 	/** 返回 Finish 观察委托。 */

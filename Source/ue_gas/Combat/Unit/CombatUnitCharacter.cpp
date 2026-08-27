@@ -11,10 +11,13 @@
 #include "Combat/Log/CombatEventSubsystem.h"
 #include "Combat/Modifiers/CombatModifierComponent.h"
 #include "Combat/Motion/CombatMotionComponent.h"
+#include "Combat/Network/CombatNetworkSecuritySubsystem.h"
 #include "Combat/Order/CombatOrderComponent.h"
 #include "Combat/Unit/CombatRegenerationComponent.h"
 #include "Combat/Unit/CombatUnitLifecycleComponent.h"
+#include "Combat/View/CombatUnitViewComponent.h"
 #include "Components/CapsuleComponent.h"
+#include "GameFramework/PlayerController.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameplayEffectTypes.h"
 #include "Net/UnrealNetwork.h"
@@ -33,10 +36,122 @@ ACombatUnitCharacter::ACombatUnitCharacter()
 	CombatAttackComponent = CreateDefaultSubobject<UCombatAttackComponent>(TEXT("CombatAttack"));
 	CombatOrderComponent = CreateDefaultSubobject<UCombatOrderComponent>(TEXT("CombatOrders"));
 	CombatMotionComponent = CreateDefaultSubobject<UCombatMotionComponent>(TEXT("CombatMotion"));
+	CombatUnitViewComponent = CreateDefaultSubobject<UCombatUnitViewComponent>(TEXT("CombatUnitView"));
 	AutoPossessAI = EAutoPossessAI::PlacedInWorldOrSpawned;
 	GetCapsuleComponent()->SetCollisionProfileName(TEXT("CombatUnit"));
 	// Strategy 单位的 AI 路径使用输入加速度驱动，确保 PathFollowing 通过 PawnMovement 正式消费移动请求。
 	GetCharacterMovement()->GetNavMovementProperties()->bUseAccelerationForPaths = true;
+}
+
+bool ACombatUnitCharacter::SetCommandingPlayerController(APlayerController* NewController)
+{
+	if (!HasAuthority() || (NewController && NewController->GetWorld() != GetWorld()))
+	{
+		return false;
+	}
+	if (GetOwner() == NewController)
+	{
+		SetAutonomousProxy(NewController != nullptr);
+		RefreshCombatReplicationPolicy();
+		return true;
+	}
+	SetOwner(NewController);
+	// 未被 PlayerController possess 的 Strategy Unit 仍需向 owning connection 暴露 AutonomousProxy RPC 通道。
+	SetAutonomousProxy(NewController != nullptr);
+	RefreshCombatReplicationPolicy();
+	ForceNetUpdate();
+	return true;
+}
+
+const AActor* ACombatUnitCharacter::GetNetOwner() const
+{
+	// APawn 默认总是把自己作为 NetOwner；Strategy Unit 必须显式暴露真正的指挥玩家。
+	if (const APlayerController* CommandingController = Cast<APlayerController>(GetOwner()))
+	{
+		return CommandingController;
+	}
+	return Super::GetNetOwner();
+}
+
+UNetConnection* ACombatUnitCharacter::GetNetConnection() const
+{
+	// APawn 默认优先查询 AIController，而 AIController 没有客户端连接，因此这里改走显式 Owner。
+	if (const APlayerController* CommandingController = Cast<APlayerController>(GetOwner()))
+	{
+		return CommandingController->GetNetConnection();
+	}
+	return Super::GetNetConnection();
+}
+
+UPlayer* ACombatUnitCharacter::GetNetOwningPlayer()
+{
+	if (APlayerController* CommandingController = Cast<APlayerController>(GetOwner()))
+	{
+		return CommandingController->GetNetOwningPlayer();
+	}
+	return Super::GetNetOwningPlayer();
+}
+
+UPlayer* ACombatUnitCharacter::GetNetOwningPlayerAnyRole()
+{
+	if (APlayerController* CommandingController = Cast<APlayerController>(GetOwner()))
+	{
+		return CommandingController->GetNetOwningPlayerAnyRole();
+	}
+	return Super::GetNetOwningPlayerAnyRole();
+}
+
+void ACombatUnitCharacter::ServerIssueOrderBatch_Implementation(FCombatOrderBatchRequest Request)
+{
+	APlayerController* RequestingController = Cast<APlayerController>(GetOwner());
+	UE_LOG(LogCombat, Display, TEXT("M7OrderBatchServerReceived Unit=%s RequestId=%d Owner=%s Count=%d"),
+		*GetName(), Request.RequestId, RequestingController ? *RequestingController->GetName() : TEXT("None"), Request.Orders.Num());
+	const FCombatOrderBatchResult Result = ProcessOrderBatchForConnection(RequestingController, Request);
+	ClientReceiveOrderBatchResult(Result);
+}
+
+FCombatOrderBatchResult ACombatUnitCharacter::ProcessOrderBatchForConnection(
+	APlayerController* RequestingController,
+	const FCombatOrderBatchRequest& Request)
+{
+	FCombatOrderBatchResult Result;
+	Result.RequestId = Request.RequestId;
+	UCombatNetworkSecuritySubsystem* Security = GetWorld()
+		? GetWorld()->GetSubsystem<UCombatNetworkSecuritySubsystem>() : nullptr;
+	FString Diagnostic;
+	if (!Security || !Security->ValidateAndConsumeOrderRequest(
+		RequestingController, this, Request, Result.FailureTag, Diagnostic))
+	{
+		if (!Result.FailureTag.IsValid())
+		{
+			Result.FailureTag = CombatTags::Failure_ActionUnsupported;
+		}
+		return Result;
+	}
+	Result.bAccepted = true;
+	if (!CombatOrderComponent)
+	{
+		Result.FailureTag = CombatTags::Failure_ActionUnsupported;
+		return Result;
+	}
+	for (int32 Index = 0; Index < Request.Orders.Num(); ++Index)
+	{
+		const bool bQueue = Request.bAppendToExistingQueue || Index > 0;
+		FCombatOrderResult& OrderResult = Result.OrderResults.Add_GetRef(
+			CombatOrderComponent->IssueOrder(Request.Orders[Index], bQueue));
+		Result.AcceptedOrderCount += OrderResult.bSuccess ? 1 : 0;
+	}
+	return Result;
+}
+
+void ACombatUnitCharacter::ClientReceiveOrderBatchResult_Implementation(FCombatOrderBatchResult Result)
+{
+	LastOrderBatchResult = MoveTemp(Result);
+	UE_LOG(LogCombat, Display, TEXT("M7OrderBatchResult Unit=%s RequestId=%d Accepted=%s Orders=%d Failure=%s"),
+		*GetName(), LastOrderBatchResult.RequestId,
+		LastOrderBatchResult.bAccepted ? TEXT("true") : TEXT("false"),
+		LastOrderBatchResult.AcceptedOrderCount, *LastOrderBatchResult.FailureTag.ToString());
+	OnOrderBatchResult.Broadcast(LastOrderBatchResult);
 }
 
 UAbilitySystemComponent* ACombatUnitCharacter::GetAbilitySystemComponent() const
@@ -168,6 +283,13 @@ bool ACombatUnitCharacter::InitializeFromUnitData(UCombatUnitData* InUnitData)
 		}
 	}
 	InitializedUnitDefinitionId = RequestedId;
+	// 动态 Spawn 的最小 World 可能在 BeginPlay 后才具备最终 Authority/Owner；初始化结束再应用一次产品策略。
+	RefreshCombatReplicationPolicy();
+	if (CombatUnitViewComponent)
+	{
+		CombatUnitViewComponent->RefreshUnitView();
+		CombatUnitViewComponent->RefreshModifierViews();
+	}
 	// 组件 BeginPlay 可能早于运行时 UnitData 注入；这里幂等确保恢复任务已按新属性建立。
 	if (CombatRegenerationComponent)
 	{
@@ -232,6 +354,7 @@ void ACombatUnitCharacter::NotifyControllerChanged()
 void ACombatUnitCharacter::BeginPlay()
 {
 	Super::BeginPlay();
+	RefreshCombatReplicationPolicy();
 	RefreshAbilityActorInfo();
 	RefreshLifeStateTag();
 	if (CombatAbilitySystemComponent)
@@ -276,6 +399,10 @@ void ACombatUnitCharacter::OnRep_Controller()
 
 void ACombatUnitCharacter::OnRep_TeamId(const FCombatTeamId PreviousTeamId)
 {
+	if (CombatUnitViewComponent)
+	{
+		CombatUnitViewComponent->RefreshUnitView();
+	}
 	if (!HasAuthority())
 	{
 		return;
@@ -304,6 +431,10 @@ void ACombatUnitCharacter::OnRep_LifeState()
 {
 	RefreshLifeStateTag();
 	RefreshStatusResponse();
+	if (CombatUnitViewComponent)
+	{
+		CombatUnitViewComponent->RefreshUnitView();
+	}
 	if (HasAuthority())
 	{
 		if (UCombatAuraSubsystem* Auras = GetWorld() ? GetWorld()->GetSubsystem<UCombatAuraSubsystem>() : nullptr)
@@ -319,6 +450,33 @@ void ACombatUnitCharacter::RefreshAbilityActorInfo()
 	if (CombatAbilitySystemComponent)
 	{
 		CombatAbilitySystemComponent->InitializeCombatActorInfo(this, this);
+	}
+}
+
+void ACombatUnitCharacter::RefreshCombatReplicationPolicy()
+{
+	if (!HasAuthority() || !CombatAbilitySystemComponent)
+	{
+		return;
+	}
+	EffectiveAscReplicationPolicy = AscReplicationPolicy;
+	if (EffectiveAscReplicationPolicy == ECombatAscReplicationPolicy::Automatic)
+	{
+		EffectiveAscReplicationPolicy = Cast<APlayerController>(GetOwner())
+			? ECombatAscReplicationPolicy::Mixed : ECombatAscReplicationPolicy::Minimal;
+	}
+	switch (EffectiveAscReplicationPolicy)
+	{
+	case ECombatAscReplicationPolicy::Minimal:
+		CombatAbilitySystemComponent->SetReplicationMode(EGameplayEffectReplicationMode::Minimal);
+		break;
+	case ECombatAscReplicationPolicy::Full:
+		CombatAbilitySystemComponent->SetReplicationMode(EGameplayEffectReplicationMode::Full);
+		break;
+	case ECombatAscReplicationPolicy::Mixed:
+	default:
+		CombatAbilitySystemComponent->SetReplicationMode(EGameplayEffectReplicationMode::Mixed);
+		break;
 	}
 }
 
@@ -405,4 +563,8 @@ void ACombatUnitCharacter::SetLifeStateFromLifecycle(const ECombatLifeState NewS
 void ACombatUnitCharacter::IncrementLifeGenerationFromLifecycle()
 {
 	++LifeGeneration;
+	if (CombatUnitViewComponent)
+	{
+		CombatUnitViewComponent->RefreshUnitView();
+	}
 }

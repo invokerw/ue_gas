@@ -1,8 +1,8 @@
 # 00 开发进度台账
 
 > 最后更新：2026-08-27
-> 当前里程碑：M6 已验收（复杂技能集）
-> 总进度：68/82 Task 完成，7/9 里程碑由用户验收
+> 当前里程碑：M7 已验收（M8 未授权）
+> 总进度：77/82 Task 完成，8/9 里程碑由用户验收
 
 本文件是项目执行状态的唯一来源。[10 实施路线图](10-Implementation-Roadmap.md)定义任务内容和依赖，本文件记录实际状态、验证证据和用户验收结论。
 
@@ -41,7 +41,7 @@
 | M4 | Order 与普攻 | 8/8 | 通过 | 已验收 | 2026-08-26 / 2026-08-26 | Editor/Server/Client 构建、Automation 23/23 和独立联机追击/连续近战 smoke 通过；用户验收通过；见 [21](21-M4-Acceptance.md) |
 | M5 | Projectile、Thinker 与 Motion | 9/9 | 通过 | 已验收 | 2026-08-26 / 2026-08-26 | Editor/Server/Client 构建、Automation 27/27 和独立联机 Projectile spawn/hit/finish smoke 通过；用户验收通过；见 [23](23-M5-Acceptance.md) |
 | M6 | 复杂技能集 | 6/6 | 通过 | 已验收 | 2026-08-26 / 2026-08-27 | Editor/Server/Client 构建、Automation 32/32、独立联机 M6 场景 smoke 通过；中文可见说明整改后用户验收通过；见 [26](26-M6-Acceptance.md) |
-| M7 | 联机、UI、工具和性能 | 0/9 | 未开始 | 未开始 | — | — |
+| M7 | 联机、UI、工具和性能 | 9/9 | 通过 | 已验收 | 2026-08-27 / 2026-08-27 | Editor/Server/Client 构建、Automation 37/37、资产校验和 64 Unit/256 Modifier 双客户端 soak 通过；用户验收通过；见 [29](29-M7-Acceptance.md) |
 | M8 | 候选发布 | 0/5 | 未开始 | 未开始 | — | — |
 
 ## 3. M0：设计冻结
@@ -151,15 +151,15 @@
 
 | Task | 需求名称 | 状态 | 完成证据/备注 |
 | --- | --- | --- | --- |
-| NET-001 | ASC 复制矩阵 | 未开始 | — |
-| NET-002 | Order RPC Hardening | 未开始 | 到期：GAP-021 |
-| NET-003 | Modifier 与 Unit View | 未开始 | — |
-| NET-004 | Projectile Reconcile | 未开始 | — |
-| OBS-701 | Combat Log 与调试工具 | 未开始 | 到期：GAP-019 |
-| MCP-701 | UE MCP 诊断配方 | 未开始 | — |
-| DAT-701 | 资产验证与迁移 | 未开始 | — |
-| PERF-701 | 容量与性能基线 | 未开始 | 到期：GAP-018 |
-| TST-701 | Dedicated Soak | 未开始 | — |
+| NET-001 | ASC 复制矩阵 | 已完成 | `Automatic` 在玩家 Owner Unit 选择 Mixed、AI Unit 选择 Minimal；PlayerController 网络 Owner 与 AIController 导航职责分离；Dedicated 2-client 矩阵为 Mixed=2/Minimal=62 |
+| NET-002 | Order RPC Hardening | 已完成 | 批量 RPC 完成 owner、正数 RequestId、8 Order/4096 bytes、20/s + 32 burst、128 重放窗口和稳定失败 Tag；ADR-038 关闭 GAP-021 |
+| NET-003 | Modifier 与 Unit View | 已完成 | `UCombatUnitViewComponent` 复制扁平 Unit View 与 FastArray Modifier View；owner/non-owner 共用投影，不复制 `UCombatModifierRuntime` |
+| NET-004 | Projectile Reconcile | 已完成 | 权威 Projectile identity 与可选 PredictionKey 复制；客户端预测视觉被同键服务器视觉替换，重复 Handle 幂等去重且不能参与命中结算 |
+| OBS-701 | Combat Log 与调试工具 | 已完成 | Event schema v1、RootEvent 展开、Unit dump、debug draw、metrics、滚动 p95/p99 与连接带宽统计完成；ADR-039 关闭 GAP-019 |
+| MCP-701 | UE MCP 诊断配方 | 已完成 | [28](28-M7-MCP-Diagnostic-Recipe.md) 固化 World 身份、复制矩阵、安全 RPC、事件、Projectile 与性能查询顺序及命令行降级入口 |
+| DAT-701 | 资产验证与迁移 | 已完成 | `CombatAssetValidation` commandlet、redirect/version 校验与 JSON 报告完成；验收扫描 2 个资产、0 Error/0 Warning |
+| PERF-701 | 容量与性能基线 | 已完成 | 30 Hz 预算与指标采样实现；64 Unit/256 Modifier soak 的 p95 16.281 ms、p99 22.392 ms、单连接最大发送 39.817 KiB/s；ADR-040 关闭 GAP-018 |
+| TST-701 | Dedicated Soak | 已完成 | `L_CombatTest -CombatM7CapacitySmoke` 独立 Server + 2 Client 运行超过 90 秒；双 RPC 成功，无拒绝、崩溃、网络失败或容量泄漏；World Automation 验证 64/256 teardown |
 
 ## 11. M8：候选发布
 
@@ -181,8 +181,8 @@
 | M3 | 2026-08-26 | 已验收 | 无 | 2026-08-26 | 已授权 M4（2026-08-26） |
 | M4 | 2026-08-26 | 已验收 | 无 | 2026-08-26 | 已授权 M5（2026-08-26） |
 | M5 | 2026-08-26 | 已验收 | 无 | 2026-08-26 | 已授权 M6（2026-08-26） |
-| M6 | 2026-08-26 | 已验收 | Native GameplayTag 中文说明与蓝图可见中文注释已补齐 | 2026-08-27 | 未授权 |
-| M7 | — | 未提交 | — | — | 未授权 |
+| M6 | 2026-08-26 | 已验收 | Native GameplayTag 中文说明与蓝图可见中文注释已补齐 | 2026-08-27 | 已授权 M7（2026-08-27） |
+| M7 | 2026-08-27 | 已验收 | 无 | 2026-08-27 | 未授权 |
 | M8 | — | 未提交 | — | — | 不适用 |
 
 ## 13. 更新日志
@@ -216,6 +216,9 @@
 | 2026-08-26 | 完成 M6 全部 6 项；关闭 GAP-014/GAP-016；Editor、源码 Server/Client Target 构建成功，`Combat.` 自动化 32/32、独立监听服务器 M6 Aura 场景与客户端连接 smoke 通过；G6 通过并提交用户验收 | M6 / DEMO-601..TOOL-601 / GAP-014/GAP-016 / G6 |
 | 2026-08-27 | 按验收反馈将 144 个 Native GameplayTag 定义统一为 `UE_DEFINE_GAMEPLAY_TAG_COMMENT` 并补齐中文说明；生产蓝图节点、事件、Pin 与 M6 配置字段补充中文 `DisplayName`/`ToolTip`；Editor 正式编译及 `Combat.` 自动化 32/32 通过 | M6 / 中文可见说明整改 |
 | 2026-08-27 | 用户确认 M6 验收通过并要求提交；保持 M7 未开始，等待单独授权 | M6 |
+| 2026-08-27 | 用户授权开始 M7；读取 G7、网络复制、安全、View、诊断、资产与容量约束，NET-001 切换为进行中 | M7 / NET-001 |
+| 2026-08-27 | 完成 M7 全部 9 项；ADR-038/039/040 关闭 GAP-021/019/018；Editor、源码 Server/Client 构建成功，`Combat.*` 自动化 37/37、资产校验 2/2、64 Unit/256 Modifier Dedicated 双客户端 soak 通过；G7 转为待用户验收 | M7 / NET-001..TST-701 / G7 |
+| 2026-08-27 | 用户确认 M7 验收通过并要求提交；保持 M8 未开始，等待单独授权 | M7 |
 
 ## 14. 更新规则
 

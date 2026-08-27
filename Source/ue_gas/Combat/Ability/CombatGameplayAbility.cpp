@@ -16,6 +16,7 @@
 #include "Combat/Targeting/CombatTargetingSubsystem.h"
 #include "Combat/Thinker/CombatThinkerSubsystem.h"
 #include "Combat/Unit/CombatUnitCharacter.h"
+#include "Combat/View/CombatUnitViewComponent.h"
 
 UCombatGameplayAbility::UCombatGameplayAbility()
 {
@@ -164,6 +165,17 @@ void UCombatGameplayAbility::ActivateAbility(
 		return;
 	}
 	EmitLifecycleEvent(CombatTags::Event_Combat_AbilityCastStarted, FGameplayTag(), TEXT("CastStarted"));
+	if (UCombatUnitViewComponent* View = Unit->GetCombatUnitViewComponent())
+	{
+		const double StartTime = GetWorld()->GetTimeSeconds();
+		const bool bIsChannelled = AbilityData->BehaviorTags.HasTagExact(CombatTags::Ability_Behavior_Channelled);
+		View->NotifyAbilityStarted(
+			AbilityData->GetPrimaryAssetId(),
+			CombatContext.EventContext.RootEventId,
+			StartTime,
+			StartTime + AbilityData->CastPoint + (bIsChannelled ? AbilityData->ChannelDuration : 0.0f),
+			bIsChannelled);
+	}
 	if (AbilityData->CastPoint <= 0.0f)
 	{
 		HandleCastPoint(FCombatScheduledTickContext());
@@ -229,6 +241,13 @@ void UCombatGameplayAbility::EndAbility(
 	}
 	EmitLifecycleEvent(CombatTags::Event_Combat_AbilityEnded, FGameplayTag(),
 		bWasCancelled ? TEXT("Ended Cancelled=1") : TEXT("Ended Cancelled=0"));
+	if (CombatContext.Caster)
+	{
+		if (UCombatUnitViewComponent* View = CombatContext.Caster->GetCombatUnitViewComponent())
+		{
+			View->NotifyAbilityEnded(CombatContext.EventContext.RootEventId);
+		}
+	}
 	Super::EndAbility(Handle, ActorInfo, ActivationInfo, bReplicateEndAbility, bWasCancelled);
 	bEnding = false;
 }

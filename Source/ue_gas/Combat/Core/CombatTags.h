@@ -97,11 +97,17 @@ namespace CombatTags
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Combat_AuraReconciled)
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Combat_AuraFinished)
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Combat_BlockerChanged)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Combat_OrderRequestRejected)
 
 	/** 公共操作、Target 与 Ability 校验失败标签。 */
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Failure_Authority)
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Failure_InvalidNumber)
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Failure_ActionUnsupported)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Failure_Network_Ownership)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Failure_Network_RateLimited)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Failure_Network_PayloadTooLarge)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Failure_Network_DuplicateRequest)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Failure_Network_InvalidRequestId)
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Failure_Target_Invalid)
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Failure_Target_TeamInvalid)
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Failure_Target_SelfNotAllowed)

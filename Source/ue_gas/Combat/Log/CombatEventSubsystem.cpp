@@ -50,6 +50,8 @@ FCombatEventContext UCombatEventSubsystem::CreateChildEvent(const FCombatEventCo
 
 void UCombatEventSubsystem::Emit(FCombatLogRecord Record)
 {
+	// 写入时统一覆盖 schema，防止调用者无意提交旧版或未知布局。
+	Record.SchemaVersion = CurrentSchemaVersion;
 	Record.Sequence = NextLogSequence++;
 	Record.ServerTime = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
 	RecentRecords.Add(Record);
@@ -60,6 +62,24 @@ void UCombatEventSubsystem::Emit(FCombatLogRecord Record)
 	}
 	UE_LOG(LogCombat, Log, TEXT("%s"), *Record.ToString());
 	RecordDelegate.Broadcast(RecentRecords.Last());
+}
+
+TArray<FCombatLogRecord> UCombatEventSubsystem::GetRecordsForRootEvent(const FCombatEventId RootEventId) const
+{
+	TArray<FCombatLogRecord> Result;
+	if (!RootEventId.IsValid())
+	{
+		return Result;
+	}
+
+	for (const FCombatLogRecord& Record : RecentRecords)
+	{
+		if (Record.Context.RootEventId == RootEventId)
+		{
+			Result.Add(Record);
+		}
+	}
+	return Result;
 }
 
 FCombatEventId UCombatEventSubsystem::AllocateEventId()

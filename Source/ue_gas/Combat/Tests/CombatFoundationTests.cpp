@@ -98,10 +98,13 @@ bool FCombatConfigurationTest::RunTest(const FString& Parameters)
 		Event_Combat_ThinkerFinished, Event_Combat_MotionStarted, Event_Combat_MotionFinished,
 		Event_Combat_AbilitySpellBlocked, Event_Combat_AuraStarted, Event_Combat_AuraReconciled,
 		Event_Combat_AuraFinished, Event_Combat_BlockerChanged,
+		Event_Combat_OrderRequestRejected,
 		Failure_Projectile_StaleHandle, Failure_Projectile_Blocked, Failure_Projectile_TargetLost,
 		Failure_Projectile_Timeout, Failure_Thinker_StaleHandle, Failure_Motion_ChannelBusy, Failure_Motion_Blocked,
 		Failure_Motion_StaleHandle, Failure_Ability_SpellBlocked, Failure_Modifier_DebuffImmune,
-		Failure_Modifier_DispelImmune, Failure_Aura_StaleHandle, Failure_Aura_Broken
+		Failure_Modifier_DispelImmune, Failure_Aura_StaleHandle, Failure_Aura_Broken,
+		Failure_Network_Ownership, Failure_Network_RateLimited, Failure_Network_PayloadTooLarge,
+		Failure_Network_DuplicateRequest, Failure_Network_InvalidRequestId
 	};
 	for (const FGameplayTag& Tag : NativeTags)
 	{
