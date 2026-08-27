@@ -17,6 +17,7 @@
 #include "Combat/Network/CombatNetworkSecuritySubsystem.h"
 #include "Combat/Performance/CombatPerformanceBudget.h"
 #include "Combat/Projectile/CombatProjectileSubsystem.h"
+#include "Combat/Release/CombatReleaseContract.h"
 #include "Combat/Targeting/CombatTargetingSubsystem.h"
 #include "Combat/Thinker/CombatThinkerSubsystem.h"
 #include "Combat/Unit/CombatRegenerationComponent.h"
@@ -307,9 +308,28 @@ void ACombatTestScenarioActor::StartM7NetworkScenario()
 		Validation ? Validation->ContentVersion : 0,
 		bCapacityFixtureReady ? TEXT("Ready") : TEXT("Invalid"),
 		BudgetResult.bPassed ? TEXT("Pass") : TEXT("Fail"), *Metrics.ToString());
+	LogM8ReleaseContract();
 	LogM7PerformanceSnapshot();
 	GetWorldTimerManager().SetTimer(
 		M7PerformanceTimer, this, &ACombatTestScenarioActor::LogM7PerformanceSnapshot, 30.0f, true);
+}
+
+void ACombatTestScenarioActor::LogM8ReleaseContract()
+{
+	const FCombatReleaseContract Contract = UCombatReleaseContractLibrary::GetCombatReleaseContract();
+	FString Error;
+	const bool bValid = Contract.IsSelfConsistent(Error);
+	UE_LOG(LogCombat, Display,
+		TEXT("M8ReleaseContract Valid=%s Contract=%d Release=%s Content=%d Tags=%d Formula=%d RNG=%d Event=%d Authority=%s ProjectilePrediction=%s GameplayRollback=%s Replay=%s Summons=%s Economy=%s Error=%s"),
+		bValid ? TEXT("Pass") : TEXT("Fail"), Contract.ContractVersion, *Contract.ReleaseId.ToString(),
+		Contract.ContentVersion, Contract.GameplayTagSchemaVersion, Contract.FormulaVersion, Contract.RngAlgorithmVersion, Contract.EventSchemaVersion,
+		Contract.bServerAuthoritativeGameplay ? TEXT("Server") : TEXT("Invalid"),
+		Contract.bProjectileVisualPrediction ? TEXT("VisualOnly") : TEXT("Disabled"),
+		Contract.bGameplayRollback ? TEXT("Enabled") : TEXT("DeferredPostV1"),
+		Contract.bDeterministicReplay ? TEXT("Enabled") : TEXT("DeferredPostV1"),
+		Contract.bSummonsAndIllusions ? TEXT("Enabled") : TEXT("DeferredPostV1"),
+		Contract.bItemsAndEconomy ? TEXT("Enabled") : TEXT("DeferredPostV1"),
+		Error.IsEmpty() ? TEXT("None") : *Error);
 }
 
 void ACombatTestScenarioActor::StartM7ClientRpcSmoke()

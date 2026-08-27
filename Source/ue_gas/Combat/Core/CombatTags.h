@@ -5,6 +5,9 @@
 /** 集中声明 Combat 模块使用的 Native GameplayTag，避免运行时字符串拼写漂移。 */
 namespace CombatTags
 {
+	/** Native GameplayTag 命名与语义 schema 版本；不兼容改名或语义变化时递增。 */
+	inline constexpr int32 SchemaVersion = 1;
+
 	/** Unit 生命周期、控制、可见性与碰撞状态标签。 */
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Alive)
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Dying)

@@ -55,6 +55,8 @@
 | ADR-038 | 已定 | 玩家拥有 Unit 使用 Mixed、纯服务器 AI 使用 Minimal；Order 批量 RPC 由 Unit owning connection 承载，并执行 ownership、RequestId、载荷、token bucket 与重放窗口复核 | 关闭 GAP-021；AIController 继续负责导航，PlayerController Owner 只建立网络归属，客户端无 Damage/Modifier/Finish 写入口 |
 | ADR-039 | 已定 | Combat Event schema v1 使用无 Runtime UObject 指针的稳定字段、World 环形缓冲与 RootEvent 展开；第一版不承诺录像或确定性 replay | 关闭 GAP-019；不兼容字段变更必须提升 schema 并提供离线迁移，Shipping 不默认保留完整高频 payload |
 | ADR-040 | 已定 | M7 容量基线为 30 Hz Dedicated：64 Unit、256 Modifier、128 Projectile、32 Thinker、16 Aura/256 child，Server frame p95 <= 33.34 ms、p99 <= 50 ms，单连接发送 <= 256 KiB/s | 关闭 GAP-018；正确性与性能 Gate 分离，只有 profiler 证据指向具体 owner 后才引入 pooling、relevancy 或紧凑序列化 |
+| ADR-041 | 已定 | `combat_v1_rc1` 使用机器可读发布契约冻结 Content/Formula/RNG/Event schema v1；gameplay 保持服务器权威，Projectile 只允许视觉预测；完整回滚、重放、召唤/幻象和物品经济明确延期到 post-v1 | 关闭 G8 的未知功能边界；契约漂移由 M8 Automation 和 Dedicated 日志阻止，完整边界见 [30](30-M8-Release-Candidate-Decision.md) |
+| ADR-042 | 已定 | M8 不做无 profiler owner 的推测性 pooling/relevancy/批处理优化 | M7 容量实测远低于预算；保留 Handle generation、稳定顺序和 exactly-once，未来超预算时按具体 owner 独立优化与回归 |
 
 ## 3. 本轮查漏补缺摘要
 
@@ -109,12 +111,12 @@
 | Gap | 状态 | 缺口 | 建议基线 | 最迟节点 |
 | --- | --- | --- | --- | --- |
 | GAP-014 | 已关闭（ADR-036） | Aura 没有 owner/target 生命周期 | 每 World registry、Scheduler Coalesce、统一 Targeting 与普通 child Modifier reconcile；完整规则见 [24 §4](24-M6-Content-Decision.md#4-aura关闭-gap-014-的基线) | 2026-08-26 / EXT-601 |
-| GAP-015 | 开放 | Summon/illusion 的 Owner、Team、ASC、Order 权限 | 独立 Unit + 独立 ASC；CommandingController 与 gameplay owner 分离 | 引入召唤物前 |
-| GAP-017 | 明确延期 | 物品、背包、技能点、天赋、经验和经济 | 不属于第一版；通过 AbilitySet/Modifier 公共 API 留扩展口 | M8 后 |
+| GAP-015 | 明确延期（ADR-041） | Summon/illusion 的 Owner、Team、ASC、Order 权限 | 不属于 v1；发布契约固定 `bSummonsAndIllusions=false`。引入前新增独立 ADR，冻结独立 Unit/ASC、CommandingController 与 gameplay owner、Team 继承和 teardown Gate | post-v1 / 引入召唤物前 |
+| GAP-017 | 明确延期（ADR-041） | 物品、背包、技能点、天赋、经验和经济 | 不属于 v1；发布契约固定 `bItemsAndEconomy=false`，只保留 AbilitySet/Modifier 公共 API 扩展口 | post-v1 |
 | GAP-018 | 已关闭（ADR-040） | 目标容量/帧/带宽预算和池化触发阈值 | 预算、采样边界与优化触发规则见 [27 §7](27-M7-Network-Observability-Decision.md#7-容量预算关闭-gap-018-的目标值)；64 Unit/256 Modifier 双客户端 soak 通过，验收证据见 [29](29-M7-Acceptance.md) | 2026-08-27 / PERF-701 |
 | GAP-019 | 已关闭（ADR-039） | Combat Event schema 版本、存档/回放边界 | schema v1、环形诊断与明确不支持的 replay 边界见 [27 §6](27-M7-Network-Observability-Decision.md#6-事件调试和回放边界关闭-gap-019-的目标值) | 2026-08-27 / OBS-701 |
 | GAP-021 | 已关闭（ADR-038） | RPC token bucket、批量命令上限和重复 request id 窗口 | ownership、20/s + 32 burst、8 Order/4096 bytes、128 RequestId 窗口及失败 Tag 见 [27 §3](27-M7-Network-Observability-Decision.md#3-order-rpc-安全基线关闭-gap-021-的目标值) | 2026-08-27 / NET-002 |
-| GAP-022 | 明确延期 | Ability/移动本地预测和回滚 | G7 后单独设计 PredictionKey/rollback/Cue reconcile | M8/REL-004 |
+| GAP-022 | 明确延期（ADR-041） | Ability/移动本地预测和回滚 | v1 只保留 Projectile 纯视觉 PredictionKey；完整 PredictionKey owner、rollback 与 Cue reconcile 需独立 ADR/schema/Gate，发布契约固定 `bGameplayRollback=false`；评估见 [30 §3](30-M8-Release-Candidate-Decision.md#3-rel-004-预测评估) | 2026-08-27 / post-v1 |
 | GAP-025 | 已关闭 | 暂停、global/custom time dilation 语义 | `UCombatSchedulerSubsystem` 使用 World game time；real-time UI 不进入 Scheduler；时序/catch-up/budget/teardown 自动化通过 | 2026-08-24 / FND-007 |
 
 ## 7. 模板适配风险

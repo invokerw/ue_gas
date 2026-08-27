@@ -21,8 +21,8 @@ public:
 	/** 配置测试 Actor 的默认 UnitClass，并关闭运行时 Tick。 */
 	ACombatTestScenarioActor();
 
-	/** 在 Authority 上生成 Team 1/2 各一名 Unit，并输出 M4-M7 场景日志。 */
-	UFUNCTION(BlueprintCallable, CallInEditor, Category="Combat|Test", meta=(DisplayName="生成战斗测试场景", ToolTip="在 Authority 上生成 Team 1/2 测试单位并启动 M4-M7 自动场景链。"))
+	/** 在 Authority 上生成 Team 1/2 各一名 Unit，并输出 M4-M8 场景日志。 */
+	UFUNCTION(BlueprintCallable, CallInEditor, Category="Combat|Test", meta=(DisplayName="生成战斗测试场景", ToolTip="在 Authority 上生成 Team 1/2 测试单位并启动 M4-M8 自动场景链。"))
 	void SpawnScenario();
 
 	/** 销毁当前场景 Actor 生成的全部 Unit，并清空跟踪数组。 */
@@ -74,6 +74,8 @@ private:
 	void StartM7ClientRpcSmoke();
 	/** 每 30 秒输出 Dedicated 帧时、带宽、容量和统一预算结果。 */
 	void LogM7PerformanceSnapshot();
+	/** 输出 M8 冻结版本、服务器权威边界和显式延期能力。 */
+	void LogM8ReleaseContract();
 	/** 带 -CombatM7CapacitySmoke 时把场景扩展到 64 Unit / 256 Modifier 冻结边界。 */
 	bool ExpandM7CapacityScenario();
 

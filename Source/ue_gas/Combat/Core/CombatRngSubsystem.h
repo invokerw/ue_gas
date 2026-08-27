@@ -7,6 +7,13 @@
 
 #include "CombatRngSubsystem.generated.h"
 
+/** 冻结 Combat RNG v1 的算法版本，供记录、发布契约和迁移工具共用。 */
+struct UE_GAS_API FCombatRngPolicyV1
+{
+	/** keyed RNG 输入编码与哈希算法版本。 */
+	static constexpr uint16 AlgorithmVersion = 1;
+};
+
 /** 由两个 64 位字段组成、与 UObject 地址无关的 RNG 主体身份。 */
 USTRUCT(BlueprintType)
 struct UE_GAS_API FCombatRngSubjectId
@@ -31,7 +38,7 @@ struct UE_GAS_API FCombatRngRollRecord
 	/** 生成概率结果所使用的数值公式版本。 */
 	uint16 FormulaVersion = 1;
 	/** keyed RNG 哈希算法版本。 */
-	uint16 RngAlgorithmVersion = 1;
+	uint16 RngAlgorithmVersion = FCombatRngPolicyV1::AlgorithmVersion;
 	/** 本次随机判定所属的根战斗事件。 */
 	UPROPERTY(BlueprintReadOnly, Category="Combat|RNG") FCombatEventId RootEventId;
 	/** 区分闪避、暴击、Modifier proc 等随机域。 */
