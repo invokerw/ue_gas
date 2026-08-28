@@ -11,6 +11,7 @@ class UNiagaraSystem;
 class UInputMappingContext;
 class UInputAction;
 class UPathFollowingComponent;
+class ACombatUnitCharacter;
 
 DECLARE_LOG_CATEGORY_EXTERN(LogTemplateCharacter, Log, All);
 
@@ -49,6 +50,19 @@ protected:
 	UPROPERTY(EditAnywhere, Category="Input")
 	TObjectPtr<UInputAction> SetDestinationTouchAction;
 
+	/** Combat ability slot input actions. */
+	UPROPERTY(EditAnywhere, Category="Input|Abilities")
+	TObjectPtr<UInputAction> AbilitySlotQAction;
+
+	UPROPERTY(EditAnywhere, Category="Input|Abilities")
+	TObjectPtr<UInputAction> AbilitySlotWAction;
+
+	UPROPERTY(EditAnywhere, Category="Input|Abilities")
+	TObjectPtr<UInputAction> AbilitySlotEAction;
+
+	UPROPERTY(EditAnywhere, Category="Input|Abilities")
+	TObjectPtr<UInputAction> AbilitySlotRAction;
+
 	/** True if the controlled character should navigate to the mouse cursor. */
 	uint32 bMoveToMouseCursor : 1;
 
@@ -78,8 +92,19 @@ protected:
 	void OnTouchTriggered();
 	void OnTouchReleased();
 
+	/** Activate the first four granted, non-passive combat abilities with Q/W/E/R. */
+	void OnAbilitySlotQ();
+	void OnAbilitySlotW();
+	void OnAbilitySlotE();
+	void OnAbilitySlotR();
+	void ActivateCombatAbilitySlot(int32 SlotIndex);
+	ACombatUnitCharacter* FindCombatUnitUnderCursor(const FVector& CursorWorldLocation) const;
+
 	/** Helper function to get the move destination */
 	void UpdateCachedDestination();
+
+	/** Monotonic, non-zero request id used by the combat order RPC replay guard. */
+	int32 NextCombatOrderRequestId = 1;
 };
 
 

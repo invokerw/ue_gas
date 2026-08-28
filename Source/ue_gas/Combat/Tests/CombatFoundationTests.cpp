@@ -14,6 +14,7 @@
 #include "Misc/PackageName.h"
 #include "Serialization/MemoryReader.h"
 #include "Serialization/MemoryWriter.h"
+#include "UObject/Package.h"
 
 #include "Combat/Ability/CombatAbilitySystemComponent.h"
 #include "Combat/Ability/CombatGameplayEffectContext.h"
@@ -43,6 +44,46 @@ namespace CombatFoundationTests
 		Test.AddError(TEXT("Combat automation world fixture could not create a UWorld"));
 		return false;
 	}
+}
+
+/** 验证自动化 PIE World 使用独立 Package，且不会污染全局 TransientPackage。 */
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FCombatAutomationWorldPackageIsolationTest,
+	"Combat.Foundation.AutomationWorld.PackageIsolation",
+	CombatFoundationTests::Flags)
+
+/** 构造和销毁 fixture 后，PIE 标记都只能存在于其独立测试 Package。 */
+bool FCombatAutomationWorldPackageIsolationTest::RunTest(const FString& Parameters)
+{
+	UPackage* const TransientPackage = GetTransientPackage();
+	UPackage* FixturePackage = nullptr;
+	TestFalse(TEXT("Global TransientPackage starts without PIE flag"),
+		TransientPackage->HasAnyPackageFlags(PKG_PlayInEditor));
+
+	{
+		FCombatAutomationWorldFixture Fixture;
+		if (!CombatFoundationTests::RequireWorld(*this, Fixture))
+		{
+			return false;
+		}
+
+		FixturePackage = Fixture.GetWorld()->GetOutermost();
+		TestNotEqual(TEXT("Automation World uses a dedicated package"), FixturePackage, TransientPackage);
+#if WITH_EDITOR
+		TestTrue(TEXT("Dedicated package carries the PIE flag while the World is active"),
+			FixturePackage->HasAnyPackageFlags(PKG_PlayInEditor));
+#endif
+		TestFalse(TEXT("Creating the fixture does not mark the global TransientPackage as PIE"),
+			TransientPackage->HasAnyPackageFlags(PKG_PlayInEditor));
+	}
+
+#if WITH_EDITOR
+	TestFalse(TEXT("Destroyed fixture package no longer carries the PIE flag"),
+		FixturePackage->HasAnyPackageFlags(PKG_PlayInEditor));
+#endif
+	TestFalse(TEXT("Destroying the fixture leaves the global TransientPackage clean"),
+		TransientPackage->HasAnyPackageFlags(PKG_PlayInEditor));
+	return true;
 }
 
 /** 验证 Native GameplayTag 与 Combat Collision Channel/Profile 的冻结配置。 */
