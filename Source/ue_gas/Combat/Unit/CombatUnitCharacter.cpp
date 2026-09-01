@@ -43,7 +43,7 @@ ACombatUnitCharacter::ACombatUnitCharacter()
 	CombatOverheadWidgetComponent->SetRelativeLocation(FVector(0.0f, 0.0f, 145.0f));
 	AutoPossessAI = EAutoPossessAI::PlacedInWorldOrSpawned;
 	GetCapsuleComponent()->SetCollisionProfileName(TEXT("CombatUnit"));
-	// Strategy 单位的 AI 路径使用输入加速度驱动，确保 PathFollowing 通过 PawnMovement 正式消费移动请求。
+	// AI 路径使用输入加速度驱动，确保 PathFollowing 通过 PawnMovement 正式消费移动请求。
 	GetCharacterMovement()->GetNavMovementProperties()->bUseAccelerationForPaths = true;
 }
 
@@ -60,7 +60,7 @@ bool ACombatUnitCharacter::SetCommandingPlayerController(APlayerController* NewC
 		return true;
 	}
 	SetOwner(NewController);
-	// 未被 PlayerController possess 的 Strategy Unit 仍需向 owning connection 暴露 AutonomousProxy RPC 通道。
+	// 未被 PlayerController possess 的指令单位仍需向 owning connection 暴露 AutonomousProxy RPC 通道。
 	SetAutonomousProxy(NewController != nullptr);
 	RefreshCombatReplicationPolicy();
 	ForceNetUpdate();
@@ -69,7 +69,7 @@ bool ACombatUnitCharacter::SetCommandingPlayerController(APlayerController* NewC
 
 const AActor* ACombatUnitCharacter::GetNetOwner() const
 {
-	// APawn 默认总是把自己作为 NetOwner；Strategy Unit 必须显式暴露真正的指挥玩家。
+	// APawn 默认总是把自己作为 NetOwner；AIController 驱动的单位必须显式暴露真正的指挥玩家。
 	if (const APlayerController* CommandingController = Cast<APlayerController>(GetOwner()))
 	{
 		return CommandingController;

@@ -78,7 +78,7 @@ public:
 	/** 返回当前导航尝试代次，供 blocker/repath 自动化记录旧值。 */
 	uint32 GetNavigationAttemptGenerationForTesting() const { return NavigationAttemptGeneration; }
 
-	/** 可选的 Strategy 风格目的点 EQS；为空时直接使用 AI MoveTo。 */
+	/** 可选的目的点 EQS；为空时直接使用 AI MoveTo。 */
 	UPROPERTY(EditAnywhere, Category="Combat|Order|Movement") TObjectPtr<UEnvQuery> MoveDestinationQuery;
 	/** 普通 MoveToPoint/MoveToUnit 的完成容差。 */
 	UPROPERTY(EditAnywhere, Category="Combat|Order|Movement", meta=(ClampMin="0", Units="cm")) float MovementAcceptanceRadius = 25.0f;

@@ -27,12 +27,12 @@
 
 截至 2026-09-01，仓库基线为：
 
-- `ue_gas.uproject` 关联 UE 5.8，并启用 GameplayAbilities、StateTree 以及 Editor/MCP 辅助插件。
+- `ue_gas.uproject` 关联 UE 5.8，并启用 GameplayAbilities、StateTree 以及 Editor/MCP 辅助插件；StateTree 仅保留为可选引擎能力，不再被项目源码依赖。
 - `Source/ue_gas/ue_gas.Build.cs` 已接入 GameplayAbilities、GameplayTags、GameplayTasks、导航、网络、Niagara 和 UMG/Slate 等运行时依赖。
 - Combat 已在 `Source/ue_gas/Combat` 落地，包含 ASC、AttributeSet、Ability、Modifier、Damage/Heal、Order、Attack、Projectile、Thinker、Aura、Motion、网络 View、UI、调试、资产校验和 Automation。
 - 当前仍保持单 Runtime Module；`ue_gasEditor`、`ue_gasServer`、`ue_gasClient` Target 均存在。Server/Client Target 的源码引擎要求见 [15 M1 环境决策](15-M1-Environment-Decision.md)。
 - `/Game/Combat/Demo/Maps/L_CombatDemo` 提供远程攻击可玩 Demo；`/Game/Combat/Tests/L_CombatTest` 用于 PIE、Dedicated 和容量验证。
-- `Variant_Strategy` 的 AI/NavMesh 能力和 `Variant_TwinStick` 的表现资产仍可作为适配入口，但所有战斗结算必须收敛到 Combat 公共子系统。
+- `Variant_Strategy` 与 `Variant_TwinStick` 模板源码、资产和关卡已移除；可玩与验证入口统一位于 `/Game/Combat/Demo` 和 `/Game/Combat/Tests`。
 - `.codex/config.toml` 配置本地 `unreal-mcp` endpoint，Editor/Content/PIE 操作遵循“读取—修改—回读—测试”闭环。
 - M0-M8 已完成验收，核心发布契约为 `combat_v1_rc1`。最近一次完整发布证据见 [33 M8 验收记录](33-M8-Acceptance.md)；该历史记录不自动证明后续工作区修改已回归。
 
@@ -206,7 +206,7 @@ M0 冻结的跨系统值域和默认值集中在 [14 M0 设计冻结](14-M0-Desi
 1. 先做统一属性、Damage/Heal 和 Modifier，再做复杂技能。
 2. 使用 GAS 擅长的属性、标签、持续时间、叠层、冷却、消耗和 GameplayCue。
 3. 用自定义层补 AttackRecord、Modifier Hook、Order Queue、Scheduler 和 Projectile callback。
-4. Strategy/TwinStick 仅作适配入口，结算最终收敛到 Combat Subsystem。
+4. 示例玩法只通过 Combat 公共入口组合，不能保留第二套 gameplay 权威或结算旁路。
 5. 先完成单机/服务器权威纵向切片，再扩展复制 UI 和预测。
 6. 每个里程碑必须通过对应 Gate，不能用示例蓝图“看起来能工作”替代自动化验收。
 7. 资产、蓝图、关卡和 PIE 操作使用 UE MCP 建立“读取—修改—回读—测试”闭环，减少手工配置漂移。

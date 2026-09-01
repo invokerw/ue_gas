@@ -88,9 +88,9 @@ public:
 	/** 在服务器建立或清除 owning connection，并重新计算 ASC 复制模式。 */
 	UFUNCTION(BlueprintCallable, Category="Combat|Network", meta=(DisplayName="设置指挥玩家", ToolTip="仅在服务器设置拥有该战斗单位的 PlayerController；为空时恢复纯 AI 所有权。"))
 	bool SetCommandingPlayerController(UPARAM(DisplayName="玩家控制器") APlayerController* NewController);
-	/** Strategy Unit 保留 AIController 导航时，优先把显式 PlayerController Owner 作为网络所有者。 */
+	/** 单位保留 AIController 导航时，优先把显式 PlayerController Owner 作为网络所有者。 */
 	virtual const AActor* GetNetOwner() const override;
-	/** Strategy Unit 保留 AIController 导航时，优先返回指挥玩家的 owning connection。 */
+	/** 单位保留 AIController 导航时，优先返回指挥玩家的 owning connection。 */
 	virtual UNetConnection* GetNetConnection() const override;
 	/** 返回当前角色下指挥玩家对应的 UPlayer；无指挥玩家时回退到 Pawn 默认规则。 */
 	virtual UPlayer* GetNetOwningPlayer() override;

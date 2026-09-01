@@ -98,9 +98,9 @@ Queued
 | Dead/OutOfGame | 取消全部当前行为 | 清空并提升 generation |
 | Motion active | 暂停普通 MoveTo | 位移结束后重判当前队首 |
 
-## 5. Strategy 模板适配要求
+## 5. Order 导航适配要求
 
-当前 `AStrategyUnit` 有可复用的 EQS/MoveTo 思路，但不能直接把 `OnMoveCompleted` 接入队列。现状缺口包括：没有保存/比较 MoveRequestId、OnMoveFinished 不检查 Result、EQS 回调不验证当前实例、StopMovement 与旧回调没有 generation 绑定。
+`Variant_Strategy` 模板已经移除；`UCombatOrderComponent` 直接持有并校验 EQS/MoveTo 异步状态。后续导航扩展不能把裸 `OnMoveCompleted` 回调直接接入队列。
 
 适配必须：
 

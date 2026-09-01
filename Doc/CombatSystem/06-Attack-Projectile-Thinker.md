@@ -160,7 +160,7 @@ Spawn Task 校验参数、请求 Subsystem 创建、返回 Handle，随后立即
 - GameplayCue/Niagara/Sound 读取 ProjectileData；视觉资源不进入命中判定。
 - Actor pooling 是性能优化，必须在幂等 EndPlay 和 Handle generation 稳定后再启用。
 
-当前 `ATwinStickProjectile` 只作表现/碰撞参考；其 `NPC->ProjectileImpact` 必须替换为 Damage/Event 公共路径。
+旧 TwinStick Projectile 模板已经移除；新增表现弹体仍不得参与权威碰撞或绕过 Damage/Event 公共路径。
 
 ## 9. Thinker 与 AoE
 
@@ -181,7 +181,7 @@ AoE 查询必须：
 - 服务器重算半径/形状，不接受客户端目标列表。
 - 明确快照或实时读取数值；默认生成时快照来源 Ability 等级和 special。
 
-当前 `ATwinStickAoEAttack` 的 Actor Timer 和直接 `ProjectileImpact` 只作改造参考。
+旧 TwinStick AoE 模板已经移除；新增 AoE 必须使用 Combat Scheduler 与 Damage/Event 公共入口，不能自建 Actor Timer gameplay。
 
 ## 10. 最低验收
 

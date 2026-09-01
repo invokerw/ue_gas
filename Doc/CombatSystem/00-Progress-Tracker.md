@@ -226,6 +226,7 @@
 | 2026-08-28 | M8 后新增远程攻击可玩 Demo，并将地图、角色、技能、输入和框架资产整理到 `/Game/Combat/Demo` 分层目录 | post-M8 Demo |
 | 2026-09-01 | 增加纯 C++ 头顶资源、控制状态、施法/引导进度与伤害治疗跳字表现；核心 gameplay 仍只读取权威 View/Result | post-M8 UI |
 | 2026-09-01 | 整理根 README、文档索引和当前工程基线；新增仓库级 Agent 开发规则，不改变 M0-M8 历史验收结论 | 文档维护 |
+| 2026-09-01 | 移除 `Variant_Strategy`、`Variant_TwinStick` 的源码、资产、关卡和外部 Actor/Object 数据；清理模块搜索路径与模板引用。Win64 Development Game Target 构建通过，`Combat.*` 41/41、6 个 Combat Demo 蓝图编译、资产校验 7/7（0 Error/0 Warning）通过；Editor Target 正式链接因运行中 Live Coding 锁未执行 | post-M8 模板清理 |
 
 ## 14. 更新规则
 
