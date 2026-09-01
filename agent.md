@@ -96,6 +96,7 @@
 - `12-Decisions-Gaps.md`：ADR、Gap、延期与契约变更入口。
 - `14`-`31`、`33`：冻结决策与验收证据；除纠正事实错误外不重写历史结论。
 - `32-M8-Public-Extension-Guide.md`：新技能和迁移的当前公开入口。
+- `34-Client-Server-Interaction.md`：客户端 Order、服务器移动/施法/结算和客户端复制回显的当前端到端说明。
 
 ## 8. 完成与交付
 

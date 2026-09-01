@@ -133,6 +133,8 @@ Fissure 等临时阻挡分三阶段：
 
 ## 7. 队伍控制和 RPC
 
+从 owning client 提交 Order、服务器执行移动/追击、再由 CharacterMovement 复制回客户端的完整时序见 [34 客户端与服务器交互流程](34-Client-Server-Interaction.md)。
+
 M0 固定 TeamId、关系和控制权是三种不同概念：`FCombatTeamId` 决定 Friendly/Hostile/Neutral，`UCombatTeamSubsystem` 是唯一关系入口，CommandingPlayerController 只决定谁能发 RPC。召唤物默认快照 spawn 时的队伍，召唤者之后换队不自动传播；细则见 [14 M0 设计冻结](14-M0-Design-Freeze.md#2-dec-001队伍与目标关系)。Order 不得因为 Controller 相同就推断 Friendly，也不得因为 Friendly 就授予控制权。
 
 PlayerController 将批量 Order RPC 到服务器。服务器验证：

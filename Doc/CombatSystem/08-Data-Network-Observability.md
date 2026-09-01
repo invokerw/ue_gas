@@ -64,6 +64,8 @@ OwnerActor = AvatarActor = Unit
 
 ## 4. 权威边界
 
+移动与 Cast Order 从 owning client RPC、服务器状态机、GAS/Projectile/Damage 结算到客户端 View/表现复制的端到端时序见 [34 客户端与服务器交互流程](34-Client-Server-Interaction.md)。
+
 - Attribute、必要 GE/Tag 由 ASC 复制。
 - Order 由 PlayerController RPC 到服务器执行。
 - Damage、Heal、ApplyModifier、Attack Finalize、Projectile Hit 只在服务器。
