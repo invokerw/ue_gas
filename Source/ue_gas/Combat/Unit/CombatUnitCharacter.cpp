@@ -13,6 +13,7 @@
 #include "Combat/Motion/CombatMotionComponent.h"
 #include "Combat/Network/CombatNetworkSecuritySubsystem.h"
 #include "Combat/Order/CombatOrderComponent.h"
+#include "Combat/UI/CombatOverheadWidgetComponent.h"
 #include "Combat/Unit/CombatRegenerationComponent.h"
 #include "Combat/Unit/CombatUnitLifecycleComponent.h"
 #include "Combat/View/CombatUnitViewComponent.h"
@@ -37,6 +38,9 @@ ACombatUnitCharacter::ACombatUnitCharacter()
 	CombatOrderComponent = CreateDefaultSubobject<UCombatOrderComponent>(TEXT("CombatOrders"));
 	CombatMotionComponent = CreateDefaultSubobject<UCombatMotionComponent>(TEXT("CombatMotion"));
 	CombatUnitViewComponent = CreateDefaultSubobject<UCombatUnitViewComponent>(TEXT("CombatUnitView"));
+	CombatOverheadWidgetComponent = CreateDefaultSubobject<UCombatOverheadWidgetComponent>(TEXT("CombatOverheadUI"));
+	CombatOverheadWidgetComponent->SetupAttachment(GetRootComponent());
+	CombatOverheadWidgetComponent->SetRelativeLocation(FVector(0.0f, 0.0f, 145.0f));
 	AutoPossessAI = EAutoPossessAI::PlacedInWorldOrSpawned;
 	GetCapsuleComponent()->SetCollisionProfileName(TEXT("CombatUnit"));
 	// Strategy 单位的 AI 路径使用输入加速度驱动，确保 PathFollowing 通过 PawnMovement 正式消费移动请求。

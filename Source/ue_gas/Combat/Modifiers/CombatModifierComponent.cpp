@@ -158,8 +158,9 @@ FCombatModifierApplyResult UCombatModifierComponent::ApplyNewModifier(
 	Runtime->Priority = Request.ModifierData->Priority;
 	Runtime->ApplySequence = NextApplySequence++;
 	Runtime->StackCount = 1;
-	Runtime->ExpireAt = EffectiveDuration > 0.0f && GetWorld()
-		? GetWorld()->GetTimeSeconds() + EffectiveDuration : 0.0;
+	Runtime->AppliedAt = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
+	Runtime->ExpireAt = EffectiveDuration > 0.0f
+		? Runtime->AppliedAt + EffectiveDuration : 0.0;
 	Runtime->ActiveEffectHandle = ActiveEffectHandle;
 	Runtime->EffectDefinition = EffectDefinition;
 	Runtime->bActive = true;
@@ -229,8 +230,9 @@ FCombatModifierApplyResult UCombatModifierComponent::RefreshModifier(
 
 	Runtime.StackCount = FMath::Clamp(Runtime.StackCount + 1, 1, FMath::Max(1, Data->MaxStacks));
 	Runtime.RuntimeParameterOverrides = Request.RuntimeParameterOverrides;
-	Runtime.ExpireAt = EffectiveDuration > 0.0f && GetWorld()
-		? GetWorld()->GetTimeSeconds() + EffectiveDuration : 0.0;
+	Runtime.AppliedAt = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
+	Runtime.ExpireAt = EffectiveDuration > 0.0f
+		? Runtime.AppliedAt + EffectiveDuration : 0.0;
 	const bool bResetThink = Data->RefreshPolicy == ECombatModifierRefreshPolicy::ResetInterval;
 	ScheduleRuntime(Runtime, bResetThink);
 	Runtime.OnRefreshed();
@@ -374,7 +376,18 @@ void UCombatModifierComponent::BuildModifierViews(TArray<FCombatModifierView>& O
 		View.Handle = Runtime->GetHandle();
 		View.DefinitionId = Data->GetPrimaryAssetId();
 		View.StackCount = Runtime->GetStackCount();
+		View.ServerStartTime = Runtime->GetAppliedAt();
 		View.ServerEndTime = Runtime->GetExpireAt();
+		for (const FGameplayTag& Tag : {
+			CombatTags::State_Stunned.GetTag(), CombatTags::State_Silenced.GetTag(),
+			CombatTags::State_Rooted.GetTag(), CombatTags::State_Disarmed.GetTag(),
+			CombatTags::State_Hexed.GetTag(), CombatTags::State_Frozen.GetTag() })
+		{
+			if (Data->GrantedTags.HasTagExact(Tag))
+			{
+				View.ControlTags.AddTag(Tag);
+			}
+		}
 		View.bIsDebuff = Data->bIsDebuff;
 		View.bDispellable = Data->DispelRule != ECombatModifierDispelRule::NotDispellable;
 	}

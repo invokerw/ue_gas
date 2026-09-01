@@ -1,16 +1,19 @@
 #include "Combat/View/CombatUnitViewComponent.h"
 
 #include "Net/UnrealNetwork.h"
+#include "GameFramework/GameStateBase.h"
 
 #include "Combat/Ability/CombatAbilitySystemComponent.h"
 #include "Combat/Attributes/CombatAttributeSet.h"
+#include "Combat/Core/CombatTags.h"
 #include "Combat/Modifiers/CombatModifierComponent.h"
 #include "Combat/Unit/CombatUnitCharacter.h"
 
 bool FCombatModifierView::HasSamePayload(const FCombatModifierView& Other) const
 {
 	return Handle == Other.Handle && DefinitionId == Other.DefinitionId
-		&& StackCount == Other.StackCount && ServerEndTime == Other.ServerEndTime
+		&& StackCount == Other.StackCount && ServerStartTime == Other.ServerStartTime
+		&& ServerEndTime == Other.ServerEndTime && ControlTags == Other.ControlTags
 		&& bIsDebuff == Other.bIsDebuff && bDispellable == Other.bDispellable;
 }
 
@@ -48,8 +51,22 @@ float UCombatUnitViewComponent::GetModifierRemainingTime(const FCombatModifierVi
 	{
 		return -1.0f;
 	}
-	const double ServerTime = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
+	const double ServerTime = GetEstimatedServerTimeSeconds();
 	return static_cast<float>(FMath::Max(0.0, View.ServerEndTime - ServerTime));
+}
+
+double UCombatUnitViewComponent::GetEstimatedServerTimeSeconds() const
+{
+	const UWorld* World = GetWorld();
+	if (!World)
+	{
+		return 0.0;
+	}
+	if (const AGameStateBase* GameState = World->GetGameState())
+	{
+		return GameState->GetServerWorldTimeSeconds();
+	}
+	return World->GetTimeSeconds();
 }
 
 void UCombatUnitViewComponent::RefreshUnitView()
@@ -64,6 +81,18 @@ void UCombatUnitViewComponent::RefreshUnitView()
 	UnitView.TeamId = Unit->GetCombatTeamId();
 	UnitView.LifeGeneration = Unit->GetLifeGeneration();
 	UnitView.LifeState = Unit->GetLifeState();
+	UnitView.VisibleStatusTags.Reset();
+	for (const FGameplayTag& Tag : {
+		CombatTags::State_Stunned.GetTag(), CombatTags::State_Silenced.GetTag(),
+		CombatTags::State_Rooted.GetTag(), CombatTags::State_Disarmed.GetTag(),
+		CombatTags::State_Hexed.GetTag(), CombatTags::State_Frozen.GetTag(),
+		CombatTags::State_NoHealthBar.GetTag() })
+	{
+		if (Asc->HasMatchingGameplayTag(Tag))
+		{
+			UnitView.VisibleStatusTags.AddTag(Tag);
+		}
+	}
 	UnitView.Health = Asc->GetNumericAttribute(UCombatAttributeSet::GetHealthAttribute());
 	UnitView.MaxHealth = Asc->GetNumericAttribute(UCombatAttributeSet::GetMaxHealthAttribute());
 	UnitView.Mana = Asc->GetNumericAttribute(UCombatAttributeSet::GetManaAttribute());
@@ -80,6 +109,9 @@ void UCombatUnitViewComponent::RefreshModifierViews()
 	{
 		return;
 	}
+	// Dynamic GE 的 GrantedTag 通知可能早于 Modifier Runtime 入表；在集合稳定后再同步一次聚合状态，
+	// 保证同一帧内 UnitView.VisibleStatusTags 与 ModifierViews.ControlTags 一致。
+	RefreshUnitView();
 	TArray<FCombatModifierView> Desired;
 	Modifiers->BuildModifierViews(Desired);
 	bool bArrayChanged = false;
@@ -188,6 +220,15 @@ void UCombatUnitViewComponent::BeginPlay()
 			Asc->GetGameplayAttributeValueChangeDelegate(Attribute)
 				.AddUObject(this, &UCombatUnitViewComponent::HandleAttributeChanged);
 		}
+		for (const FGameplayTag& Tag : {
+			CombatTags::State_Stunned.GetTag(), CombatTags::State_Silenced.GetTag(),
+			CombatTags::State_Rooted.GetTag(), CombatTags::State_Disarmed.GetTag(),
+			CombatTags::State_Hexed.GetTag(), CombatTags::State_Frozen.GetTag(),
+			CombatTags::State_NoHealthBar.GetTag() })
+		{
+			Asc->RegisterGameplayTagEvent(Tag, EGameplayTagEventType::NewOrRemoved)
+				.AddUObject(this, &UCombatUnitViewComponent::HandleVisibleStatusTagChanged);
+		}
 	}
 	if (UCombatModifierComponent* Modifiers = Unit ? Unit->GetCombatModifierComponent() : nullptr)
 	{
@@ -207,6 +248,14 @@ void UCombatUnitViewComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 			Asc->GetGameplayAttributeValueChangeDelegate(UCombatAttributeSet::GetMaxHealthAttribute()).RemoveAll(this);
 			Asc->GetGameplayAttributeValueChangeDelegate(UCombatAttributeSet::GetManaAttribute()).RemoveAll(this);
 			Asc->GetGameplayAttributeValueChangeDelegate(UCombatAttributeSet::GetMaxManaAttribute()).RemoveAll(this);
+			for (const FGameplayTag& Tag : {
+				CombatTags::State_Stunned.GetTag(), CombatTags::State_Silenced.GetTag(),
+				CombatTags::State_Rooted.GetTag(), CombatTags::State_Disarmed.GetTag(),
+				CombatTags::State_Hexed.GetTag(), CombatTags::State_Frozen.GetTag(),
+				CombatTags::State_NoHealthBar.GetTag() })
+			{
+				Asc->RegisterGameplayTagEvent(Tag, EGameplayTagEventType::NewOrRemoved).RemoveAll(this);
+			}
 		}
 		if (UCombatModifierComponent* Modifiers = Unit->GetCombatModifierComponent())
 		{
@@ -224,6 +273,13 @@ void UCombatUnitViewComponent::OnRep_UnitView()
 void UCombatUnitViewComponent::HandleAttributeChanged(const FOnAttributeChangeData& ChangeData)
 {
 	(void)ChangeData;
+	RefreshUnitView();
+}
+
+void UCombatUnitViewComponent::HandleVisibleStatusTagChanged(const FGameplayTag Tag, const int32 NewCount)
+{
+	(void)Tag;
+	(void)NewCount;
 	RefreshUnitView();
 }
 

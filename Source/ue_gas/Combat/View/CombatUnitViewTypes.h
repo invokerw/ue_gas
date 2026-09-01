@@ -25,8 +25,13 @@ struct UE_GAS_API FCombatModifierView : public FFastArraySerializerItem
 	UPROPERTY(BlueprintReadOnly, Category="Combat|View", meta=(DisplayName="叠加层数", ToolTip="当前服务器权威的 Modifier 层数。"))
 	int32 StackCount = 0;
 	/** 服务器绝对 World Game Time；0 表示无限持续。 */
+	UPROPERTY(BlueprintReadOnly, Category="Combat|View", meta=(DisplayName="服务器开始时间", ToolTip="本次创建或刷新后的服务器绝对开始时间。", Units="s"))
+	double ServerStartTime = 0.0;
 	UPROPERTY(BlueprintReadOnly, Category="Combat|View", meta=(DisplayName="服务器结束时间", ToolTip="服务器绝对结束时间；0 表示无限持续。", Units="s"))
 	double ServerEndTime = 0.0;
+	/** 仅投影头顶 UI 需要展示的控制状态标签，不暴露任意内部 GrantedTag。 */
+	UPROPERTY(BlueprintReadOnly, Category="Combat|View", meta=(DisplayName="控制状态标签", ToolTip="该 Modifier 当前贡献给头顶 UI 的眩晕、沉默、缠绕等控制状态。"))
+	FGameplayTagContainer ControlTags;
 	/** 是否属于 Debuff。 */
 	UPROPERTY(BlueprintReadOnly, Category="Combat|View", meta=(DisplayName="是减益", ToolTip="该 Modifier 是否按减益规则处理。"))
 	bool bIsDebuff = false;
@@ -87,6 +92,8 @@ struct UE_GAS_API FCombatUnitView
 	UPROPERTY(BlueprintReadOnly, Category="Combat|View", meta=(DisplayName="生命代次", ToolTip="当前生命代次，用于淘汰复活前的旧表现。")) int64 LifeGeneration = 0;
 	/** 当前完整生命状态。 */
 	UPROPERTY(BlueprintReadOnly, Category="Combat|View", meta=(DisplayName="生命状态", ToolTip="当前服务器权威 Alive/Dying/Dead/Respawning 状态。")) ECombatLifeState LifeState = ECombatLifeState::Alive;
+	/** UI 允许展示的聚合状态白名单，包括控制状态和隐藏血条状态。 */
+	UPROPERTY(BlueprintReadOnly, Category="Combat|View", meta=(DisplayName="可见状态标签", ToolTip="仅包含头顶 UI 需要的安全状态标签白名单。")) FGameplayTagContainer VisibleStatusTags;
 	/** 当前与最大生命。 */
 	UPROPERTY(BlueprintReadOnly, Category="Combat|View", meta=(DisplayName="当前生命值", ToolTip="当前服务器权威生命值。")) float Health = 0.0f;
 	UPROPERTY(BlueprintReadOnly, Category="Combat|View", meta=(DisplayName="最大生命值", ToolTip="当前服务器权威最大生命值。")) float MaxHealth = 0.0f;

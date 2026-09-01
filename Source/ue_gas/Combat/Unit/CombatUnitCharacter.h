@@ -15,6 +15,7 @@ class UCombatAttributeSet;
 class UCombatModifierComponent;
 class UCombatMotionComponent;
 class UCombatOrderComponent;
+class UCombatOverheadWidgetComponent;
 class UCombatRegenerationComponent;
 class UCombatUnitData;
 class UCombatUnitLifecycleComponent;
@@ -68,6 +69,8 @@ public:
 	UCombatMotionComponent* GetCombatMotionComponent() const { return CombatMotionComponent; }
 	/** 返回 Owner 与非 Owner UI 共用的扁平复制 View。 */
 	UCombatUnitViewComponent* GetCombatUnitViewComponent() const { return CombatUnitViewComponent; }
+	/** 返回默认挂载在 Unit 头顶的资源条、状态条与跳字组件。 */
+	UCombatOverheadWidgetComponent* GetCombatOverheadWidgetComponent() const { return CombatOverheadWidgetComponent; }
 
 	/** 返回当前复制的战斗队伍。 */
 	FCombatTeamId GetCombatTeamId() const { return TeamId; }
@@ -195,6 +198,9 @@ protected:
 	/** Unit 的 UI 安全扁平复制 View。 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Combat|Components", meta=(DisplayName="战斗单位 View 组件", ToolTip="向 Owner 与非 Owner UI 复制相同的安全扁平战斗投影。"))
 	TObjectPtr<UCombatUnitViewComponent> CombatUnitViewComponent;
+	/** DOTA 风格的屏幕空间头顶资源、施法、控制状态和战斗跳字表现。 */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Combat|Components", meta=(DisplayName="战斗头顶 UI", ToolTip="读取 CombatUnitView，并接收服务器伤害/治疗跳字。"))
+	TObjectPtr<UCombatOverheadWidgetComponent> CombatOverheadWidgetComponent;
 
 	/** 服务器初始化使用的稳定 Unit 定义。 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Combat|Unit")

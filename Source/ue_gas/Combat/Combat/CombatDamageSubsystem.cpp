@@ -12,6 +12,7 @@
 #include "Combat/Modifiers/CombatModifierComponent.h"
 #include "Combat/Unit/CombatUnitCharacter.h"
 #include "Combat/Unit/CombatUnitLifecycleComponent.h"
+#include "Combat/UI/CombatOverheadWidgetComponent.h"
 
 FCombatDamageResult UCombatDamageSubsystem::DealDamage(const FCombatDamageRequest& Request)
 {
@@ -138,6 +139,13 @@ FCombatDamageResult UCombatDamageSubsystem::DealDamage(const FCombatDamageReques
 
 	Result.Event.AppliedAmount = Delta.AppliedAmount;
 	Result.bSuccess = true;
+	if (Delta.AppliedAmount > KINDA_SMALL_NUMBER)
+	{
+		if (UCombatOverheadWidgetComponent* Overhead = Request.Target->GetCombatOverheadWidgetComponent())
+		{
+			Overhead->ShowDamageNumber(Delta.AppliedAmount, Request.DamageType);
+		}
+	}
 	if (!bHpLoss)
 	{
 		SourceModifiers->ExecutePostDealDamage(Result.Event);

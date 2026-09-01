@@ -115,7 +115,7 @@ bool FCombatM7ReplicationAndRpcSecurityTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-/** 验证 Modifier Runtime 只投影为 DefinitionId、层数和服务器结束时间的 FastArray View。 */
+/** 验证 Modifier Runtime 只投影 UI 所需的稳定身份、时间窗和白名单状态。 */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FCombatM7UnitModifierViewTest,
 	"Combat.Network.M7.UnitModifierView",
@@ -133,6 +133,7 @@ bool FCombatM7UnitModifierViewTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("Unit DefinitionId is projected"), View->GetUnitView().UnitDefinitionId, Unit->GetUnitDefinitionId());
 
 	UCombatModifierData* Data = CombatNetworkObservabilityTests::MakeModifier(*Unit, TEXT("m7_visible_modifier"));
+	Data->GrantedTags.AddTag(CombatTags::State_Stunned);
 	FCombatModifierApplyRequest Apply;
 	Apply.Source = Unit;
 	Apply.ModifierData = Data;
@@ -144,14 +145,20 @@ bool FCombatM7UnitModifierViewTest::RunTest(const FString& Parameters)
 	{
 		TestEqual(TEXT("View uses stable DefinitionId"), Entries[0].DefinitionId, Data->GetPrimaryAssetId());
 		TestEqual(TEXT("Initial stack is one"), Entries[0].StackCount, 1);
+		TestTrue(TEXT("Finite modifier exposes absolute server start time"), Entries[0].ServerStartTime >= 0.0);
 		TestTrue(TEXT("Finite modifier exposes absolute server end time"), Entries[0].ServerEndTime > World->GetTimeSeconds());
+		TestTrue(TEXT("Only supported control state is projected"), Entries[0].ControlTags.HasTagExact(CombatTags::State_Stunned));
 		TestTrue(TEXT("Debuff flag is projected"), Entries[0].bIsDebuff);
 	}
+	TestTrue(TEXT("Unit view aggregates visible control state"),
+		View->GetUnitView().VisibleStatusTags.HasTagExact(CombatTags::State_Stunned));
 	TestTrue(TEXT("Refresh reuses runtime"), Unit->GetCombatModifierComponent()->ApplyModifier(Apply).bRefreshed);
 	Entries = View->GetVisibleModifiers();
 	TestEqual(TEXT("Refresh updates stack without a second view entry"), Entries.IsEmpty() ? 0 : Entries[0].StackCount, 2);
 	TestTrue(TEXT("Modifier can be removed"), Unit->GetCombatModifierComponent()->RemoveModifier(First.Handle));
 	TestTrue(TEXT("Removed runtime disappears from view"), View->GetVisibleModifiers().IsEmpty());
+	TestFalse(TEXT("Removed control state disappears from unit view"),
+		View->GetUnitView().VisibleStatusTags.HasTagExact(CombatTags::State_Stunned));
 	return true;
 }
 

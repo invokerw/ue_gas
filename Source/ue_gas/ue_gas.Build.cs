@@ -29,7 +29,8 @@ public class ue_gas : ModuleRules
 			"NetCore",
 			"Niagara",
 			"UMG",
-			"Slate"
+			"Slate",
+			"SlateCore"
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[] { });
@@ -43,9 +44,6 @@ public class ue_gas : ModuleRules
 			"ue_gas/Variant_TwinStick/Gameplay",
 			"ue_gas/Variant_TwinStick/UI"
 		});
-
-		// 如需在实现文件中直接使用 SlateCore，可将其改为私有依赖。
-		// PrivateDependencyModuleNames.AddRange(new string[] { "Slate", "SlateCore" });
 
 		// 接入在线会话功能时再启用 OnlineSubsystem，避免当前基座引入无用依赖。
 		// PrivateDependencyModuleNames.Add("OnlineSubsystem");

@@ -9,6 +9,7 @@
 #include "Combat/Log/CombatEventSubsystem.h"
 #include "Combat/Modifiers/CombatModifierComponent.h"
 #include "Combat/Unit/CombatUnitCharacter.h"
+#include "Combat/UI/CombatOverheadWidgetComponent.h"
 
 FCombatHealResult UCombatHealSubsystem::Heal(const FCombatHealRequest& Request)
 {
@@ -96,6 +97,13 @@ FCombatHealResult UCombatHealSubsystem::Heal(const FCombatHealRequest& Request)
 	Result.Event.AppliedAmount = Delta.AppliedAmount;
 	Result.Event.OverhealAmount = FMath::Max(0.0f, Result.Event.Amount - Delta.AppliedAmount);
 	Result.bSuccess = true;
+	if (Delta.AppliedAmount > KINDA_SMALL_NUMBER)
+	{
+		if (UCombatOverheadWidgetComponent* Overhead = Request.Target->GetCombatOverheadWidgetComponent())
+		{
+			Overhead->ShowHealingNumber(Delta.AppliedAmount);
+		}
+	}
 	SourceModifiers->ExecutePostDealHeal(Result.Event);
 	TargetModifiers->ExecutePostTakeHeal(Result.Event);
 	EmitResultLog(Result);

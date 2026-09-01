@@ -111,6 +111,8 @@ public:
 	FActiveGameplayEffectHandle GetActiveEffectHandle() const { return ActiveEffectHandle; }
 	/** 返回绝对 World Game Time；0 表示无限持续。 */
 	double GetExpireAt() const { return ExpireAt; }
+	/** 返回本次创建或刷新发生的绝对 World Game Time。 */
+	double GetAppliedAt() const { return AppliedAt; }
 	/** 返回 Think 调度句柄，供调试和刷新相位自动化断言。 */
 	FCombatScheduleHandle GetThinkScheduleHandle() const { return ThinkSchedule; }
 	/** 返回 Expire 调度句柄，供调试和刷新边界自动化断言。 */
@@ -181,6 +183,8 @@ private:
 	UPROPERTY(Transient) TObjectPtr<UGameplayEffect> EffectDefinition;
 	/** 0 表示无限，否则为绝对 World Game Time。 */
 	double ExpireAt = 0.0;
+	/** 最近一次创建或刷新该 Runtime 的绝对 World Game Time。 */
+	double AppliedAt = 0.0;
 	/** Think 调度句柄。 */
 	FCombatScheduleHandle ThinkSchedule;
 	/** 自然过期调度句柄。 */
