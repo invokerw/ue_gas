@@ -81,29 +81,32 @@ RPC 防护：
 
 ## 5. Modifier 和 Unit View
 
-客户端不复制权威 ModifierRuntime UObject。敌方或 Minimal Unit UI 使用扁平 View：
+客户端不复制权威 ModifierRuntime UObject。Owner 与非 Owner UI 统一使用 `UCombatUnitViewComponent` 提供的扁平 View：
 
 ```cpp
 struct FCombatModifierView
 {
+    FCombatModifierHandle Handle;
     FPrimaryAssetId DefinitionId;
     int32 StackCount;
+    double ServerStartTime;
     double ServerEndTime;
+    FGameplayTagContainer ControlTags;
     bool bIsDebuff;
     bool bDispellable;
 };
 ```
 
-可用 FastArray 增量复制。名称/图标/文本由 DefinitionId 本地解析；护盾剩余值等秘密 Runtime 状态只在产品明确需要展示时增加量化字段。
+Modifier View 当前使用 FastArray 增量复制。名称/图标/文本由 DefinitionId 本地解析；护盾剩余值等秘密 Runtime 状态只在产品明确需要展示时增加量化字段。
 
-建议 `FCombatUnitView` 至少投影：
+当前 `FCombatUnitView` 投影：
 
-- Unit DefinitionId、TeamId、`uint32` life generation、完整 LifeState。
-- Health/MaxHealth、Mana/MaxMana 或 ASC 直接可见 Attribute。
-- 当前 cast/channel DefinitionId、ServerStart/EndTime。
-- 可见 ModifierView。
+- Unit DefinitionId、TeamId、life generation、完整 LifeState 和 UI 可见状态标签。
+- Health/MaxHealth、Mana/MaxMana。
+- 当前 cast/channel DefinitionId、ActivationId、ServerStart/EndTime 和 Channeling 标记。
+- 独立 FastArray 中的可见 ModifierView。
 
-View 只服务 UI/表现，不可反向成为服务器战斗判定来源。
+`UCombatOverheadWidgetComponent` 消费上述 View，显示资源、控制状态、施法/引导进度；短生命周期伤害/治疗跳字只读取服务器 Result，并通过不可靠多播投影到相关客户端。View 和 Widget 只服务 UI/表现，不可反向成为服务器战斗判定来源。
 
 ## 6. Projectile 表现复制
 

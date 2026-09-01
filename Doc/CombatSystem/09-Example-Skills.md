@@ -1,6 +1,6 @@
 # 09 示例技能
 
-示例技能不是演示列表，而是里程碑验收用的纵向切片。每个示例必须使用公共 Damage/Modifier/Ability/Projectile/Order API，禁止为过关增加技能专用旁路。
+本文件同时区分“验证语义的纵向切片”和“可直接进入地图体验的 Demo 内容”。纵向切片必须使用公共 Damage/Modifier/Ability/Projectile/Order API，禁止为通过测试增加技能专用旁路；并非每个 C++ 验证技能都已经制作成可玩 DataAsset/蓝图内容。
 
 ## 1. 覆盖矩阵
 
@@ -157,3 +157,15 @@ Modifier：
 - DataAsset、GameplayEffect、蓝图和测试地图优先通过 UE MCP 创建/检查，并记录精确资产路径、编译结果和回读值。
 - 示例通过对应 Gate 后才可作为后续技能模板。
 - M6 示例复制前还必须通过 [25 M6 技能模板检查表](25-M6-Skill-Template-Checklist.md)。
+
+## 10. 当前可玩 Demo
+
+M8 后增加并整理了 `/Game/Combat/Demo`：
+
+- 地图：`/Game/Combat/Demo/Maps/L_CombatDemo`。
+- 玩家与木桩：`/Game/Combat/Demo/Characters/Player`、`/Game/Combat/Demo/Characters/WoodenDummy`。
+- 远程攻击：`/Game/Combat/Demo/Abilities/RangedAttack`，通过 AbilityData、Tracking Projectile 和公共 Damage 管线完成。
+- 框架与输入：`/Game/Combat/Demo/Framework`、`/Game/Combat/Demo/Input`。
+- 每个 Combat Unit 默认挂载 C++ 头顶 Widget，显示生命/法力、控制状态、施法或引导进度，以及服务器真实 Applied Damage/Healing 跳字。
+
+该 Demo 用于人工体验和内容接线；核心语义仍以 `Combat.*` Automation、资产校验和 Dedicated 测试为准。

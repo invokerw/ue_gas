@@ -25,16 +25,16 @@
 
 ## 2. 当前工程基线
 
-仓库检查结论：
+截至 2026-09-01，仓库基线为：
 
-- `Source/ue_gas/ue_gas.Build.cs` 目前没有 `GameplayAbilities`、`GameplayTags`、`GameplayTasks` 依赖。
-- `ue_gas.uproject` 目前没有启用 GameplayAbilities 插件。
-- `Source/ue_gas/Combat` 尚不存在，没有 ASC、AttributeSet、GameplayAbility 或 GameplayEffect 实现。
-- `Variant_Strategy` 已有多单位选择、AIController、EQS 和 NavMesh 移动，可作为移动适配参考。
-- `Variant_TwinStick` 已有 Actor 弹体、AoE Actor 和简单命中表现，可作为视觉/碰撞参考；其直接调用 `ProjectileImpact` 和 Actor Timer 的路径不能作为新战斗结算入口。
-- `ue_gas.uproject` 已启用 `ModelContextProtocol`、`MCPClientToolset` 和 `AllToolsets`；`.codex/config.toml` 已配置本地 `unreal-mcp` endpoint，可作为 Editor/Content/PIE 的标准操作通道。
-
-因此路线图里的 Combat 任务均为“未开始”，不能把模板复用项记为功能完成。
+- `ue_gas.uproject` 关联 UE 5.8，并启用 GameplayAbilities、StateTree 以及 Editor/MCP 辅助插件。
+- `Source/ue_gas/ue_gas.Build.cs` 已接入 GameplayAbilities、GameplayTags、GameplayTasks、导航、网络、Niagara 和 UMG/Slate 等运行时依赖。
+- Combat 已在 `Source/ue_gas/Combat` 落地，包含 ASC、AttributeSet、Ability、Modifier、Damage/Heal、Order、Attack、Projectile、Thinker、Aura、Motion、网络 View、UI、调试、资产校验和 Automation。
+- 当前仍保持单 Runtime Module；`ue_gasEditor`、`ue_gasServer`、`ue_gasClient` Target 均存在。Server/Client Target 的源码引擎要求见 [15 M1 环境决策](15-M1-Environment-Decision.md)。
+- `/Game/Combat/Demo/Maps/L_CombatDemo` 提供远程攻击可玩 Demo；`/Game/Combat/Tests/L_CombatTest` 用于 PIE、Dedicated 和容量验证。
+- `Variant_Strategy` 的 AI/NavMesh 能力和 `Variant_TwinStick` 的表现资产仍可作为适配入口，但所有战斗结算必须收敛到 Combat 公共子系统。
+- `.codex/config.toml` 配置本地 `unreal-mcp` endpoint，Editor/Content/PIE 操作遵循“读取—修改—回读—测试”闭环。
+- M0-M8 已完成验收，核心发布契约为 `combat_v1_rc1`。最近一次完整发布证据见 [33 M8 验收记录](33-M8-Acceptance.md)；该历史记录不自动证明后续工作区修改已回归。
 
 ### 2.1 UE MCP 开发基线
 
@@ -63,25 +63,38 @@ UE MCP 是效率与准确性工具，不是新的权威数据源：
 
 保留的是语义，不照搬实现：完整施法阶段、Modifier 的属性/状态/Hook 三类职责、AttackRecord 与无副作用法球仲裁、投射物和结算分离、数据与差异逻辑分离。
 
-## 4. 建议目录和模块依赖
+## 4. 当前目录和模块依赖
 
 ```text
 Source/ue_gas/Combat
   Ability/
-  Attribute/
-  Blueprint/
-  Damage/
+  Attack/
+  Attributes/
+  Aura/
+  Combat/
+  Core/
   Data/
+  Debug/
+  Demo/
   Log/
-  Modifier/
+  Modifiers/
+  Motion/
+  Network/
   Order/
+  Performance/
   Projectile/
+  Release/
   Scheduling/
   Targeting/
   Tests/
+  Thinker/
+  UI/
+  Unit/
+  Validation/
+  View/
 ```
 
-`ue_gas.Build.cs` 至少增加：
+`ue_gas.Build.cs` 已包含 GAS 的三项基础依赖：
 
 ```csharp
 "GameplayAbilities",
@@ -89,7 +102,7 @@ Source/ue_gas/Combat
 "GameplayTasks"
 ```
 
-`ue_gas.uproject` 启用 GameplayAbilities。已有 `AIModule`、`NavigationSystem`、`StateTree`、`GameplayStateTree`、`Niagara` 和 `UMG` 可继续使用。
+`ue_gas.uproject` 已启用 GameplayAbilities；运行时同时使用 `AIModule`、`NavigationSystem`、`StateTree`、`GameplayStateTree`、`Niagara`、`UMG`、`Slate` 和 `SlateCore`。
 
 第一版保持单 Runtime Module；只有当编译时间、依赖方向或独立自动化测试确实受阻时再拆 Combat Runtime/Developer 模块。
 
@@ -108,7 +121,7 @@ Source/ue_gas/Combat
 | 投射物 | `UCombatProjectileSubsystem` | Handle、生成、命中/结束幂等、长期上下文 |
 | 伤害/治疗 | `UCombatDamageSubsystem` / `UCombatHealSubsystem` | 权威事务编排、Hook、应用最终 GE、Result |
 | 战斗事件 | `UCombatEventSubsystem` | 统一语义事件、日志投影和调试订阅 |
-| 目标规则 | `UCombatTargetingLibrary` 或 Subsystem | 队伍关系、目标状态、距离、视线和位置校验 |
+| 目标规则 | `UCombatTargetingSubsystem` / `UCombatTeamSubsystem` | 队伍关系、目标状态、距离、视线和位置校验 |
 
 组件之间只通过明确 API、Handle、Result 和不可变快照协作；异步对象不得持有会随 Ability 结束而失效的裸上下文。
 
@@ -121,7 +134,7 @@ Source/ue_gas/Combat
 | Modifier | `UCombatModifierData` | GE/Runtime 类、优先级、叠层、驱散、状态、Think、motion |
 | Projectile | `UCombatProjectileData` | 类型、速度、宽度、距离、碰撞、命中策略、Cue |
 | AbilitySet | `UCombatAbilitySet` | Ability 类和初始等级列表，不保存运行时 SpecHandle |
-| Damage/Heal | `FCombatDamageSpec` / `FCombatHealSpec` | 请求参数和来源上下文；只在服务器事务中使用 |
+| Damage/Heal | `FCombatDamageRequest` / `FCombatHealRequest` | 请求参数和来源上下文；只在服务器事务中使用 |
 | 来源身份 | `FCombatSourceContext` | DirectSourceType，以及 Ability/Modifier/Projectile DefinitionId 因果链 |
 | Ability Action | `FCombatAbilityAction` | Damage、Heal、ApplyModifier、Projectile、Thinker、Event |
 

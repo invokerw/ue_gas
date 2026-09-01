@@ -2,7 +2,7 @@
 
 ## 1. 统一入口
 
-技能、普攻、DOT、反伤都创建 `FCombatDamageSpec` 并调用 `UCombatDamageSubsystem::DealDamage`。治疗统一调用 `UCombatHealSubsystem::Heal`。两个入口只在服务器执行并返回实际结算 Result。
+技能、普攻、DOT、反伤都创建 `FCombatDamageRequest` 并调用 `UCombatDamageSubsystem::DealDamage`。治疗创建 `FCombatHealRequest` 并统一调用 `UCombatHealSubsystem::Heal`。两个入口只在服务器执行并返回包含真实 AttributeSet delta 的同步 Result。
 
 ```cpp
 UENUM(BlueprintType)
@@ -14,17 +14,17 @@ enum class ECombatDamageType : uint8
 };
 
 USTRUCT(BlueprintType)
-struct FCombatDamageSpec
+struct FCombatDamageRequest
 {
     GENERATED_BODY()
 
-    TObjectPtr<AActor> Attacker;
-    TObjectPtr<AActor> Victim;
-    ECombatDamageType Type = ECombatDamageType::Physical;
+    TObjectPtr<ACombatUnitCharacter> Source;
+    TObjectPtr<ACombatUnitCharacter> Target;
     float Amount = 0.0f;
+    ECombatDamageType DamageType = ECombatDamageType::Physical;
     FGameplayTagContainer Flags;
-    FCombatSourceContext Source;
-    FCombatAttackHandle AttackHandle;
+    FCombatSourceContext SourceContext;
+    FCombatEventContext ParentEvent;
 };
 
 USTRUCT(BlueprintType)
@@ -32,17 +32,14 @@ struct FCombatDamageResult
 {
     GENERATED_BODY()
 
-    FCombatEventId EventId;
-    float RequestedAmount = 0.0f;
-    float MitigatedAmount = 0.0f;
-    float AbsorbedAmount = 0.0f;
-    float AppliedDamage = 0.0f;
-    bool bKilled = false;
-    FGameplayTag BlockReason;
+    bool bSuccess = false;
+    bool bBlocked = false;
+    FGameplayTag FailureTag;
+    FCombatDamageEvent Event;
 };
 ```
 
-HealSpec/HealResult 使用同样结构，区分 Requested、Amplified、Applied 和 Overheal。
+`FCombatDamageEvent` 保存 EventContext、Requested/Mitigated/Absorbed/Applied Amount、DamageType、Flags 和来源身份。`FCombatHealRequest` / `FCombatHealResult` 使用同样的请求—结果结构，并通过 Event 区分 Requested、Applied 和 Overheal。
 
 ## 2. 数据与 GAS 载体
 
@@ -85,14 +82,14 @@ Flags 的组合和互斥必须由 C++ 规范化。客户端不能提交 flags �
 10. Instant GE 把 Final Amount 写入 IncomingDamage Meta Attribute。
 11. AttributeSet clamp Health，并按 EventId 回报真实 AppliedDamage/bKilled。
 12. 广播一次 DamageApplied；调用目标 PostTake 和来源 PostDeal。
-13. 将反伤、吸血等 follow-up 加入事务队列；使用新 EventId、相同 RootEventId 和防递归 flags。
-14. 如果 bKilled，从唯一死亡入口推进 Unit 生命周期；AttributeSet 不另发 Death。
+13. 反伤、吸血等 follow-up 创建子事务；使用新 EventId、相同 RootEventId 和防递归 flags。
+14. 如果真实 delta 首次跨过致死阈值，从唯一死亡入口推进 Unit 生命周期；AttributeSet 不另发 Death。
 
 推荐调用栈：
 
 ```text
 Ability/Attack/Projectile/ModifierThink
-  -> DamageSubsystem::DealDamage(Spec)
+  -> DamageSubsystem::DealDamage(Request)
     -> Validate / normalize / immunity
     -> Source PreDeal / Target PreTake
     -> pure C++ amplification and resistance
