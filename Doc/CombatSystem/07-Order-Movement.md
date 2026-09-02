@@ -1,8 +1,10 @@
 # 07 Order 与 NavMesh 移动
 
+> 本文描述 SAM Gate 通过后的当前实现；迁移决策、测试矩阵和验收证据见 [35 服务器权威单位移动改造](35-Server-Authoritative-Movement-Kickoff.md)。
+
 ## 1. 范围
 
-Order 把玩家输入、AI 意图和战斗执行统一为服务器权威状态机。寻路复用 UE NavMesh、Controller 上的 PathFollowing、EQS 和 RVO/Detour，不重写参考项目的网格 A*。Strategy Unit 可由 AIController 导航；当前 Demo 由 PlayerController 直接占有 Unit，但同样由服务器 Order 状态机校验请求、计算路径并裁决完成。
+Order 把玩家输入、AI 意图和战斗执行统一为服务器权威状态机。寻路复用 UE NavMesh、`ACombatUnitAIController` 上的 `UCrowdFollowingComponent` 和 EQS，不重写网格 A*。所有 Combat Unit 都由服务器 AIController Possess；PlayerController 只 Possess 无碰撞 Command Pawn，并通过显式 `CommandedUnit` 提交 Order。
 
 ```cpp
 UENUM(BlueprintType)
@@ -83,7 +85,7 @@ Queued
 
 ## 4. 移动执行
 
-- Point：统一构造 `FAIMoveRequest`。AIController 路径调用 `AAIController::MoveTo`；直接占有 Unit 的 PlayerController 路径在服务器同步求路，并把同一请求交给服务器 `UPathFollowingComponent::RequestMove`。如果是远端玩家，服务器还会把已批准的路径点下发给 owning client，由客户端 PathFollowing 驱动 AutonomousProxy 的 CharacterMovement；服务器通过标准 `ServerMove` 校验后观察真实位置并裁决 Order 完成。
+- Point：统一构造 `FAIMoveRequest`，只允许 `ACombatUnitAIController::MoveTo` 创建服务器 PathFollowing 请求。客户端不接收路径点、不运行 Unit PathFollowing，也不发送 Combat Unit `ServerMove`。
 - 多单位目标分散：复用 EQS 选择候选位置。
 - Unit/Attack/Cast 追击：MoveTo 保存的服务器目标位置，Scheduler Coalesce 低频复查；目标位移超过阈值时重发请求。成功的 PartialPath 也必须用当前 gameplay 距离重验。
 - 有效距离统一考虑双方碰撞半径、AttackRange/CastRangeBonus、技能距离和容差。
@@ -105,34 +107,37 @@ Queued
 适配必须：
 
 - 保存当前 `UEnvQueryInstanceBlueprintWrapper`、`FAIRequestID` 和 OrderHandle。
-- 新 Order/Stop 时取消旧 EQS，调用当前 Controller 的 `StopMovement`，并让旧请求进入可识别 Aborted 终态。
+- 新 Order/Stop 时取消旧 EQS，调用当前 `ACombatUnitAIController::StopMovement`，并让旧请求进入可识别 Aborted 终态。
 - `OnEQSFinished` 比较 QueryInstance、QueryStatus、OrderHandle。
 - `OnRequestFinished` 同时比较 RequestId、OrderHandle 和 result code。
 - 分别处理 Success、AlreadyAtGoal、Blocked、Aborted、Invalid、PartialPath。
 - 只有匹配当前请求的成功结果能推进队列。
-- 在 NotifyControllerChanged/EndPlay 解绑旧 PathFollowing delegate；Controller 改变时重新解析 AIController 或 PlayerController 上的组件，初始化必须幂等。
+- 在 NotifyControllerChanged/EndPlay 解绑旧 PathFollowing delegate；Controller 改变时只重新解析 `ACombatUnitAIController` 上的组件，初始化必须幂等。
 
-M4 已按上述约束实现 `UCombatOrderComponent`。CharacterMovement 使用 acceleration-driven PathFollowing 输入；Move 回调出现一帧残余速度时进入同一有界重试，避免把正常到达误判成永久移动阻止。AIController 与直接占有 Demo Unit 的 PlayerController 共用 RequestId、OrderHandle、Generation 和 LifeGeneration 防陈旧回调约束。
+`UCombatOrderComponent` 已收敛为单一服务器导航器。CharacterMovement 使用 acceleration-driven PathFollowing 输入；Move 回调出现一帧残余速度时进入同一有界重试，避免把正常到达误判成永久移动阻止。RequestId、OrderHandle、NavigationAttemptGeneration 和 LifeGeneration 共同淘汰陈旧回调。
 
-UE 的远端 PlayerController Pawn 只在 owning client 上运行 AutonomousProxy 的受控移动。因此 Demo 的服务器 PlayerController PathFollowing 负责保存请求、监听服务器位置和最终裁决，同时用可靠 Client RPC 下发服务器已计算的路径点；客户端不能提交路径、不能声明到达，也不能绕过 Order 改变权威目标。Order 被取消或替换时，服务器同步停止两端 PathFollowing。
+玩家拥有 Unit 仍通过 `Unit.Owner` 建立 Order RPC 与 ASC Mixed replication，但移动网络角色与所有权分离：owning client 和其他客户端看到的 Unit 都是 `ROLE_SimulatedProxy`。服务器 `UCrowdFollowingComponent` 产生局部 steering，服务器 Capsule sweep 产生最终几何结果，再由 ReplicatedMovement 向所有客户端收敛。
 
 ### 5.1 当前 Demo 点击移动
 
 `Aue_gasPlayerController` 的输入处理不再直接调用 `AddMovementInput` 或 `SimpleMoveToLocation`：
 
+- `BP_CombatDemoGameMode` 继承 `Aue_gasGameMode`；默认出生由原生 GameMode 独立生成 Unit 与 Command Pawn，先完成 Unit 的 AIController/Owner 绑定，再只把 Command Pawn 交给 PlayerController Possess。禁止在 `PlayerController::OnPossess` 中嵌套迁移 Unit。
+
 - 鼠标右键（当前 `IMC_Default` 映射）/触摸按下命中地面后，立即构造替换型 `MoveToPoint` 批次并调用 `ServerIssueOrderBatch`。
 - 按住拖动时，只在距离上一目标至少 25 cm 且距离上一请求至少 0.20 秒时重发，避免 Reliable RPC 按帧发送。
 - 松开时若最终落点明显变化，则补发一次最终目标；光标特效仍是客户端可丢弃反馈。
 - `bAppendToExistingQueue=false`，因此新的点击移动通过服务器 Order generation 取消并替换旧行为，不在客户端直接 `StopMovement`。
-- 远端玩家只有在服务器接受 Order、完成求路并下发路径点后，才启动本地 PathFollowing；该本地执行只负责 UE CharacterMovement 预测与 `ServerMove`，服务器仍以真实位置和当前 OrderHandle 决定成功、重试或取消。
+- `GetReadyCommandedUnit()` 会等待 `CommandedUnit` 与 Unit Owner 都复制就绪才允许发 RPC；客户端仅播放光标/路径预览，不启动 Unit PathFollowing。
 
 ## 6. 碰撞、避让和临时阻挡
 
 M0 已冻结 Combat 几何单位和 Profile：所有距离为 cm、速度为 cm/s；Cast/Attack/Order 默认使用双方半径扣除后的 XY 边缘距离并共享 5 cm 容差。`CombatUnit`、`CombatUnitNoCollision`、`CombatProjectile`、`CombatBlocker`、`CombatCorpse` 和 `CombatTargeting` 的职责及响应矩阵见 [14 M0 设计冻结](14-M0-Design-Freeze.md#6-dec-005碰撞los-和地图单位)。现有 Pawn/WorldDynamic 模板碰撞不直接获得 Combat 语义。
 
-- CharacterMovement 使用 RVO 或 Detour Crowd；选型要在同一地图统一，避免双重避让。
+- 普通移动只使用服务器 Detour Crowd；`UCrowdFollowingComponent` 参数集中在 `ACombatUnitAIController`，CharacterMovement RVO 固定关闭。
 - Capsule 半径映射 hull radius。
-- `State.NoUnitCollision` 通过聚合 Tag 响应器切换 collision/avoidance。
+- `State.NoUnitCollision` 退出 Crowd；Root/Stun/Motion 使用 ObstacleOnly；Dead/UnPossess 使用 Disabled；恢复 Alive 后重新加入。
+- `MaxDepenetrationWithPawnAsProxy=0` 禁止客户端 SimulatedProxy 因本地 Pawn 重叠获得非权威水平位移；服务器 Authority 解穿透和硬阻挡不受影响。
 - Projectile 使用独立 collision profile，不能继承 Pawn 阻挡配置。
 
 Fissure 等临时阻挡分三阶段：
@@ -145,7 +150,7 @@ Fissure 等临时阻挡分三阶段：
 
 ## 7. 队伍控制和 RPC
 
-从 owning client 提交 Order、服务器求路、远端 AutonomousProxy 执行服务器路径、再由服务器裁决状态的完整时序见 [34 客户端与服务器交互流程](34-Client-Server-Interaction.md)。
+从 owning client 的 Command Pawn 输入、显式 CommandedUnit RPC、服务器 AIController 求路移动到全客户端 SimulatedProxy 收敛的完整时序见 [34 客户端与服务器交互流程](34-Client-Server-Interaction.md)。
 
 M0 固定 TeamId、关系和控制权是三种不同概念：`FCombatTeamId` 决定 Friendly/Hostile/Neutral，`UCombatTeamSubsystem` 是唯一关系入口，CommandingPlayerController 只决定谁能发 RPC。召唤物默认快照 spawn 时的队伍，召唤者之后换队不自动传播；细则见 [14 M0 设计冻结](14-M0-Design-Freeze.md#2-dec-001队伍与目标关系)。Order 不得因为 Controller 相同就推断 Friendly，也不得因为 Friendly 就授予控制权。
 
@@ -179,3 +184,5 @@ Retry 必须有次数/时间上限并保留原 OrderHandle；如果生成新 Han
 - Root 解除、Motion 结束只恢复当前有效队首。
 - AttackTarget 不因单次 Landed pop，Cast 不等待 cooldown/backswing。
 - 越权、过频、超长队列、NaN 位置和未授予 Ability 请求被服务器拒绝。
+- 玩家拥有 Unit 在 owning client 仍为 SimulatedProxy；客户端无 PathFollowing/RequestMove/路径 RPC 生产分支。
+- Dedicated 双客户端在基础 RTT、约 80 ms 和约 150 ms + 2% 丢包下对撞收敛，静止 Unit 不产生服务器未认可的水平位移。

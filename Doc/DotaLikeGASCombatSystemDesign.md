@@ -25,6 +25,7 @@
 | [12 决策与缺口登记](CombatSystem/12-Decisions-Gaps.md) | 已定原则、遗漏项、开放决策和进入节点 | 负责人、架构评审 |
 | [13 UE MCP 开发工作流](CombatSystem/13-UE-MCP-Workflow.md) | Editor/资产/蓝图/PIE 的 MCP 操作与验证闭环 | 全体开发者与自动化 Agent |
 | [34 客户端与服务器交互流程](CombatSystem/34-Client-Server-Interaction.md) | 从客户端 Order 到服务器移动、施法、伤害和复制回显的完整时序 | 联机、单位控制、技能与 UI 开发 |
+| [35 服务器权威单位移动改造与验收](CombatSystem/35-Server-Authoritative-Movement-Kickoff.md) | PlayerController 指挥、AIController 服务器移动、Command Pawn、Crowd 与 Dedicated Gate 的当前实现和证据 | 单位控制、网络、AI、测试与维护者 |
 
 冻结与发布文档：
 
@@ -41,7 +42,8 @@
 - 初次了解：根 README → 00 → 01 → 32。
 - 实现技能：03 → 05 → 06 → 09 → 25 → 32。
 - 修改战斗内核：01 → 对应 02-08 专题 → 12 → 31 → 11。
-- 理解或修改单位控制与联机：34 → 07 → 08 → 27 → 28 → 11。
+- 理解当前单位控制与联机：34 → 07 → 08 → 27 → 28 → 11。
+- 维护服务器权威移动：35 → 34 → 07 → 01 → 31 → 12 → 11。
 - 核对发布状态：00 → 30 → 33。
 
 ## 原章节迁移

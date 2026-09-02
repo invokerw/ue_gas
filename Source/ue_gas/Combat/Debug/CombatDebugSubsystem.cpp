@@ -104,8 +104,10 @@ FString UCombatDebugSubsystem::DumpUnit(const ACombatUnitCharacter* Unit) const
 	const UCombatAttackComponent* Attacks = Unit->GetCombatAttackComponent();
 	const UCombatOrderComponent* Orders = Unit->GetCombatOrderComponent();
 	const UCombatMotionComponent* Motions = Unit->GetCombatMotionComponent();
+	FString MovementTopology;
+	const bool bMovementTopologyValid = Unit->ValidateServerMovementTopology(MovementTopology);
 	return FString::Printf(
-		TEXT("CombatUnit Name=%s Id=%d Definition=%s Team=%s Life=%d Generation=%u Health=%.2f/%.2f Mana=%.2f/%.2f AscPolicy=%d Modifiers=%d Attacks=%d Motions=%d OrderState=%d PendingOrders=%d Location=%s"),
+		TEXT("CombatUnit Name=%s Id=%d Definition=%s Team=%s Life=%d Generation=%u Health=%.2f/%.2f Mana=%.2f/%.2f AscPolicy=%d Modifiers=%d Attacks=%d Motions=%d OrderState=%d PendingOrders=%d Location=%s MovementTopologyValid=%s MovementTopology={%s}"),
 		*Unit->GetName(), Unit->GetUniqueID(), *Unit->GetUnitDefinitionId().ToString(), *Unit->GetCombatTeamId().ToString(),
 		static_cast<int32>(Unit->GetLifeState()), Unit->GetLifeGeneration(),
 		Attributes ? Attributes->GetHealth() : 0.0f, Attributes ? Attributes->GetMaxHealth() : 0.0f,
@@ -116,7 +118,8 @@ FString UCombatDebugSubsystem::DumpUnit(const ACombatUnitCharacter* Unit) const
 		Motions ? Motions->GetActiveMotionCount() : 0,
 		Orders ? static_cast<int32>(Orders->GetCurrentState()) : 0,
 		Orders ? Orders->GetPendingOrderCount() : 0,
-		*Unit->GetActorLocation().ToCompactString());
+		*Unit->GetActorLocation().ToCompactString(),
+		bMovementTopologyValid ? TEXT("Yes") : TEXT("No"), *MovementTopology);
 }
 
 FString UCombatDebugSubsystem::DumpRootEvent(const FCombatEventId RootEventId) const

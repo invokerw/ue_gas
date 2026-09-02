@@ -10,7 +10,7 @@
 - Modifier：Buff/Debuff、属性聚合、状态、周期 Think、事件 Hook、叠层、驱散和 motion controller。
 - Projectile：直线、跟踪、普攻弹体、穿透/首个命中、命中回调和表现资源。
 - Combat Pipeline：技能、普攻、DOT、反伤、护盾、魔免、抗性、吸血和治疗使用统一事务。
-- Order/Movement：Move/Attack/Cast/Stop 队列，复用 UE NavMesh、Controller PathFollowing、EQS 和避让；同时支持 AIController 导航与 Demo 的 PlayerController 直接占有模式。
+- Order/Movement：Move/Attack/Cast/Stop 队列，复用 UE NavMesh、服务器 `ACombatUnitAIController`、`UCrowdFollowingComponent` 与 EQS；PlayerController 只指挥显式 Unit，不占有或移动 Combat Unit。
 - 脚本层：用 Blueprintable C++ 基类和蓝图事件替代 Lua。
 - 网络：服务器权威，第一阶段可低预测，但从第一天保持可复制的数据边界。
 
@@ -25,13 +25,14 @@
 
 ## 2. 当前工程基线
 
-截至 2026-09-01，仓库基线为：
+截至 2026-09-02，仓库基线为：
 
 - `ue_gas.uproject` 关联 UE 5.8，并启用 GameplayAbilities、StateTree 以及 Editor/MCP 辅助插件；StateTree 仅保留为可选引擎能力，不再被项目源码依赖。
 - `Source/ue_gas/ue_gas.Build.cs` 已接入 GameplayAbilities、GameplayTags、GameplayTasks、导航、网络、Niagara 和 UMG/Slate 等运行时依赖。
 - Combat 已在 `Source/ue_gas/Combat` 落地，包含 ASC、AttributeSet、Ability、Modifier、Damage/Heal、Order、Attack、Projectile、Thinker、Aura、Motion、网络 View、UI、调试、资产校验和 Automation。
 - 当前仍保持单 Runtime Module；`ue_gasEditor`、`ue_gasServer`、`ue_gasClient` Target 均存在。Server/Client Target 的源码引擎要求见 [15 M1 环境决策](15-M1-Environment-Decision.md)。
 - `/Game/Combat/Demo/Maps/L_CombatDemo` 提供远程攻击可玩 Demo；`/Game/Combat/Tests/L_CombatTest` 用于 PIE、Dedicated 和容量验证。
+- SAM 服务器权威移动已落地：`Aue_gasGameMode` 在默认出生阶段独立生成 Combat Unit 与 Command Pawn，Unit 由唯一服务器专用 AIController Possess，玩家只拥有无碰撞 Command Pawn；所有客户端的 Combat Unit 均为 SimulatedProxy。
 - `Variant_Strategy` 与 `Variant_TwinStick` 模板源码、资产和关卡已移除；可玩与验证入口统一位于 `/Game/Combat/Demo` 和 `/Game/Combat/Tests`。
 - `.codex/config.toml` 配置本地 `unreal-mcp` endpoint，Editor/Content/PIE 操作遵循“读取—修改—回读—测试”闭环。
 - M0-M8 已完成验收，核心发布契约为 `combat_v1_rc1`。最近一次完整发布证据见 [33 M8 验收记录](33-M8-Acceptance.md)；该历史记录不自动证明后续工作区修改已回归。
@@ -57,7 +58,7 @@ UE MCP 是效率与准确性工具，不是新的权威数据源：
 | `modifier` | 属性、状态、事件 Hook、motion | ActiveGE + GameplayTag + Modifier Runtime |
 | `projectile` | 直线/跟踪弹体、命中/结束 | Projectile Actor/Subsystem、AbilityTask、GameplayCue |
 | `combat` | 伤害/治疗管线 | Combat Subsystem、Calculator、Instant GE、Result |
-| `pathfinding` | A*、ShapeCast、动态圆碰撞 | NavMesh、Controller PathFollowing、RVO/Detour、EQS |
+| `pathfinding` | A*、ShapeCast、动态圆碰撞 | NavMesh、服务器 AIController/Detour Crowd、Capsule sweep、EQS |
 | `script` | Lua 绑定 | BlueprintNativeEvent/BlueprintImplementableEvent |
 | `log/replay` | 事件记录与回放 | Combat Log、GameplayMessage、调试工具 |
 
@@ -111,6 +112,9 @@ Source/ue_gas/Combat
 | 类/组件 | 建议名称 | 单一职责 |
 | --- | --- | --- |
 | 战斗单位 | `ACombatUnitCharacter` | `IAbilitySystemInterface`、ASC、属性、队伍、攻击和指令组件 |
+| 单位导航控制器 | `ACombatUnitAIController` | 仅服务器 Possess Combat Unit，持有 PathFollowing 与唯一 Detour Crowd steering |
+| 玩家指挥控制器 | `Aue_gasPlayerController` | Possess Command Pawn，维护 owner-only CommandedUnit/BindingGeneration 并提交 Order |
+| 命令 Pawn | `Aue_gasCharacter` | 无 Combat 组件和碰撞的连接/相机载体，只在本地跟随 CommandedUnit |
 | ASC | `UCombatAbilitySystemComponent` | GAS 激活、标签查询、冷却/消耗查询和 ActorInfo 初始化 |
 | 属性集 | `UCombatAttributeSet` | Health/Mana、战斗属性和 IncomingDamage/Healing Meta Attribute |
 | 指令队列 | `UCombatOrderComponent` | Move/Attack/Cast/Stop 的当前项、FIFO 和 generation |
@@ -174,6 +178,8 @@ M0 冻结的跨系统值域和默认值集中在 [14 M0 设计冻结](14-M0-Desi
 | Health/Mana | Damage/Heal/Resource API 是编排入口；最终修改只通过 GE 或 AttributeSet Meta Attribute。 |
 | 事件 Hook | Runtime 只做响应、实例状态和副作用，不绕过统一属性路径。 |
 | 服务器入口 | Damage、Heal、ApplyModifier、Attack Finalize、Order 执行只允许服务器调用。 |
+| 移动拓扑 | Combat Unit 只由服务器 `ACombatUnitAIController` 移动；PlayerController Owner 只建立 RPC/ASC owning connection，owning client 仍为 SimulatedProxy。 |
+| 避让 | 普通移动只启用服务器 Detour Crowd；CharacterMovement RVO 关闭，客户端 SimulatedProxy Pawn 解穿透上限为 0。 |
 | Damage 载荷 | Final Amount 用 SetByCaller，类型/flags 用 DynamicAssetTags，身份链用自定义 EffectContext。 |
 | 事件结果 | Post Hook、吸血、反伤、日志和死亡只读取实际 Result，不从请求值反推。 |
 | Hook 顺序 | `Priority descending -> ApplySequence ascending`；结构修改延迟到当前阶段结束。 |
@@ -196,6 +202,8 @@ M0 冻结的跨系统值域和默认值集中在 [14 M0 设计冻结](14-M0-Desi
 | AttackRecord | AttackComponent registry | 攻击前摇开始 | Landed/Failed 后一次性销毁 |
 | Projectile | ProjectileSubsystem | 权威 spawn | Hit/timeout/fizzle/EndPlay 的幂等 Finish |
 | Order | OrderComponent | IssueOrder | 完成、失败、Stop 或新 generation |
+| CommandedUnit 绑定 | PlayerController | GameMode 出生/服务器控制转移 | Controller EndPlay、Unit EndPlay 或下一次绑定；双方 generation/弱引用清理 |
+| Crowd agent | CombatUnitAIController | AI Possess Alive Unit | Dead/NoCollision/UnPossess 为 Disabled，Root/Stun/Motion 为 ObstacleOnly |
 | Schedule | Scheduler slot | Schedule | Cancel、Owner 销毁或 World teardown |
 | Combat Event | Damage/Heal/Event Subsystem | 事务入口 | Result、follow-up 入队、日志提交 |
 

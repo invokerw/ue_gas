@@ -5,8 +5,11 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "Engine/World.h"
+#include "EngineUtils.h"
+#include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/PlayerController.h"
 #include "Misc/AutomationTest.h"
+#include "Navigation/CrowdFollowingComponent.h"
 #include "Navigation/PathFollowingComponent.h"
 
 #include "Combat/Ability/CombatAbilitySystemComponent.h"
@@ -19,11 +22,16 @@
 #include "Combat/Demo/CombatDemoModifierRuntimes.h"
 #include "Combat/Log/CombatEventSubsystem.h"
 #include "Combat/Modifiers/CombatModifierComponent.h"
+#include "Combat/Motion/CombatMotionComponent.h"
 #include "Combat/Order/CombatOrderComponent.h"
 #include "Combat/Scheduling/CombatSchedulerSubsystem.h"
 #include "Combat/Tests/CombatAutomationWorldFixture.h"
+#include "Combat/Unit/CombatUnitAIController.h"
 #include "Combat/Unit/CombatUnitCharacter.h"
 #include "Combat/Unit/CombatUnitLifecycleComponent.h"
+#include "ue_gasCharacter.h"
+#include "ue_gasGameMode.h"
+#include "ue_gasPlayerController.h"
 
 namespace CombatOrderAttackTests
 {
@@ -187,13 +195,13 @@ bool FCombatOrderQueueGenerationTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-/** 验证直接占有 Combat Unit 的 PlayerController 也能向 Order 提供 PathFollowing。 */
+/** 验证 Combat Unit 只绑定服务器专用 AIController 的 CrowdFollowing。 */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FCombatOrderPlayerControllerNavigationBindingTest,
-	"Combat.OrderAttack.Order.PlayerControllerPathFollowingBinding",
+	FCombatOrderServerAiNavigationBindingTest,
+	"Combat.SAM.ServerAiCrowdNavigationBinding",
 	CombatOrderAttackTests::Flags)
 
-bool FCombatOrderPlayerControllerNavigationBindingTest::RunTest(const FString& Parameters)
+bool FCombatOrderServerAiNavigationBindingTest::RunTest(const FString& Parameters)
 {
 	(void)Parameters;
 	FCombatAutomationWorldFixture Fixture;
@@ -201,22 +209,170 @@ bool FCombatOrderPlayerControllerNavigationBindingTest::RunTest(const FString& P
 	UWorld& World = *Fixture.GetWorld();
 	FCombatUnitBaseStats Stats;
 	ACombatUnitCharacter* Unit = CombatOrderAttackTests::SpawnUnit(
-		World, TEXT("player_navigation_unit"), FVector::ZeroVector, 1, Stats);
-	APlayerController* Controller = World.SpawnActor<APlayerController>();
-	if (!Unit || !Controller) { AddError(TEXT("Could not spawn controller binding actors")); return false; }
-
-	UPathFollowingComponent* PathFollowing = NewObject<UPathFollowingComponent>(
-		Controller, TEXT("TestPathFollowingComponent"));
-	Controller->AddInstanceComponent(PathFollowing);
-	PathFollowing->RegisterComponent();
-	PathFollowing->Initialize();
-	Controller->Possess(Unit);
+		World, TEXT("server_navigation_unit"), FVector::ZeroVector, 1, Stats);
+	if (!Unit) { AddError(TEXT("Could not spawn controller binding unit")); return false; }
+	if (!Unit->GetController())
+	{
+		Unit->SpawnDefaultController();
+	}
+	ACombatUnitAIController* Controller = Cast<ACombatUnitAIController>(Unit->GetController());
+	if (!Controller) { AddError(TEXT("Combat AIController was not created")); return false; }
 	Unit->GetCombatOrderComponent()->RefreshControllerBinding();
 
-	TestTrue(TEXT("PlayerController path following component is registered"),
-		Controller->FindComponentByClass<UPathFollowingComponent>() == PathFollowing);
-	TestTrue(TEXT("Order binds PlayerController path following component"),
+	TestNotNull(TEXT("Combat AIController owns CrowdFollowing"), Controller->GetCombatCrowdFollowing());
+	TestTrue(TEXT("Order binds only the Combat AIController path following component"),
 		Unit->GetCombatOrderComponent()->HasPathFollowingBindingForTesting());
+	TestFalse(TEXT("CharacterMovement RVO remains disabled"), Unit->GetCharacterMovement()->bUseRVOAvoidance);
+	TestEqual(TEXT("SimulatedProxy pawn depenetration is disabled"),
+		Unit->GetCharacterMovement()->MaxDepenetrationWithPawnAsProxy, 0.0f);
+	FString TopologyDiagnostic;
+	const bool bTopologyValid = Unit->ValidateServerMovementTopology(TopologyDiagnostic);
+	TestTrue(*FString::Printf(TEXT("Topology is valid: %s"), *TopologyDiagnostic), bTopologyValid);
+	return true;
+}
+
+/** 验证 GameMode 出生即建立唯一 AI + Command Pawn 拓扑，并覆盖幂等绑定与控制权转移清理。 */
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FCombatSamCommandBindingLifecycleTest,
+	"Combat.SAM.CommandBindingLifecycle",
+	CombatOrderAttackTests::Flags)
+
+bool FCombatSamCommandBindingLifecycleTest::RunTest(const FString& Parameters)
+{
+	(void)Parameters;
+	FCombatAutomationWorldFixture Fixture(NM_DedicatedServer);
+	if (!Fixture.IsValid()) { AddError(TEXT("Could not create SAM command binding world")); return false; }
+	UWorld& World = *Fixture.GetWorld();
+	Aue_gasGameMode* GameMode = World.SpawnActor<Aue_gasGameMode>();
+	Aue_gasPlayerController* FirstController = World.SpawnActor<Aue_gasPlayerController>();
+	Aue_gasPlayerController* SecondController = World.SpawnActor<Aue_gasPlayerController>();
+	if (!GameMode || !FirstController || !SecondController)
+	{
+		AddError(TEXT("Could not spawn SAM command binding actors"));
+		return false;
+	}
+	APawn* CommandPawn = GameMode->SpawnDefaultPawnAtTransform(
+		FirstController, FTransform(FRotator::ZeroRotator, FVector::ZeroVector));
+	FirstController->Possess(CommandPawn);
+	ACombatUnitCharacter* Unit = FirstController->GetCommandedUnit();
+	if (!Unit || !CommandPawn)
+	{
+		AddError(TEXT("GameMode did not create the default Command Pawn and Combat Unit"));
+		return false;
+	}
+	if (!Unit->HasActorBegunPlay())
+	{
+		// 该最小 Dedicated fixture 不自动派发运行时 Spawn 的 BeginPlay；补齐后才能验证真实 Destroy -> EndPlay 顺序。
+		Unit->DispatchBeginPlay();
+	}
+
+	TestTrue(TEXT("PlayerController possesses a Command Pawn"), Cast<Aue_gasCharacter>(FirstController->GetPawn()) != nullptr);
+	TestEqual(TEXT("PlayerController explicitly references the unit"), FirstController->GetCommandedUnit(), Unit);
+	TestTrue(TEXT("Combat Unit remains possessed by the server AIController"),
+		Cast<ACombatUnitAIController>(Unit->GetController()) != nullptr);
+	TestEqual(TEXT("Unit owning connection points at the commanding player"),
+		Unit->GetCommandingPlayerController(), static_cast<APlayerController*>(FirstController));
+	TestEqual(TEXT("Unit remains SimulatedProxy for remote clients"), Unit->GetRemoteRole(), ROLE_SimulatedProxy);
+	int32 CombatAiControllerCount = 0;
+	int32 OrphanCombatAiControllerCount = 0;
+	for (TActorIterator<ACombatUnitAIController> It(&World); It; ++It)
+	{
+		++CombatAiControllerCount;
+		OrphanCombatAiControllerCount += It->GetPawn() ? 0 : 1;
+	}
+	TestEqual(TEXT("Default player topology creates exactly one Combat AIController"), CombatAiControllerCount, 1);
+	TestEqual(TEXT("Default player topology leaves no orphan Combat AIController"), OrphanCombatAiControllerCount, 0);
+	const int32 FirstGeneration = FirstController->GetCommandBindingGeneration();
+	TestTrue(TEXT("Initial binding generation is non-zero"), FirstGeneration > 0);
+	TestTrue(TEXT("Idempotent rebinding succeeds"), FirstController->SetCommandedUnitAuthority(Unit));
+	TestEqual(TEXT("Idempotent rebinding does not advance generation"),
+		FirstController->GetCommandBindingGeneration(), FirstGeneration);
+
+	Unit->GetCombatOrderComponent()->SetNavigationDeferredForTesting(true);
+	const FCombatOrderResult ActiveMove = Unit->GetCombatOrderComponent()->IssueOrder(
+		CombatOrderAttackTests::MakeMoveOrder(FVector(1000.0, 0.0, 0.0)), false);
+	TestTrue(TEXT("Transfer precondition has an active order"), ActiveMove.bSuccess);
+	TestTrue(TEXT("Second controller can atomically take ownership"),
+		SecondController->SetCommandedUnitAuthority(Unit));
+	TestNull(TEXT("Old controller binding is cleared"), FirstController->GetCommandedUnit());
+	TestTrue(TEXT("Old controller generation advances"),
+		FirstController->GetCommandBindingGeneration() > FirstGeneration);
+	TestEqual(TEXT("New controller becomes explicit owner"), Unit->GetCommandingPlayerController(),
+		static_cast<APlayerController*>(SecondController));
+	TestEqual(TEXT("Transfer cancels the previous order"),
+		Unit->GetCombatOrderComponent()->GetCurrentState(), ECombatOrderState::Idle);
+	TestTrue(TEXT("AIController possession survives owner transfer"),
+		Cast<ACombatUnitAIController>(Unit->GetController()) != nullptr);
+	const int32 SecondGeneration = SecondController->GetCommandBindingGeneration();
+	TestTrue(TEXT("Dedicated test world accepts authoritative Unit destruction"),
+		World.DestroyActor(Unit, true));
+	// 临时 Automation World 不自动跑帧；显式推进一帧，让 Destroy 的 EndPlay 与 Controller 清理按生产顺序完成。
+	World.Tick(LEVELTICK_All, 0.0f);
+	TestNull(TEXT("Unit EndPlay clears the commanding controller binding"), SecondController->GetCommandedUnit());
+	TestTrue(TEXT("Unit EndPlay advances the commanding controller generation"),
+		SecondController->GetCommandBindingGeneration() > SecondGeneration);
+	return true;
+}
+
+/** 验证 NoUnitCollision、控制状态、Motion、死亡与复活对 Crowd agent 的唯一状态投影。 */
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FCombatSamCrowdLifecycleTest,
+	"Combat.SAM.CrowdStateLifecycle",
+	CombatOrderAttackTests::Flags)
+
+bool FCombatSamCrowdLifecycleTest::RunTest(const FString& Parameters)
+{
+	(void)Parameters;
+	FCombatAutomationWorldFixture Fixture;
+	if (!Fixture.IsValid()) { AddError(TEXT("Could not create SAM crowd lifecycle world")); return false; }
+	UWorld& World = *Fixture.GetWorld();
+	FCombatUnitBaseStats Stats;
+	ACombatUnitCharacter* Unit = CombatOrderAttackTests::SpawnUnit(
+		World, TEXT("sam_crowd_unit"), FVector::ZeroVector, 1, Stats);
+	if (!Unit) { AddError(TEXT("Could not spawn SAM crowd unit")); return false; }
+	if (!Unit->GetController()) Unit->SpawnDefaultController();
+	ACombatUnitAIController* Controller = Cast<ACombatUnitAIController>(Unit->GetController());
+	UCrowdFollowingComponent* Crowd = Controller ? Controller->GetCombatCrowdFollowing() : nullptr;
+	if (!Crowd) { AddError(TEXT("SAM crowd component is missing")); return false; }
+
+	Unit->RefreshServerMovementState();
+	TestEqual(TEXT("Alive normal unit targets enabled Crowd steering"),
+		Controller->GetDesiredCrowdSimulationState(), ECrowdSimulationState::Enabled);
+	Unit->GetCombatAbilitySystemComponent()->AddLooseGameplayTag(CombatTags::State_NoUnitCollision);
+	Unit->RefreshServerMovementState();
+	TestEqual(TEXT("NoUnitCollision removes the unit from Crowd"),
+		Controller->GetDesiredCrowdSimulationState(), ECrowdSimulationState::Disabled);
+	Unit->GetCombatAbilitySystemComponent()->RemoveLooseGameplayTag(CombatTags::State_NoUnitCollision);
+	Unit->GetCombatAbilitySystemComponent()->AddLooseGameplayTag(CombatTags::State_Rooted);
+	Unit->RefreshServerMovementState();
+	TestEqual(TEXT("Rooted unit remains a Crowd obstacle without steering"),
+		Controller->GetDesiredCrowdSimulationState(), ECrowdSimulationState::ObstacleOnly);
+	Unit->GetCombatAbilitySystemComponent()->RemoveLooseGameplayTag(CombatTags::State_Rooted);
+
+	FCombatMotionRequest MotionRequest;
+	MotionRequest.TargetLocation = FVector(100.0, 0.0, 0.0);
+	MotionRequest.Speed = 500.0f;
+	MotionRequest.Channel = ECombatMotionChannel::Horizontal;
+	const FCombatMotionResult MotionResult = Unit->GetCombatMotionComponent()->TryAcquireMotion(MotionRequest);
+	TestTrue(TEXT("Motion acquires the horizontal channel"), MotionResult.bSuccess);
+	TestEqual(TEXT("Active Motion pauses Crowd steering"),
+		Controller->GetDesiredCrowdSimulationState(), ECrowdSimulationState::ObstacleOnly);
+	TestTrue(TEXT("Motion releases successfully"), Unit->GetCombatMotionComponent()->ReleaseMotion(MotionResult.Handle));
+	TestEqual(TEXT("Crowd steering target resumes after the last Motion"),
+		Controller->GetDesiredCrowdSimulationState(), ECrowdSimulationState::Enabled);
+
+	FCombatEventContext DeathEvent = World.GetSubsystem<UCombatEventSubsystem>()->CreateRootEvent();
+	TestTrue(TEXT("Death transition succeeds"),
+		Unit->GetCombatLifecycleComponent()->RequestDeath(DeathEvent, Unit));
+	TestEqual(TEXT("Dead unit is removed from Crowd"),
+		Controller->GetDesiredCrowdSimulationState(), ECrowdSimulationState::Disabled);
+	TestTrue(TEXT("Respawn transition succeeds"),
+		Unit->GetCombatLifecycleComponent()->RespawnAtLocation(FVector::ZeroVector));
+	TestEqual(TEXT("Respawned unit rejoins Crowd"),
+		Controller->GetDesiredCrowdSimulationState(), ECrowdSimulationState::Enabled);
+	Controller->UnPossess();
+	TestEqual(TEXT("Controller teardown disables its Crowd agent"),
+		Controller->GetDesiredCrowdSimulationState(), ECrowdSimulationState::Disabled);
 	return true;
 }
 

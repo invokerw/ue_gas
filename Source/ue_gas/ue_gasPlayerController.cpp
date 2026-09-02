@@ -1,139 +1,222 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "ue_gasPlayerController.h"
-#include "GameFramework/Pawn.h"
-#include "NiagaraSystem.h"
-#include "NiagaraFunctionLibrary.h"
-#include "ue_gasCharacter.h"
-#include "Engine/World.h"
-#include "EnhancedInputComponent.h"
-#include "NavigationPath.h"
-#include "Navigation/PathFollowingComponent.h"
-#include "InputActionValue.h"
-#include "EnhancedInputSubsystems.h"
+
 #include "Engine/LocalPlayer.h"
+#include "Engine/World.h"
 #include "EngineUtils.h"
+#include "EnhancedInputComponent.h"
+#include "EnhancedInputSubsystems.h"
+#include "InputActionValue.h"
+#include "Net/UnrealNetwork.h"
+#include "NiagaraFunctionLibrary.h"
+#include "NiagaraSystem.h"
 
 #include "Combat/Ability/CombatAbilitySystemComponent.h"
 #include "Combat/Ability/CombatGameplayAbility.h"
 #include "Combat/Core/CombatTags.h"
 #include "Combat/Data/CombatDefinitionData.h"
+#include "Combat/Log/CombatEventSubsystem.h"
 #include "Combat/Network/CombatNetworkTypes.h"
+#include "Combat/Order/CombatOrderComponent.h"
+#include "Combat/Unit/CombatUnitAIController.h"
 #include "Combat/Unit/CombatUnitCharacter.h"
 #include "ue_gas.h"
+#include "ue_gasCharacter.h"
 
 Aue_gasPlayerController::Aue_gasPlayerController()
 {
 	bIsTouch = false;
-
-	// 当前 Demo 由 PlayerController 直接占有 Unit；服务器与 owning client 用同一组件衔接 Order 路径。
-	PathFollowingComponent = CreateDefaultSubobject<UPathFollowingComponent>(TEXT("Path Following Component"));
-
-	// configure the controller
 	bShowMouseCursor = true;
 	DefaultMouseCursor = EMouseCursor::Default;
-	CachedDestination = FVector::ZeroVector;
+	CommandPawnClass = Aue_gasCharacter::StaticClass();
 }
 
-void Aue_gasPlayerController::ClientFollowCombatOrderPath_Implementation(
-	const TArray<FVector_NetQuantize10>& PathPoints,
-	const FVector_NetQuantize10 GoalLocation,
-	const float AcceptanceRadius)
+void Aue_gasPlayerController::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
-	if (!IsLocalController() || !GetPawn() || !PathFollowingComponent || PathPoints.Num() < 2)
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+	DOREPLIFETIME_CONDITION(Aue_gasPlayerController, CommandedUnit, COND_OwnerOnly);
+	DOREPLIFETIME_CONDITION(Aue_gasPlayerController, CommandBindingGeneration, COND_OwnerOnly);
+}
+
+bool Aue_gasPlayerController::SetCommandedUnitAuthority(ACombatUnitCharacter* NewUnit)
+{
+	if (!HasAuthority() || (NewUnit && NewUnit->GetWorld() != GetWorld()))
+	{
+		return false;
+	}
+	if (CommandedUnit == NewUnit)
+	{
+		if (NewUnit && NewUnit->GetCommandingPlayerController() != this
+			&& !NewUnit->SetCommandingPlayerController(this))
+		{
+			return false;
+		}
+		RefreshCommandBinding();
+		return true;
+	}
+
+	ACombatUnitCharacter* PreviousUnit = CommandedUnit;
+	if (NewUnit)
+	{
+		if (Aue_gasPlayerController* PreviousController =
+			Cast<Aue_gasPlayerController>(NewUnit->GetCommandingPlayerController());
+			PreviousController && PreviousController != this)
+		{
+			PreviousController->SetCommandedUnitAuthority(nullptr);
+		}
+		else if (APlayerController* PreviousOwner = NewUnit->GetCommandingPlayerController(); PreviousOwner != this)
+		{
+			if (UCombatOrderComponent* Orders = NewUnit->GetCombatOrderComponent())
+			{
+				Orders->StopAllOrders(CombatTags::Order_Failure_Cancelled);
+			}
+			NewUnit->SetCommandingPlayerController(nullptr);
+		}
+	}
+
+	// 指针只在清理完成后一次性发布；旧连接随后到达的 Unit RPC 会被 Owner 校验拒绝。
+	CommandedUnit = nullptr;
+	if (PreviousUnit)
+	{
+		if (UCombatOrderComponent* Orders = PreviousUnit->GetCombatOrderComponent())
+		{
+			Orders->StopAllOrders(CombatTags::Order_Failure_Cancelled);
+		}
+		PreviousUnit->SetCommandingPlayerController(nullptr);
+	}
+
+	bool bSuccess = true;
+	if (NewUnit)
+	{
+		bSuccess = NewUnit->SetCommandingPlayerController(this);
+		if (bSuccess)
+		{
+			CommandedUnit = NewUnit;
+		}
+	}
+	AdvanceCommandBindingGeneration();
+	ForceNetUpdate();
+	RefreshCommandBinding();
+
+	UE_LOG(LogCombat, Log,
+		TEXT("SAMCommandBinding Controller=%s OldUnit=%s NewUnit=%s CommandBindingGeneration=%d Success=%s"),
+		*GetName(), *GetNameSafe(PreviousUnit), *GetNameSafe(CommandedUnit), CommandBindingGeneration,
+		bSuccess ? TEXT("Yes") : TEXT("No"));
+	if (CommandedUnit)
+	{
+		CommandedUnit->LogServerMovementTopology(TEXT("CommandBindingChanged"));
+	}
+	return bSuccess;
+}
+
+void Aue_gasPlayerController::HandleCommandedUnitEndPlay(ACombatUnitCharacter* EndingUnit)
+{
+	if (!HasAuthority() || !EndingUnit || CommandedUnit != EndingUnit)
 	{
 		return;
 	}
-
-	// 远端 PlayerController 的 CharacterMovement 只在拥有客户端生成预测移动；路径仍由服务器计算并批准。
-	PathFollowingComponent->Initialize();
-	TArray<FVector> LocalPathPoints;
-	LocalPathPoints.Reserve(PathPoints.Num());
-	for (const FVector_NetQuantize10& Point : PathPoints)
-	{
-		LocalPathPoints.Add(Point);
-	}
-	// 避免网络延迟造成首点轻微落后于客户端预测位置，从当前导航位置接入服务器路径。
-	LocalPathPoints[0] = GetNavAgentLocation();
-
-	FAIMoveRequest MoveRequest;
-	MoveRequest.SetGoalLocation(GoalLocation);
-	MoveRequest.SetAcceptanceRadius(AcceptanceRadius);
-	MoveRequest.SetReachTestIncludesAgentRadius(true);
-	MoveRequest.SetReachTestIncludesGoalRadius(true);
-	MoveRequest.SetAllowPartialPath(true);
-	MoveRequest.SetUsePathfinding(false);
-	MoveRequest.SetProjectGoalLocation(false);
-	MoveRequest.SetCanStrafe(false);
-
-	const FNavPathSharedPtr ClientPath = MakeShared<FNavigationPath, ESPMode::ThreadSafe>(LocalPathPoints, nullptr);
-	PathFollowingComponent->RequestMove(MoveRequest, ClientPath);
+	CommandedUnit = nullptr;
+	AdvanceCommandBindingGeneration();
+	ForceNetUpdate();
+	RefreshCommandBinding();
 }
 
-void Aue_gasPlayerController::ClientStopCombatOrderNavigation_Implementation()
+void Aue_gasPlayerController::OnPossess(APawn* InPawn)
 {
-	if (PathFollowingComponent && PathFollowingComponent->GetStatus() != EPathFollowingStatus::Idle)
+	if (HasAuthority())
 	{
-		PathFollowingComponent->AbortMove(
-			*this,
-			FPathFollowingResultFlags::ForcedScript,
-			FAIRequestID::AnyRequest,
-			EPathFollowingVelocityMode::Reset);
+		if (ACombatUnitCharacter* CombatUnit = Cast<ACombatUnitCharacter>(InPawn))
+		{
+			// 这是配置错误的兜底；生产 GameMode 不再把 Unit 作为待占有 Pawn 返回。
+			UE_LOG(LogCombat, Error,
+				TEXT("SAMDirectCombatUnitPossessRejected Controller=%s Unit=%s"),
+				*GetName(), *GetNameSafe(InPawn));
+			if (!CombatUnit->GetController())
+			{
+				CombatUnit->SpawnDefaultController();
+			}
+			return;
+		}
 	}
+	Super::OnPossess(InPawn);
+	RefreshCommandBinding();
+}
+
+void Aue_gasPlayerController::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	if (HasAuthority())
+	{
+		SetCommandedUnitAuthority(nullptr);
+	}
+	Super::EndPlay(EndPlayReason);
+}
+
+void Aue_gasPlayerController::OnRep_CommandedUnit()
+{
+	RefreshCommandBinding();
+}
+
+void Aue_gasPlayerController::OnRep_CommandBindingGeneration()
+{
+	RefreshCommandBinding();
+}
+
+void Aue_gasPlayerController::RefreshCommandBinding()
+{
+	if (Aue_gasCharacter* CommandPawn = Cast<Aue_gasCharacter>(GetPawn()))
+	{
+		// Unit Owner 可能比 CommandedUnit 晚到；相机可以先安全观察，输入仍由 GetReadyCommandedUnit 阻止。
+		CommandPawn->SetFollowTarget(CommandedUnit);
+	}
+}
+
+void Aue_gasPlayerController::AdvanceCommandBindingGeneration()
+{
+	CommandBindingGeneration = CommandBindingGeneration >= MAX_int32 ? 1 : CommandBindingGeneration + 1;
+	if (CommandBindingGeneration <= 0)
+	{
+		CommandBindingGeneration = 1;
+	}
+}
+
+ACombatUnitCharacter* Aue_gasPlayerController::GetReadyCommandedUnit() const
+{
+	return CommandedUnit && CommandedUnit->GetCommandingPlayerController() == this
+		? CommandedUnit.Get() : nullptr;
 }
 
 void Aue_gasPlayerController::SetupInputComponent()
 {
-	// set up gameplay key bindings
 	Super::SetupInputComponent();
-
-	// Only set up input on local player controllers
-	if (IsLocalPlayerController())
+	if (!IsLocalPlayerController())
 	{
-		// Add Input Mapping Context
-		if (UEnhancedInputLocalPlayerSubsystem* Subsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(GetLocalPlayer()))
-		{
-			Subsystem->AddMappingContext(DefaultMappingContext, 0);
-		}
-
-		// Set up action bindings
-		if (UEnhancedInputComponent* EnhancedInputComponent = Cast<UEnhancedInputComponent>(InputComponent))
-		{
-			// Setup mouse input events
-			EnhancedInputComponent->BindAction(SetDestinationClickAction, ETriggerEvent::Started, this, &Aue_gasPlayerController::OnInputStarted);
-			EnhancedInputComponent->BindAction(SetDestinationClickAction, ETriggerEvent::Triggered, this, &Aue_gasPlayerController::OnSetDestinationTriggered);
-			EnhancedInputComponent->BindAction(SetDestinationClickAction, ETriggerEvent::Completed, this, &Aue_gasPlayerController::OnSetDestinationReleased);
-			EnhancedInputComponent->BindAction(SetDestinationClickAction, ETriggerEvent::Canceled, this, &Aue_gasPlayerController::OnSetDestinationReleased);
-
-			// Setup touch input events
-			EnhancedInputComponent->BindAction(SetDestinationTouchAction, ETriggerEvent::Started, this, &Aue_gasPlayerController::OnTouchStarted);
-			EnhancedInputComponent->BindAction(SetDestinationTouchAction, ETriggerEvent::Triggered, this, &Aue_gasPlayerController::OnTouchTriggered);
-			EnhancedInputComponent->BindAction(SetDestinationTouchAction, ETriggerEvent::Completed, this, &Aue_gasPlayerController::OnTouchReleased);
-			EnhancedInputComponent->BindAction(SetDestinationTouchAction, ETriggerEvent::Canceled, this, &Aue_gasPlayerController::OnTouchReleased);
-
-			if (AbilitySlotQAction)
-			{
-				EnhancedInputComponent->BindAction(AbilitySlotQAction, ETriggerEvent::Started, this, &Aue_gasPlayerController::OnAbilitySlotQ);
-			}
-			if (AbilitySlotWAction)
-			{
-				EnhancedInputComponent->BindAction(AbilitySlotWAction, ETriggerEvent::Started, this, &Aue_gasPlayerController::OnAbilitySlotW);
-			}
-			if (AbilitySlotEAction)
-			{
-				EnhancedInputComponent->BindAction(AbilitySlotEAction, ETriggerEvent::Started, this, &Aue_gasPlayerController::OnAbilitySlotE);
-			}
-			if (AbilitySlotRAction)
-			{
-				EnhancedInputComponent->BindAction(AbilitySlotRAction, ETriggerEvent::Started, this, &Aue_gasPlayerController::OnAbilitySlotR);
-			}
-
-		}
-		else
-		{
-			UE_LOG(Logue_gas, Error, TEXT("'%s' Failed to find an Enhanced Input Component! This template is built to use the Enhanced Input system. If you intend to use the legacy system, then you will need to update this C++ file."), *GetNameSafe(this));
-		}
+		return;
 	}
+	if (UEnhancedInputLocalPlayerSubsystem* Subsystem =
+		ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(GetLocalPlayer()))
+	{
+		Subsystem->AddMappingContext(DefaultMappingContext, 0);
+	}
+
+	UEnhancedInputComponent* EnhancedInputComponent = Cast<UEnhancedInputComponent>(InputComponent);
+	if (!EnhancedInputComponent)
+	{
+		UE_LOG(Logue_gas, Error, TEXT("'%s' failed to find an Enhanced Input Component"), *GetNameSafe(this));
+		return;
+	}
+	EnhancedInputComponent->BindAction(SetDestinationClickAction, ETriggerEvent::Started, this, &Aue_gasPlayerController::OnInputStarted);
+	EnhancedInputComponent->BindAction(SetDestinationClickAction, ETriggerEvent::Triggered, this, &Aue_gasPlayerController::OnSetDestinationTriggered);
+	EnhancedInputComponent->BindAction(SetDestinationClickAction, ETriggerEvent::Completed, this, &Aue_gasPlayerController::OnSetDestinationReleased);
+	EnhancedInputComponent->BindAction(SetDestinationClickAction, ETriggerEvent::Canceled, this, &Aue_gasPlayerController::OnSetDestinationReleased);
+	EnhancedInputComponent->BindAction(SetDestinationTouchAction, ETriggerEvent::Started, this, &Aue_gasPlayerController::OnTouchStarted);
+	EnhancedInputComponent->BindAction(SetDestinationTouchAction, ETriggerEvent::Triggered, this, &Aue_gasPlayerController::OnTouchTriggered);
+	EnhancedInputComponent->BindAction(SetDestinationTouchAction, ETriggerEvent::Completed, this, &Aue_gasPlayerController::OnTouchReleased);
+	EnhancedInputComponent->BindAction(SetDestinationTouchAction, ETriggerEvent::Canceled, this, &Aue_gasPlayerController::OnTouchReleased);
+	if (AbilitySlotQAction) EnhancedInputComponent->BindAction(AbilitySlotQAction, ETriggerEvent::Started, this, &Aue_gasPlayerController::OnAbilitySlotQ);
+	if (AbilitySlotWAction) EnhancedInputComponent->BindAction(AbilitySlotWAction, ETriggerEvent::Started, this, &Aue_gasPlayerController::OnAbilitySlotW);
+	if (AbilitySlotEAction) EnhancedInputComponent->BindAction(AbilitySlotEAction, ETriggerEvent::Started, this, &Aue_gasPlayerController::OnAbilitySlotE);
+	if (AbilitySlotRAction) EnhancedInputComponent->BindAction(AbilitySlotRAction, ETriggerEvent::Started, this, &Aue_gasPlayerController::OnAbilitySlotR);
 }
 
 void Aue_gasPlayerController::OnInputStarted()
@@ -154,8 +237,6 @@ void Aue_gasPlayerController::OnSetDestinationTriggered()
 	{
 		bHasCachedDestination = true;
 	}
-
-	// 按住拖动只在固定节奏且目标明显变化时替换 Order，避免 Reliable RPC 按帧发送。
 	if (bHasCachedDestination
 		&& (!bHasIssuedMoveOrder
 			|| (MoveOrderRefreshElapsed >= MoveOrderRefreshInterval
@@ -168,7 +249,6 @@ void Aue_gasPlayerController::OnSetDestinationTriggered()
 
 void Aue_gasPlayerController::OnSetDestinationReleased()
 {
-	// 拖动结束时补交最后一个明显不同的目标，确保服务器收到最终落点。
 	if (bHasCachedDestination
 		&& (!bHasIssuedMoveOrder
 			|| FVector::DistSquared2D(CachedDestination, LastIssuedMoveDestination)
@@ -176,7 +256,7 @@ void Aue_gasPlayerController::OnSetDestinationReleased()
 	{
 		IssueCombatMoveOrder();
 	}
-	if (bHasCachedDestination)
+	if (bHasCachedDestination && FXCursor)
 	{
 		UNiagaraFunctionLibrary::SpawnSystemAtLocation(
 			this, FXCursor, CachedDestination, FRotator::ZeroRotator, FVector::OneVector,
@@ -205,33 +285,18 @@ void Aue_gasPlayerController::OnTouchReleased()
 	bIsTouch = false;
 }
 
-void Aue_gasPlayerController::OnAbilitySlotQ()
-{
-	ActivateCombatAbilitySlot(0);
-}
-
-void Aue_gasPlayerController::OnAbilitySlotW()
-{
-	ActivateCombatAbilitySlot(1);
-}
-
-void Aue_gasPlayerController::OnAbilitySlotE()
-{
-	ActivateCombatAbilitySlot(2);
-}
-
-void Aue_gasPlayerController::OnAbilitySlotR()
-{
-	ActivateCombatAbilitySlot(3);
-}
+void Aue_gasPlayerController::OnAbilitySlotQ() { ActivateCombatAbilitySlot(0); }
+void Aue_gasPlayerController::OnAbilitySlotW() { ActivateCombatAbilitySlot(1); }
+void Aue_gasPlayerController::OnAbilitySlotE() { ActivateCombatAbilitySlot(2); }
+void Aue_gasPlayerController::OnAbilitySlotR() { ActivateCombatAbilitySlot(3); }
 
 void Aue_gasPlayerController::ActivateCombatAbilitySlot(const int32 SlotIndex)
 {
-	ACombatUnitCharacter* Unit = Cast<ACombatUnitCharacter>(GetPawn());
+	ACombatUnitCharacter* Unit = GetReadyCommandedUnit();
 	UCombatAbilitySystemComponent* Asc = Unit ? Unit->GetCombatAbilitySystemComponent() : nullptr;
 	if (!Unit || !Asc)
 	{
-		UE_LOG(Logue_gas, Warning, TEXT("Combat ability slot %d ignored: controlled pawn has no Combat ASC"), SlotIndex + 1);
+		UE_LOG(Logue_gas, Warning, TEXT("Combat ability slot %d ignored: CommandedUnit is not ready"), SlotIndex + 1);
 		return;
 	}
 
@@ -246,7 +311,6 @@ void Aue_gasPlayerController::ActivateCombatAbilitySlot(const int32 SlotIndex)
 		}
 		SlottedAbilities.Add(&Spec);
 	}
-
 	if (!SlottedAbilities.IsValidIndex(SlotIndex))
 	{
 		UE_LOG(Logue_gas, Display, TEXT("Combat ability slot %d is empty"), SlotIndex + 1);
@@ -264,14 +328,12 @@ void Aue_gasPlayerController::ActivateCombatAbilitySlot(const int32 SlotIndex)
 	const bool bHasCursorHit = GetHitResultUnderCursor(ECC_Visibility, true, CursorHit);
 	FCombatOrderRequest Order;
 	Order.AbilitySpecHandle = Spec.Handle;
-
 	if (AbilityData->BehaviorTags.HasTagExact(CombatTags::Ability_Behavior_UnitTarget))
 	{
 		Order.Type = ECombatOrderType::CastTarget;
 		Order.TargetUnit = bHasCursorHit ? FindCombatUnitUnderCursor(CursorHit.Location) : nullptr;
 		if (!Order.TargetUnit)
 		{
-			UE_LOG(Logue_gas, Display, TEXT("Combat ability slot %d needs a unit under the mouse cursor"), SlotIndex + 1);
 			return;
 		}
 	}
@@ -279,7 +341,6 @@ void Aue_gasPlayerController::ActivateCombatAbilitySlot(const int32 SlotIndex)
 	{
 		if (!bHasCursorHit)
 		{
-			UE_LOG(Logue_gas, Display, TEXT("Combat ability slot %d needs a world position under the mouse cursor"), SlotIndex + 1);
 			return;
 		}
 		Order.Type = ECombatOrderType::CastPoint;
@@ -300,24 +361,21 @@ void Aue_gasPlayerController::ActivateCombatAbilitySlot(const int32 SlotIndex)
 
 bool Aue_gasPlayerController::IssueCombatMoveOrder()
 {
-	ACombatUnitCharacter* Unit = Cast<ACombatUnitCharacter>(GetPawn());
+	ACombatUnitCharacter* Unit = GetReadyCommandedUnit();
 	if (!Unit || !bHasCachedDestination || CachedDestination.ContainsNaN())
 	{
 		return false;
 	}
-
 	FCombatOrderRequest Order;
 	Order.Type = ECombatOrderType::MoveToPoint;
 	Order.TargetLocation = CachedDestination;
 	Order.bHasTargetLocation = true;
-
 	FCombatOrderBatchRequest Batch;
 	Batch.RequestId = NextCombatOrderRequestId;
 	Batch.bAppendToExistingQueue = false;
 	Batch.Orders.Add(Order);
 	NextCombatOrderRequestId = NextCombatOrderRequestId == MAX_int32 ? 1 : NextCombatOrderRequestId + 1;
 	Unit->ServerIssueOrderBatch(MoveTemp(Batch));
-
 	LastIssuedMoveDestination = CachedDestination;
 	MoveOrderRefreshElapsed = 0.0f;
 	bHasIssuedMoveOrder = true;
@@ -334,10 +392,7 @@ ACombatUnitCharacter* Aue_gasPlayerController::FindCombatUnitUnderCursor(const F
 			return DirectTarget;
 		}
 	}
-
-	// The demo dummy can have thin visible geometry. Accept a nearby unit around
-	// the cursor impact so the Q/W/E/R controls remain pleasant to use. If the
-	// cursor is not over a unit, fall back to the nearest unit in demo cast range.
+	const ACombatUnitCharacter* SourceUnit = CommandedUnit;
 	ACombatUnitCharacter* BestTarget = nullptr;
 	float BestDistanceSquared = FMath::Square(175.0f);
 	ACombatUnitCharacter* NearestTarget = nullptr;
@@ -345,7 +400,7 @@ ACombatUnitCharacter* Aue_gasPlayerController::FindCombatUnitUnderCursor(const F
 	for (TActorIterator<ACombatUnitCharacter> It(GetWorld()); It; ++It)
 	{
 		ACombatUnitCharacter* Candidate = *It;
-		if (!Candidate || Candidate == GetPawn())
+		if (!Candidate || Candidate == SourceUnit)
 		{
 			continue;
 		}
@@ -355,12 +410,14 @@ ACombatUnitCharacter* Aue_gasPlayerController::FindCombatUnitUnderCursor(const F
 			BestDistanceSquared = DistanceSquared;
 			BestTarget = Candidate;
 		}
-
-		const float DistanceFromPawnSquared = FVector::DistSquared2D(GetPawn()->GetActorLocation(), Candidate->GetActorLocation());
-		if (DistanceFromPawnSquared < NearestDistanceSquared)
+		if (SourceUnit)
 		{
-			NearestDistanceSquared = DistanceFromPawnSquared;
-			NearestTarget = Candidate;
+			const float SourceDistanceSquared = FVector::DistSquared2D(SourceUnit->GetActorLocation(), Candidate->GetActorLocation());
+			if (SourceDistanceSquared < NearestDistanceSquared)
+			{
+				NearestDistanceSquared = SourceDistanceSquared;
+				NearestTarget = Candidate;
+			}
 		}
 	}
 	return BestTarget ? BestTarget : NearestTarget;
@@ -369,16 +426,9 @@ ACombatUnitCharacter* Aue_gasPlayerController::FindCombatUnitUnderCursor(const F
 bool Aue_gasPlayerController::UpdateCachedDestination()
 {
 	FHitResult Hit;
-	bool bHitSuccessful = false;
-	if (bIsTouch)
-	{
-		bHitSuccessful = GetHitResultUnderFinger(ETouchIndex::Touch1, ECollisionChannel::ECC_Visibility, true, Hit);
-	}
-	else
-	{
-		bHitSuccessful = GetHitResultUnderCursor(ECollisionChannel::ECC_Visibility, true, Hit);
-	}
-
+	const bool bHitSuccessful = bIsTouch
+		? GetHitResultUnderFinger(ETouchIndex::Touch1, ECollisionChannel::ECC_Visibility, true, Hit)
+		: GetHitResultUnderCursor(ECollisionChannel::ECC_Visibility, true, Hit);
 	if (!bHitSuccessful || Hit.Location.ContainsNaN())
 	{
 		return false;

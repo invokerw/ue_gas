@@ -1,8 +1,9 @@
 # 00 开发进度台账
 
-> 最后更新：2026-09-01
-> 当前阶段：M8 已验收；`combat_v1_rc1` 核心契约保持冻结，进入 post-M8 Demo/UI 维护
-> 总进度：82/82 Task 完成，9/9 里程碑由用户验收
+> 最后更新：2026-09-02
+> 当前阶段：M8 已验收；`combat_v1_rc1` 核心契约保持冻结；SAM 验收反馈已修复并重新待验收
+> 历史 M0-M8：82/82 Task 完成，9/9 里程碑由用户验收
+> SAM 进度：10/10 Task 完成；修正 Gate 已通过，等待用户复验
 
 本文件是项目执行状态的唯一来源。[10 实施路线图](10-Implementation-Roadmap.md)定义任务内容和依赖，本文件记录实际状态、验证证据和用户验收结论。
 
@@ -43,6 +44,7 @@
 | M6 | 复杂技能集 | 6/6 | 通过 | 已验收 | 2026-08-26 / 2026-08-27 | Editor/Server/Client 构建、Automation 32/32、独立联机 M6 场景 smoke 通过；中文可见说明整改后用户验收通过；见 [26](26-M6-Acceptance.md) |
 | M7 | 联机、UI、工具和性能 | 9/9 | 通过 | 已验收 | 2026-08-27 / 2026-08-27 | Editor/Server/Client 构建、Automation 37/37、资产校验和 64 Unit/256 Modifier 双客户端 soak 通过；用户验收通过；见 [29](29-M7-Acceptance.md) |
 | M8 | 候选发布 | 5/5 | 通过 | 已验收 | 2026-08-27 / 2026-08-27 | Editor/Server/Client、最终修订 3×40 Automation、资产与 64/256 双客户端候选场景全绿；用户验收通过，见 [33](33-M8-Acceptance.md) |
+| SAM | 服务器权威单位移动改造 | 10/10 | 通过 | 待验收 | 2026-09-02 / — | 已修复默认 Pawn 生成顺序导致的重复/孤立 AIController；单/双玩家 PIE 真实位移、Dedicated 双客户端、三 Target、`Combat.*` 44/44 与资产 7/7 全绿；等待用户复验；见 [35](35-Server-Authoritative-Movement-Kickoff.md) |
 
 ## 3. M0：设计冻结
 
@@ -171,7 +173,24 @@
 | REL-004 | 网络预测评估 | 已完成 | ADR-041：v1 仅 Projectile 纯视觉 PredictionKey；完整 rollback/Cue reconcile 明确延期 post-v1，GAP-022 已版本化延期 |
 | REL-005 | 文档与样例冻结 | 已完成 | 发布契约、生命周期审计与[公共扩展/迁移指南](32-M8-Public-Extension-Guide.md)已落地；自动化保护 DataAsset/蓝图扩展面 |
 
-## 12. 用户验收记录
+## 12. Post-M8：服务器权威单位移动改造
+
+> 该工作不改写 M0-M8 历史验收。架构、迁移记录与完整 Gate 见 [35 服务器权威单位移动改造与验收](35-Server-Authoritative-Movement-Kickoff.md)。
+
+| Task | 需求名称 | 状态 | 完成证据/备注 |
+| --- | --- | --- | --- |
+| SAM-000 | 开工设计冻结 | 已完成 | ADR-043 与 [35](35-Server-Authoritative-Movement-Kickoff.md) 冻结拓扑、迁移、删除清单和 Gate |
+| SAM-001 | 拓扑不变量与诊断 | 已完成 | Unit dump/一次性日志覆盖 Controller、Owner、Role、BindingGeneration、PathFollowing、Crowd、Collision 与 LifeGeneration；非法拓扑拒绝普通移动 |
+| SAM-002 | 服务器 AI 导航器 | 已完成 | 新增 `ACombatUnitAIController` + `UCrowdFollowingComponent`；Order 只走服务器 `AAIController::MoveTo/StopMovement`，Move/Stop/追击回归全绿 |
+| SAM-003 | Command Pawn 与控制绑定 | 已完成 | `Aue_gasGameMode` 在默认出生时独立生成 Combat Unit 与 Command Pawn，先完成 AI Possess/Owner 绑定，再只把 Command Pawn 返回给 PlayerController；Demo GameMode 已改为继承原生 GameMode，单玩家 PIE 保持 2 Unit/2 AIController，玩家 Unit 右键移动约 420 cm |
+| SAM-004 | 输入与网络角色迁移 | 已完成 | 点击与 Q/W/E/R 全部改读 CommandedUnit；Dedicated 两端 RPC 成功，UnitLocalRole=1，Player Pawn 为 `ue_gasCharacter` |
+| SAM-005 | 删除客户端路径分支 | 已完成 | 已删除 PC PathFollowing、`ClientFollowCombatOrderPath`、`ClientStopCombatOrderNavigation`、非 AI Move 分支与 `SetAutonomousProxy`；生产代码无遗留引用 |
+| SAM-006 | 服务器碰撞与 Crowd | 已完成 | Capsule 硬阻挡、SimProxy `MaxDepenetrationWithPawnAsProxy=0`、CMC RVO 关闭、单一 Detour Crowd 及 NoCollision/Root/Motion/Dead/Respawn/UnPossess 状态测试通过 |
+| SAM-007 | Demo 资产迁移 | 已完成 | 默认地图/GameMode 与 Crowd 配置已更新；`BP_CombatDemoGameMode` 已通过 UE MCP 改为继承 `Aue_gasGameMode`、编译并保存；全项目 Blueprint 编译 0 Error/0 Warning，资产 7/7、0 Error/0 Warning，Dedicated 回读真实 Demo GameMode/PC/Pawn |
+| SAM-008 | Automation 与 Dedicated Gate | 已完成 | 默认出生链路新增 GameMode/蓝图父类、AIController 唯一性与孤立计数断言；Editor/Server/Client Target 构建通过，`Combat.*` 44/44、资产 7/7 通过；单/双玩家 PIE 真实位移通过，同版本 Dedicated 双客户端移动 324.508 cm、静止单位 0 cm |
+| SAM-009 | 当前行为文档切换 | 已完成 | 01/07/34 已切换到服务器 AIController + Command Pawn + SimulatedProxy 当前语义；31 生命周期与本文证据同步更新 |
+
+## 13. 用户验收记录
 
 | 里程碑 | 提交验收日期 | 用户结论 | 修正要求 | 最终验收日期 | 下一阶段授权 |
 | --- | --- | --- | --- | --- | --- |
@@ -184,8 +203,9 @@
 | M6 | 2026-08-26 | 已验收 | Native GameplayTag 中文说明与蓝图可见中文注释已补齐 | 2026-08-27 | 已授权 M7（2026-08-27） |
 | M7 | 2026-08-27 | 已验收 | 无 | 2026-08-27 | 已授权 M8（2026-08-27） |
 | M8 | 2026-08-27 | 已验收 | 无 | 2026-08-27 | 不适用（最终里程碑） |
+| SAM | 2026-09-02 | 待验收 | 用户反馈“启动 PIE，点击右键并不能移动”；默认出生拓扑已修复，并已补 AIController 唯一性与真实位移验证 | — | 已重新提交验收，等待用户复验 |
 
-## 13. 更新日志
+## 14. 更新日志
 
 | 日期 | 更新内容 | 关联 Task/里程碑 |
 | --- | --- | --- |
@@ -227,8 +247,13 @@
 | 2026-09-01 | 增加纯 C++ 头顶资源、控制状态、施法/引导进度与伤害治疗跳字表现；核心 gameplay 仍只读取权威 View/Result | post-M8 UI |
 | 2026-09-01 | 整理根 README、文档索引和当前工程基线；新增仓库级 Agent 开发规则，不改变 M0-M8 历史验收结论 | 文档维护 |
 | 2026-09-01 | 移除 `Variant_Strategy`、`Variant_TwinStick` 的源码、资产、关卡和外部 Actor/Object 数据；清理模块搜索路径与模板引用。Win64 Development Game Target 构建通过，`Combat.*` 41/41、6 个 Combat Demo 蓝图编译、资产校验 7/7（0 Error/0 Warning）通过；Editor Target 正式链接因运行中 Live Coding 锁未执行 | post-M8 模板清理 |
+| 2026-09-02 | 冻结服务器权威单位移动的 post-M8 开工设计：PlayerController 只指挥、AIController 在服务器 Possess/移动、所有客户端 Unit 为 SimulatedProxy；登记 ADR-043、GAP-026 和 SAM-000..009，生产实现保持未开始 | SAM-000 / ADR-043 / GAP-026 |
+| 2026-09-02 | 用户授权完成 SAM 服务器权威单位移动改造；SAM-001 进入实现，开始建立拓扑不变量、诊断与测试保护 | SAM / SAM-001 |
+| 2026-09-02 | 完成 SAM-001..009：服务器 Combat AIController/Detour Crowd、无碰撞 Command Pawn、owner-only 控制绑定与生命周期、输入/Order 收敛和客户端路径分支删除；三 Target、`Combat.*` 44/44、资产 7/7、蓝图 0 错误、三档 Dedicated 双客户端及 64/256 容量全绿；关闭 GAP-026，SAM 转为待用户验收 | SAM / SAM-001..009 / GAP-026 |
+| 2026-09-02 | 用户验收反馈 PIE 右键无法移动；运行时确认 RPC 与寻路已接受但速度/位移为零，同一玩家 Unit 出现重复 AIController，SAM-003 与 SAM-008 转为进行中并补默认出生链路回归 | SAM / SAM-003 / SAM-008 |
+| 2026-09-02 | 完成 PIE 右键不移动修正：GameMode 原子创建 Unit/Command Pawn 并建立 AI/Owner 绑定，Demo GameMode 改继承原生实现；单/双玩家 PIE、同版本 Dedicated 双客户端真实位移通过，三 Target、`Combat.*` 44/44、资产 7/7 全绿；SAM 重新转为待用户验收 | SAM / SAM-003 / SAM-007 / SAM-008 |
 
-## 14. 更新规则
+## 15. 更新规则
 
 - 开始任务时立即将其改为“进行中”，并更新“最后更新”和“当前里程碑”。
 - Task 满足路线图验收标准后改为“已完成”，在证据列记录代码/资产路径、测试命令与结果、UE MCP 回读信息。

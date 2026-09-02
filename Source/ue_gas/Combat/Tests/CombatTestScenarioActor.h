@@ -72,6 +72,12 @@ private:
 	void StartM7NetworkScenario();
 	/** 带 -CombatM7ClientSmoke 的客户端向自己拥有的单位提交一个安全 Order 批次。 */
 	void StartM7ClientRpcSmoke();
+	/** 带 -CombatSAMMovementSmoke 时在服务器让 A 撞向静止 B，并记录 B 的权威净位移。 */
+	void StartSamMovementConsistencyScenario();
+	/** SAM 对撞稳定窗口结束后输出服务器 A/B 位置与静止 B 净位移。 */
+	void FinishSamMovementConsistencyScenario();
+	/** owning client 输出 Command Pawn、SimulatedProxy 角色和当前可见 Unit 位置。 */
+	void LogSamClientPositions();
 	/** 每 30 秒输出 Dedicated 帧时、带宽、容量和统一预算结果。 */
 	void LogM7PerformanceSnapshot();
 	/** 输出 M8 冻结版本、服务器权威边界和显式延期能力。 */
@@ -90,6 +96,14 @@ private:
 	FTimerHandle M7ClientRpcTimer;
 	/** Dedicated soak 周期性能快照计时器。 */
 	FTimerHandle M7PerformanceTimer;
+	/** SAM 服务器对撞稳定窗口计时器。 */
+	FTimerHandle SamMovementTimer;
+	/** SAM 客户端等待复制收敛后的位置快照计时器。 */
+	FTimerHandle SamClientPositionTimer;
+	/** SAM 对撞开始时静止 B 的服务器权威位置。 */
+	FVector SamStationaryUnitStart = FVector::ZeroVector;
+	/** SAM 对撞开始时移动 A 的服务器权威位置，用于防止“只验证静止目标”的假阳性。 */
+	FVector SamMovingUnitStart = FVector::ZeroVector;
 	/** M5 场景使用的瞬态 Projectile 定义，保证弹体飞行期间不会被 GC。 */
 	UPROPERTY(Transient)
 	TObjectPtr<UCombatProjectileData> ScenarioProjectileData;

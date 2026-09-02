@@ -57,6 +57,7 @@ Combat 当前仍位于 `ue_gas` 单 Runtime Module 中，不是独立插件或�
 
 - 初次了解：本文 → [文档总索引](Doc/DotaLikeGASCombatSystemDesign.md) → [范围、架构与硬约束](Doc/CombatSystem/01-Scope-Architecture.md)。
 - 理解联机交互：[客户端与服务器交互流程](Doc/CombatSystem/34-Client-Server-Interaction.md) → [Order 与移动](Doc/CombatSystem/07-Order-Movement.md) → [Ability 与目标](Doc/CombatSystem/03-Ability-Targeting-Blueprint.md) → [网络与 UI](Doc/CombatSystem/08-Data-Network-Observability.md)。
+- 理解服务器权威单位移动：[服务器权威单位移动改造与验收](Doc/CombatSystem/35-Server-Authoritative-Movement-Kickoff.md)；当前端到端链路以 34 为准。
 - 开发技能：[Ability、目标与蓝图接口](Doc/CombatSystem/03-Ability-Targeting-Blueprint.md) → [Damage/Heal](Doc/CombatSystem/05-Damage-Heal.md) → [示例技能](Doc/CombatSystem/09-Example-Skills.md) → [技能模板检查表](Doc/CombatSystem/25-M6-Skill-Template-Checklist.md)。
 - 修改内核：先读对应 02-08 专题，再检查 [决策与缺口登记](Doc/CombatSystem/12-Decisions-Gaps.md) 和 [生命周期审计](Doc/CombatSystem/31-M8-Lifecycle-Audit.md)。
 - 验证发布边界：[候选发布决策](Doc/CombatSystem/30-M8-Release-Candidate-Decision.md) → [M8 验收记录](Doc/CombatSystem/33-M8-Acceptance.md)。

@@ -1,5 +1,7 @@
 # 31 M8 生命周期与所有权审计
 
+> 2026-09-02：补充 SAM 服务器权威移动的 CommandedUnit、AIController 与 Crowd 生命周期。
+
 ## 1. 审计规则
 
 每个异步或有状态对象必须回答五个问题：谁创建、谁持有、谁结束、如何拒绝旧回调、World/Actor teardown 如何清理。Handle 必须校验完整 `Id + Generation + LifeGeneration`（不适用生命代次的类型至少校验 `Id + Generation`）；结束广播只能发生一次。
@@ -8,7 +10,9 @@
 
 | 对象 | 创建者 / 运行时 owner | 活动引用或委托 | 正常退出 | 中断、死亡与 teardown | 旧回调防护 |
 | --- | --- | --- | --- | --- | --- |
-| Unit Actor | World / 测试场景或关卡 | World Actor registry | Destroy/关卡切换 | `ACombatUnitCharacter::EndPlay` 通知 Aura，清 ASC ActorInfo | LifeGeneration 隔离复活前记录 |
+| Unit Actor | World / 测试场景或关卡 | World Actor registry | Destroy/关卡切换 | `ACombatUnitCharacter::EndPlay` 通知指挥 Controller/Aura，清 owning 反向引用与 ASC ActorInfo | LifeGeneration 隔离复活前记录 |
+| Command Pawn / CommandedUnit 绑定 | GameMode 默认出生编排 + PlayerController 服务器绑定事务 | GameMode 独立生成 Unit/Command Pawn，PC 强引用 owner-only CommandedUnit；Unit 以服务器弱引用锚定指挥 PC | 幂等重绑、切换 Unit 或 Command Pawn 重生 | 出生任一步失败清理本次新建 Actor；PC EndPlay、Unit EndPlay、断线或控制转移先取消旧 Order、清 Owner，并提升 BindingGeneration | CommandBindingGeneration；输入还要复核 Unit Owner 已复制为本地 PC；禁止嵌套 `OnPossess` 迁移 Unit |
+| Combat AIController / Crowd agent | Unit `SpawnDefaultController` / 服务器 | AIController Possess Unit；CrowdFollowing 由 Controller 默认子对象持有 | Alive 普通移动为 Enabled | Root/Stun/Motion 为 ObstacleOnly；NoCollision/Dead/UnPossess 为 Disabled；Controller 变化时 Order delegate 重绑 | 普通 Move 只接受专用 AIController；OrderHandle + MoveRequestId + attempt generation 淘汰旧回调 |
 | ASC、Attribute、生命周期、恢复、Order、Attack、Modifier、Motion、View | Unit 构造的默认子对象 | Unit 强持有 | 随 Unit 结束 | 各组件 EndPlay 取消自身任务/委托；Unit 最后清 ActorInfo | 组件只接受当前 Unit/生命状态 |
 | GameplayAbility 实例 | GAS AbilitySpec | ASC/Spec 与 AbilityTask | `EndAbility` | 取消 Schedule、Task 和显式绑定的 Projectile/Thinker；停止表现 | ActivationId、SpecHandle、ActorInfo 复核 |
 | AbilityTask Interval/Projectile | Ability 实例 | AbilityTask + Scheduler/Projectile finish delegate | 完成后 `EndTask` | `OnDestroy` 取消 Schedule、解绑 delegate；可选取消来源弹体 | Schedule/Projectile Handle + ActivationId |
@@ -35,8 +39,11 @@
 - Finish/Remove/Cancel 都先从活动 registry 取走或验证完整句柄，再广播与销毁；重复使用旧句柄安全失败。
 - Unit Death/Respawn 的 LifeGeneration 会淘汰旧 Attack、Projectile、Order、Aura child 和异步回调。
 - View、Projectile 表现和调试缓冲只消费权威结果，不会反向修改 gameplay。
+- Command Pawn 不含 Combat 组件或 gameplay collision；其本地 Tick 只移动相机载体，不回写 Unit transform。
+- Unit 保存的服务器弱指挥引用只用于抵抗 Pawn 销毁/Controller 重建时 Owner 被引擎临时覆盖；网络 Owner 仍是 RPC 与 ASC owning connection 的唯一来源。
+- Demo GameMode 必须继承 `Aue_gasGameMode`，让默认出生直接返回 Command Pawn；Automation 同时校验该资产父类、唯一 Combat AIController 和零孤立 AIController，避免重现“Unit BeginPlay 生成 AI 后又被 PlayerController 迁移”的顺序缺陷。
 
-`Combat.Release.M8.LifecycleOwnershipAndTeardown` 在真实 Dedicated 测试 World 中同时建立 Schedule、Modifier Runtime、Thinker、Aura 和 Transaction slot，逐个退出后断言 registry 全部为 0、广播 exactly-once、旧句柄全部失败。前序 M2–M7 自动化继续覆盖 Death、Respawn、Order/EQS/Move、Attack、Projectile、Motion、Aura 与 64/256 容量 teardown。
+`Combat.Release.M8.LifecycleOwnershipAndTeardown` 在真实 Dedicated 测试 World 中同时建立 Schedule、Modifier Runtime、Thinker、Aura 和 Transaction slot，逐个退出后断言 registry 全部为 0、广播 exactly-once、旧句柄全部失败。`Combat.SAM.CommandBindingLifecycle` 与 `Combat.SAM.CrowdStateLifecycle` 继续覆盖控制转移、Unit EndPlay、死亡/复活、Motion 与 Controller teardown；前序 M2–M7 自动化保留 Order/EQS/Move、Attack、Projectile、Aura 与 64/256 容量 teardown。
 
 ## 4. 后续新增对象的检查表
 

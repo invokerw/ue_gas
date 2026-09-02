@@ -1,48 +1,33 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "ue_gasCharacter.h"
-#include "UObject/ConstructorHelpers.h"
+
 #include "Camera/CameraComponent.h"
-#include "Components/DecalComponent.h"
-#include "Components/CapsuleComponent.h"
-#include "GameFramework/CharacterMovementComponent.h"
+#include "Components/SceneComponent.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/SpringArmComponent.h"
-#include "Materials/Material.h"
-#include "Engine/World.h"
+
+#include "Combat/Unit/CombatUnitCharacter.h"
 
 Aue_gasCharacter::Aue_gasCharacter()
 {
-	// Set size for player capsule
-	GetCapsuleComponent()->InitCapsuleSize(42.f, 96.0f);
+	bReplicates = true;
+	SetReplicateMovement(false);
+	SetActorEnableCollision(false);
+	CommandRoot = CreateDefaultSubobject<USceneComponent>(TEXT("CommandRoot"));
+	SetRootComponent(CommandRoot);
 
-	// Don't rotate character to camera direction
-	bUseControllerRotationPitch = false;
-	bUseControllerRotationYaw = false;
-	bUseControllerRotationRoll = false;
-
-	// Configure character movement
-	GetCharacterMovement()->bOrientRotationToMovement = true;
-	GetCharacterMovement()->RotationRate = FRotator(0.f, 640.f, 0.f);
-	GetCharacterMovement()->bConstrainToPlane = true;
-	GetCharacterMovement()->bSnapToPlaneAtStart = true;
-
-	// Create the camera boom component
 	CameraBoom = CreateDefaultSubobject<USpringArmComponent>(TEXT("CameraBoom"));
-
-	CameraBoom->SetupAttachment(RootComponent);
+	CameraBoom->SetupAttachment(CommandRoot);
 	CameraBoom->SetUsingAbsoluteRotation(true);
 	CameraBoom->TargetArmLength = 800.f;
 	CameraBoom->SetRelativeRotation(FRotator(-60.f, 0.f, 0.f));
 	CameraBoom->bDoCollisionTest = false;
 
-	// Create the camera component
 	TopDownCameraComponent = CreateDefaultSubobject<UCameraComponent>(TEXT("TopDownCamera"));
-
 	TopDownCameraComponent->SetupAttachment(CameraBoom, USpringArmComponent::SocketName);
 	TopDownCameraComponent->bUsePawnControlRotation = false;
 
-	// Activate ticking in order to update the cursor every frame.
 	PrimaryActorTick.bCanEverTick = true;
 	PrimaryActorTick.bStartWithTickEnabled = true;
 }
@@ -50,13 +35,30 @@ Aue_gasCharacter::Aue_gasCharacter()
 void Aue_gasCharacter::BeginPlay()
 {
 	Super::BeginPlay();
-
-	// stub
+	SetActorEnableCollision(false);
 }
 
-void Aue_gasCharacter::Tick(float DeltaSeconds)
+void Aue_gasCharacter::Tick(const float DeltaSeconds)
 {
-    Super::Tick(DeltaSeconds);
+	Super::Tick(DeltaSeconds);
+	const APlayerController* PlayerController = Cast<APlayerController>(GetController());
+	ACombatUnitCharacter* Target = FollowTarget.Get();
+	if (!PlayerController || !PlayerController->IsLocalController() || !Target)
+	{
+		return;
+	}
+	const FVector TargetLocation = Target->GetActorLocation();
+	const FVector NewLocation = CameraFollowSpeed <= 0.0f
+		? TargetLocation
+		: FMath::VInterpTo(GetActorLocation(), TargetLocation, DeltaSeconds, CameraFollowSpeed);
+	SetActorLocation(NewLocation, false, nullptr, ETeleportType::None);
+}
 
-	// stub
+void Aue_gasCharacter::SetFollowTarget(ACombatUnitCharacter* NewTarget)
+{
+	FollowTarget = NewTarget;
+	if (NewTarget)
+	{
+		SetActorLocation(NewTarget->GetActorLocation(), false, nullptr, ETeleportType::TeleportPhysics);
+	}
 }

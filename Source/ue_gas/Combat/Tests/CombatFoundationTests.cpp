@@ -28,6 +28,8 @@
 #include "Combat/Targeting/CombatTeamSubsystem.h"
 #include "Combat/Tests/CombatAutomationWorldFixture.h"
 #include "Combat/Unit/CombatUnitCharacter.h"
+#include "ue_gasGameMode.h"
+#include "ue_gasPlayerController.h"
 
 namespace CombatFoundationTests
 {
@@ -308,6 +310,20 @@ bool FCombatContentDiscoveryTest::RunTest(const FString& Parameters)
 		TeamTwoData.PackageName, FName(TEXT("/Game/Combat/Definitions/Units/DA_CombatUnit_TeamTwo")));
 	TestTrue(TEXT("L_CombatTest package exists on disk"),
 		FPackageName::DoesPackageExist(TEXT("/Game/Combat/Tests/L_CombatTest")));
+	UClass* DemoGameModeClass = LoadClass<AGameModeBase>(
+		nullptr,
+		TEXT("/Game/Combat/Demo/Framework/BP_CombatDemoGameMode.BP_CombatDemoGameMode_C"));
+	TestNotNull(TEXT("Combat Demo GameMode class loads"), DemoGameModeClass);
+	TestTrue(TEXT("Combat Demo GameMode inherits the native authoritative spawn coordinator"),
+		DemoGameModeClass && DemoGameModeClass->IsChildOf(Aue_gasGameMode::StaticClass()));
+	const Aue_gasGameMode* DemoGameMode = DemoGameModeClass
+		? Cast<Aue_gasGameMode>(DemoGameModeClass->GetDefaultObject()) : nullptr;
+	TestTrue(TEXT("Combat Demo DefaultPawnClass remains a Combat Unit template"),
+		DemoGameMode && DemoGameMode->DefaultPawnClass
+		&& DemoGameMode->DefaultPawnClass->IsChildOf(ACombatUnitCharacter::StaticClass()));
+	TestTrue(TEXT("Combat Demo uses the command-only PlayerController"),
+		DemoGameMode && DemoGameMode->PlayerControllerClass
+		&& DemoGameMode->PlayerControllerClass->IsChildOf(Aue_gasPlayerController::StaticClass()));
 	return true;
 }
 

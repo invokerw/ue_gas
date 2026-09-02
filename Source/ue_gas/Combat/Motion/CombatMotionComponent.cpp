@@ -85,6 +85,8 @@ FCombatMotionResult UCombatMotionComponent::TryAcquireMotion(const FCombatMotion
 	{
 		Orders->HandleOwnerMotionStarted();
 	}
+	// Motion 抢占普通移动时立即暂停 Crowd steering，避免同帧继续施加旧 corridor 速度。
+	Unit->RefreshServerMovementState();
 	SetComponentTickEnabled(true);
 	EmitMotionLog(ActiveMotions.FindChecked(Handle.Key.Id), CombatTags::Event_Combat_MotionStarted,
 		ECombatMotionFinishReason::Completed, FGameplayTag());
@@ -212,6 +214,11 @@ bool UCombatMotionComponent::FinishMotion(
 	ActiveMotions.Remove(Handle.Key.Id);
 
 	ACombatUnitCharacter* Unit = GetOwnerUnit();
+	if (Unit)
+	{
+		// 最后一条 Motion 结束后恢复 Crowd；Order 恢复仍由 RestoreNavigationAndOrder 统一裁决。
+		Unit->RefreshServerMovementState();
+	}
 	LastMotionResult.bSuccess = true;
 	LastMotionResult.Handle = Handle;
 	LastMotionResult.FinishReason = Reason;

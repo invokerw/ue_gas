@@ -57,6 +57,7 @@
 | ADR-040 | 已定 | M7 容量基线为 30 Hz Dedicated：64 Unit、256 Modifier、128 Projectile、32 Thinker、16 Aura/256 child，Server frame p95 <= 33.34 ms、p99 <= 50 ms，单连接发送 <= 256 KiB/s | 关闭 GAP-018；正确性与性能 Gate 分离，只有 profiler 证据指向具体 owner 后才引入 pooling、relevancy 或紧凑序列化 |
 | ADR-041 | 已定 | `combat_v1_rc1` 使用机器可读发布契约冻结 Content/Formula/RNG/Event schema v1；gameplay 保持服务器权威，Projectile 只允许视觉预测；完整回滚、重放、召唤/幻象和物品经济明确延期到 post-v1 | 关闭 G8 的未知功能边界；契约漂移由 M8 Automation 和 Dedicated 日志阻止，完整边界见 [30](30-M8-Release-Candidate-Decision.md) |
 | ADR-042 | 已定 | M8 不做无 profiler owner 的推测性 pooling/relevancy/批处理优化 | M7 容量实测远低于预算；保留 Handle generation、稳定顺序和 exactly-once，未来超预算时按具体 owner 独立优化与回归 |
+| ADR-043 | 已定 | 可玩 Combat Unit 统一由服务器 `ACombatUnitAIController` Possess 和移动；`PlayerController` 只 Possess Command Pawn、通过 Unit Owner 建立指挥连接；Combat Unit 在所有客户端均为 SimulatedProxy | 消除 owning client PathFollowing 与本地 Pawn 解穿透造成的非权威位移；保留 Order RPC、ASC Mixed、服务器 Capsule 硬阻挡，并只使用一种服务器 Crowd 避让；实施与 Gate 见 [35](35-Server-Authoritative-Movement-Kickoff.md) |
 
 ## 3. 本轮查漏补缺摘要
 
@@ -118,6 +119,7 @@
 | GAP-021 | 已关闭（ADR-038） | RPC token bucket、批量命令上限和重复 request id 窗口 | ownership、20/s + 32 burst、8 Order/4096 bytes、128 RequestId 窗口及失败 Tag 见 [27 §3](27-M7-Network-Observability-Decision.md#3-order-rpc-安全基线关闭-gap-021-的目标值) | 2026-08-27 / NET-002 |
 | GAP-022 | 明确延期（ADR-041） | Ability/移动本地预测和回滚 | v1 只保留 Projectile 纯视觉 PredictionKey；完整 PredictionKey owner、rollback 与 Cue reconcile 需独立 ADR/schema/Gate，发布契约固定 `bGameplayRollback=false`；评估见 [30 §3](30-M8-Release-Candidate-Decision.md#3-rel-004-预测评估) | 2026-08-27 / post-v1 |
 | GAP-025 | 已关闭 | 暂停、global/custom time dilation 语义 | `UCombatSchedulerSubsystem` 使用 World game time；real-time UI 不进入 Scheduler；时序/catch-up/budget/teardown 自动化通过 | 2026-08-24 / FND-007 |
+| GAP-026 | 已关闭 | 直接 Possess Demo 允许 owning client 参与单位移动，客户端 Pawn 解穿透可产生服务器未认可的视觉位移 | ADR-043 已落地：服务器 Combat AIController + Command Pawn + 全客户端 SimulatedProxy + 单一 Detour Crowd；三档 Dedicated 双客户端对撞、RPC、64/256 容量和 teardown Gate 见 [35](35-Server-Authoritative-Movement-Kickoff.md) | 2026-09-02 / SAM-008 |
 
 ## 7. 模板适配风险
 

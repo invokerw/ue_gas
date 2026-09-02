@@ -14,10 +14,11 @@
 
 1. 阅读 `README.md`、进度台账、架构硬约束和与任务直接相关的专题文档。
 2. 修改技能或公开扩展面时，额外阅读 `32-M8-Public-Extension-Guide.md` 和 `25-M6-Skill-Template-Checklist.md`。
-3. 修改异步对象、Handle、Delegate 或 teardown 时，额外阅读 `31-M8-Lifecycle-Audit.md`。
-4. 检查工作区状态，保留用户已有修改；不覆盖、不格式化、不回退无关文件。
-5. 若仓库根目录存在 `.codegraph/`，理解或定位代码时先使用 CodeGraph；没有索引再使用 `rg` 和直接阅读源码。
-6. 涉及蓝图、DataAsset、关卡或 PIE 时，优先通过 UE MCP 读取真实 Editor 状态；修改后回读、编译蓝图、保存资产并执行相应验证。MCP 不可用时记录降级方式。
+3. 修改单位控制、普通移动、PathFollowing、单位碰撞或服务器避让时，额外阅读 `35-Server-Authoritative-Movement-Kickoff.md`，并以 `34-Client-Server-Interaction.md` 核对当前端到端行为。
+4. 修改异步对象、Handle、Delegate 或 teardown 时，额外阅读 `31-M8-Lifecycle-Audit.md`。
+5. 检查工作区状态，保留用户已有修改；不覆盖、不格式化、不回退无关文件。
+6. 若仓库根目录存在 `.codegraph/`，理解或定位代码时先使用 CodeGraph；没有索引再使用 `rg` 和直接阅读源码。
+7. 涉及蓝图、DataAsset、关卡或 PIE 时，优先通过 UE MCP 读取真实 Editor 状态；修改后回读、编译蓝图、保存资产并执行相应验证。MCP 不可用时记录降级方式。
 
 ## 3. 不可破坏的架构约束
 
@@ -97,6 +98,7 @@
 - `14`-`31`、`33`：冻结决策与验收证据；除纠正事实错误外不重写历史结论。
 - `32-M8-Public-Extension-Guide.md`：新技能和迁移的当前公开入口。
 - `34-Client-Server-Interaction.md`：客户端 Order、服务器移动/施法/结算和客户端复制回显的当前端到端说明。
+- `35-Server-Authoritative-Movement-Kickoff.md`：服务器权威单位移动的架构、迁移记录、生命周期与验收 Gate。
 
 ## 8. 完成与交付
 

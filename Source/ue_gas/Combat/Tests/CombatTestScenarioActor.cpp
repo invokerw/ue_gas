@@ -32,6 +32,8 @@
 #include "Misc/CommandLine.h"
 #include "Misc/Parse.h"
 #include "TimerManager.h"
+#include "ue_gasCharacter.h"
+#include "ue_gasPlayerController.h"
 
 ACombatTestScenarioActor::ACombatTestScenarioActor()
 {
@@ -49,10 +51,17 @@ void ACombatTestScenarioActor::BeginPlay()
 	{
 		SpawnScenario();
 	}
-	else if (!HasAuthority() && FParse::Param(FCommandLine::Get(), TEXT("CombatM7ClientSmoke")))
+	else if (!HasAuthority()
+		&& (FParse::Param(FCommandLine::Get(), TEXT("CombatM7ClientSmoke"))
+			|| FParse::Param(FCommandLine::Get(), TEXT("CombatSAMMovementSmoke"))))
 	{
 		GetWorldTimerManager().SetTimer(
 			M7ClientRpcTimer, this, &ACombatTestScenarioActor::StartM7ClientRpcSmoke, 5.0f, false);
+		if (FParse::Param(FCommandLine::Get(), TEXT("CombatSAMMovementSmoke")))
+		{
+			GetWorldTimerManager().SetTimer(
+				SamClientPositionTimer, this, &ACombatTestScenarioActor::LogSamClientPositions, 10.0f, false);
+		}
 	}
 }
 
@@ -64,6 +73,8 @@ void ACombatTestScenarioActor::EndPlay(const EEndPlayReason::Type EndPlayReason)
 		GetWorldTimerManager().ClearTimer(M7NetworkScenarioTimer);
 		GetWorldTimerManager().ClearTimer(M7ClientRpcTimer);
 		GetWorldTimerManager().ClearTimer(M7PerformanceTimer);
+		GetWorldTimerManager().ClearTimer(SamMovementTimer);
+		GetWorldTimerManager().ClearTimer(SamClientPositionTimer);
 	}
 	if (EndPlayReason == EEndPlayReason::Destroyed)
 	{
@@ -275,7 +286,21 @@ void ACombatTestScenarioActor::StartM7NetworkScenario()
 		{
 			SpawnedUnits[Index]->GetCombatLifecycleComponent()->RespawnAtLocation(SpawnedUnits[Index]->GetActorLocation());
 		}
-		SpawnedUnits[Index]->SetCommandingPlayerController(Players[Index]);
+		if (Aue_gasPlayerController* CombatPlayer = Cast<Aue_gasPlayerController>(Players[Index]))
+		{
+			ACombatUnitCharacter* InitialDemoUnit = CombatPlayer->GetCommandedUnit();
+			CombatPlayer->SetCommandedUnitAuthority(SpawnedUnits[Index]);
+			// Combat Demo GameMode 会先生成一个初始单位；测试接管场景单位后将其销毁，保持容量夹具精确为 64 Unit。
+			if (IsValid(InitialDemoUnit) && InitialDemoUnit != SpawnedUnits[Index]
+				&& !SpawnedUnits.Contains(InitialDemoUnit))
+			{
+				InitialDemoUnit->Destroy();
+			}
+		}
+		else
+		{
+			UE_LOG(LogCombat, Error, TEXT("SAMScenarioInvalidPlayerController Controller=%s"), *GetNameSafe(Players[Index]));
+		}
 	}
 	// 保留至少一个无 PlayerController Owner 的单位，验证纯 AI 走 Minimal。
 	if (SpawnedUnits.Num() == 2)
@@ -310,6 +335,10 @@ void ACombatTestScenarioActor::StartM7NetworkScenario()
 		BudgetResult.bPassed ? TEXT("Pass") : TEXT("Fail"), *Metrics.ToString());
 	LogM8ReleaseContract();
 	LogM7PerformanceSnapshot();
+	if (FParse::Param(FCommandLine::Get(), TEXT("CombatSAMMovementSmoke")))
+	{
+		StartSamMovementConsistencyScenario();
+	}
 	GetWorldTimerManager().SetTimer(
 		M7PerformanceTimer, this, &ACombatTestScenarioActor::LogM7PerformanceSnapshot, 30.0f, true);
 }
@@ -338,25 +367,103 @@ void ACombatTestScenarioActor::StartM7ClientRpcSmoke()
 	{
 		return;
 	}
-	APlayerController* LocalController = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr;
-	for (TActorIterator<ACombatUnitCharacter> It(GetWorld()); It; ++It)
+	Aue_gasPlayerController* LocalController = GetWorld()
+		? Cast<Aue_gasPlayerController>(GetWorld()->GetFirstPlayerController()) : nullptr;
+	ACombatUnitCharacter* CommandedUnit = LocalController ? LocalController->GetCommandedUnit() : nullptr;
+	if (LocalController && CommandedUnit && CommandedUnit->GetOwner() == LocalController)
 	{
-		if (It->GetOwner() != LocalController)
-		{
-			continue;
-		}
 		FCombatOrderBatchRequest Request;
-		Request.RequestId = 7001 + static_cast<int32>(LocalController ? LocalController->GetUniqueID() % 100000u : 0u);
+		Request.RequestId = 7001 + static_cast<int32>(LocalController->GetUniqueID() % 100000u);
 		FCombatOrderRequest& Order = Request.Orders.AddDefaulted_GetRef();
 		// Stop 不依赖 NavMesh、位置误差或既有命令状态，适合作为双客户端 RPC 冒烟的确定性业务载荷。
 		Order.Type = ECombatOrderType::Stop;
-		It->ServerIssueOrderBatch(Request);
-		UE_LOG(LogCombat, Display, TEXT("M7ClientRpcSmoke Submitted RequestId=%d Unit=%s"), Request.RequestId, *It->GetName());
+		CommandedUnit->ServerIssueOrderBatch(Request);
+		UE_LOG(LogCombat, Display,
+			TEXT("SAMClientRpcSmoke Submitted RequestId=%d Unit=%s UnitLocalRole=%d Pawn=%s BindingGeneration=%d"),
+			Request.RequestId, *CommandedUnit->GetName(), static_cast<int32>(CommandedUnit->GetLocalRole()),
+			*GetNameSafe(LocalController->GetPawn()), LocalController->GetCommandBindingGeneration());
 		return;
 	}
-	UE_LOG(LogCombat, Display, TEXT("M7ClientRpcSmoke WaitingForOwnedUnit"));
+	UE_LOG(LogCombat, Display, TEXT("SAMClientRpcSmoke WaitingForCommandedUnit"));
 	GetWorldTimerManager().SetTimer(
 		M7ClientRpcTimer, this, &ACombatTestScenarioActor::StartM7ClientRpcSmoke, 1.0f, false);
+}
+
+void ACombatTestScenarioActor::StartSamMovementConsistencyScenario()
+{
+	if (!HasAuthority() || SpawnedUnits.Num() < 2)
+	{
+		return;
+	}
+	ACombatUnitCharacter* MovingUnit = SpawnedUnits[0];
+	ACombatUnitCharacter* StationaryUnit = SpawnedUnits[1];
+	if (!MovingUnit || !StationaryUnit)
+	{
+		return;
+	}
+	MovingUnit->GetCombatOrderComponent()->StopAllOrders(CombatTags::Order_Failure_Cancelled);
+	StationaryUnit->GetCombatOrderComponent()->StopAllOrders(CombatTags::Order_Failure_Cancelled);
+	const FVector Origin = GetActorLocation() + FVector(0.0, 0.0, 288.0);
+	MovingUnit->SetActorLocation(Origin + FVector(-400.0, 0.0, 0.0), false, nullptr, ETeleportType::TeleportPhysics);
+	StationaryUnit->SetActorLocation(Origin, false, nullptr, ETeleportType::TeleportPhysics);
+	SamMovingUnitStart = MovingUnit->GetActorLocation();
+	SamStationaryUnitStart = StationaryUnit->GetActorLocation();
+
+	FCombatOrderRequest MoveOrder;
+	MoveOrder.Type = ECombatOrderType::MoveToPoint;
+	MoveOrder.TargetLocation = SamStationaryUnitStart;
+	MoveOrder.bHasTargetLocation = true;
+	const FCombatOrderResult Result = MovingUnit->GetCombatOrderComponent()->IssueOrder(MoveOrder, false);
+	MovingUnit->LogServerMovementTopology(TEXT("SAMCollisionStartMoving"));
+	StationaryUnit->LogServerMovementTopology(TEXT("SAMCollisionStartStationary"));
+	UE_LOG(LogCombat, Display,
+		TEXT("SAMCollisionStart Accepted=%s Moving=%s Start=%s Stationary=%s Start=%s"),
+		Result.bSuccess ? TEXT("Yes") : TEXT("No"), *MovingUnit->GetName(),
+		*MovingUnit->GetActorLocation().ToCompactString(), *StationaryUnit->GetName(),
+		*SamStationaryUnitStart.ToCompactString());
+	GetWorldTimerManager().SetTimer(
+		SamMovementTimer, this, &ACombatTestScenarioActor::FinishSamMovementConsistencyScenario, 5.0f, false);
+}
+
+void ACombatTestScenarioActor::FinishSamMovementConsistencyScenario()
+{
+	if (!HasAuthority() || SpawnedUnits.Num() < 2 || !SpawnedUnits[0] || !SpawnedUnits[1])
+	{
+		return;
+	}
+	const FVector StationaryEnd = SpawnedUnits[1]->GetActorLocation();
+	const FVector MovingEnd = SpawnedUnits[0]->GetActorLocation();
+	// 同时要求 A 真实推进，避免“双方都没动”误通过；落地时的 Z 校正属于 CharacterMovement 正常行为。
+	const float MovingNetDisplacement = FVector::Dist2D(MovingEnd, SamMovingUnitStart);
+	const float StationaryNetDisplacement = FVector::Dist2D(StationaryEnd, SamStationaryUnitStart);
+	const bool bPassed = MovingNetDisplacement >= 100.0f && StationaryNetDisplacement <= 1.0f;
+	UE_LOG(LogCombat, Display,
+		TEXT("SAMCollisionServerResult MovingStart=%s MovingEnd=%s MovingNetDisplacement2D=%.3f Minimum=100.000 StationaryStart=%s StationaryEnd=%s StationaryNetDisplacement2D=%.3f Tolerance=1.000 Result=%s"),
+		*SamMovingUnitStart.ToCompactString(), *MovingEnd.ToCompactString(), MovingNetDisplacement,
+		*SamStationaryUnitStart.ToCompactString(), *StationaryEnd.ToCompactString(), StationaryNetDisplacement,
+		bPassed ? TEXT("Pass") : TEXT("Fail"));
+}
+
+void ACombatTestScenarioActor::LogSamClientPositions()
+{
+	if (HasAuthority() || !GetWorld())
+	{
+		return;
+	}
+	const Aue_gasPlayerController* LocalController =
+		Cast<Aue_gasPlayerController>(GetWorld()->GetFirstPlayerController());
+	const ACombatUnitCharacter* LocalUnit = LocalController ? LocalController->GetCommandedUnit() : nullptr;
+	UE_LOG(LogCombat, Display,
+		TEXT("SAMCollisionClientTopology Controller=%s Pawn=%s CommandedUnit=%s BindingGeneration=%d UnitLocalRole=%d UnitLocation=%s"),
+		*GetNameSafe(LocalController), *GetNameSafe(LocalController ? LocalController->GetPawn() : nullptr),
+		*GetNameSafe(LocalUnit), LocalController ? LocalController->GetCommandBindingGeneration() : 0,
+		LocalUnit ? static_cast<int32>(LocalUnit->GetLocalRole()) : -1,
+		LocalUnit ? *LocalUnit->GetActorLocation().ToCompactString() : TEXT("None"));
+	for (TActorIterator<ACombatUnitCharacter> It(GetWorld()); It; ++It)
+	{
+		UE_LOG(LogCombat, Display, TEXT("SAMCollisionClientUnit Unit=%s Role=%d Location=%s"),
+			*It->GetName(), static_cast<int32>(It->GetLocalRole()), *It->GetActorLocation().ToCompactString());
+	}
 }
 
 void ACombatTestScenarioActor::LogM7PerformanceSnapshot()
@@ -441,6 +548,8 @@ void ACombatTestScenarioActor::DestroyScenario()
 	GetWorldTimerManager().ClearTimer(M7NetworkScenarioTimer);
 	GetWorldTimerManager().ClearTimer(M7ClientRpcTimer);
 	GetWorldTimerManager().ClearTimer(M7PerformanceTimer);
+	GetWorldTimerManager().ClearTimer(SamMovementTimer);
+	GetWorldTimerManager().ClearTimer(SamClientPositionTimer);
 	if (UCombatAuraSubsystem* Auras = GetWorld()
 		? GetWorld()->GetSubsystem<UCombatAuraSubsystem>() : nullptr)
 	{

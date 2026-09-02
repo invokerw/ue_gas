@@ -78,7 +78,7 @@ public:
 		bool bPartial = false);
 	/** 返回当前导航尝试代次，供 blocker/repath 自动化记录旧值。 */
 	uint32 GetNavigationAttemptGenerationForTesting() const { return NavigationAttemptGeneration; }
-	/** 返回当前是否已绑定 Controller 的 PathFollowing，供控制器适配回归测试使用。 */
+	/** 返回当前是否已绑定服务器 Combat AIController 的 PathFollowing，供控制器适配回归测试使用。 */
 	bool HasPathFollowingBindingForTesting() const { return BoundPathFollowing.IsValid(); }
 
 	/** 可选的目的点 EQS；为空时直接使用当前 Controller 的 PathFollowing。 */
@@ -106,7 +106,7 @@ protected:
 private:
 	/** 返回组件所属 Combat Unit。 */
 	ACombatUnitCharacter* GetOwnerUnit() const;
-	/** 解析 AIController 或直接占有单位的 PlayerController 上的 PathFollowing。 */
+	/** 只解析服务器 ACombatUnitAIController 上的 PathFollowing；其他 Controller 一律拒绝。 */
 	UPathFollowingComponent* ResolvePathFollowingComponent() const;
 	/** 幂等绑定 ASC/Attack 委托，避免动态 Spawn 时受组件 BeginPlay 顺序影响。 */
 	void EnsureRuntimeBindings();
@@ -132,7 +132,7 @@ private:
 	bool FaceCurrentTarget();
 	/** 开始直接或 EQS 解析后的服务器导航 Move。 */
 	bool BeginMovement(bool bChasing);
-	/** 使用当前 Controller 创建受 RequestId 与 OrderHandle 保护的导航 Move。 */
+	/** 使用服务器 ACombatUnitAIController 创建受 RequestId 与 OrderHandle 保护的导航 Move。 */
 	bool StartNavigationMove(bool bChasing);
 	/** 为动态目标建立唯一 Coalesce 追击检查。 */
 	void EnsureChaseSchedule();

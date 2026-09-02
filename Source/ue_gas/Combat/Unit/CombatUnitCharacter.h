@@ -20,6 +20,7 @@ class UCombatRegenerationComponent;
 class UCombatUnitData;
 class UCombatUnitLifecycleComponent;
 class UCombatUnitViewComponent;
+class ACombatUnitAIController;
 class APlayerController;
 class UNetConnection;
 class UPlayer;
@@ -85,9 +86,21 @@ public:
 	/** 返回服务器当前实际采用的 ASC 复制策略。 */
 	UFUNCTION(BlueprintPure, Category="Combat|Network", meta=(DisplayName="获取 ASC 复制策略", ToolTip="返回服务器根据配置与 owning connection 计算出的实际复制策略。"))
 	ECombatAscReplicationPolicy GetEffectiveAscReplicationPolicy() const { return EffectiveAscReplicationPolicy; }
-	/** 在服务器建立或清除 owning connection，并重新计算 ASC 复制模式。 */
+	/** 在服务器建立或清除 owning connection；该操作不会改变 AI Possession 或移动网络角色。 */
 	UFUNCTION(BlueprintCallable, Category="Combat|Network", meta=(DisplayName="设置指挥玩家", ToolTip="仅在服务器设置拥有该战斗单位的 PlayerController；为空时恢复纯 AI 所有权。"))
 	bool SetCommandingPlayerController(UPARAM(DisplayName="玩家控制器") APlayerController* NewController);
+	/** 返回显式网络 Owner 对应的指挥玩家；AIController 从不被视为指挥玩家。 */
+	UFUNCTION(BlueprintPure, Category="Combat|Network", meta=(DisplayName="获取指挥玩家", ToolTip="返回通过 Unit Owner 建立 owning connection 的 PlayerController。"))
+	APlayerController* GetCommandingPlayerController() const;
+	/**
+	 * 验证服务器 AIController、PathFollowing、SimulatedProxy 与单一 Crowd/RVO 不变量。
+	 * @param OutDiagnostic 始终返回包含 Controller/Owner/Role/Crowd/Collision/LifeGeneration 的诊断文本。
+	 */
+	bool ValidateServerMovementTopology(FString& OutDiagnostic) const;
+	/** 输出一次结构化移动拓扑日志；不在 Tick 中调用，避免位置类日志刷屏。 */
+	void LogServerMovementTopology(const TCHAR* Context) const;
+	/** 状态、Motion 或 Controller 改变后刷新服务器 Crowd participation。 */
+	void RefreshServerMovementState();
 	/** 单位保留 AIController 导航时，优先把显式 PlayerController Owner 作为网络所有者。 */
 	virtual const AActor* GetNetOwner() const override;
 	/** 单位保留 AIController 导航时，优先返回指挥玩家的 owning connection。 */
@@ -226,6 +239,9 @@ protected:
 private:
 	/** 服务器实际应用到 ASC 的复制策略。 */
 	ECombatAscReplicationPolicy EffectiveAscReplicationPolicy = ECombatAscReplicationPolicy::Mixed;
+	/** 服务器生命周期锚点；Pawn 销毁或 Controller 重建时不依赖 Actor Owner 的引擎回调顺序。 */
+	UPROPERTY(Transient)
+	TWeakObjectPtr<APlayerController> CommandingPlayerController;
 	/** owning client 最近一次收到的安全层与逐项业务结果。 */
 	UPROPERTY(Transient)
 	FCombatOrderBatchResult LastOrderBatchResult;

@@ -15,6 +15,7 @@
 #include "Combat/Order/CombatOrderComponent.h"
 #include "Combat/UI/CombatOverheadWidgetComponent.h"
 #include "Combat/Unit/CombatRegenerationComponent.h"
+#include "Combat/Unit/CombatUnitAIController.h"
 #include "Combat/Unit/CombatUnitLifecycleComponent.h"
 #include "Combat/View/CombatUnitViewComponent.h"
 #include "Components/CapsuleComponent.h"
@@ -22,6 +23,8 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameplayEffectTypes.h"
 #include "Net/UnrealNetwork.h"
+#include "Navigation/CrowdFollowingComponent.h"
+#include "ue_gasPlayerController.h"
 
 ACombatUnitCharacter::ACombatUnitCharacter()
 {
@@ -41,10 +44,15 @@ ACombatUnitCharacter::ACombatUnitCharacter()
 	CombatOverheadWidgetComponent = CreateDefaultSubobject<UCombatOverheadWidgetComponent>(TEXT("CombatOverheadUI"));
 	CombatOverheadWidgetComponent->SetupAttachment(GetRootComponent());
 	CombatOverheadWidgetComponent->SetRelativeLocation(FVector(0.0f, 0.0f, 145.0f));
+	AIControllerClass = ACombatUnitAIController::StaticClass();
 	AutoPossessAI = EAutoPossessAI::PlacedInWorldOrSpawned;
 	GetCapsuleComponent()->SetCollisionProfileName(TEXT("CombatUnit"));
 	// AI 路径使用输入加速度驱动，确保 PathFollowing 通过 PawnMovement 正式消费移动请求。
 	GetCharacterMovement()->GetNavMovementProperties()->bUseAccelerationForPaths = true;
+	// 所有客户端都只消费服务器移动；禁止 SimulatedProxy 因本地 Pawn 重叠改写其他 Unit 的表现位置。
+	GetCharacterMovement()->MaxDepenetrationWithPawnAsProxy = 0.0f;
+	// Detour Crowd 是普通移动唯一 steering，CMC RVO 必须关闭以避免双重避让。
+	GetCharacterMovement()->bUseRVOAvoidance = false;
 }
 
 bool ACombatUnitCharacter::SetCommandingPlayerController(APlayerController* NewController)
@@ -53,18 +61,105 @@ bool ACombatUnitCharacter::SetCommandingPlayerController(APlayerController* NewC
 	{
 		return false;
 	}
-	if (GetOwner() == NewController)
+	if (NewController && Cast<APlayerController>(GetController()))
 	{
-		SetAutonomousProxy(NewController != nullptr);
+		UE_LOG(LogCombat, Error,
+			TEXT("SAMTopologyRejected Unit=%s Reason=PlayerControllerDirectPossess Controller=%s"),
+			*GetName(), *GetNameSafe(GetController()));
+		return false;
+	}
+	if (NewController && !Cast<ACombatUnitAIController>(GetController()))
+	{
+		SpawnDefaultController();
+	}
+	if (NewController && !Cast<ACombatUnitAIController>(GetController()))
+	{
+		UE_LOG(LogCombat, Error,
+			TEXT("SAMTopologyRejected Unit=%s Reason=MissingCombatAIController Controller=%s"),
+			*GetName(), *GetNameSafe(GetController()));
+		return false;
+	}
+	if (GetOwner() == NewController && CommandingPlayerController.Get() == NewController)
+	{
 		RefreshCombatReplicationPolicy();
+		RefreshServerMovementState();
 		return true;
 	}
+	CommandingPlayerController = NewController;
 	SetOwner(NewController);
-	// 未被 PlayerController possess 的指令单位仍需向 owning connection 暴露 AutonomousProxy RPC 通道。
-	SetAutonomousProxy(NewController != nullptr);
+	// Owner 只建立 RPC/ASC owning connection；移动 RemoteRole 保持 SimulatedProxy。
 	RefreshCombatReplicationPolicy();
+	RefreshAbilityActorInfo();
+	RefreshServerMovementState();
 	ForceNetUpdate();
 	return true;
+}
+
+APlayerController* ACombatUnitCharacter::GetCommandingPlayerController() const
+{
+	if (HasAuthority() && CommandingPlayerController.IsValid())
+	{
+		return CommandingPlayerController.Get();
+	}
+	return Cast<APlayerController>(GetOwner());
+}
+
+bool ACombatUnitCharacter::ValidateServerMovementTopology(FString& OutDiagnostic) const
+{
+	const ACombatUnitAIController* CombatController = Cast<ACombatUnitAIController>(GetController());
+	const UCrowdFollowingComponent* Crowd = CombatController ? CombatController->GetCombatCrowdFollowing() : nullptr;
+	const UCharacterMovementComponent* Movement = GetCharacterMovement();
+	const APlayerController* CommandingController = GetCommandingPlayerController();
+	int32 BindingGeneration = 0;
+	if (const Aue_gasPlayerController* CombatPlayer = Cast<Aue_gasPlayerController>(CommandingController))
+	{
+		BindingGeneration = CombatPlayer->GetCommandBindingGeneration();
+	}
+	OutDiagnostic = FString::Printf(
+		TEXT("Unit=%s ControllerClass=%s CommandingPlayerController=%s CommandBindingGeneration=%d LocalRole=%d RemoteRole=%d PathFollowingClass=%s CrowdSimulationState=%d CrowdActive=%d CollisionProfile=%s LifeGeneration=%u"),
+		*GetName(), *GetNameSafe(GetController() ? GetController()->GetClass() : nullptr),
+		*GetNameSafe(CommandingController), BindingGeneration,
+		static_cast<int32>(GetLocalRole()), static_cast<int32>(GetRemoteRole()),
+		*GetNameSafe(CombatController && CombatController->GetPathFollowingComponent()
+			? CombatController->GetPathFollowingComponent()->GetClass() : nullptr),
+		Crowd ? static_cast<int32>(Crowd->GetCrowdSimulationState()) : -1,
+		Crowd && Crowd->IsCrowdSimulationActive() ? 1 : 0,
+		*GetCapsuleComponent()->GetCollisionProfileName().ToString(), LifeGeneration);
+
+	if (!HasAuthority())
+	{
+		return GetLocalRole() == ROLE_SimulatedProxy;
+	}
+	const bool bAliveTopologyValid = LifeState != ECombatLifeState::Alive
+		|| (CombatController && CombatController->GetPathFollowingComponent());
+	return bAliveTopologyValid
+		&& !Cast<APlayerController>(GetController())
+		&& GetRemoteRole() != ROLE_AutonomousProxy
+		&& (!Movement || !Movement->bUseRVOAvoidance);
+}
+
+void ACombatUnitCharacter::LogServerMovementTopology(const TCHAR* Context) const
+{
+	FString Diagnostic;
+	const bool bValid = ValidateServerMovementTopology(Diagnostic);
+	UE_LOG(LogCombat, Log, TEXT("SAMTopology Context=%s Valid=%s %s"),
+		Context ? Context : TEXT("Unknown"), bValid ? TEXT("Yes") : TEXT("No"), *Diagnostic);
+	if (HasAuthority() && !bValid)
+	{
+		UE_LOG(LogCombat, Error, TEXT("SAMTopologyInvariantFailed Context=%s %s"),
+			Context ? Context : TEXT("Unknown"), *Diagnostic);
+	}
+}
+
+void ACombatUnitCharacter::RefreshServerMovementState()
+{
+	if (HasAuthority())
+	{
+		if (ACombatUnitAIController* CombatController = Cast<ACombatUnitAIController>(GetController()))
+		{
+			CombatController->RefreshCrowdParticipation();
+		}
+	}
 }
 
 const AActor* ACombatUnitCharacter::GetNetOwner() const
@@ -336,13 +431,31 @@ void ACombatUnitCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>&
 
 void ACombatUnitCharacter::PossessedBy(AController* NewController)
 {
+	APlayerController* PreviousCommandingController = GetCommandingPlayerController();
 	Super::PossessedBy(NewController);
+	// AIController 重建会由 APawn 临时覆盖 Owner；显式恢复玩家 owning connection。
+	if (PreviousCommandingController && Cast<ACombatUnitAIController>(NewController))
+	{
+		SetOwner(PreviousCommandingController);
+	}
+	if (Cast<APlayerController>(NewController))
+	{
+		UE_LOG(LogCombat, Error,
+			TEXT("SAMTopologyInvariantFailed Context=DirectPossess Unit=%s Controller=%s"),
+			*GetName(), *GetNameSafe(NewController));
+	}
 	RefreshAbilityActorInfo();
+	RefreshServerMovementState();
 }
 
 void ACombatUnitCharacter::UnPossessed()
 {
+	APlayerController* PreviousCommandingController = GetCommandingPlayerController();
 	Super::UnPossessed();
+	if (PreviousCommandingController)
+	{
+		SetOwner(PreviousCommandingController);
+	}
 	RefreshAbilityActorInfo();
 }
 
@@ -353,6 +466,7 @@ void ACombatUnitCharacter::NotifyControllerChanged()
 	{
 		CombatOrderComponent->RefreshControllerBinding();
 	}
+	RefreshServerMovementState();
 }
 
 void ACombatUnitCharacter::BeginPlay()
@@ -370,13 +484,25 @@ void ACombatUnitCharacter::BeginPlay()
 	{
 		InitializeFromUnitData(UnitData);
 	}
+	if (HasAuthority() && !GetController())
+	{
+		SpawnDefaultController();
+	}
 	RefreshStatusResponse();
+	if (HasAuthority())
+	{
+		LogServerMovementTopology(TEXT("BeginPlay"));
+	}
 }
 
 void ACombatUnitCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
 	if (HasAuthority())
 	{
+		if (Aue_gasPlayerController* CommandingController = Cast<Aue_gasPlayerController>(GetCommandingPlayerController()))
+		{
+			CommandingController->HandleCommandedUnitEndPlay(this);
+		}
 		if (UCombatAuraSubsystem* Auras = GetWorld() ? GetWorld()->GetSubsystem<UCombatAuraSubsystem>() : nullptr)
 		{
 			Auras->NotifyUnitEndPlay(this);
@@ -548,6 +674,7 @@ void ACombatUnitCharacter::RefreshStatusResponse()
 	{
 		CombatOrderComponent->HandleOwnerStatusChanged();
 	}
+	RefreshServerMovementState();
 }
 
 void ACombatUnitCharacter::HandleMoveSpeedChanged(const FOnAttributeChangeData& ChangeData)
