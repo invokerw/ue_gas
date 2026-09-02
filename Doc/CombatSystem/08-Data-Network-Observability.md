@@ -46,13 +46,13 @@ M0 已冻结 C++ 直接引用的 v1 叶节点，包括四个生命状态、Abili
 
 ## 3. ASC 所有权和复制矩阵
 
-本项目由 PlayerController 间接控制多个 AI possessed Character。ASC 放在 Unit Character：
+项目同时支持两种拓扑：Strategy Unit 由 PlayerController 作为网络 Owner、AIController 负责 Possess/导航；当前 Combat Demo 则由 PlayerController 直接 Possess 单个 Unit。两者的 ASC 都放在 Unit Character：
 
 ```text
 OwnerActor = AvatarActor = Unit
 ```
 
-玩家拥有的 Unit 由服务器 `Unit->SetOwner(CommandingPlayerController)`，让 Mixed replication 找到 owning connection；AIController 只负责导航，不作为 ASC OwnerActor。
+Strategy Unit 由服务器 `Unit->SetOwner(CommandingPlayerController)`，让 Mixed replication 找到 owning connection；当前直接 Possess 的 Demo Unit 使用 Pawn/Controller 自带 owning connection。AIController 或 PlayerController 只承载导航与网络控制关系，都不替代 ASC 的 OwnerActor。
 
 | 单位类型 | ASC Mode | 完整 ActiveGE | UI 来源 |
 | --- | --- | --- | --- |
@@ -68,6 +68,7 @@ OwnerActor = AvatarActor = Unit
 
 - Attribute、必要 GE/Tag 由 ASC 复制。
 - Order 由 PlayerController RPC 到服务器执行。
+- 直接 Possess 的远端 Demo Pawn 只执行服务器下发的已批准路径点，并通过 UE CharacterMovement `ServerMove` 接受服务器校验；客户端不能提交路径或最终 Order 状态。
 - Damage、Heal、ApplyModifier、Attack Finalize、Projectile Hit 只在服务器。
 - 客户端不能提交 Amount、flags、ModifierData、资源结果、Attack/Projectile Finish。
 - 客户端 TargetData 只作请求，服务器重算队伍、状态、范围、LOS 和位置。
@@ -181,7 +182,7 @@ UE MCP 是上述调试信息进入 Unreal Editor/PIE 工作流的首选桥梁：
 第一阶段：
 
 - 指令、施法接受、Projectile 命中、Damage/Modifier 由服务器确认。
-- 客户端只预测点击反馈、施法指示器、选中和非命中特效。
+- 客户端只预测点击反馈、施法指示器、选中和非命中特效；远端 Demo Pawn 的本地 PathFollowing 是服务器批准路径的 CharacterMovement 网络执行，不是客户端自定目标或战斗结果预测。
 - UI 使用服务器时间显示 cast/channel/cooldown，允许平滑但不改变权威状态。
 
 Damage/Modifier/Projectile 全链路通过 Dedicated Server 测试后，再单独评估瞬发技能和普通移动预测。预测设计需要明确 PredictionKey、回滚对象和 Cue reconcile，不作为“打开 GAS 预测开关”处理。

@@ -10,7 +10,7 @@
 - Modifier：Buff/Debuff、属性聚合、状态、周期 Think、事件 Hook、叠层、驱散和 motion controller。
 - Projectile：直线、跟踪、普攻弹体、穿透/首个命中、命中回调和表现资源。
 - Combat Pipeline：技能、普攻、DOT、反伤、护盾、魔免、抗性、吸血和治疗使用统一事务。
-- Order/Movement：Move/Attack/Cast/Stop 队列，复用 UE NavMesh、AIController、EQS 和避让。
+- Order/Movement：Move/Attack/Cast/Stop 队列，复用 UE NavMesh、Controller PathFollowing、EQS 和避让；同时支持 AIController 导航与 Demo 的 PlayerController 直接占有模式。
 - 脚本层：用 Blueprintable C++ 基类和蓝图事件替代 Lua。
 - 网络：服务器权威，第一阶段可低预测，但从第一天保持可复制的数据边界。
 
@@ -57,7 +57,7 @@ UE MCP 是效率与准确性工具，不是新的权威数据源：
 | `modifier` | 属性、状态、事件 Hook、motion | ActiveGE + GameplayTag + Modifier Runtime |
 | `projectile` | 直线/跟踪弹体、命中/结束 | Projectile Actor/Subsystem、AbilityTask、GameplayCue |
 | `combat` | 伤害/治疗管线 | Combat Subsystem、Calculator、Instant GE、Result |
-| `pathfinding` | A*、ShapeCast、动态圆碰撞 | NavMesh、AI MoveTo、RVO/Detour、EQS |
+| `pathfinding` | A*、ShapeCast、动态圆碰撞 | NavMesh、Controller PathFollowing、RVO/Detour、EQS |
 | `script` | Lua 绑定 | BlueprintNativeEvent/BlueprintImplementableEvent |
 | `log/replay` | 事件记录与回放 | Combat Log、GameplayMessage、调试工具 |
 
@@ -177,7 +177,7 @@ M0 冻结的跨系统值域和默认值集中在 [14 M0 设计冻结](14-M0-Desi
 | Damage 载荷 | Final Amount 用 SetByCaller，类型/flags 用 DynamicAssetTags，身份链用自定义 EffectContext。 |
 | 事件结果 | Post Hook、吸血、反伤、日志和死亡只读取实际 Result，不从请求值反推。 |
 | Hook 顺序 | `Priority descending -> ApplySequence ascending`；结构修改延迟到当前阶段结束。 |
-| 异步身份 | Attack、Order、Projectile、Schedule、EQS、AI Move 使用带 generation/sequence 的稳定 Handle。 |
+| 异步身份 | Attack、Order、Projectile、Schedule、EQS、导航 Move 使用带 generation/sequence 的稳定 Handle。 |
 | 周期逻辑 | Channel、Modifier Think、DOT/HOT、attack-ready、追击和 thinker pulse 只走 Combat Scheduler。 |
 | 连续运动 | Projectile、CharacterMovement、RootMotionSource 可逐帧更新，但不得顺便结算周期 Damage/Heal。 |
 | Order 释放 | 只等待 `OrderReleased`、`AbilityChannelEnded` 或失败/中断，不等待 cooldown 或纯表现 backswing。 |

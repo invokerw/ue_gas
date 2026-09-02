@@ -5,7 +5,9 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "Engine/World.h"
+#include "GameFramework/PlayerController.h"
 #include "Misc/AutomationTest.h"
+#include "Navigation/PathFollowingComponent.h"
 
 #include "Combat/Ability/CombatAbilitySystemComponent.h"
 #include "Combat/Attack/CombatAttackComponent.h"
@@ -182,6 +184,39 @@ bool FCombatOrderQueueGenerationTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("Both FIFO results were broadcast in order"), Finished.Num() >= 2
 		&& Finished[Finished.Num() - 2].Handle == FifoA.Handle && Finished.Last().Handle == FifoB.Handle
 		&& Finished[Finished.Num() - 2].bSuccess && Finished.Last().bSuccess);
+	return true;
+}
+
+/** 验证直接占有 Combat Unit 的 PlayerController 也能向 Order 提供 PathFollowing。 */
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FCombatOrderPlayerControllerNavigationBindingTest,
+	"Combat.OrderAttack.Order.PlayerControllerPathFollowingBinding",
+	CombatOrderAttackTests::Flags)
+
+bool FCombatOrderPlayerControllerNavigationBindingTest::RunTest(const FString& Parameters)
+{
+	(void)Parameters;
+	FCombatAutomationWorldFixture Fixture;
+	if (!Fixture.IsValid()) { AddError(TEXT("Could not create controller binding world")); return false; }
+	UWorld& World = *Fixture.GetWorld();
+	FCombatUnitBaseStats Stats;
+	ACombatUnitCharacter* Unit = CombatOrderAttackTests::SpawnUnit(
+		World, TEXT("player_navigation_unit"), FVector::ZeroVector, 1, Stats);
+	APlayerController* Controller = World.SpawnActor<APlayerController>();
+	if (!Unit || !Controller) { AddError(TEXT("Could not spawn controller binding actors")); return false; }
+
+	UPathFollowingComponent* PathFollowing = NewObject<UPathFollowingComponent>(
+		Controller, TEXT("TestPathFollowingComponent"));
+	Controller->AddInstanceComponent(PathFollowing);
+	PathFollowing->RegisterComponent();
+	PathFollowing->Initialize();
+	Controller->Possess(Unit);
+	Unit->GetCombatOrderComponent()->RefreshControllerBinding();
+
+	TestTrue(TEXT("PlayerController path following component is registered"),
+		Controller->FindComponentByClass<UPathFollowingComponent>() == PathFollowing);
+	TestTrue(TEXT("Order binds PlayerController path following component"),
+		Unit->GetCombatOrderComponent()->HasPathFollowingBindingForTesting());
 	return true;
 }
 

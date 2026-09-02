@@ -40,7 +40,7 @@ enum class ECombatOrderState : uint8
 	Validating,
 	/** 等待 EQS 解析移动目的点。 */
 	Querying,
-	/** 等待 AI Move 完成。 */
+	/** 等待当前 Controller 的导航 Move 完成。 */
 	Moving,
 	/** 动态目标追击并定期复核。 */
 	Chasing,

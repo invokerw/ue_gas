@@ -11,6 +11,7 @@
 #include "CombatOrderComponent.generated.h"
 
 class AAIController;
+class AController;
 class ACombatUnitCharacter;
 class UEnvQuery;
 class UEnvQueryInstanceBlueprintWrapper;
@@ -44,7 +45,7 @@ public:
 	void HandleOwnerDeath();
 	/** Respawn 后保持空队列，允许新生命接受 Order。 */
 	void HandleOwnerRespawn();
-	/** 强制位移开始时取消旧 AI Move 并暂停当前有效队首。 */
+	/** 强制位移开始时取消旧导航 Move 并暂停当前有效队首。 */
 	void HandleOwnerMotionStarted();
 	/** 全部强制位移结束后只重新 Pump 当前 generation 的队首。 */
 	void HandleOwnerMotionFinished();
@@ -77,8 +78,10 @@ public:
 		bool bPartial = false);
 	/** 返回当前导航尝试代次，供 blocker/repath 自动化记录旧值。 */
 	uint32 GetNavigationAttemptGenerationForTesting() const { return NavigationAttemptGeneration; }
+	/** 返回当前是否已绑定 Controller 的 PathFollowing，供控制器适配回归测试使用。 */
+	bool HasPathFollowingBindingForTesting() const { return BoundPathFollowing.IsValid(); }
 
-	/** 可选的目的点 EQS；为空时直接使用 AI MoveTo。 */
+	/** 可选的目的点 EQS；为空时直接使用当前 Controller 的 PathFollowing。 */
 	UPROPERTY(EditAnywhere, Category="Combat|Order|Movement") TObjectPtr<UEnvQuery> MoveDestinationQuery;
 	/** 普通 MoveToPoint/MoveToUnit 的完成容差。 */
 	UPROPERTY(EditAnywhere, Category="Combat|Order|Movement", meta=(ClampMin="0", Units="cm")) float MovementAcceptanceRadius = 25.0f;
@@ -103,6 +106,8 @@ protected:
 private:
 	/** 返回组件所属 Combat Unit。 */
 	ACombatUnitCharacter* GetOwnerUnit() const;
+	/** 解析 AIController 或直接占有单位的 PlayerController 上的 PathFollowing。 */
+	UPathFollowingComponent* ResolvePathFollowingComponent() const;
 	/** 幂等绑定 ASC/Attack 委托，避免动态 Spawn 时受组件 BeginPlay 顺序影响。 */
 	void EnsureRuntimeBindings();
 	/** 校验 payload 字段组合、有限位置、AbilitySpec 与目标 Actor。 */
@@ -125,10 +130,10 @@ private:
 	float GetCurrentDesiredRange() const;
 	/** 朝当前 Actor/Point 目标设置服务器 XY 朝向。 */
 	bool FaceCurrentTarget();
-	/** 开始直接或 EQS 解析后的 AI Move。 */
+	/** 开始直接或 EQS 解析后的服务器导航 Move。 */
 	bool BeginMovement(bool bChasing);
-	/** 使用给定位置或动态 Actor 创建受 RequestId 保护的 AI Move。 */
-	bool StartAiMove(bool bChasing);
+	/** 使用当前 Controller 创建受 RequestId 与 OrderHandle 保护的导航 Move。 */
+	bool StartNavigationMove(bool bChasing);
 	/** 为动态目标建立唯一 Coalesce 追击检查。 */
 	void EnsureChaseSchedule();
 	/** 追击 Schedule 回调：范围复核、位移唤醒和 deadline。 */

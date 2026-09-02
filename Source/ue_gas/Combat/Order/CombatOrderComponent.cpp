@@ -5,8 +5,11 @@
 #include "EnvironmentQuery/EnvQueryInstanceBlueprintWrapper.h"
 #include "EnvironmentQuery/EnvQueryManager.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "GameFramework/Controller.h"
 #include "Navigation/PathFollowingComponent.h"
+#include "NavigationData.h"
 #include "NavigationPath.h"
+#include "NavigationSystem.h"
 
 #include "Combat/Ability/CombatAbilitySystemComponent.h"
 #include "Combat/Attack/CombatAttackComponent.h"
@@ -19,6 +22,7 @@
 #include "Combat/Scheduling/CombatSchedulerSubsystem.h"
 #include "Combat/Targeting/CombatTargetingSubsystem.h"
 #include "Combat/Unit/CombatUnitCharacter.h"
+#include "ue_gasPlayerController.h"
 
 UCombatOrderComponent::UCombatOrderComponent()
 {
@@ -148,7 +152,7 @@ void UCombatOrderComponent::PumpCurrentOrder()
 			}
 			if (!BeginMovement(Type == ECombatOrderType::MoveToUnit))
 			{
-				CompleteCurrentOrder(false, CombatTags::Order_Failure_PathFailed, TEXT("Could not start AI movement"));
+				CompleteCurrentOrder(false, CombatTags::Order_Failure_PathFailed, TEXT("Could not start navigation movement"));
 				continue;
 			}
 			return;
@@ -227,9 +231,7 @@ void UCombatOrderComponent::RefreshControllerBinding()
 		Previous->OnRequestFinished.RemoveAll(this);
 	}
 	BoundPathFollowing.Reset();
-	ACombatUnitCharacter* Unit = GetOwnerUnit();
-	AAIController* AiController = Unit ? Cast<AAIController>(Unit->GetController()) : nullptr;
-	if (UPathFollowingComponent* PathFollowing = AiController ? AiController->GetPathFollowingComponent() : nullptr)
+	if (UPathFollowingComponent* PathFollowing = ResolvePathFollowingComponent())
 	{
 		PathFollowing->OnRequestFinished.AddUObject(this, &UCombatOrderComponent::HandleMoveFinished);
 		BoundPathFollowing = PathFollowing;
@@ -385,6 +387,17 @@ void UCombatOrderComponent::BeginPlay()
 ACombatUnitCharacter* UCombatOrderComponent::GetOwnerUnit() const
 {
 	return Cast<ACombatUnitCharacter>(GetOwner());
+}
+
+UPathFollowingComponent* UCombatOrderComponent::ResolvePathFollowingComponent() const
+{
+	const ACombatUnitCharacter* Unit = GetOwnerUnit();
+	AController* Controller = Unit ? Unit->GetController() : nullptr;
+	if (AAIController* AiController = Cast<AAIController>(Controller))
+	{
+		return AiController->GetPathFollowingComponent();
+	}
+	return Controller ? Controller->FindComponentByClass<UPathFollowingComponent>() : nullptr;
 }
 
 void UCombatOrderComponent::EnsureRuntimeBindings()
@@ -570,9 +583,14 @@ void UCombatOrderComponent::CancelMovementAsync()
 	{
 		if (ACombatUnitCharacter* Unit = GetOwnerUnit())
 		{
-			if (AAIController* AiController = Cast<AAIController>(Unit->GetController()))
+			if (AController* Controller = Unit->GetController())
 			{
-				AiController->StopMovement();
+				Controller->StopMovement();
+				if (Aue_gasPlayerController* PlayerController = Cast<Aue_gasPlayerController>(Controller);
+					PlayerController && !PlayerController->IsLocalController())
+				{
+					PlayerController->ClientStopCombatOrderNavigation();
+				}
 			}
 		}
 	}
@@ -686,18 +704,24 @@ bool UCombatOrderComponent::BeginMovement(const bool bChasing)
 		TransitionTo(ECombatOrderState::Querying);
 		return true;
 	}
-	return StartAiMove(bChasing);
+	return StartNavigationMove(bChasing);
 }
 
-bool UCombatOrderComponent::StartAiMove(const bool bChasing)
+bool UCombatOrderComponent::StartNavigationMove(const bool bChasing)
 {
 	ACombatUnitCharacter* Unit = GetOwnerUnit();
-	AAIController* AiController = Unit ? Cast<AAIController>(Unit->GetController()) : nullptr;
-	if (!Unit || !AiController || !CurrentOrder.IsSet())
+	AController* Controller = Unit ? Unit->GetController() : nullptr;
+	if (!Unit || !Controller || !CurrentOrder.IsSet())
 	{
 		return false;
 	}
 	RefreshControllerBinding();
+	UPathFollowingComponent* PathFollowing = BoundPathFollowing.Get();
+	if (!PathFollowing || !PathFollowing->IsPathFollowingAllowed())
+	{
+		return false;
+	}
+
 	FAIMoveRequest MoveRequest;
 	// 动态 Actor 也使用位置快照；EnsureChaseSchedule 负责位移阈值唤醒，避免 GoalActor 自带的到达半径
 	// 与 CombatUnit 自定义碰撞响应重复计算并让 PathFollowing 停在无有效速度的状态。
@@ -709,23 +733,95 @@ bool UCombatOrderComponent::StartAiMove(const bool bChasing)
 	MoveRequest.SetUsePathfinding(true);
 	MoveRequest.SetProjectGoalLocation(true);
 	MoveRequest.SetRequireNavigableEndLocation(true);
-	MoveRequest.SetNavigationFilter(AiController->GetDefaultNavigationFilterClass());
 	MoveRequest.SetCanStrafe(false);
+
 	FNavPathSharedPtr FollowedPath;
-	const FPathFollowingRequestResult RequestResult = AiController->MoveTo(MoveRequest, &FollowedPath);
-	if (RequestResult.Code == EPathFollowingRequestResult::Failed)
+	FAIRequestID MoveRequestId = FAIRequestID::InvalidRequest;
+	if (AAIController* AiController = Cast<AAIController>(Controller))
+	{
+		MoveRequest.SetNavigationFilter(AiController->GetDefaultNavigationFilterClass());
+		const FPathFollowingRequestResult RequestResult = AiController->MoveTo(MoveRequest, &FollowedPath);
+		if (RequestResult.Code == EPathFollowingRequestResult::Failed)
+		{
+			return false;
+		}
+		if (RequestResult.Code == EPathFollowingRequestResult::AlreadyAtGoal)
+		{
+			TransitionTo(ECombatOrderState::Validating);
+			PumpCurrentOrder();
+			return true;
+		}
+		MoveRequestId = RequestResult.MoveId;
+	}
+	else
+	{
+		// PlayerController 没有 AAIController::MoveTo，因此复用同一 FAIMoveRequest 同步求路后交给其 PathFollowing。
+		UNavigationSystemV1* NavigationSystem = FNavigationSystem::GetCurrent<UNavigationSystemV1>(GetWorld());
+		if (!NavigationSystem)
+		{
+			return false;
+		}
+		FNavLocation ProjectedGoal;
+		if (MoveRequest.IsProjectingGoal()
+			&& !NavigationSystem->ProjectPointToNavigation(
+				MoveRequest.GetGoalLocation(), ProjectedGoal, INVALID_NAVEXTENT,
+				&Controller->GetNavAgentPropertiesRef()))
+		{
+			return false;
+		}
+		if (MoveRequest.IsProjectingGoal())
+		{
+			MoveRequest.UpdateGoalLocation(ProjectedGoal.Location);
+		}
+		if (PathFollowing->HasReached(MoveRequest))
+		{
+			TransitionTo(ECombatOrderState::Validating);
+			PumpCurrentOrder();
+			return true;
+		}
+
+		const FVector AgentLocation = Controller->GetNavAgentLocation();
+		const ANavigationData* NavigationData = NavigationSystem->GetNavDataForProps(
+			Controller->GetNavAgentPropertiesRef(), AgentLocation);
+		if (!NavigationData)
+		{
+			return false;
+		}
+		FPathFindingQuery Query(
+			Controller, *NavigationData, AgentLocation, MoveRequest.GetGoalLocation());
+		Query.SetAllowPartialPaths(MoveRequest.IsUsingPartialPaths());
+		Query.SetRequireNavigableEndLocation(MoveRequest.IsNavigableEndLocationRequired());
+		PathFollowing->OnPathfindingQuery(Query);
+		FPathFindingResult PathResult = NavigationSystem->FindPathSync(Query);
+		if (!PathResult.IsSuccessful() || !PathResult.Path.IsValid())
+		{
+			return false;
+		}
+		FollowedPath = PathResult.Path;
+		MoveRequestId = PathFollowing->RequestMove(MoveRequest, FollowedPath);
+	}
+	if (!MoveRequestId.IsValid())
 	{
 		return false;
 	}
-	if (RequestResult.Code == EPathFollowingRequestResult::AlreadyAtGoal)
-	{
-		TransitionTo(ECombatOrderState::Validating);
-		PumpCurrentOrder();
-		return true;
-	}
-	ActiveMoveRequestId = RequestResult.MoveId;
+
+	ActiveMoveRequestId = MoveRequestId;
 	ActiveMoveOrderHandle = CurrentOrder->Handle;
 	ActiveMovePath = FollowedPath;
+	if (Aue_gasPlayerController* PlayerController = Cast<Aue_gasPlayerController>(Controller);
+		PlayerController && !PlayerController->IsLocalController() && FollowedPath.IsValid())
+	{
+		TArray<FVector_NetQuantize10> ReplicatedPathPoints;
+		ReplicatedPathPoints.Reserve(FollowedPath->GetPathPoints().Num());
+		for (const FNavPathPoint& PathPoint : FollowedPath->GetPathPoints())
+		{
+			ReplicatedPathPoints.Emplace(PathPoint.Location);
+		}
+		PlayerController->ClientFollowCombatOrderPath(
+			ReplicatedPathPoints,
+			MoveRequest.GetGoalLocation(),
+			MoveRequest.GetAcceptanceRadius());
+	}
 	FString PathDiagnostic;
 	if (FollowedPath.IsValid())
 	{
@@ -794,12 +890,12 @@ void UCombatOrderComponent::HandleChaseCheck(
 		ActiveMovePath.Reset();
 		if (PreviousRequest.IsValid())
 		{
-			if (AAIController* AiController = Cast<AAIController>(GetOwnerUnit()->GetController()))
+			if (AController* Controller = GetOwnerUnit()->GetController())
 			{
-				AiController->StopMovement();
+				Controller->StopMovement();
 			}
 		}
-		StartAiMove(true);
+		StartNavigationMove(true);
 	}
 }
 
@@ -914,7 +1010,7 @@ void UCombatOrderComponent::StartCurrentAttack()
 		}
 		else
 		{
-			// AI Move 完成与 CharacterMovement 刹停可能相差一帧；有界延迟后重新验证距离、朝向和速度。
+			// 导航 Move 完成与 CharacterMovement 刹停可能相差一帧；有界延迟后重新验证距离、朝向和速度。
 			ScheduleMoveRetry(Result.FailureTag, TEXT("Waiting for movement to settle before attack start"));
 		}
 		return;
@@ -997,9 +1093,9 @@ void UCombatOrderComponent::HandleEqsFinished(
 		return;
 	}
 	CurrentMoveGoal = Locations[0];
-	if (!StartAiMove(false))
+	if (!StartNavigationMove(false))
 	{
-		ScheduleMoveRetry(CombatTags::Order_Failure_PathFailed, TEXT("AI Move rejected EQS location"));
+		ScheduleMoveRetry(CombatTags::Order_Failure_PathFailed, TEXT("Navigation Move rejected EQS location"));
 	}
 }
 

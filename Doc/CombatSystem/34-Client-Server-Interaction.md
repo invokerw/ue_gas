@@ -2,7 +2,7 @@
 
 ## 1. 定位与总览
 
-Combat 使用 RTS/MOBA 风格的服务器权威命令模型。客户端负责选择单位、点击目标、构造 Order 请求和播放可丢弃的输入反馈；服务器负责 Order 执行、寻路、目标复核、Ability 激活、Projectile 命中、Damage/Heal/Modifier、死亡和最终状态复制。
+Combat 使用 RTS/MOBA 风格的服务器权威命令模型。客户端负责选择单位、点击目标、构造 Order 请求和播放可丢弃的输入反馈；服务器负责 Order 执行、寻路、目标复核、Ability 激活、Projectile 命中、Damage/Heal/Modifier、死亡和最终状态复制。直接 Possess 的远端 Demo Pawn 会在服务器批准并下发路径后，以 UE AutonomousProxy 机制执行移动，但不能自定路径或裁决 Order 完成。
 
 它不是“客户端先执行完整移动或技能，服务器再确认”的高预测模型。当前公共链路为：
 
@@ -17,7 +17,7 @@ Combat 使用 RTS/MOBA 风格的服务器权威命令模型。客户端负责选
   -> Movement、ASC、UnitView、Projectile 和表现 RPC 复制到客户端
 ```
 
-玩家拥有的 Unit 仍由 `AIController` 负责服务器导航。服务器通过 `SetCommandingPlayerController` 把 `PlayerController` 设置为网络 Owner，并为未被玩家直接 Possess 的 Strategy Unit 建立 owning client RPC 通道；控制权、AI 导航权和战斗队伍是三个独立概念。
+服务器支持两种控制器拓扑。未被玩家直接 Possess 的 Strategy Unit 由 `AIController` 负责服务器导航，服务器通过 `SetCommandingPlayerController` 把 `PlayerController` 设置为网络 Owner；当前 Combat Demo 则由 `PlayerController` 直接 Possess Unit，并在控制器上提供 `PathFollowingComponent`。远端 Demo Pawn 的服务器端负责求路、Order 状态和完成裁决，owning client 只跟随服务器下发的路径点并走标准 CharacterMovement `ServerMove`。网络控制权、路径权威、移动网络执行和战斗队伍仍是独立概念。
 
 ## 2. 统一命令入口
 
@@ -56,6 +56,8 @@ owning client 调用 `ACombatUnitCharacter::ServerIssueOrderBatch`。服务器�
 
 这个回执只说明请求已被接收或拒绝，不承诺异步行为已经完成。移动到达、技能生效和弹体命中分别有自己的服务器生命周期。
 
+当前 Demo 的 `Aue_gasPlayerController` 在鼠标右键（`IMC_Default` 当前映射）/触摸按下命中地面时立即提交一个 `MoveToPoint` 批次，不再由输入代码调用客户端 `SimpleMoveToLocation` 或按帧 `AddMovementInput`。按住拖动会以 0.20 秒最短间隔、25 cm 目标变化阈值重发替换型移动 Order；松开时只在最终落点仍有明显变化时补发，因此不会用 Reliable RPC 按帧刷包。
+
 ## 3. 移动交互流程
 
 ```mermaid
@@ -65,9 +67,10 @@ sequenceDiagram
     participant U as CombatUnit（服务器）
     participant N as NetworkSecurity
     participant O as OrderComponent
-    participant AI as AIController / NavMesh
-    participant M as CharacterMovement
+    participant NAV as 服务器 PathFollowing / NavMesh
+    participant M as CharacterMovement 网络层
 
+    C->>C: 点击地面 / 拖动节流<br/>构造目标位置
     C->>U: ServerIssueOrderBatch<br/>MoveToPoint / MoveToUnit
     U->>N: 校验所有权、RequestId、载荷、限频、重放
 
@@ -76,15 +79,19 @@ sequenceDiagram
     else 安全校验通过
         U->>O: IssueOrder(Request, bQueue)
         O->>O: 业务校验<br/>分配 OrderHandle / Generation
-        O->>AI: MoveTo(目标位置、接受半径)
+        O->>NAV: MoveTo / RequestMove<br/>服务器求路、目标位置、接受半径
         U-->>C: 批次及逐项初始结果
 
-        loop 服务器移动期间
-            AI->>M: PathFollowing 驱动角色
-            M-->>C: Actor Movement 复制
+        alt AIController 或监听服务器本地 Pawn
+            NAV->>M: 服务器 PathFollowing 驱动角色
+        else 远端 PlayerController Pawn
+            NAV-->>C: ClientFollowCombatOrderPath<br/>已批准路径点
+            C->>M: 客户端 PathFollowing 驱动 AutonomousProxy
+            M-->>U: ServerMove / 服务器移动校验
         end
+        M-->>C: 位置校正 / Actor Movement 复制
 
-        AI-->>O: OnRequestFinished
+        NAV-->>O: OnRequestFinished<br/>服务器观察真实位置
         O->>O: 校验 MoveRequestId、OrderHandle<br/>Generation、LifeGeneration
 
         alt 到达目标或进入行为距离
@@ -100,15 +107,16 @@ sequenceDiagram
 1. `IssueOrder` 只允许服务器执行。`bQueue=false` 时先提升 Order generation、取消旧异步行为并替换队列；`bQueue=true` 时追加到 FIFO。
 2. 服务器创建 `FCombatQueuedOrder`，分配稳定 `OrderHandle`，并快照当前 Unit `LifeGeneration`。
 3. `PumpCurrentOrder` 复核 Unit 是否存活、generation 是否有效，以及 Root/Stun/Hex/Motion 等状态是否阻止移动。
-4. `BeginMovement` 使用点目标或动态目标的服务器位置快照。普通点移动可先运行 EQS；追击直接进入服务器 `AIController::MoveTo`。
-5. `FAIMoveRequest` 使用行为距离作为 AcceptanceRadius，允许 PartialPath，但最终必须用当前 gameplay 边缘距离再次裁决。
-6. 动态目标默认每 0.10 秒通过 Combat Scheduler 复核；目标位移达到 50 cm 时停止旧 Move 并重发。单次持续追击默认最多 10 秒。
-7. Move 完成回调必须同时匹配 `FAIRequestID`、OrderHandle generation 和 Unit LifeGeneration。旧请求、旧命令或旧生命回调直接失效。
-8. Blocked、Invalid 或未满足行为距离的 PartialPath 进入有界重试；当前默认最多重试 3 次，每次延迟 0.20 秒。
+4. `BeginMovement` 使用点目标或动态目标的服务器位置快照。普通点移动可先运行 EQS；随后 AIController 使用 `MoveTo`，直接占有 Demo Unit 的 PlayerController 则由服务器同步求路并调用自身 `PathFollowingComponent::RequestMove`。
+5. 对远端 PlayerController Pawn，服务器把该次求路得到的路径点可靠下发给 owning client。客户端 PathFollowing 只消费这条服务器路径，并由 AutonomousProxy CharacterMovement 产生标准 `ServerMove`；监听服务器本地 Pawn 不需要该分支。
+6. `FAIMoveRequest` 使用行为距离作为 AcceptanceRadius，允许 PartialPath，但最终必须用服务器当前 gameplay 边缘距离再次裁决。
+7. 动态目标默认每 0.10 秒通过 Combat Scheduler 复核；目标位移达到 50 cm 时停止旧 Move 并重发。单次持续追击默认最多 10 秒。
+8. Move 完成回调必须同时匹配 `FAIRequestID`、OrderHandle generation 和 Unit LifeGeneration。旧请求、旧命令或旧生命回调直接失效。
+9. Blocked、Invalid 或未满足行为距离的 PartialPath 进入有界重试；当前默认最多重试 3 次，每次延迟 0.20 秒。
 
 ### 3.2 客户端如何看到移动
 
-`ACombatUnitCharacter` 开启 `bReplicates` 和 `SetReplicateMovement(true)`。项目层没有在客户端先执行一份权威 AI Move；服务器 CharacterMovement 的位置、旋转和速度通过 UE Actor Movement Replication 投影给相关客户端。
+`ACombatUnitCharacter` 开启 `bReplicates` 和 `SetReplicateMovement(true)`。Strategy/AI Unit 由服务器 CharacterMovement 直接移动并复制。直接 Possess 的远端 Demo Pawn 则在服务器接受 Order 并求路后，通过 `ClientFollowCombatOrderPath` 消费服务器路径点；客户端 PathFollowing 驱动 AutonomousProxy，UE CharacterMovement 把移动发送给服务器校验并接收校正。输入代码不再调用 `SimpleMoveToLocation` 或按帧 `AddMovementInput`，客户端也不能提交路径或“已到达”结果。点击光标特效仍可本地即时播放，但不参与裁决。
 
 当前 `FOnCombatOrderFinished` 是 OrderComponent 的服务器原生委托，没有对应的最终完成 Client RPC。因此 UI 若只订阅 `OnOrderBatchResult`，只能显示“命令已接收/被拒绝”，不能把它显示成“已经到达”。如果产品需要可靠的最终订单状态，应新增明确、受限的状态投影，而不是复用初始 RPC 回执。
 
@@ -135,7 +143,7 @@ sequenceDiagram
 
     alt 目标合法但超出施法距离
         O->>O: 进入 Chasing 状态
-        O->>O: 复用服务器 AI Move
+        O->>O: 复用服务器导航 Move
         O->>T: 进入范围后再次校验
     end
 
@@ -236,7 +244,7 @@ Projectile 表现层允许客户端创建纯视觉预测对象，并通过 Predi
 
 ### 6.2 客户端看到角色移动，不代表客户端拥有移动权威
 
-客户端看到的是服务器 CharacterMovement 的复制结果。PlayerController Owner 用于拥有 RPC 通道和 ASC Mixed replication；实际 Strategy 导航仍由服务器 AIController 执行。
+Strategy Unit 的 PlayerController Owner 只用于 RPC 通道和 ASC Mixed replication，实际导航由服务器 AIController 执行。直接 Possess 的远端 Demo Unit 会在 owning client 上运行服务器路径对应的 AutonomousProxy 移动，但目标、路径、取消/替换和完成状态都来自服务器 Order；UE CharacterMovement 仍会把每次移动送往服务器验证和校正。因此“客户端参与网络移动执行”不等于客户端拥有 Order 或位置权威。
 
 ### 6.3 Cast Order 完成不等于技能所有效果完成
 
@@ -249,7 +257,8 @@ Order 只等到 `OrderReleased`。Cooldown、backswing、长期 Modifier、Think
 | [`CombatNetworkTypes.h`](../../Source/ue_gas/Combat/Network/CombatNetworkTypes.h) | Order 批次请求、回执和安全统计结构 |
 | [`CombatNetworkSecuritySubsystem.cpp`](../../Source/ue_gas/Combat/Network/CombatNetworkSecuritySubsystem.cpp) | 所有权、载荷、限频和重放防护 |
 | [`CombatUnitCharacter.cpp`](../../Source/ue_gas/Combat/Unit/CombatUnitCharacter.cpp) | owning RPC、客户端回执、Actor/ASC 复制策略 |
-| [`CombatOrderComponent.cpp`](../../Source/ue_gas/Combat/Order/CombatOrderComponent.cpp) | Order 状态机、AI Move、追击、Ability 派发和异步失效 |
+| [`CombatOrderComponent.cpp`](../../Source/ue_gas/Combat/Order/CombatOrderComponent.cpp) | Order 状态机、Controller PathFollowing、追击、Ability 派发和异步失效 |
+| [`ue_gasPlayerController.cpp`](../../Source/ue_gas/ue_gasPlayerController.cpp) | 点击/触摸目标采集、拖动节流、移动/技能 Order 提交，以及远端 Pawn 对服务器路径的 AutonomousProxy 执行 |
 | [`CombatAbilitySystemComponent.cpp`](../../Source/ue_gas/Combat/Ability/CombatAbilitySystemComponent.cpp) | Ability 服务器预检、TargetData 暂存和 GAS 激活 |
 | [`CombatGameplayAbility.cpp`](../../Source/ue_gas/Combat/Ability/CombatGameplayAbility.cpp) | 前摇、commit、Action、Channel、OrderReleased 和清理 |
 | [`CombatProjectileSubsystem.cpp`](../../Source/ue_gas/Combat/Projectile/CombatProjectileSubsystem.cpp) | 权威弹体推进、命中 Action 和 exactly-once Finish |

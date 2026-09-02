@@ -2,7 +2,7 @@
 
 ## 1. 范围
 
-Order 把玩家输入、AI 意图和战斗执行统一为服务器权威状态机。寻路复用 UE NavMesh、AIController、EQS 和 RVO/Detour，不重写参考项目的网格 A*。
+Order 把玩家输入、AI 意图和战斗执行统一为服务器权威状态机。寻路复用 UE NavMesh、Controller 上的 PathFollowing、EQS 和 RVO/Detour，不重写参考项目的网格 A*。Strategy Unit 可由 AIController 导航；当前 Demo 由 PlayerController 直接占有 Unit，但同样由服务器 Order 状态机校验请求、计算路径并裁决完成。
 
 ```cpp
 UENUM(BlueprintType)
@@ -83,7 +83,7 @@ Queued
 
 ## 4. 移动执行
 
-- Point：`AAIController::MoveTo` + `FAIMoveRequest`。
+- Point：统一构造 `FAIMoveRequest`。AIController 路径调用 `AAIController::MoveTo`；直接占有 Unit 的 PlayerController 路径在服务器同步求路，并把同一请求交给服务器 `UPathFollowingComponent::RequestMove`。如果是远端玩家，服务器还会把已批准的路径点下发给 owning client，由客户端 PathFollowing 驱动 AutonomousProxy 的 CharacterMovement；服务器通过标准 `ServerMove` 校验后观察真实位置并裁决 Order 完成。
 - 多单位目标分散：复用 EQS 选择候选位置。
 - Unit/Attack/Cast 追击：MoveTo 保存的服务器目标位置，Scheduler Coalesce 低频复查；目标位移超过阈值时重发请求。成功的 PartialPath 也必须用当前 gameplay 距离重验。
 - 有效距离统一考虑双方碰撞半径、AttackRange/CastRangeBonus、技能距离和容差。
@@ -105,14 +105,26 @@ Queued
 适配必须：
 
 - 保存当前 `UEnvQueryInstanceBlueprintWrapper`、`FAIRequestID` 和 OrderHandle。
-- 新 Order/Stop 时取消旧 EQS，调用 AIController StopMovement，并让旧请求进入可识别 Aborted 终态。
+- 新 Order/Stop 时取消旧 EQS，调用当前 Controller 的 `StopMovement`，并让旧请求进入可识别 Aborted 终态。
 - `OnEQSFinished` 比较 QueryInstance、QueryStatus、OrderHandle。
 - `OnRequestFinished` 同时比较 RequestId、OrderHandle 和 result code。
 - 分别处理 Success、AlreadyAtGoal、Blocked、Aborted、Invalid、PartialPath。
 - 只有匹配当前请求的成功结果能推进队列。
-- 在 NotifyControllerChanged/EndPlay 解绑旧 PathFollowing delegate，初始化必须幂等。
+- 在 NotifyControllerChanged/EndPlay 解绑旧 PathFollowing delegate；Controller 改变时重新解析 AIController 或 PlayerController 上的组件，初始化必须幂等。
 
-M4 已按上述约束实现 `UCombatOrderComponent`。CharacterMovement 使用 acceleration-driven PathFollowing 输入；Move 回调出现一帧残余速度时进入同一有界重试，避免把正常到达误判成永久移动阻止。实际监听服务器 NavMesh 追击、到达、转向和连续近战已通过 smoke。
+M4 已按上述约束实现 `UCombatOrderComponent`。CharacterMovement 使用 acceleration-driven PathFollowing 输入；Move 回调出现一帧残余速度时进入同一有界重试，避免把正常到达误判成永久移动阻止。AIController 与直接占有 Demo Unit 的 PlayerController 共用 RequestId、OrderHandle、Generation 和 LifeGeneration 防陈旧回调约束。
+
+UE 的远端 PlayerController Pawn 只在 owning client 上运行 AutonomousProxy 的受控移动。因此 Demo 的服务器 PlayerController PathFollowing 负责保存请求、监听服务器位置和最终裁决，同时用可靠 Client RPC 下发服务器已计算的路径点；客户端不能提交路径、不能声明到达，也不能绕过 Order 改变权威目标。Order 被取消或替换时，服务器同步停止两端 PathFollowing。
+
+### 5.1 当前 Demo 点击移动
+
+`Aue_gasPlayerController` 的输入处理不再直接调用 `AddMovementInput` 或 `SimpleMoveToLocation`：
+
+- 鼠标右键（当前 `IMC_Default` 映射）/触摸按下命中地面后，立即构造替换型 `MoveToPoint` 批次并调用 `ServerIssueOrderBatch`。
+- 按住拖动时，只在距离上一目标至少 25 cm 且距离上一请求至少 0.20 秒时重发，避免 Reliable RPC 按帧发送。
+- 松开时若最终落点明显变化，则补发一次最终目标；光标特效仍是客户端可丢弃反馈。
+- `bAppendToExistingQueue=false`，因此新的点击移动通过服务器 Order generation 取消并替换旧行为，不在客户端直接 `StopMovement`。
+- 远端玩家只有在服务器接受 Order、完成求路并下发路径点后，才启动本地 PathFollowing；该本地执行只负责 UE CharacterMovement 预测与 `ServerMove`，服务器仍以真实位置和当前 OrderHandle 决定成功、重试或取消。
 
 ## 6. 碰撞、避让和临时阻挡
 
@@ -133,7 +145,7 @@ Fissure 等临时阻挡分三阶段：
 
 ## 7. 队伍控制和 RPC
 
-从 owning client 提交 Order、服务器执行移动/追击、再由 CharacterMovement 复制回客户端的完整时序见 [34 客户端与服务器交互流程](34-Client-Server-Interaction.md)。
+从 owning client 提交 Order、服务器求路、远端 AutonomousProxy 执行服务器路径、再由服务器裁决状态的完整时序见 [34 客户端与服务器交互流程](34-Client-Server-Interaction.md)。
 
 M0 固定 TeamId、关系和控制权是三种不同概念：`FCombatTeamId` 决定 Friendly/Hostile/Neutral，`UCombatTeamSubsystem` 是唯一关系入口，CommandingPlayerController 只决定谁能发 RPC。召唤物默认快照 spawn 时的队伍，召唤者之后换队不自动传播；细则见 [14 M0 设计冻结](14-M0-Design-Freeze.md#2-dec-001队伍与目标关系)。Order 不得因为 Controller 相同就推断 Friendly，也不得因为 Friendly 就授予控制权。
 
