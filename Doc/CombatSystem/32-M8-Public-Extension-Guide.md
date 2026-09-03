@@ -23,6 +23,13 @@
 5. 使用 `25-M6-Skill-Template-Checklist.md` 检查旁路、身份、时序、清理、中文说明和自动化。
 6. 为技能添加至少一条成功事件序列和一条中断/失败序列；涉及异步对象时增加旧句柄与 teardown 用例。
 
+### 2.1 Details 面板配置提示
+
+- C++ 注释用于维护源码，不等同于 DataAsset 配置界面的说明。所有可编辑或只读展示的 Combat DataAsset 字段，以及展开后由项目定义的 `USTRUCT` 字段，都应显式提供中文 `DisplayName` 与 `ToolTip`。
+- `ToolTip` 至少说明字段的业务用途；数值来源、单位、有效范围、空引用、`None`、`0`、负数和保留值有特殊行为时必须写明，避免配置者依赖源码或实现猜测。
+- 可由反射表达的约束同时写入元数据：数值使用 `Units`、`ClampMin/ClampMax`，条件字段使用 `EditCondition`，结构数组使用 `TitleProperty`。元数据只改善编辑体验，运行时与 `IsDataValid`/`ValidateRuntime` 校验仍是最终边界。
+- 枚举选项应提供中文 `UMETA(DisplayName=...)`，并用紧邻选项的中文文档注释生成反射 `ToolTip`，使下拉列表能够直接表达选择后果；不要重复声明两份不同的 `ToolTip`。
+
 ## 3. 禁止旁路
 
 - 蓝图或技能代码不能直接修改 Health，必须调用 Damage/Heal 公共入口。

@@ -19,9 +19,9 @@ UENUM(BlueprintType)
 enum class ECombatProjectileMovementType : uint8
 {
 	/** 沿 Spawn 时快照方向匀速运动。 */
-	Linear,
+	Linear UMETA(DisplayName="直线运动"),
 	/** 每帧朝仍合法的目标当前位置转向。 */
-	Tracking
+	Tracking UMETA(DisplayName="追踪目标")
 };
 
 /** Tracking 目标失效后采用的冻结策略。 */
@@ -29,9 +29,9 @@ UENUM(BlueprintType)
 enum class ECombatProjectileTargetLostPolicy : uint8
 {
 	/** 立即 fizzle，不执行 Impact Action。 */
-	Fizzle,
+	Fizzle UMETA(DisplayName="立即消散"),
 	/** 沿最后合法位置继续，到达后 fizzle。 */
-	UseLastKnownPoint
+	UseLastKnownPoint UMETA(DisplayName="飞向最后已知位置")
 };
 
 /** Projectile exactly-once 结束的稳定分类。 */
@@ -59,9 +59,9 @@ UENUM(BlueprintType)
 enum class ECombatProjectileImpactActionType : uint8
 {
 	/** 通过 DamageSubsystem 造成伤害。 */
-	Damage,
+	Damage UMETA(DisplayName="造成伤害"),
 	/** 通过 ModifierComponent 施加 Modifier。 */
-	ApplyModifier
+	ApplyModifier UMETA(DisplayName="施加 Modifier")
 };
 
 /** 冻结阵营、穿透与 World block 行为的命中策略。 */
@@ -71,15 +71,15 @@ struct UE_GAS_API FCombatProjectileHitPolicy
 	GENERATED_BODY()
 
 	/** 是否允许命中敌对单位。 */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Combat|Projectile|Hit") bool bHitHostile = true;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Combat|Projectile|Hit", meta=(DisplayName="可命中敌方", ToolTip="启用后，弹体 sweep 可以把与来源队伍关系为 Hostile 的单位判定为合法命中。")) bool bHitHostile = true;
 	/** 是否允许命中友方单位。 */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Combat|Projectile|Hit") bool bHitFriendly = false;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Combat|Projectile|Hit", meta=(DisplayName="可命中友方", ToolTip="启用后，弹体 sweep 可以把与来源队伍关系为 Friendly 的单位判定为合法命中。")) bool bHitFriendly = false;
 	/** 是否允许命中 Source 自身；默认始终忽略。 */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Combat|Projectile|Hit") bool bHitSelf = false;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Combat|Projectile|Hit", meta=(DisplayName="可命中来源自身", ToolTip="启用后允许弹体命中发射它的来源单位；关闭时始终忽略来源自身。")) bool bHitSelf = false;
 	/** 第一个合法 Unit 命中后是否结束 Projectile。 */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Combat|Projectile|Hit") bool bDestroyOnFirstUnitHit = true;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Combat|Projectile|Hit", meta=(DisplayName="首个单位命中后结束", ToolTip="启用后，命中第一个合法单位并执行动作后结束弹体；关闭时允许继续穿透并命中其他单位。")) bool bDestroyOnFirstUnitHit = true;
 	/** WorldStatic、WorldDynamic 或 CombatBlocker 是否结束 Projectile。 */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Combat|Projectile|Hit") bool bStopOnWorld = true;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Combat|Projectile|Hit", meta=(DisplayName="世界阻挡时结束", ToolTip="启用后，命中 WorldStatic、WorldDynamic 或 CombatBlocker 时结束弹体。")) bool bStopOnWorld = true;
 };
 
 /** 单个 Impact Action 的伤害、Modifier 与可选 Hook Motion 快照。 */
@@ -89,21 +89,21 @@ struct UE_GAS_API FCombatProjectileImpactAction
 	GENERATED_BODY()
 
 	/** 选择 Damage 或 ApplyModifier 公共入口。 */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Combat|Projectile|Impact") ECombatProjectileImpactActionType Type = ECombatProjectileImpactActionType::Damage;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Combat|Projectile|Impact", meta=(DisplayName="命中动作类型", ToolTip="选择命中后通过公共伤害入口造成伤害，或通过 ModifierComponent 施加 Modifier。")) ECombatProjectileImpactActionType Type = ECombatProjectileImpactActionType::Damage;
 	/** Damage 动作使用的非负值。 */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Combat|Projectile|Impact") float Magnitude = 0.0f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Combat|Projectile|Impact", meta=(ClampMin="0", DisplayName="伤害数值", ToolTip="Damage 命中动作提交给 DamageSubsystem 的非负伤害值；ApplyModifier 动作会忽略此字段。")) float Magnitude = 0.0f;
 	/** Damage 动作使用的类型。 */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Combat|Projectile|Impact") ECombatDamageType DamageType = ECombatDamageType::Magical;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Combat|Projectile|Impact", meta=(DisplayName="伤害类型", ToolTip="Damage 命中动作使用的物理、魔法或纯粹结算分支。")) ECombatDamageType DamageType = ECombatDamageType::Magical;
 	/** ApplyModifier 动作使用的稳定定义。 */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Combat|Projectile|Impact") TObjectPtr<UCombatModifierData> ModifierData = nullptr;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Combat|Projectile|Impact", meta=(DisplayName="Modifier 定义", ToolTip="ApplyModifier 命中动作施加的稳定 ModifierData；该动作类型下不能为空。")) TObjectPtr<UCombatModifierData> ModifierData = nullptr;
 	/** Modifier 持续时间覆盖；小于 0 使用定义值。 */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Combat|Projectile|Impact") float DurationOverride = -1.0f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Combat|Projectile|Impact", meta=(ClampMin="-1", Units="s", DisplayName="持续时间覆盖", ToolTip="ApplyModifier 的持续时间覆盖，单位为秒；小于 0 表示使用 ModifierData 定义值，0 表示无限持续，正数表示指定时长。")) float DurationOverride = -1.0f;
 	/** true 时为 Modifier Runtime 注入“拖向 Source 快照位置”的 Motion 请求。 */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Combat|Projectile|Impact") bool bMotionToSource = false;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Combat|Projectile|Impact", meta=(DisplayName="拖向来源位置", ToolTip="启用后，为命中的 Modifier Runtime 注入拖向弹体来源快照位置的 Motion 请求。")) bool bMotionToSource = false;
 	/** Hook Motion 的快照速度。 */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Combat|Projectile|Impact", meta=(ClampMin="0", Units="cm/s")) float MotionSpeed = 0.0f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Combat|Projectile|Impact", meta=(ClampMin="0", Units="cm/s", DisplayName="运动速度", ToolTip="拖向来源位置时使用的 Hook Motion 速度，单位为厘米/秒；启用运动时必须大于 0。")) float MotionSpeed = 0.0f;
 	/** Hook Motion 抢占优先级。 */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Combat|Projectile|Impact") int32 MotionPriority = 100;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Combat|Projectile|Impact", meta=(DisplayName="运动优先级", ToolTip="Hook Motion 申请水平运动通道时使用的抢占优先级；数值越大越容易抢占。")) int32 MotionPriority = 100;
 };
 
 /** Spawn 时由服务器完整冻结、之后不再读取 Ability 实例的 Projectile Spec。 */

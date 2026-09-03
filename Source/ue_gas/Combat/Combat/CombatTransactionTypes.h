@@ -15,11 +15,11 @@ UENUM(BlueprintType)
 enum class ECombatDamageType : uint8
 {
 	/** 使用 Armor 公式结算的物理伤害。 */
-	Physical,
+	Physical UMETA(DisplayName="物理伤害"),
 	/** 使用 MagicResist 结算并受魔免阻挡的魔法伤害。 */
-	Magical,
+	Magical UMETA(DisplayName="魔法伤害"),
 	/** 跳过 Armor 与 MagicResist 的纯粹伤害。 */
-	Pure
+	Pure UMETA(DisplayName="纯粹伤害")
 };
 
 /** 标识同步结果槽等待 AttributeSet 回报的元属性类型。 */

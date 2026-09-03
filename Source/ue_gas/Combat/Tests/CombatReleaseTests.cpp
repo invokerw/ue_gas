@@ -3,6 +3,7 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "Misc/AutomationTest.h"
+#include "UObject/UnrealType.h"
 
 #include "Combat/Ability/CombatGameplayAbility.h"
 #include "Combat/Aura/CombatAuraSubsystem.h"
@@ -64,6 +65,36 @@ namespace CombatReleaseTests
 		Test.TestFalse(*FString::Printf(TEXT("%s has ToolTip"), *FunctionName.ToString()), Function->GetMetaData(TEXT("ToolTip")).IsEmpty());
 #endif
 		return true;
+	}
+
+	/** 检查 DataAsset 与其配置结构的全部本地可编辑字段都显式提供 Details 面板说明。 */
+	bool HasDocumentedEditableProperties(FAutomationTestBase& Test, UStruct* OwnerStruct)
+	{
+		if (!Test.TestNotNull(TEXT("Reflected owner struct exists"), OwnerStruct))
+		{
+			return false;
+		}
+
+		bool bAllDocumented = true;
+#if WITH_EDITOR
+		for (TFieldIterator<FProperty> It(OwnerStruct, EFieldIteratorFlags::ExcludeSuper); It; ++It)
+		{
+			const FProperty* Property = *It;
+			if (!Property->HasAnyPropertyFlags(CPF_Edit))
+			{
+				continue;
+			}
+
+			const FString PropertyPath = FString::Printf(TEXT("%s.%s"), *OwnerStruct->GetName(), *Property->GetName());
+			bAllDocumented &= Test.TestFalse(
+				*FString::Printf(TEXT("%s has explicit DisplayName"), *PropertyPath),
+				Property->GetMetaData(TEXT("DisplayName")).IsEmpty());
+			bAllDocumented &= Test.TestFalse(
+				*FString::Printf(TEXT("%s has explicit ToolTip"), *PropertyPath),
+				Property->GetMetaData(TEXT("ToolTip")).IsEmpty());
+		}
+#endif
+		return bAllDocumented;
 	}
 }
 
@@ -208,6 +239,23 @@ bool FCombatM8PublicExtensionSurfaceTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("ModifierData derives from public definition base"), UCombatModifierData::StaticClass()->IsChildOf(UCombatDefinitionData::StaticClass()));
 	TestTrue(TEXT("ProjectileData derives from public definition base"), UCombatProjectileData::StaticClass()->IsChildOf(UCombatDefinitionData::StaticClass()));
 	TestTrue(TEXT("AbilitySet derives from public definition base"), UCombatAbilitySet::StaticClass()->IsChildOf(UCombatDefinitionData::StaticClass()));
+
+	CombatReleaseTests::HasDocumentedEditableProperties(*this, UCombatDefinitionData::StaticClass());
+	CombatReleaseTests::HasDocumentedEditableProperties(*this, UCombatUnitData::StaticClass());
+	CombatReleaseTests::HasDocumentedEditableProperties(*this, UCombatAbilityData::StaticClass());
+	CombatReleaseTests::HasDocumentedEditableProperties(*this, UCombatModifierData::StaticClass());
+	CombatReleaseTests::HasDocumentedEditableProperties(*this, UCombatProjectileData::StaticClass());
+	CombatReleaseTests::HasDocumentedEditableProperties(*this, UCombatAbilitySet::StaticClass());
+	CombatReleaseTests::HasDocumentedEditableProperties(*this, FCombatModifierAttributeChange::StaticStruct());
+	CombatReleaseTests::HasDocumentedEditableProperties(*this, FCombatDefinitionRedirect::StaticStruct());
+	CombatReleaseTests::HasDocumentedEditableProperties(*this, FCombatSpecialValue::StaticStruct());
+	CombatReleaseTests::HasDocumentedEditableProperties(*this, FCombatAbilitySetEntry::StaticStruct());
+	CombatReleaseTests::HasDocumentedEditableProperties(*this, FCombatUnitBaseStats::StaticStruct());
+	CombatReleaseTests::HasDocumentedEditableProperties(*this, FCombatAbilityAction::StaticStruct());
+	CombatReleaseTests::HasDocumentedEditableProperties(*this, FCombatTargetingRules::StaticStruct());
+	CombatReleaseTests::HasDocumentedEditableProperties(*this, FCombatProjectileHitPolicy::StaticStruct());
+	CombatReleaseTests::HasDocumentedEditableProperties(*this, FCombatProjectileImpactAction::StaticStruct());
+	CombatReleaseTests::HasDocumentedEditableProperties(*this, FCombatTeamId::StaticStruct());
 
 	CombatReleaseTests::HasDocumentedBlueprintFunction(*this, UCombatGameplayAbility::StaticClass(), GET_FUNCTION_NAME_CHECKED(UCombatGameplayAbility, ReceiveSpellStart));
 	CombatReleaseTests::HasDocumentedBlueprintFunction(*this, UCombatGameplayAbility::StaticClass(), GET_FUNCTION_NAME_CHECKED(UCombatGameplayAbility, ReceiveChannelTick));

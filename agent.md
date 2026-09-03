@@ -66,6 +66,8 @@
    - API 契约写在头文件声明处，实现原因写在 `.cpp` 对应逻辑附近，避免在声明和实现中重复同一段说明。
    - 修改行为时同步更新注释；失效、误导或与代码重复的注释应直接删除。
 5. 蓝图可见的类、函数、字段和参数提供中文 `DisplayName`、`ToolTip` 或 `UPARAM(DisplayName=...)`。
+   - 可在 UE Details 面板中编辑或查看的 DataAsset 字段，以及它们展开后的项目自有 `USTRUCT` 字段，必须显式同时提供中文 `DisplayName` 与 `ToolTip`，不能只依赖 C++ 注释。
+   - `ToolTip` 应说明字段用途；来源、单位、有效范围、空值、`0`、负数或保留值存在特殊语义时一并写明。适用时使用 `Units`、`ClampMin/ClampMax`、`EditCondition`、`TitleProperty` 等元数据降低误配风险。
 6. 行为变化与代码同一次修改中更新文档；不要把已实现行为继续写成“建议实现”，也不要改写历史验收结果。
 7. 除非编译依赖或测试隔离已有证据表明确实受阻，否则保持单 Runtime Module。
 

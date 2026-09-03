@@ -20,43 +20,43 @@ struct UE_GAS_API FCombatUnitBaseStats
 	GENERATED_BODY()
 
 	/** 初始与最大生命值。 */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Attributes") float MaxHealth = 100.0f;
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Attributes", meta=(ClampMin="1", ClampMax="1000000000", DisplayName="最大生命值", ToolTip="单位初始化后的当前生命和最大生命，范围为 1 到 10 亿。")) float MaxHealth = 100.0f;
 	/** 初始与最大法力值。 */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Attributes") float MaxMana = 100.0f;
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Attributes", meta=(ClampMin="1", ClampMax="1000000000", DisplayName="最大法力值", ToolTip="单位初始化后的当前法力和最大法力，范围为 1 到 10 亿。")) float MaxMana = 100.0f;
 	/** 物理护甲。 */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Attributes") float Armor = 0.0f;
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Attributes", meta=(ClampMin="-10000", ClampMax="10000", DisplayName="物理护甲", ToolTip="物理伤害公式使用的护甲值，允许负护甲；有效范围为 -10000 到 10000。")) float Armor = 0.0f;
 	/** 魔法抗性比例。 */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Attributes") float MagicResist = 0.25f;
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Attributes", meta=(ClampMin="-1", ClampMax="0.95", DisplayName="魔法抗性比例", ToolTip="魔法伤害结算使用的比例，范围为 -1 到 0.95；例如 0.25 表示减免 25%，-1 表示承受双倍伤害。")) float MagicResist = 0.25f;
 	/** 闪避概率。 */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Attributes") float Evasion = 0.0f;
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Attributes", meta=(ClampMin="0", ClampMax="1", DisplayName="闪避概率", ToolTip="普通攻击命中时使用的闪避概率，范围为 0 到 1；例如 0.2 表示 20%。")) float Evasion = 0.0f;
 	/** 基础攻击伤害。 */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Attributes") float AttackDamage = 50.0f;
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Attributes", meta=(ClampMin="0", DisplayName="基础攻击伤害", ToolTip="普通攻击记录快照的基础伤害，必须为非负值。")) float AttackDamage = 50.0f;
 	/** 攻击速度属性。 */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Attributes") float AttackSpeed = 100.0f;
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Attributes", meta=(ClampMin="0", DisplayName="攻击速度", ToolTip="普通攻击前摇和间隔缩放使用的攻速属性；100 表示基础速率，必须为非负值。")) float AttackSpeed = 100.0f;
 	/** 基础攻击间隔，单位为秒。 */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Attributes") float BaseAttackTime = 1.7f;
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Attributes", meta=(Units="s", DisplayName="基础攻击间隔", ToolTip="AttackSpeed 为 100 时两次普通攻击之间的基础间隔，单位为秒，必须大于 0；最终由资产校验拒绝非法值。")) float BaseAttackTime = 1.7f;
 	/** 攻击距离，单位为厘米。 */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Attributes") float AttackRange = 150.0f;
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Attributes", meta=(ClampMin="0", Units="cm", DisplayName="攻击距离", ToolTip="普通攻击的基础边缘距离，单位为厘米；运行时还会考虑双方碰撞半径。")) float AttackRange = 150.0f;
 	/** 地面移动速度，单位为厘米/秒。 */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Attributes") float MoveSpeed = 300.0f;
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Attributes", meta=(ClampMin="0", Units="cm/s", DisplayName="地面移动速度", ToolTip="投影到 CharacterMovement 的基础最大地面速度，单位为厘米/秒。")) float MoveSpeed = 300.0f;
 	/** 每秒生命恢复。 */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Attributes") float HealthRegen = 0.0f;
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Attributes", meta=(ClampMin="0", DisplayName="每秒生命恢复", ToolTip="单位每秒恢复的基础生命值，必须为非负值。")) float HealthRegen = 0.0f;
 	/** 每秒法力恢复。 */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Attributes") float ManaRegen = 0.0f;
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Attributes", meta=(ClampMin="0", DisplayName="每秒法力恢复", ToolTip="单位每秒恢复的基础法力值，必须为非负值。")) float ManaRegen = 0.0f;
 	/** 按真实伤害计算的吸血比例。 */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Attributes") float LifestealPct = 0.0f;
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Attributes", meta=(ClampMin="0", ClampMax="10", DisplayName="吸血比例", ToolTip="按实际造成伤害计算的吸血比例，范围为 0 到 10；例如 0.2 表示 20%。")) float LifestealPct = 0.0f;
 	/** 技能伤害增幅比例。 */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Attributes") float SpellAmplifyPct = 0.0f;
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Attributes", meta=(ClampMin="-1", ClampMax="10", DisplayName="技能伤害增幅比例", ToolTip="技能伤害在公共结算前应用的增幅比例，范围为 -1 到 10；例如 0.25 表示增加 25%。")) float SpellAmplifyPct = 0.0f;
 	/** 冷却缩减比例。 */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Attributes") float CooldownReductionPct = 0.0f;
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Attributes", meta=(ClampMin="0", ClampMax="0.9", DisplayName="冷却缩减比例", ToolTip="技能冷却缩短的比例，范围为 0 到 0.9；例如 0.2 表示缩短 20%。")) float CooldownReductionPct = 0.0f;
 	/** 施法距离加成，单位为厘米。 */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Attributes") float CastRangeBonus = 0.0f;
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Attributes", meta=(Units="cm", DisplayName="施法距离加成", ToolTip="运行时叠加到技能基础施法范围的距离，单位为厘米；负值会缩短施法范围。")) float CastRangeBonus = 0.0f;
 	/** 可抵抗 Debuff 的持续时间缩减比例。 */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Attributes") float StatusResistancePct = 0.0f;
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Attributes", meta=(ClampMin="0", ClampMax="0.9", DisplayName="状态抗性比例", ToolTip="对标记为受状态抗性影响的 Debuff 缩短持续时间，范围为 0 到 0.9。")) float StatusResistancePct = 0.0f;
 	/** 治疗来源提供的增幅比例。 */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Attributes") float HealAmplifyPct = 0.0f;
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Attributes", meta=(ClampMin="-1", ClampMax="10", DisplayName="治疗来源增幅比例", ToolTip="作为治疗来源时对治疗量应用的增幅比例，范围为 -1 到 10；例如 0.25 表示增加 25%。")) float HealAmplifyPct = 0.0f;
 	/** 治疗目标接受的增幅比例。 */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Attributes") float HealReceivedPct = 0.0f;
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Attributes", meta=(ClampMin="-1", ClampMax="10", DisplayName="受到治疗增幅比例", ToolTip="作为治疗目标时对治疗量应用的增幅比例，范围为 -1 到 10；例如 -0.2 表示减少 20%。")) float HealReceivedPct = 0.0f;
 
 	/** 检查全部基础数值是否有限并满足 Numeric Policy v1。 */
 	bool IsValid(FString* OutDiagnostic = nullptr) const;

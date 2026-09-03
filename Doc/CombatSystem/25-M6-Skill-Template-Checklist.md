@@ -11,6 +11,7 @@
 - [ ] `ValidateRuntime` 通过；TargetMode、Behavior、CommitPolicy、等级数组与 Action schema 没有冲突。
 - [ ] 所有平衡值来自 `SpecialValues`，数组覆盖 `MaxLevel`；代码没有写死可配置伤害、距离、持续时间或资源消耗。
 - [ ] 被动/法球模板配置 `IntrinsicModifier`；公共 Action 模板至少包含一个受支持的 DataDriven Action。
+- [ ] DataAsset 及展开的项目自有结构字段在 Details 面板中具有中文显示名和说明；单位、范围、空值及 `0`、负数、保留值等特殊语义可直接从提示中确认。
 
 ## 3. 公共管线与时序
 
@@ -65,6 +66,7 @@ M6ScenarioReady FrostArrows=Ready Fissure=Ready AuraRuntime=Ready AuraStarted=Ye
 - [ ] 资产保存、编译且无 validation error。
 - [ ] Automation、PIE、Dedicated（涉及网络时）证据已记录。
 - [ ] 中文注释覆盖项目自有新增/实质修改的类、结构、枚举、函数、关键字段和非直观时序。
+- [ ] 新增或修改的 DataAsset 配置字段显式提供中文 `DisplayName` 与 `ToolTip`，并按语义补充单位、范围、条件显示或数组标题元数据。
 - [ ] 对应功能文档、测试计划和进度台账已同步。
 
 全部勾选后，示例才可作为新技能模板；检查器通过不能替代 PIE、网络和人工旁路审计。

@@ -74,7 +74,7 @@ struct UE_GAS_API FCombatTeamId
 	static constexpr uint8 InvalidValue = MAX_uint8;
 
 	/** 队伍的紧凑网络值。 */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Combat|Team")
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Combat|Team", meta=(ClampMin="0", ClampMax="255", DisplayName="队伍 ID", ToolTip="战斗队伍的紧凑值：0 表示中立，1 到 254 表示有效队伍，255 是无效保留值。"))
 	uint8 Value = InvalidValue;
 
 	FCombatTeamId() = default;
