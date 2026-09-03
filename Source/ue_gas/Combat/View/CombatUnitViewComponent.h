@@ -35,10 +35,10 @@ public:
 	UFUNCTION(BlueprintPure, Category="Combat|View", meta=(DisplayName="获取估算服务器时间", ToolTip="用于 UI 对齐技能和状态绝对时间窗。"))
 	double GetEstimatedServerTimeSeconds() const;
 
-	/** Unit View 字段变化时广播。 */
-	UPROPERTY(BlueprintAssignable, Category="Combat|View", meta=(DisplayName="单位 View 已变化", ToolTip="单位身份、生命、属性或技能投影变化时广播。")) FCombatUnitViewChangedDelegate OnUnitViewChanged;
-	/** Modifier FastArray 增删改时广播。 */
-	UPROPERTY(BlueprintAssignable, Category="Combat|View", meta=(DisplayName="Modifier View 已变化", ToolTip="可见 Modifier FastArray 增删改时广播。")) FCombatUnitViewChangedDelegate OnModifierViewsChanged;
+	/** Unit View 字段变化时广播；订阅关系只在运行时存在，不会写入关卡或 Actor 资产。 */
+	UPROPERTY(Transient, BlueprintAssignable, Category="Combat|View", meta=(DisplayName="单位 View 已变化", ToolTip="单位身份、生命、属性或技能投影变化时广播；运行时绑定不会保存到资产。")) FCombatUnitViewChangedDelegate OnUnitViewChanged;
+	/** Modifier FastArray 增删改时广播；订阅关系只在运行时存在，不会写入关卡或 Actor 资产。 */
+	UPROPERTY(Transient, BlueprintAssignable, Category="Combat|View", meta=(DisplayName="Modifier View 已变化", ToolTip="可见 Modifier FastArray 增删改时广播；运行时绑定不会保存到资产。")) FCombatUnitViewChangedDelegate OnModifierViewsChanged;
 
 	/** 服务器从 Unit/Attribute 当前状态刷新基础投影。 */
 	void RefreshUnitView();

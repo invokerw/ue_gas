@@ -2,6 +2,7 @@
 
 #include "Combat/UI/CombatOverheadWidget.h"
 #include "Combat/Unit/CombatUnitCharacter.h"
+#include "Engine/World.h"
 
 UCombatOverheadWidgetComponent::UCombatOverheadWidgetComponent()
 {
@@ -56,6 +57,13 @@ void UCombatOverheadWidgetComponent::ShowHealingNumber(const float AppliedAmount
 void UCombatOverheadWidgetComponent::InitWidget()
 {
 	Super::InitWidget();
+	// WidgetComponent 也会为编辑器预览创建临时 Widget；这里只允许游戏 World 绑定，
+	// 避免预览对象通过动态委托进入 World Partition External Actor 的保存依赖。
+	const UWorld* World = GetWorld();
+	if (!World || !World->IsGameWorld())
+	{
+		return;
+	}
 	if (UCombatOverheadWidget* OverheadWidget = Cast<UCombatOverheadWidget>(GetUserWidgetObject()))
 	{
 		OverheadWidget->InitializeForUnit(Cast<ACombatUnitCharacter>(GetOwner()));

@@ -17,6 +17,7 @@
 #include "Combat/Tests/CombatAutomationWorldFixture.h"
 #include "Combat/Thinker/CombatThinkerSubsystem.h"
 #include "Combat/Unit/CombatUnitCharacter.h"
+#include "Combat/View/CombatUnitViewComponent.h"
 
 namespace CombatReleaseTests
 {
@@ -256,6 +257,17 @@ bool FCombatM8PublicExtensionSurfaceTest::RunTest(const FString& Parameters)
 	CombatReleaseTests::HasDocumentedEditableProperties(*this, FCombatProjectileHitPolicy::StaticStruct());
 	CombatReleaseTests::HasDocumentedEditableProperties(*this, FCombatProjectileImpactAction::StaticStruct());
 	CombatReleaseTests::HasDocumentedEditableProperties(*this, FCombatTeamId::StaticStruct());
+
+	const FProperty* UnitViewChangedProperty = FindFProperty<FProperty>(
+		UCombatUnitViewComponent::StaticClass(),
+		GET_MEMBER_NAME_CHECKED(UCombatUnitViewComponent, OnUnitViewChanged));
+	const FProperty* ModifierViewsChangedProperty = FindFProperty<FProperty>(
+		UCombatUnitViewComponent::StaticClass(),
+		GET_MEMBER_NAME_CHECKED(UCombatUnitViewComponent, OnModifierViewsChanged));
+	TestTrue(TEXT("Unit View delegate is runtime-only"),
+		UnitViewChangedProperty && UnitViewChangedProperty->HasAnyPropertyFlags(CPF_Transient));
+	TestTrue(TEXT("Modifier View delegate is runtime-only"),
+		ModifierViewsChangedProperty && ModifierViewsChangedProperty->HasAnyPropertyFlags(CPF_Transient));
 
 	CombatReleaseTests::HasDocumentedBlueprintFunction(*this, UCombatGameplayAbility::StaticClass(), GET_FUNCTION_NAME_CHECKED(UCombatGameplayAbility, ReceiveSpellStart));
 	CombatReleaseTests::HasDocumentedBlueprintFunction(*this, UCombatGameplayAbility::StaticClass(), GET_FUNCTION_NAME_CHECKED(UCombatGameplayAbility, ReceiveChannelTick));

@@ -30,7 +30,7 @@ public:
 	UFUNCTION(BlueprintCallable, Category="Combat|UI", meta=(DisplayName="显示治疗跳字", ToolTip="仅服务器有效；按实际治疗值向相关客户端发送头顶跳字。"))
 	void ShowHealingNumber(UPARAM(DisplayName="实际治疗") float AppliedAmount);
 
-	/** 创建 Widget 后绑定所属 Unit 的复制 View。 */
+	/** 在游戏 World 创建 Widget 后绑定所属 Unit 的复制 View；编辑器预览不建立运行时委托。 */
 	virtual void InitWidget() override;
 
 protected:
