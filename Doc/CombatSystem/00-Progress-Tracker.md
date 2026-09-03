@@ -1,6 +1,6 @@
 # 00 开发进度台账
 
-> 最后更新：2026-09-02
+> 最后更新：2026-09-03
 > 当前阶段：M8 已验收；`combat_v1_rc1` 核心契约保持冻结；SAM 验收反馈已修复并重新待验收
 > 历史 M0-M8：82/82 Task 完成，9/9 里程碑由用户验收
 > SAM 进度：10/10 Task 完成；修正 Gate 已通过，等待用户复验
@@ -253,6 +253,7 @@
 | 2026-09-02 | 用户验收反馈 PIE 右键无法移动；运行时确认 RPC 与寻路已接受但速度/位移为零，同一玩家 Unit 出现重复 AIController，SAM-003 与 SAM-008 转为进行中并补默认出生链路回归 | SAM / SAM-003 / SAM-008 |
 | 2026-09-02 | 完成 PIE 右键不移动修正：GameMode 原子创建 Unit/Command Pawn 并建立 AI/Owner 绑定，Demo GameMode 改继承原生实现；单/双玩家 PIE、同版本 Dedicated 双客户端真实位移通过，三 Target、`Combat.*` 44/44、资产 7/7 全绿；SAM 重新转为待用户验收 | SAM / SAM-003 / SAM-007 / SAM-008 |
 | 2026-09-02 | 修复 `BP_WoodenDummy` 装饰腿阻挡移动：蓝图模板及 `L_CombatDemo` 已放置实例的 `WoodenPost`、`WoodenCrossbarX/Y`、`WoodenTopCap` 统一为 `NoCollision`，只保留 `CombatUnit` Capsule；增加资产回归断言，并完成 Blueprint 编译保存、冷重载、PIE 运行时碰撞回读、资产与 Automation 复验 | SAM / SAM-006 / SAM-008 |
+| 2026-09-03 | 移除 `/Game/TopDown` 模板蓝图、示例关卡及其 World Partition 外部数据；仍被 Combat 使用的输入、点击光标和环境材质迁入 `/Game/Combat` 并修复引用。`BP_CombatDemoPlayerController` 编译保存、双玩家 Demo PIE smoke、相关 Automation 3/3、资产校验 7/7（0 Error/0 Warning）均通过 | post-M8 模板清理 |
 
 ## 15. 更新规则
 

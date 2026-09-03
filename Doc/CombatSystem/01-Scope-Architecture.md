@@ -34,6 +34,7 @@
 - `/Game/Combat/Demo/Maps/L_CombatDemo` 提供远程攻击可玩 Demo；`/Game/Combat/Tests/L_CombatTest` 用于 PIE、Dedicated 和容量验证。
 - SAM 服务器权威移动已落地：`Aue_gasGameMode` 在默认出生阶段独立生成 Combat Unit 与 Command Pawn，Unit 由唯一服务器专用 AIController Possess，玩家只拥有无碰撞 Command Pawn；所有客户端的 Combat Unit 均为 SimulatedProxy。
 - `Variant_Strategy` 与 `Variant_TwinStick` 模板源码、资产和关卡已移除；可玩与验证入口统一位于 `/Game/Combat/Demo` 和 `/Game/Combat/Tests`。
+- `/Game/TopDown` 模板蓝图、示例关卡及 World Partition 外部数据已移除；Combat 仍使用的移动输入、点击光标和环境材质已归档到 `/Game/Combat/Demo` 与 `/Game/Combat/Shared`。
 - `.codex/config.toml` 配置本地 `unreal-mcp` endpoint，Editor/Content/PIE 操作遵循“读取—修改—回读—测试”闭环。
 - M0-M8 已完成验收，核心发布契约为 `combat_v1_rc1`。最近一次完整发布证据见 [33 M8 验收记录](33-M8-Acceptance.md)；该历史记录不自动证明后续工作区修改已回归。
 
