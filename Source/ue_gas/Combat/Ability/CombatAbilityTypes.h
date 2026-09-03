@@ -13,29 +13,35 @@ class ACombatUnitCharacter;
 class UCombatModifierData;
 class UCombatProjectileData;
 
-/** Cost 与 Cooldown 可以选择的三个冻结提交阶段。 */
+/**
+ * 决定技能费用或冷却在哪个服务器生命周期阶段正式提交。
+ * 在所选阶段之前失败或中断时不会提交；一旦提交，后续中断不会自动退还费用或取消冷却。
+ */
 UENUM(BlueprintType)
 enum class ECombatAbilityCommitStage : uint8
 {
-	/** 进入前摇并发出 CastStarted 时提交。 */
+	/** 技能通过初始校验、进入施法前摇时立即提交。 */
 	CastStarted UMETA(DisplayName="施法开始时"),
-	/** cast point 完成、目标复核通过后提交。 */
+	/** 施法前摇结束且目标复核通过、法术即将生效时提交。 */
 	SpellStarted UMETA(DisplayName="法术生效时"),
-	/** Ability 正常结束前提交；中断不提交。 */
+	/** 只有技能正常完成时才提交；此前被打断或取消则不提交。 */
 	AbilityEnded UMETA(DisplayName="技能正常结束时")
 };
 
-/** UnitTarget 在 cast point 丢失时采用的处理规则。 */
+/**
+ * 单位目标技能在施法前摇结束、服务器重新校验目标失败时的处理方式。
+ * 它只处理已经记录过单位目标位置的技能，不会把无目标技能自动改成点目标技能。
+ */
 UENUM(BlueprintType)
 enum class ECombatTargetLostPolicy : uint8
 {
-	/** 目标失效立即中断 Ability。 */
+	/** 中断本次技能，不执行后续动作。 */
 	Fail UMETA(DisplayName="中断技能"),
-	/** 仅允许点/AoE 行为继续使用激活时的最后已知位置。 */
+	/** 丢弃失效单位，改用激活时记录的位置继续执行点或范围动作；需要单位对象的动作仍不能执行。 */
 	UseLastKnownPoint UMETA(DisplayName="使用最后已知位置")
 };
 
-/** 引导被中断后 OrderComponent 应如何处理后续队列。 */
+/** 决定引导技能被中断并释放当前施法命令后，OrderComponent 是否继续执行玩家已经排队的后续命令。 */
 UENUM(BlueprintType)
 enum class ECombatChannelInterruptOrderPolicy : uint8
 {
@@ -45,7 +51,10 @@ enum class ECombatChannelInterruptOrderPolicy : uint8
 	ClearQueuedOrders UMETA(DisplayName="清空后续命令")
 };
 
-/** DataDriven Action schema v1 的全部动作类型。 */
+/**
+ * DataDriven Action 通过哪一个公共战斗入口产生效果。
+ * 选择类型后只读取该动作所需字段，其余字段会被忽略并由 AbilityData 校验阻止矛盾配置。
+ */
 UENUM(BlueprintType)
 enum class ECombatAbilityActionType : uint8
 {
@@ -65,7 +74,7 @@ enum class ECombatAbilityActionType : uint8
 	CreateThinker UMETA(DisplayName="创建区域 Thinker")
 };
 
-/** 声明 Action 应使用施法者、单位目标还是服务器 AoE 查询结果。 */
+/** 决定一条 Action 作用于施法者、服务器确认的单位目标，还是服务器在目标点重新查询到的范围内单位。 */
 UENUM(BlueprintType)
 enum class ECombatAbilityActionTarget : uint8
 {
@@ -77,7 +86,10 @@ enum class ECombatAbilityActionTarget : uint8
 	UnitsInRadius UMETA(DisplayName="范围内单位")
 };
 
-/** AbilityData 中一条可由公共服务器入口执行的动作。 */
+/**
+ * AbilityData 在 SpellStarted 阶段执行的一条服务器动作配置。
+ * Type 决定使用哪些字段，Target 决定目标集合，数值键从 AbilityData.SpecialValues 按本次技能等级读取；数组中的动作按配置顺序执行。
+ */
 USTRUCT(BlueprintType)
 struct UE_GAS_API FCombatAbilityAction
 {

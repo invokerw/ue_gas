@@ -7,7 +7,10 @@
 
 class ACombatUnitCharacter;
 
-/** 定义目标校验是否需要额外的战争迷雾可见性信息。 */
+/**
+ * 决定服务器目标校验是否还要求“战争迷雾中可见”。这与 bRequireLineOfSight 的几何遮挡检查是两项独立规则。
+ * 当前版本没有服务器 VisionProvider，因此只能使用 None；选择 RequireVisible 会明确校验失败，而不是信任客户端视野。
+ */
 UENUM(BlueprintType)
 enum class ECombatVisibilityPolicy : uint8
 {
@@ -17,13 +20,16 @@ enum class ECombatVisibilityPolicy : uint8
 	RequireVisible UMETA(DisplayName="要求权威可见")
 };
 
-/** UI、Order 与 Ability 共用的一组服务器目标规则。 */
+/**
+ * 一组由 UI 提示、Order 预检和 Ability 最终校验共用的目标限制。
+ * 客户端可以用它显示可选目标，但服务器会重新检查阵营、生命状态、状态标签、距离和视线；所有启用的条件都通过后目标才有效。
+ */
 USTRUCT(BlueprintType)
 struct UE_GAS_API FCombatTargetingRules
 {
 	GENERATED_BODY()
 
-	/** Friendly、Enemy、Both 或 NoTarget 使用的 None。 */
+	/** UnitTarget 和服务器范围查询使用 Friendly、Enemy 或 Both；NoTarget 必须使用 None，不查询单位的点目标动作会忽略它。 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Targeting", meta=(Categories="TargetTeam", DisplayName="目标阵营规则", ToolTip="使用 TargetTeam 下的 Friendly、Enemy、Both 或 None 标签声明允许的目标关系。")) FGameplayTag TargetTeamTag;
 	/** 是否允许把来源 Unit 自身作为单位目标。 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Targeting", meta=(DisplayName="允许选择自身", ToolTip="启用后，来源单位自身可以作为单位目标；仍需满足其他状态和阵营规则。")) bool bAllowSelf = false;
@@ -45,7 +51,10 @@ struct UE_GAS_API FCombatTargetingRules
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Targeting", meta=(DisplayName="战争迷雾可见性", ToolTip="选择是否要求服务器权威可见性；当前版本只支持“不检查可见性”。")) ECombatVisibilityPolicy VisibilityPolicy = ECombatVisibilityPolicy::None;
 };
 
-/** 客户端可提交给服务器复核的最小 TargetData。 */
+/**
+ * 客户端随技能请求提交的最小目标意图，只包含单位或世界坐标。
+ * 服务器不会信任客户端命中结果，会用 FCombatTargetingRules 从当前权威状态重新校验并查询范围目标。
+ */
 USTRUCT(BlueprintType)
 struct UE_GAS_API FCombatAbilityTargetData
 {
@@ -61,7 +70,7 @@ struct UE_GAS_API FCombatAbilityTargetData
 	UPROPERTY(BlueprintReadWrite, Category="Combat|Targeting") TArray<TObjectPtr<ACombatUnitCharacter>> ClientClaimedHitActors;
 };
 
-/** Target Filter 的结构化成功、失败和服务器修正位置。 */
+/** 服务器目标校验的结果：成功时提供最终采用的位置，失败时提供稳定原因标签和诊断文本。 */
 USTRUCT(BlueprintType)
 struct UE_GAS_API FCombatTargetValidationResult
 {

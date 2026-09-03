@@ -10,7 +10,10 @@
 
 class ACombatUnitCharacter;
 
-/** 描述一次伤害使用的基础抗性分支。 */
+/**
+ * 决定伤害在公共结算管线中使用哪一种防御减免公式。
+ * 该选择只控制 Armor、MagicResist 和魔法免疫分支；无敌、Hook、护盾、事件与死亡流程仍按统一管线处理。
+ */
 UENUM(BlueprintType)
 enum class ECombatDamageType : uint8
 {

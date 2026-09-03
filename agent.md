@@ -43,7 +43,7 @@
 ### 3.3 数据、网络与扩展边界
 
 - 可被网络、日志、UI、存档或迁移引用的定义使用 `UCombatDefinitionData` 派生 DataAsset 和稳定 `FPrimaryAssetId`。
-- `DefinitionName` 使用唯一的 `lower_snake_case`；网络与日志不复制 DataAsset UObject 指针。
+- `DefinitionName` 使用 `lower_snake_case`，并在同一 `PrimaryAssetType` 内唯一；网络与日志不复制 DataAsset UObject 指针。
 - 平衡数值优先进入 Ability/Modifier/Projectile DataAsset；公共校验、权限、提交和清理留在 C++。
 - 普通技能优先组合 DataDriven Action；只有自定义施法阶段才派生 `UCombatGameplayAbility`，只有有状态 Hook 才派生 `UCombatModifierRuntime`。
 - 不直接比较 TeamId、生命状态或距离来旁路 `CombatTeamSubsystem` / `CombatTargetingSubsystem`。
@@ -60,6 +60,8 @@
    - 类、结构和枚举应有简介。简单类型可用一句话说明；核心类应进一步说明主要职责、职责边界、生命周期、网络权限及关键协作对象。
    - 项目自定义函数应至少简要说明用途。存在前置条件、副作用、失败情形、特殊返回语义、权限或时序要求时，必须一并说明。
    - 关键字段应说明其业务含义；单位、所有权、复制策略、生命周期或有效条件不直观时，需要明确标注。语义清晰的局部变量无需注释。
+   - 注释应能让维护者不跳转到实现也理解基本行为，不能只翻译标识符或堆叠 `Think`、`ExpireAt`、`ActiveGE` 等内部术语。术语首次出现时说明其业务含义；策略类注释应写清生效场景、各选项的可观察结果以及不受该策略控制的边界。
+   - 时间、叠层、覆盖优先级或数值运算容易误解时，补充最小时间线或配置示例。例如刷新周期应说明“何时再次触发”，参数覆盖应说明“有同名覆盖值时用哪个值”。
    - 构造函数、析构函数、简单访问器及其他惯例代码无需例行注释；只有存在特殊初始化、资源管理或非显然行为时才补充说明。
    - Unreal Engine 的常规生命周期回调、重写函数和接口实现无需重复解释引擎语义；只有承载项目特有职责、调用顺序或副作用时才需要注释。
    - 实现内部的注释应解释特殊分支、稳定排序、权限判断、兼容处理和清理顺序背后的原因，不要描述代码表面行为。
@@ -67,7 +69,7 @@
    - 修改行为时同步更新注释；失效、误导或与代码重复的注释应直接删除。
 5. 蓝图可见的类、函数、字段和参数提供中文 `DisplayName`、`ToolTip` 或 `UPARAM(DisplayName=...)`。
    - 可在 UE Details 面板中编辑或查看的 DataAsset 字段，以及它们展开后的项目自有 `USTRUCT` 字段，必须显式同时提供中文 `DisplayName` 与 `ToolTip`，不能只依赖 C++ 注释。
-   - `ToolTip` 应说明字段用途；来源、单位、有效范围、空值、`0`、负数或保留值存在特殊语义时一并写明。适用时使用 `Units`、`ClampMin/ClampMax`、`EditCondition`、`TitleProperty` 等元数据降低误配风险。
+   - `ToolTip` 应使用配置者可直接理解的语言说明选择后果；来源、单位、有效范围、空值、`0`、负数或保留值存在特殊语义时一并写明。适用时使用 `Units`、`ClampMin/ClampMax`、`EditCondition`、`TitleProperty` 等元数据降低误配风险。
 6. 行为变化与代码同一次修改中更新文档；不要把已实现行为继续写成“建议实现”，也不要改写历史验收结果。
 7. 除非编译依赖或测试隔离已有证据表明确实受阻，否则保持单 Runtime Module。
 

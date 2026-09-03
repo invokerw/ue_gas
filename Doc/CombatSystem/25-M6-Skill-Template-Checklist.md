@@ -6,10 +6,10 @@
 
 ## 2. Definition 与 Class/Data 身份
 
-- [ ] Ability、Modifier、Projectile 等 `DefinitionName` 均为唯一 `lower_snake`，没有空值或重复 `PrimaryAssetId`。
+- [ ] Ability、Modifier、Projectile 等 `DefinitionName` 均为 `lower_snake` 且在同一类型内唯一，没有空值或重复 `PrimaryAssetId`。
 - [ ] Ability Class CDO 的 `AbilityData` 与待检查 DataAsset 是同一对象，保持 Class -> Data 单向引用。
 - [ ] `ValidateRuntime` 通过；TargetMode、Behavior、CommitPolicy、等级数组与 Action schema 没有冲突。
-- [ ] 所有平衡值来自 `SpecialValues`，数组覆盖 `MaxLevel`；代码没有写死可配置伤害、距离、持续时间或资源消耗。
+- [ ] 所有平衡值来自 `SpecialValues`；每项使用一个全等级共用值，或提供恰好 `MaxLevel` 个分级值；代码没有写死可配置伤害、距离、持续时间或资源消耗。
 - [ ] 被动/法球模板配置 `IntrinsicModifier`；公共 Action 模板至少包含一个受支持的 DataDriven Action。
 - [ ] DataAsset 及展开的项目自有结构字段在 Details 面板中具有中文显示名和说明；单位、范围、空值及 `0`、负数、保留值等特殊语义可直接从提示中确认。
 
@@ -65,7 +65,8 @@ M6ScenarioReady FrostArrows=Ready Fissure=Ready AuraRuntime=Ready AuraStarted=Ye
 
 - [ ] 资产保存、编译且无 validation error。
 - [ ] Automation、PIE、Dedicated（涉及网络时）证据已记录。
-- [ ] 中文注释覆盖项目自有新增/实质修改的类、结构、枚举、函数、关键字段和非直观时序。
+- [ ] 中文注释覆盖项目自有新增/实质修改的类型、自定义函数、关键字段和非直观时序；构造函数、简单访问器和常规 UE 回调不要求例行注释。
+- [ ] 策略、时序和参数覆盖注释能独立说明生效场景、选择后果与边界；必要时给出最小时间线或数值示例，不只翻译字段名或罗列内部术语。
 - [ ] 新增或修改的 DataAsset 配置字段显式提供中文 `DisplayName` 与 `ToolTip`，并按语义补充单位、范围、条件显示或数组标题元数据。
 - [ ] 对应功能文档、测试计划和进度台账已同步。
 

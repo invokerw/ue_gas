@@ -13,29 +13,33 @@
 	GAMEPLAYATTRIBUTE_VALUE_SETTER(PropertyName) \
 	GAMEPLAYATTRIBUTE_VALUE_INITTER(PropertyName)
 
-/** UnitData 保存并在服务器初始化时写入 ASC 的基础战斗数值。 */
+/**
+ * UnitData 中可编辑的出生属性模板；服务器创建单位时一次性写入 CombatAttributeSet。
+ * MaxHealth/MaxMana 同时作为当前值初始化，之后的 Modifier、伤害和治疗都只改变 GAS 属性，不回写这份模板。
+ * 名称带 Pct 的字段使用小数比例，例如 0.25 表示 25%。
+ */
 USTRUCT(BlueprintType)
 struct UE_GAS_API FCombatUnitBaseStats
 {
 	GENERATED_BODY()
 
-	/** 初始与最大生命值。 */
+	/** 初始化 MaxHealth，并把当前 Health 同步设为该值。 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Attributes", meta=(ClampMin="1", ClampMax="1000000000", DisplayName="最大生命值", ToolTip="单位初始化后的当前生命和最大生命，范围为 1 到 10 亿。")) float MaxHealth = 100.0f;
-	/** 初始与最大法力值。 */
+	/** 初始化 MaxMana，并把当前 Mana 同步设为该值。 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Attributes", meta=(ClampMin="1", ClampMax="1000000000", DisplayName="最大法力值", ToolTip="单位初始化后的当前法力和最大法力，范围为 1 到 10 亿。")) float MaxMana = 100.0f;
 	/** 物理护甲。 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Attributes", meta=(ClampMin="-10000", ClampMax="10000", DisplayName="物理护甲", ToolTip="物理伤害公式使用的护甲值，允许负护甲；有效范围为 -10000 到 10000。")) float Armor = 0.0f;
-	/** 魔法抗性比例。 */
+	/** 魔法伤害减免比例；0.25 减免 25%，负值会放大伤害。 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Attributes", meta=(ClampMin="-1", ClampMax="0.95", DisplayName="魔法抗性比例", ToolTip="魔法伤害结算使用的比例，范围为 -1 到 0.95；例如 0.25 表示减免 25%，-1 表示承受双倍伤害。")) float MagicResist = 0.25f;
 	/** 闪避概率。 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Attributes", meta=(ClampMin="0", ClampMax="1", DisplayName="闪避概率", ToolTip="普通攻击命中时使用的闪避概率，范围为 0 到 1；例如 0.2 表示 20%。")) float Evasion = 0.0f;
 	/** 基础攻击伤害。 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Attributes", meta=(ClampMin="0", DisplayName="基础攻击伤害", ToolTip="普通攻击记录快照的基础伤害，必须为非负值。")) float AttackDamage = 50.0f;
-	/** 攻击速度属性。 */
+	/** 缩放普通攻击前摇与间隔的攻速值；100 表示使用基础时长。 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Attributes", meta=(ClampMin="0", DisplayName="攻击速度", ToolTip="普通攻击前摇和间隔缩放使用的攻速属性；100 表示基础速率，必须为非负值。")) float AttackSpeed = 100.0f;
 	/** 基础攻击间隔，单位为秒。 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Attributes", meta=(Units="s", DisplayName="基础攻击间隔", ToolTip="AttackSpeed 为 100 时两次普通攻击之间的基础间隔，单位为秒，必须大于 0；最终由资产校验拒绝非法值。")) float BaseAttackTime = 1.7f;
-	/** 攻击距离，单位为厘米。 */
+	/** 普攻的基础边缘距离，单位为厘米；判定时还会计入双方碰撞半径。 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Attributes", meta=(ClampMin="0", Units="cm", DisplayName="攻击距离", ToolTip="普通攻击的基础边缘距离，单位为厘米；运行时还会考虑双方碰撞半径。")) float AttackRange = 150.0f;
 	/** 地面移动速度，单位为厘米/秒。 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Attributes", meta=(ClampMin="0", Units="cm/s", DisplayName="地面移动速度", ToolTip="投影到 CharacterMovement 的基础最大地面速度，单位为厘米/秒。")) float MoveSpeed = 300.0f;
@@ -51,14 +55,14 @@ struct UE_GAS_API FCombatUnitBaseStats
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Attributes", meta=(ClampMin="0", ClampMax="0.9", DisplayName="冷却缩减比例", ToolTip="技能冷却缩短的比例，范围为 0 到 0.9；例如 0.2 表示缩短 20%。")) float CooldownReductionPct = 0.0f;
 	/** 施法距离加成，单位为厘米。 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Attributes", meta=(Units="cm", DisplayName="施法距离加成", ToolTip="运行时叠加到技能基础施法范围的距离，单位为厘米；负值会缩短施法范围。")) float CastRangeBonus = 0.0f;
-	/** 可抵抗 Debuff 的持续时间缩减比例。 */
+	/** 只缩短明确标记为受状态抗性影响的 Debuff；0.25 会把 10 秒缩短到 7.5 秒。 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Attributes", meta=(ClampMin="0", ClampMax="0.9", DisplayName="状态抗性比例", ToolTip="对标记为受状态抗性影响的 Debuff 缩短持续时间，范围为 0 到 0.9。")) float StatusResistancePct = 0.0f;
 	/** 治疗来源提供的增幅比例。 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Attributes", meta=(ClampMin="-1", ClampMax="10", DisplayName="治疗来源增幅比例", ToolTip="作为治疗来源时对治疗量应用的增幅比例，范围为 -1 到 10；例如 0.25 表示增加 25%。")) float HealAmplifyPct = 0.0f;
 	/** 治疗目标接受的增幅比例。 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Attributes", meta=(ClampMin="-1", ClampMax="10", DisplayName="受到治疗增幅比例", ToolTip="作为治疗目标时对治疗量应用的增幅比例，范围为 -1 到 10；例如 -0.2 表示减少 20%。")) float HealReceivedPct = 0.0f;
 
-	/** 检查全部基础数值是否有限并满足 Numeric Policy v1。 */
+	/** 检查每个字段是否为有限数，并验证生命、比例、速度和时间等项目约束；失败时可返回首条诊断。 */
 	bool IsValid(FString* OutDiagnostic = nullptr) const;
 };
 

@@ -19,8 +19,9 @@ class UCombatModifierData;
 class UGameplayEffect;
 
 /**
- * 与一个 ActiveGameplayEffect 一一对应的可扩展 Modifier 运行时对象。
- * ModifierComponent 独占其身份、排序、周期和销毁生命周期；派生类只在稳定 Hook 阶段实现有状态行为，并通过公共请求延迟修改容器，不能自行维护第二套属性结果。
+ * 一个活动 Modifier 的可扩展运行时对象，用于保存护盾余量、每跳伤害等无法只靠 DataAsset 表达的实例状态。
+ * 它与一项 Active GameplayEffect 一一对应：属性和标签由 GameplayEffect 聚合，生命周期、周期与 Hook 顺序由 ModifierComponent 管理。
+ * 派生类只实现所需的自定义 Hook，并通过公共请求修改战斗状态，不能自行维护第二套属性结果。
  */
 UCLASS(Blueprintable, BlueprintType)
 class UE_GAS_API UCombatModifierRuntime : public UObject
@@ -28,17 +29,17 @@ class UE_GAS_API UCombatModifierRuntime : public UObject
 	GENERATED_BODY()
 
 public:
-	/** Runtime 与 ActiveGE 建立一一映射后调用一次。 */
-	UFUNCTION(BlueprintNativeEvent, Category="Combat|Modifier", meta=(DisplayName="Modifier 已创建", ToolTip="Runtime 与 ActiveGE 建立一一映射后调用一次。"))
+	/** 新 Modifier 的 Runtime 与 Active GameplayEffect 都建立成功后调用一次，可在此初始化实例状态。 */
+	UFUNCTION(BlueprintNativeEvent, Category="Combat|Modifier", meta=(DisplayName="Modifier 已创建", ToolTip="新 Modifier 的运行时对象与属性效果都建立成功后调用一次，可在此初始化实例状态。"))
 	void OnCreated();
-	/** 同定义再次施加并刷新层数/持续时间后调用。 */
-	UFUNCTION(BlueprintNativeEvent, Category="Combat|Modifier", meta=(DisplayName="Modifier 已刷新", ToolTip="同定义再次施加并刷新层数或持续时间后调用。"))
+	/** 同一刷新对象被再次施加，且层数、参数、属性幅值与持续时间更新后调用。 */
+	UFUNCTION(BlueprintNativeEvent, Category="Combat|Modifier", meta=(DisplayName="Modifier 已刷新", ToolTip="同一 Modifier 实例被再次施加，且层数、参数、属性幅值和持续时间更新后调用。"))
 	void OnRefreshed();
-	/** ActiveGE 移除前调用一次，供 Runtime 释放内部状态。 */
-	UFUNCTION(BlueprintNativeEvent, Category="Combat|Modifier", meta=(DisplayName="Modifier 将销毁", ToolTip="ActiveGE 移除前调用一次，用于释放 Runtime 内部状态。"))
+	/** Modifier 因到期、驱散、死亡清理或明确移除而结束时，在移除 Active GameplayEffect 前调用一次。 */
+	UFUNCTION(BlueprintNativeEvent, Category="Combat|Modifier", meta=(DisplayName="Modifier 将销毁", ToolTip="Modifier 因到期、驱散、死亡清理或明确移除而结束时，在撤销属性效果前调用一次。"))
 	void OnDestroyed();
-	/** Combat Scheduler 到达逻辑周期时调用。 */
-	UFUNCTION(BlueprintNativeEvent, Category="Combat|Modifier", meta=(DisplayName="Modifier 周期执行", ToolTip="Combat Scheduler 到达逻辑周期时调用。"))
+	/** ThinkInterval 大于 0 时由 Combat Scheduler 周期调用；暂停、过期边界和刷新相位由组件统一处理。 */
+	UFUNCTION(BlueprintNativeEvent, Category="Combat|Modifier", meta=(DisplayName="Modifier 周期执行", ToolTip="周期触发间隔大于 0 时调用；过期边界和刷新后何时再次触发由 ModifierData 配置。"))
 	void OnThink(UPARAM(DisplayName="周期上下文") const FCombatScheduledTickContext& TickContext);
 
 	/** 来源单位 Modifier 的伤害增幅 Hook。 */
@@ -93,11 +94,11 @@ public:
 		UPARAM(DisplayName="施法者") ACombatUnitCharacter* Caster,
 		UPARAM(DisplayName="事件上下文") const FCombatEventContext& Context);
 
-	/** 请求在当前 Hook 阶段结束后移除自身 ActiveGE 与 Runtime。 */
-	UFUNCTION(BlueprintCallable, Category="Combat|Modifier", meta=(DisplayName="请求移除自身", ToolTip="请求在当前 Hook 阶段结束后移除自身对应的 ActiveGE 与 Runtime。"))
+	/** 请求结束自身并撤销属性、标签和周期任务；Runtime 已失效或不再由组件持有时返回 false，Hook 内会延迟到遍历结束。 */
+	UFUNCTION(BlueprintCallable, Category="Combat|Modifier", meta=(DisplayName="请求移除自身", ToolTip="请求结束自身并撤销属性、标签和周期任务；Runtime 已失效时返回失败，Hook 内会延迟到当前遍历结束。"))
 	bool RequestRemoveSelf();
-	/** 读取 ModifierData 的只读 Runtime 参数，缺失时返回默认值。 */
-	UFUNCTION(BlueprintPure, Category="Combat|Modifier", meta=(DisplayName="获取 Modifier 运行时参数", ToolTip="读取冻结后的 Runtime 参数；键不存在时返回默认值。"))
+	/** 按“本次 Apply 覆盖值 → ModifierData 默认参数 → DefaultValue”的顺序读取参数。 */
+	UFUNCTION(BlueprintPure, Category="Combat|Modifier", meta=(DisplayName="获取 Modifier 运行时参数", ToolTip="优先读取本次施加的同名覆盖值，其次读取 ModifierData 默认参数；都不存在时返回传入的默认值。"))
 	float GetRuntimeParameter(
 		UPARAM(DisplayName="参数键") FName Key,
 		UPARAM(DisplayName="默认值") float DefaultValue = 0.0f) const;

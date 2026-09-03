@@ -14,27 +14,30 @@ class ACombatUnitCharacter;
 class UCombatModifierData;
 class UCombatProjectileData;
 
-/** Projectile actor 每帧执行的权威运动类型。 */
+/** 决定服务器弹体每帧是沿发射方向直线前进，还是持续朝一个有效目标修正方向。 */
 UENUM(BlueprintType)
 enum class ECombatProjectileMovementType : uint8
 {
-	/** 沿 Spawn 时快照方向匀速运动。 */
+	/** 使用生成时记录的方向匀速直线飞行，之后不会追随目标位置。 */
 	Linear UMETA(DisplayName="直线运动"),
-	/** 每帧朝仍合法的目标当前位置转向。 */
+	/** 每帧朝目标当前权威位置飞行；目标失效时按 TargetLostPolicy 结束或继续。 */
 	Tracking UMETA(DisplayName="追踪目标")
 };
 
-/** Tracking 目标失效后采用的冻结策略。 */
+/** 追踪弹体的目标死亡、换 World 或因生命代次变化而失效时，服务器如何处理尚未命中的弹体。 */
 UENUM(BlueprintType)
 enum class ECombatProjectileTargetLostPolicy : uint8
 {
-	/** 立即 fizzle，不执行 Impact Action。 */
+	/** 立即以 TargetLost 结束，不执行任何命中动作。 */
 	Fizzle UMETA(DisplayName="立即消散"),
-	/** 沿最后合法位置继续，到达后 fizzle。 */
+	/** 继续飞向最后一次有效位置；到达后以 TargetLost 结束，仍不执行命中动作。 */
 	UseLastKnownPoint UMETA(DisplayName="飞向最后已知位置")
 };
 
-/** Projectile exactly-once 结束的稳定分类。 */
+/**
+ * 弹体结束时记录的唯一原因，用于日志、攻击收尾和表现回收。
+ * 每个权威弹体只完成一次；后续碰撞、取消或 EndPlay 不会再次派发完成结果。
+ */
 UENUM(BlueprintType)
 enum class ECombatProjectileFinishReason : uint8
 {
@@ -54,7 +57,7 @@ enum class ECombatProjectileFinishReason : uint8
 	EndPlay
 };
 
-/** Projectile 命中单位后可从不可变快照执行的公共动作。 */
+/** 选择弹体命中合法单位后，是通过公共伤害管线造成伤害，还是通过目标的 ModifierComponent 施加效果。 */
 UENUM(BlueprintType)
 enum class ECombatProjectileImpactActionType : uint8
 {
@@ -64,7 +67,10 @@ enum class ECombatProjectileImpactActionType : uint8
 	ApplyModifier UMETA(DisplayName="施加 Modifier")
 };
 
-/** 冻结阵营、穿透与 World block 行为的命中策略。 */
+/**
+ * 配置弹体 sweep 遇到单位或世界阻挡时哪些对象算合法命中，以及命中后是否继续飞行。
+ * 策略在弹体生成时复制到 Spec，飞行过程中不会随 DataAsset 修改。
+ */
 USTRUCT(BlueprintType)
 struct UE_GAS_API FCombatProjectileHitPolicy
 {
@@ -82,7 +88,10 @@ struct UE_GAS_API FCombatProjectileHitPolicy
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Combat|Projectile|Hit", meta=(DisplayName="世界阻挡时结束", ToolTip="启用后，命中 WorldStatic、WorldDynamic 或 CombatBlocker 时结束弹体。")) bool bStopOnWorld = true;
 };
 
-/** 单个 Impact Action 的伤害、Modifier 与可选 Hook Motion 快照。 */
+/**
+ * 弹体命中一个合法单位后按数组顺序执行的一项效果。
+ * Type 决定 Damage 字段或 Modifier 字段哪一组生效；可选 Motion 只随 ApplyModifier 一起把目标拖向发射时记录的来源位置。
+ */
 USTRUCT(BlueprintType)
 struct UE_GAS_API FCombatProjectileImpactAction
 {
@@ -106,7 +115,10 @@ struct UE_GAS_API FCombatProjectileImpactAction
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Combat|Projectile|Impact", meta=(DisplayName="运动优先级", ToolTip="Hook Motion 申请水平运动通道时使用的抢占优先级；数值越大越容易抢占。")) int32 MotionPriority = 100;
 };
 
-/** Spawn 时由服务器完整冻结、之后不再读取 Ability 实例的 Projectile Spec。 */
+/**
+ * 服务器生成弹体时冻结的完整运行参数，包括来源、目标、运动、命中动作和事件身份。
+ * 生成后弹体只读取该 Spec，不再依赖 Ability 实例；因此 Ability 结束不会改变已发射弹体，除非显式启用按 ActivationId 取消。
+ */
 USTRUCT(BlueprintType)
 struct UE_GAS_API FCombatProjectileSpec
 {
@@ -153,7 +165,7 @@ struct UE_GAS_API FCombatProjectileSpec
 	int32 PredictionKey = 0;
 };
 
-/** Spawn 或 exactly-once Finish 返回的结构化结果。 */
+/** 弹体生成或结束操作的结果；结束时包含唯一 FinishReason、命中对象和实际造成的生命减少量。 */
 USTRUCT(BlueprintType)
 struct UE_GAS_API FCombatProjectileResult
 {

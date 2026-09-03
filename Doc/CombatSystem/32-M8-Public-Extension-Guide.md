@@ -16,7 +16,7 @@
 
 ## 2. 推荐创建流程
 
-1. 从对应 `UCombatDefinitionData` 派生类型创建 DataAsset，填写唯一 DefinitionName、版本化参数与目标规则。
+1. 从对应 `UCombatDefinitionData` 派生类型创建 DataAsset，填写同一类型内唯一的 DefinitionName、版本化参数与目标规则。
 2. 优先用 Ability Data 的公共 Action 表达 Damage、Heal、Modifier、Projectile、Thinker 或 Motion。
 3. 只有需要自定义阶段控制时才派生 `UCombatGameplayAbility`；在公开蓝图事件中编排，生命周期交给基类。
 4. 只有需要有状态 Hook 时才派生 `UCombatModifierRuntime`；在 `OnCreated/OnRefreshed/OnDestroyed/OnThink` 和伤害、治疗、技能、攻击 Hook 中实现最小逻辑。
@@ -29,6 +29,14 @@
 - `ToolTip` 至少说明字段的业务用途；数值来源、单位、有效范围、空引用、`None`、`0`、负数和保留值有特殊行为时必须写明，避免配置者依赖源码或实现猜测。
 - 可由反射表达的约束同时写入元数据：数值使用 `Units`、`ClampMin/ClampMax`，条件字段使用 `EditCondition`，结构数组使用 `TitleProperty`。元数据只改善编辑体验，运行时与 `IsDataValid`/`ValidateRuntime` 校验仍是最终边界。
 - 枚举选项应提供中文 `UMETA(DisplayName=...)`，并用紧邻选项的中文文档注释生成反射 `ToolTip`，使下拉列表能够直接表达选择后果；不要重复声明两份不同的 `ToolTip`。
+
+### 2.2 源码注释可读性
+
+- 源码注释应让维护者不追到实现文件也能理解基本行为。不要只把成员名翻译成中文，也不要假定读者已经知道 `Think`、`ExpireAt`、`ActiveGE`、`Spec` 等项目术语。
+- 规则或策略类型先说明系统何时读取它，再说明每个选项会改变什么、不会改变什么。例如“不可驱散”只表示 `Dispel` 接口会跳过该 Modifier；它仍可能自然过期、在死亡清理中移除，或由明确的移除接口结束。
+- 时间行为适合用短时间线说明。例如一个每秒触发的 DOT 在 `0s` 施加、`1s` 首次触发、`1.5s` 刷新：保留周期相位会在 `2s` 继续触发，重置周期间隔会在 `2.5s` 再触发。
+- 配置结构应说明字段如何配合以及覆盖优先级。例如属性修改中的 `Magnitude` 是默认幅值；`MagnitudeParameterKey=slow_multiplier` 且本次施加请求携带同名运行时覆盖值时，使用覆盖值。`MoveSpeed + Multiplicitive + 0.8` 表示保留 80% 移速，覆盖为 `0.6` 时本次施加保留 60%。
+- 简单类型、字段和函数可用一句话说明；构造函数、简单访问器及常规 UE 回调无需为满足数量而添加低信息量注释。
 
 ## 3. 禁止旁路
 
