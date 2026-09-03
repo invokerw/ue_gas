@@ -18,7 +18,6 @@ class UE_GAS_API UCombatOverheadWidgetComponent : public UWidgetComponent
 	GENERATED_BODY()
 
 public:
-	/** 配置 DOTA 风格的固定屏幕尺寸、枢轴和默认 C++ Widget。 */
 	UCombatOverheadWidgetComponent();
 
 	/** 由服务器把目标实际承受的伤害显示给当前相关客户端。 */

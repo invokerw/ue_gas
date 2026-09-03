@@ -281,7 +281,7 @@ void ACombatTestScenarioActor::StartM7NetworkScenario()
 	}
 	for (int32 Index = 0; Index < FMath::Min(Players.Num(), 2); ++Index)
 	{
-		// 前序 M4 对战可能已击杀 Team 2；联机冒烟前复活，确保两端都能验证业务 Order 已执行。
+		// 前序攻击场景可能已击杀 Team 2；联机冒烟前复活，确保两端都能验证业务 Order 已执行。
 		if (SpawnedUnits[Index]->GetLifeState() == ECombatLifeState::Dead)
 		{
 			SpawnedUnits[Index]->GetCombatLifecycleComponent()->RespawnAtLocation(SpawnedUnits[Index]->GetActorLocation());
@@ -487,7 +487,7 @@ bool ACombatTestScenarioActor::ExpandM7CapacityScenario()
 	{
 		return true;
 	}
-	// 容量边界需要精确 256 个 Modifier；先移除前序 M6 Aura 及其 child，再建立稳定负载。
+	// 容量边界需要精确 256 个 Modifier；先移除前序 Aura 及其 child，再建立稳定负载。
 	if (UCombatAuraSubsystem* Auras = GetWorld()->GetSubsystem<UCombatAuraSubsystem>())
 	{
 		Auras->CancelAura(ScenarioAuraHandle);

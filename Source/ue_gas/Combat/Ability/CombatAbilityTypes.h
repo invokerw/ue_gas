@@ -35,13 +35,13 @@ enum class ECombatTargetLostPolicy : uint8
 	UseLastKnownPoint
 };
 
-/** 引导被中断后未来 OrderComponent 应如何处理队列。 */
+/** 引导被中断后 OrderComponent 应如何处理后续队列。 */
 UENUM(BlueprintType)
 enum class ECombatChannelInterruptOrderPolicy : uint8
 {
 	/** 释放当前施法 Order，保留后续队列。 */
 	Continue,
-	/** 通知未来 OrderComponent 清除排队项。 */
+	/** 通知 OrderComponent 清除尚未执行的排队项。 */
 	ClearQueuedOrders
 };
 

@@ -21,7 +21,10 @@ struct FCombatThinkerRuntimeRecord
 	int32 AffectedTargetCount = 0;
 };
 
-/** 持有无 Tick Thinker registry，并只用 Combat Scheduler 驱动 delay/pulse/duration。 */
+/**
+ * 每个 World 的服务器权威区域 Thinker registry。
+ * Thinker Actor 只承载身份和位置；子系统通过 Combat Scheduler 驱动 delay、pulse 与 duration，按稳定 Targeting 快照执行动作，并在取消或 teardown 时统一释放 Actor 和调度句柄。
+ */
 UCLASS()
 class UE_GAS_API UCombatThinkerSubsystem : public UWorldSubsystem
 {

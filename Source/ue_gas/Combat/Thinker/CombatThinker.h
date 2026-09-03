@@ -14,7 +14,6 @@ class UE_GAS_API ACombatThinker : public AActor
 	GENERATED_BODY()
 
 public:
-	/** 默认关闭 Tick、碰撞并启用基础 Actor 复制。 */
 	ACombatThinker();
 	/** Spawn 后写入稳定句柄。 */
 	void InitializeThinker(FCombatThinkerHandle InHandle) { ThinkerHandle = InHandle; }

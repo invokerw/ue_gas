@@ -28,7 +28,6 @@
 
 namespace CombatCoreTests
 {
-	/** M2 自动化统一使用 EditorContext 与 EngineFilter。 */
 	constexpr EAutomationTestFlags Flags = EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter;
 
 	/** 在测试 World 中生成已初始化且互不重叠的 Combat Unit。 */

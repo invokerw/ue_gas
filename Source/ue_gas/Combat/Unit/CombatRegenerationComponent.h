@@ -14,7 +14,6 @@ class UE_GAS_API UCombatRegenerationComponent : public UActorComponent
 	GENERATED_BODY()
 
 public:
-	/** 默认关闭 Tick，并使用 ADR-024 的 0.25 秒固定节拍。 */
 	UCombatRegenerationComponent();
 	/** Authority BeginPlay 时建立恢复任务。 */
 	virtual void BeginPlay() override;

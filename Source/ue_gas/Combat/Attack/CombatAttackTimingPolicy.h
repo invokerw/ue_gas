@@ -4,7 +4,7 @@
 
 #include "Combat/Attack/CombatAttackTypes.h"
 
-/** 集中实现 M4 冻结的 BAT、IAS、attack point 与动画投影公式。 */
+/** 集中实现发布契约冻结的 BAT、IAS、attack point 与动画投影公式。 */
 struct UE_GAS_API FCombatAttackTimingPolicyV1
 {
 	/** Numeric Policy v1 接受的最小有效攻击速度。 */

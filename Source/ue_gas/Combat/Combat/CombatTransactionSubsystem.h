@@ -9,7 +9,10 @@
 
 class ACombatUnitCharacter;
 
-/** 保存 ApplyGameplayEffect 与 AttributeSet 回调之间的同步结果槽。 */
+/**
+ * 在 Damage/Heal 子系统应用 GameplayEffect 与 AttributeSet 回调之间传递真实属性变化。
+ * 每个 EventId 只持有一个同步、短生命周期槽位；回报完成、应用失败或消费结果后立即关闭，不作为第二套战斗数值存储。
+ */
 UCLASS()
 class UE_GAS_API UCombatTransactionSubsystem : public UWorldSubsystem
 {

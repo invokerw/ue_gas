@@ -14,17 +14,18 @@ class UInputMappingContext;
 
 DECLARE_LOG_CATEGORY_EXTERN(LogTemplateCharacter, Log, All);
 
-/** 顶视角玩家控制器；Possess 无战斗碰撞的 Command Pawn，并向显式 CommandedUnit 提交服务器 Order。 */
+/**
+ * 顶视角玩家的连接、输入和镜头入口。
+ * Controller 只 Possess 无战斗碰撞的 Command Pawn，通过 owner-only CommandedUnit 绑定选择业务单位；移动和技能输入最终提交给服务器 Order/RPC 校验链，不直接驱动 Unit Transform 或战斗结算。
+ */
 UCLASS(Blueprintable)
 class Aue_gasPlayerController : public APlayerController
 {
 	GENERATED_BODY()
 
 public:
-	/** 配置鼠标、Command Pawn 默认类与服务器权威绑定初值。 */
 	Aue_gasPlayerController();
 
-	/** 注册 owner-only CommandedUnit 与 BindingGeneration。 */
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 	/** 返回当前显式主控 Combat Unit；输入不得从 GetPawn 推断该对象。 */

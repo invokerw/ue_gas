@@ -17,21 +17,23 @@ DECLARE_MULTICAST_DELEGATE_OneParam(FOnCombatAttackReady, FCombatOrderHandle);
 /** AttackRecord 以任意 outcome exactly-once 结束后广播。 */
 DECLARE_MULTICAST_DELEGATE_OneParam(FOnCombatAttackFinalized, const FCombatAttackResult&);
 
-/** 持有单位唯一 AttackRecord registry，并统一前摇、ready、随机与命中结算。 */
+/**
+ * Unit 普通攻击的服务器权威执行器和唯一 AttackRecord registry。
+ * 组件在攻击开始时冻结时序、目标、随机和法球结果，通过 Scheduler 推进 attack point/ready，并保证近战或弹体回调只能 exactly-once 终结对应记录。
+ */
 UCLASS(ClassGroup=(Combat), meta=(BlueprintSpawnableComponent))
 class UE_GAS_API UCombatAttackComponent : public UActorComponent
 {
 	GENERATED_BODY()
 
 public:
-	/** 默认关闭 Tick；前摇与 ready 只由 Combat Scheduler 驱动。 */
 	UCombatAttackComponent();
 
 	/** 无副作用检查当前状态、目标、距离、LOS、朝向与 ready。 */
 	FCombatOperationResult CanStartMeleeAttack(ACombatUnitCharacter* Target) const;
 	/** 创建 Pending Record、提交法球 winner 并安排唯一 attack point。 */
 	FCombatAttackResult StartMeleeAttack(ACombatUnitCharacter* Target, FCombatOrderHandle OrderHandle);
-	/** 幂等终结仍活动的 Record；主要供 M5 Projectile 回调使用。 */
+	/** 幂等终结仍活动的 Record；主要供 Projectile 命中回调使用。 */
 	FCombatAttackResult FinalizeAttack(FCombatAttackHandle Handle);
 	/** Attack Projectile 命中原目标后结算；跳过已由弹道承担的距离与 LOS 复核。 */
 	FCombatAttackResult FinalizeAttackFromProjectile(FCombatAttackHandle Handle, ACombatUnitCharacter* ImpactTarget);

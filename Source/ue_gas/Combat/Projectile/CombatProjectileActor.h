@@ -16,7 +16,6 @@ class UE_GAS_API ACombatProjectileActor : public AActor
 	GENERATED_BODY()
 
 public:
-	/** 创建无物理碰撞的表现根组件，并启用服务器 Tick 与 movement replication。 */
 	ACombatProjectileActor();
 
 	/** Spawn 后写入稳定 Handle、DefinitionId 与表现半径。 */
@@ -32,7 +31,6 @@ public:
 	virtual void Tick(float DeltaSeconds) override;
 	/** 外部 Destroy/World teardown 时请求 registry exactly-once Finish。 */
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
-	/** 复制 Handle、DefinitionId 和 Actor movement。 */
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 protected:

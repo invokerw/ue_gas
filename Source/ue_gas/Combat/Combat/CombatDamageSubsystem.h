@@ -7,7 +7,10 @@
 
 #include "CombatDamageSubsystem.generated.h"
 
-/** 服务器 Damage 唯一入口，负责 Hook、抗性、Shield、真实落账与 follow-up。 */
+/**
+ * 服务器 Damage 的唯一业务入口。
+ * 子系统按固定阶段执行来源/目标 Hook、抗性、Shield 和 GAS 元属性落账，以 AttributeSet 回报的真实 Health delta 生成结果；follow-up 继承 RootEventId，并受递归深度与标志约束。
+ */
 UCLASS()
 class UE_GAS_API UCombatDamageSubsystem : public UWorldSubsystem
 {

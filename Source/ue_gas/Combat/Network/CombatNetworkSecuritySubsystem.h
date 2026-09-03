@@ -10,7 +10,10 @@
 class ACombatUnitCharacter;
 class APlayerController;
 
-/** 为每个 owning connection 执行 Order RPC 所有权、载荷、限频与重放防护。 */
+/**
+ * Order RPC 的服务器连接级安全边界。
+ * 子系统按 owning connection 保存有界限频和 RequestId 重放窗口，先验证控制权与批次载荷，再允许业务 Order 进入 Unit；状态只用于安全判定和诊断，不参与 gameplay 结算。
+ */
 UCLASS()
 class UE_GAS_API UCombatNetworkSecuritySubsystem : public UWorldSubsystem
 {

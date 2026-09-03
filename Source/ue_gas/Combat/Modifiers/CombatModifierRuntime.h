@@ -18,7 +18,10 @@ class UCombatModifierComponent;
 class UCombatModifierData;
 class UGameplayEffect;
 
-/** 一个 ActiveGameplayEffect 对应的可扩展 Modifier 运行时对象。 */
+/**
+ * 与一个 ActiveGameplayEffect 一一对应的可扩展 Modifier 运行时对象。
+ * ModifierComponent 独占其身份、排序、周期和销毁生命周期；派生类只在稳定 Hook 阶段实现有状态行为，并通过公共请求延迟修改容器，不能自行维护第二套属性结果。
+ */
 UCLASS(Blueprintable, BlueprintType)
 class UE_GAS_API UCombatModifierRuntime : public UObject
 {

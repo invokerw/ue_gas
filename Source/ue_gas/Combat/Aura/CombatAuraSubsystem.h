@@ -30,7 +30,10 @@ struct FCombatAuraRuntimeRecord
 	TMap<TWeakObjectPtr<ACombatUnitCharacter>, FCombatAuraChildRecord> Children;
 };
 
-/** 每 World 唯一 Aura registry，使用 Targeting + Scheduler 对 child Modifier 做幂等 reconcile。 */
+/**
+ * 每个 World 唯一的服务器权威 Aura registry。
+ * Aura 冻结 Owner、Targeting 与 child 策略，由 Combat Scheduler 周期 reconcile 合法目标和一一映射 Modifier；队伍、生命或 World 生命周期变化都会幂等清理旧 child。
+ */
 UCLASS()
 class UE_GAS_API UCombatAuraSubsystem : public UWorldSubsystem
 {

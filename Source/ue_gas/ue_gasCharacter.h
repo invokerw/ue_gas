@@ -41,7 +41,6 @@ private:
 	float CameraFollowSpeed = 12.0f;
 
 public:
-	/** 创建无碰撞、无移动组件的可复制 Command Pawn 与顶视角相机。 */
 	Aue_gasCharacter();
 
 	/** 初始化时保持碰撞关闭；实际跟随目标由 PlayerController 绑定。 */

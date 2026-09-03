@@ -9,56 +9,55 @@
 class ACombatFissureBlocker;
 class UCombatModifierData;
 
-/** M3 无目标自我治疗纵向切片使用的 Ability Class。 */
+/** 无目标自我治疗示例 Ability。 */
 UCLASS()
 class UE_GAS_API UCombatSelfHealAbility : public UCombatGameplayAbility
 {
 	GENERATED_BODY()
 };
 
-/** M3 敌方单位目标魔法伤害纵向切片使用的 Ability Class。 */
+/** 敌方单位目标魔法伤害示例 Ability。 */
 UCLASS()
 class UE_GAS_API UCombatUnitDamageAbility : public UCombatGameplayAbility
 {
 	GENERATED_BODY()
 };
 
-/** M3 点目标服务器 AoE 查询纵向切片使用的 Ability Class。 */
+/** 由服务器查询命中集合的点目标 AoE 伤害示例 Ability。 */
 UCLASS()
 class UE_GAS_API UCombatPointAoeAbility : public UCombatGameplayAbility
 {
 	GENERATED_BODY()
 };
 
-/** M5 Dragon Slave：由 AbilityData 生成可穿透直线弹体并按 special 冻结伤害、宽度、距离与速度。 */
+/** Dragon Slave：由 AbilityData 生成可穿透直线弹体，并按 special 冻结伤害、宽度、距离与速度。 */
 UCLASS()
 class UE_GAS_API UCombatDragonSlaveAbility : public UCombatGameplayAbility
 {
 	GENERATED_BODY()
 };
 
-/** M5 Meat Hook：由 AbilityData 生成首命中弹体，依次伤害、施加 Hook Modifier 并请求水平拖拽。 */
+/** Meat Hook：由 AbilityData 生成首命中弹体，依次伤害、施加 Hook Modifier 并请求水平拖拽。 */
 UCLASS()
 class UE_GAS_API UCombatMeatHookAbility : public UCombatGameplayAbility
 {
 	GENERATED_BODY()
 };
 
-/** M6 Frost Arrows：Passive/Attack/AutoCast Ability，实际法球行为由 Intrinsic Runtime 提供。 */
+/** Frost Arrows：Passive/Attack/AutoCast Ability，实际法球行为由 Intrinsic Runtime 提供。 */
 UCLASS()
 class UE_GAS_API UCombatFrostArrowsAbility : public UCombatGameplayAbility
 {
 	GENERATED_BODY()
 };
 
-/** M6 Earthshaker Fissure：统一执行线伤、Stun、Knockback、视觉 Thinker 与物理 blocker。 */
+/** Earthshaker Fissure：统一执行线伤、Stun、Knockback、视觉 Thinker 与物理 blocker。 */
 UCLASS()
 class UE_GAS_API UCombatFissureAbility : public UCombatGameplayAbility
 {
 	GENERATED_BODY()
 
 public:
-	/** 默认 blocker 使用无 Tick 的 ACombatFissureBlocker。 */
 	UCombatFissureAbility();
 	/** Spec 授予时把 Fissure 专属 CDO 引用同步到 InstancedPerActor 实例。 */
 	virtual void OnGiveAbility(
@@ -76,7 +75,7 @@ public:
 	/** Fissure Stun 使用的普通 Debuff 定义。 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Demo|Fissure", meta=(DisplayName="眩晕 Modifier 定义", ToolTip="裂沟命中单位时施加的普通减益 Modifier。"))
 	TObjectPtr<UCombatModifierData> StunModifierData = nullptr;
-	/** 第一版物理 blocker Actor 类型。 */
+	/** 裂沟使用的权威物理 blocker Actor 类型。 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Demo|Fissure", meta=(DisplayName="阻挡物类型", ToolTip="裂沟创建的物理阻挡 Actor 类型；为空时使用默认实现。"))
 	TSubclassOf<ACombatFissureBlocker> BlockerClass;
 
@@ -92,7 +91,7 @@ private:
 	bool bBlockerCreated = false;
 };
 
-/** M3 Scheduler Channel 自动化使用的可观察 Ability Class。 */
+/** Scheduler Channel 自动化使用的可观察 Ability。 */
 UCLASS()
 class UE_GAS_API UCombatChannelProbeAbility : public UCombatGameplayAbility
 {

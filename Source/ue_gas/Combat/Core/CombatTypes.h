@@ -77,9 +77,7 @@ struct UE_GAS_API FCombatTeamId
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Combat|Team")
 	uint8 Value = InvalidValue;
 
-	/** 构造无效队伍标识。 */
 	FCombatTeamId() = default;
-	/** 使用给定紧凑值构造队伍标识。 */
 	explicit FCombatTeamId(const uint8 InValue) : Value(InValue) {}
 
 	/** 返回当前值是否不是无效保留值。 */

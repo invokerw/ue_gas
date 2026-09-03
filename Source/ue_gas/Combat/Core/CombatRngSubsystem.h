@@ -59,7 +59,10 @@ struct UE_GAS_API FCombatRngRollRecord
 	UPROPERTY(BlueprintReadOnly, Category="Combat|RNG") bool bSuccess = false;
 };
 
-/** 为当前 World 提供可重放、无调用顺序依赖的 keyed RNG。 */
+/**
+ * 当前 World 的确定性 keyed RNG 服务。
+ * 每次取样由 MatchSeed、域、稳定对象身份和 RollIndex 独立决定，不依赖其他系统的调用顺序；服务器结果可通过同一键重放和诊断，客户端不得用它替代权威判定。
+ */
 UCLASS()
 class UE_GAS_API UCombatRngSubsystem : public UWorldSubsystem
 {

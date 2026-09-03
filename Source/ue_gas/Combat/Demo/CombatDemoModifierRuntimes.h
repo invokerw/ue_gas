@@ -49,7 +49,7 @@ protected:
 	virtual void OnPostTakeDamage_Implementation(const FCombatDamageEvent& Event) override;
 };
 
-/** M4 基础法球 Runtime：无副作用预检，winner 提交 Mana 并写入伤害/OnHit 快照。 */
+/** 基础法球 Runtime：无副作用预检，winner 提交 Mana 并写入伤害与 OnHit 快照。 */
 UCLASS(Blueprintable)
 class UE_GAS_API UCombatDemoOrbRuntime : public UCombatModifierRuntime
 {
@@ -60,7 +60,7 @@ public:
 	UFUNCTION(BlueprintPure, Category="Combat|Demo|Orb", meta=(DisplayName="获取法球成功声明次数", ToolTip="返回该 Runtime 作为法球胜者成功提交资源的次数。")) int32 GetSuccessfulClaimCount() const { return SuccessfulClaimCount; }
 
 protected:
-	/** 第一版示例统一参与 Orb.Primary exclusive group。 */
+	/** 示例法球统一参与 Orb.Primary 互斥组。 */
 	virtual FName GetAttackOrbExclusiveGroup_Implementation() const override;
 	/** 只读检查 orb_enabled、数值与当前 Mana，不产生任何资源副作用。 */
 	virtual bool CanClaimAttack_Implementation(const FCombatAttackCandidateContext& Context) const override;
@@ -74,7 +74,7 @@ private:
 	int32 SuccessfulClaimCount = 0;
 };
 
-/** M6 Frost Arrows：读取 AbilitySpec 等级与 AutoCast，并把 slow/弹体完整快照进 AttackRecord。 */
+/** Frost Arrows Runtime：读取 AbilitySpec 等级与 AutoCast，并把减速和弹体信息完整快照进 AttackRecord。 */
 UCLASS(Blueprintable)
 class UE_GAS_API UCombatFrostArrowsRuntime : public UCombatModifierRuntime
 {
@@ -99,7 +99,7 @@ private:
 	int32 SuccessfulClaimCount = 0;
 };
 
-/** M6 SpellBlock：在 SpellStarted commit 后消耗自身并阻止一个显式可阻挡技能。 */
+/** SpellBlock Runtime：在 SpellStarted commit 后消耗自身并阻止一个显式可阻挡技能。 */
 UCLASS(Blueprintable)
 class UE_GAS_API UCombatSpellBlockRuntime : public UCombatModifierRuntime
 {

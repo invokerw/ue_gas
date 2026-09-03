@@ -19,7 +19,6 @@
 
 namespace CombatReleaseTests
 {
-	/** M8 候选发布测试统一使用 EditorContext 与 EngineFilter。 */
 	constexpr EAutomationTestFlags Flags = EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter;
 
 	/** 在真实测试 World 中创建已经完成 Combat 初始化的服务器单位。 */

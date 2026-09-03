@@ -7,7 +7,10 @@
 
 #include "CombatHealSubsystem.generated.h"
 
-/** 服务器 Heal 唯一入口，负责 Hook、增幅、真实落账与过量治疗。 */
+/**
+ * 服务器 Heal 的唯一业务入口。
+ * 子系统按固定阶段执行来源/目标 Hook、治疗增幅和 GAS 元属性落账，以 AttributeSet 回报的真实 Health delta 区分有效与过量治疗，并保持 follow-up 的事件因果链。
+ */
 UCLASS()
 class UE_GAS_API UCombatHealSubsystem : public UWorldSubsystem
 {

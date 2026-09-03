@@ -10,9 +10,7 @@ class UWorld;
 class FCombatAutomationWorldFixture
 {
 public:
-	/** 创建指定 NetMode 的最小 Game World，并初始化 World Subsystem。 */
 	explicit FCombatAutomationWorldFixture(ENetMode RequestedNetMode = NM_Standalone);
-	/** 销毁 World、清理 Context，并触发 Subsystem teardown。 */
 	~FCombatAutomationWorldFixture();
 
 	/** 禁止复制，确保 World 只有一个 fixture owner。 */

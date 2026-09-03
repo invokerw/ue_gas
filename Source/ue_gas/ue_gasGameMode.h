@@ -17,7 +17,6 @@ class Aue_gasGameMode : public AGameModeBase
 
 public:
 
-	/** 配置 Combat PlayerController 与玩家默认 Unit 类。 */
 	Aue_gasGameMode();
 
 	/**

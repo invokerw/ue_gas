@@ -9,7 +9,10 @@
 
 class ACombatUnitCharacter;
 
-/** 为 UI、Order 和 Ability 提供同一套服务器目标与 AoE 查询规则。 */
+/**
+ * UI、Order 和 Ability 共用的权威目标校验与空间查询入口。
+ * 单位、点、半径和线段查询统一复用队伍、生命、距离与 LOS 规则；客户端 TargetData 只作为请求，命中集合始终由服务器重建并稳定排序。
+ */
 UCLASS()
 class UE_GAS_API UCombatTargetingSubsystem : public UWorldSubsystem
 {

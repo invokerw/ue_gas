@@ -17,14 +17,16 @@ class UEnvQuery;
 class UEnvQueryInstanceBlueprintWrapper;
 class UPathFollowingComponent;
 
-/** 统一执行 Move、Cast、Attack 与 Stop 的服务器权威 FIFO 状态机。 */
+/**
+ * Unit 的服务器权威 Move、Cast、Attack 与 Stop FIFO 状态机。
+ * 组件统一验证和推进队首，用 OrderHandle generation 淘汰导航、EQS、Ability 和 Attack 的过期回调；生命状态、控制状态或强制位移变化只通过明确的暂停、取消和恢复入口影响队列。
+ */
 UCLASS(ClassGroup=(Combat), meta=(BlueprintSpawnableComponent))
 class UE_GAS_API UCombatOrderComponent : public UActorComponent
 {
 	GENERATED_BODY()
 
 public:
-	/** 默认关闭 Tick；异步推进只来自受句柄保护的回调与 Scheduler。 */
 	UCombatOrderComponent();
 
 	/** 接受一个权威 Order；bQueue=false 会提升 generation 并替换全部旧行为。 */

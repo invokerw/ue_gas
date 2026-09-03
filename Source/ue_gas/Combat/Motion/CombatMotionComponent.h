@@ -9,14 +9,16 @@
 
 class ACombatUnitCharacter;
 
-/** 每个 Unit 唯一的强制位移执行器，维护水平/垂直独占通道与优先级抢占。 */
+/**
+ * 每个 Unit 唯一的服务器权威强制位移执行器。
+ * 组件以稳定 Handle 管理水平、垂直独占通道和优先级抢占，只通过 CharacterMovement 推进连续位移；死亡、释放或 EndPlay 都会使旧请求失效并 exactly-once 广播结果。
+ */
 UCLASS(ClassGroup=(Combat), meta=(BlueprintSpawnableComponent))
 class UE_GAS_API UCombatMotionComponent : public UActorComponent
 {
 	GENERATED_BODY()
 
 public:
-	/** Authority Tick 只在存在活动 Motion 时推进连续位移。 */
 	UCombatMotionComponent();
 
 	/** 校验请求并获取通道；严格高优先级会中断旧 owner。 */

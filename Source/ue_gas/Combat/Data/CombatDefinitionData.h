@@ -115,7 +115,10 @@ struct UE_GAS_API FCombatSpecialValue
 	bool IsValidForMaxLevel(int32 MaxLevel) const;
 };
 
-/** 所有 Combat PrimaryDataAsset 的身份和 schema 基类。 */
+/**
+ * 所有 Combat PrimaryDataAsset 的稳定身份与 schema 基类。
+ * 派生定义通过唯一 lower_snake_case DefinitionName 生成 PrimaryAssetId，并在编辑器、运行时和迁移校验中共享同一内容版本边界。
+ */
 UCLASS(Abstract, BlueprintType)
 class UE_GAS_API UCombatDefinitionData : public UPrimaryDataAsset
 {
@@ -197,7 +200,6 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Unit")
 	TArray<TSoftObjectPtr<UCombatAbilitySet>> AbilitySets;
 
-	/** 返回 CombatUnit PrimaryAssetType。 */
 	virtual FPrimaryAssetType GetCombatPrimaryAssetType() const override;
 
 #if WITH_EDITOR
@@ -253,7 +255,7 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Ability")
 	ECombatTargetLostPolicy TargetLostPolicy = ECombatTargetLostPolicy::Fail;
 
-	/** 引导中断后未来 OrderComponent 的队列策略。 */
+	/** 引导中断后 OrderComponent 处理后续队列的策略。 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Ability")
 	ECombatChannelInterruptOrderPolicy ChannelInterruptOrderPolicy = ECombatChannelInterruptOrderPolicy::Continue;
 
@@ -279,10 +281,9 @@ public:
 
 	/** 读取指定等级的 special；缺失键返回 DefaultValue。 */
 	float GetSpecialValue(FName Key, int32 Level, float DefaultValue = 0.0f) const;
-	/** 在运行时和自动化中执行与 Editor validator 相同的 M3 schema 校验。 */
+	/** 在运行时和自动化中执行与 Editor validator 相同的 Ability schema 校验。 */
 	bool ValidateRuntime(FString& OutDiagnostic) const;
 
-	/** 返回 CombatAbility PrimaryAssetType。 */
 	virtual FPrimaryAssetType GetCombatPrimaryAssetType() const override;
 
 #if WITH_EDITOR
@@ -358,7 +359,6 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Modifier", meta=(DisplayName="受 Break 禁用", ToolTip="启用后，目标具有 State.Broken 时暂停该 Runtime 的 Hook、周期和法球行为。"))
 	bool bDisabledByBreak = false;
 
-	/** 返回 CombatModifier PrimaryAssetType。 */
 	virtual FPrimaryAssetType GetCombatPrimaryAssetType() const override;
 
 #if WITH_EDITOR
@@ -414,7 +414,6 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Projectile")
 	FName CollisionProfileName = TEXT("CombatProjectile");
 
-	/** 返回 CombatProjectile PrimaryAssetType。 */
 	virtual FPrimaryAssetType GetCombatPrimaryAssetType() const override;
 
 #if WITH_EDITOR
@@ -453,7 +452,6 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|AbilitySet")
 	TArray<FCombatAbilitySetEntry> Abilities;
 
-	/** 返回 CombatAbilitySet PrimaryAssetType。 */
 	virtual FPrimaryAssetType GetCombatPrimaryAssetType() const override;
 
 #if WITH_EDITOR

@@ -12,14 +12,16 @@ class ACombatUnitCharacter;
 class UAbilityTask_WaitCombatInterval;
 class UCombatAbilityData;
 
-/** 服务器权威的 Combat Ability 基类，统一目标、提交、Scheduler 生命周期与清理。 */
+/**
+ * 数据驱动 Combat Ability 的服务器权威基类。
+ * 每次激活冻结 AbilityData、等级、目标和事件身份，按配置提交 Cost/Cooldown 并执行同步或异步动作；所有 Scheduler、Projectile 和 View 状态都在结束路径中按激活身份清理。
+ */
 UCLASS(Blueprintable)
 class UE_GAS_API UCombatGameplayAbility : public UGameplayAbility
 {
 	GENERATED_BODY()
 
 public:
-	/** 默认使用 InstancedPerActor、ServerOnly，实例保存本次激活快照。 */
 	UCombatGameplayAbility();
 
 	/** 返回 Class CDO 单向引用的稳定 AbilityData。 */
@@ -80,7 +82,7 @@ public:
 	TObjectPtr<UCombatAbilityData> AbilityData;
 
 protected:
-	/** 按服务器权威 Target 快照依次执行同步动作和 M5 异步实体动作。 */
+	/** 按服务器权威 Target 快照依次执行同步动作和异步实体动作。 */
 	FCombatAbilityActionResult ExecuteDataDrivenActions();
 
 	/** C++ 默认蓝图事件为空。 */

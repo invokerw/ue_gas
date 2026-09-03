@@ -369,7 +369,7 @@ void UCombatAttackComponent::HandleAttackPoint(
 		}
 		return;
 	}
-	// 没有 ProjectileData 的单位保持 M4 近战语义，在 attack point 立即 impact。
+	// 没有 ProjectileData 的单位采用近战语义，在 attack point 立即结算命中。
 	FinalizeAttackInternal(Handle);
 }
 

@@ -10,14 +10,13 @@
 
 class UBoxComponent;
 
-/** Fissure 第一版物理 blocker：无 Tick、Scheduler 生命周期，并主动通知相交 Order repath。 */
+/** Fissure 的权威物理 blocker：无 Tick、由 Scheduler 管理生命周期，并主动通知相交 Order 重新寻路。 */
 UCLASS()
 class UE_GAS_API ACombatFissureBlocker : public AActor
 {
 	GENERATED_BODY()
 
 public:
-	/** 创建复制的 CombatBlocker Box，默认关闭 Tick。 */
 	ACombatFissureBlocker();
 	/** 在 Authority 上冻结线段几何与持续时间，并通知相关移动路径。 */
 	bool InitializeBlocker(

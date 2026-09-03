@@ -62,21 +62,22 @@ struct UE_GAS_API FCombatUnitBaseStats
 	bool IsValid(FString* OutDiagnostic = nullptr) const;
 };
 
-/** 集中持有 Unit 可复制战斗属性，并把 Damage/Heal 元属性回报到同步事务槽。 */
+/**
+ * Unit 战斗数值的唯一 GAS 属性集合，集中保存并复制资源、攻击、防御和施法相关聚合值。
+ * Damage/Heal 只通过瞬时元属性进入；执行回调应用数值策略、写入真实 Health delta，并把结果同步回报给对应战斗事务。
+ */
 UCLASS()
 class UE_GAS_API UCombatAttributeSet : public UAttributeSet
 {
 	GENERATED_BODY()
 
 public:
-	/** 建立适合测试单位的 v1 默认属性。 */
 	UCombatAttributeSet();
 
 	/** 在聚合值即将变化时应用 Numeric Policy v1 的有限值与区间约束。 */
 	virtual void PreAttributeChange(const FGameplayAttribute& Attribute, float& NewValue) override;
 	/** 在 Instant GE 执行后消费 Damage/Heal 元属性并回报真实 Health delta。 */
 	virtual void PostGameplayEffectExecute(const FGameplayEffectModCallbackData& Data) override;
-	/** 注册全部非元属性的复制字段。 */
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 	/** 当前生命值，限制在 0..MaxHealth。 */

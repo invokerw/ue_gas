@@ -28,7 +28,6 @@
 
 namespace CombatContentExtensionTests
 {
-	/** M6 自动化统一使用 EditorContext 与 EngineFilter。 */
 	constexpr EAutomationTestFlags Flags = EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter;
 
 	/** 生成带稳定定义、队伍、属性和快速 attack point 的 Combat Unit。 */
@@ -80,7 +79,7 @@ namespace CombatContentExtensionTests
 		return Handle;
 	}
 
-	/** 创建满足 M5 运行时校验的 Tracking ProjectileData。 */
+	/** 创建满足运行时校验的 Tracking ProjectileData。 */
 	UCombatProjectileData* MakeTrackingProjectile(UObject& Outer, const FName DefinitionName)
 	{
 		UCombatProjectileData* Data = NewObject<UCombatProjectileData>(&Outer);

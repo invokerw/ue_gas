@@ -11,9 +11,9 @@ class ACombatUnitCharacter;
 UENUM(BlueprintType)
 enum class ECombatVisibilityPolicy : uint8
 {
-	/** M3 基线：不做战争迷雾判定，仍可独立开启几何 LOS。 */
+	/** 不做战争迷雾判定，仍可独立开启几何 LOS。 */
 	None,
-	/** 为未来 VisionProvider 预留；M3 请求该策略会明确返回 Unsupported。 */
+	/** 为权威 VisionProvider 预留；当前请求该策略会明确返回 Unsupported。 */
 	RequireVisible
 };
 
@@ -41,7 +41,7 @@ struct UE_GAS_API FCombatTargetingRules
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Targeting", meta=(ClampMin="0", Units="cm")) float CastRange = 0.0f;
 	/** cast point 是否使用 CombatTargeting trace channel 重新检查几何视线。 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Targeting") bool bRequireLineOfSight = false;
-	/** M3 只支持 None，保留该字段避免未来把客户端可见性误作权威。 */
+	/** 当前只支持 None；保留该字段以避免把客户端可见性误作权威。 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Targeting") ECombatVisibilityPolicy VisibilityPolicy = ECombatVisibilityPolicy::None;
 };
 
@@ -57,7 +57,7 @@ struct UE_GAS_API FCombatAbilityTargetData
 	UPROPERTY(BlueprintReadWrite, Category="Combat|Targeting") FVector TargetLocation = FVector::ZeroVector;
 	/** 区分合法原点与没有提交 Point。 */
 	UPROPERTY(BlueprintReadWrite, Category="Combat|Targeting") bool bHasTargetLocation = false;
-	/** 仅用于显式识别伪造；M3 任何非空客户端命中列表都会被服务器拒绝。 */
+	/** 仅用于显式识别伪造；任何非空客户端命中列表都会被服务器拒绝。 */
 	UPROPERTY(BlueprintReadWrite, Category="Combat|Targeting") TArray<TObjectPtr<ACombatUnitCharacter>> ClientClaimedHitActors;
 };
 

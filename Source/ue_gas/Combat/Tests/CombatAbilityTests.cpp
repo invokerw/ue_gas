@@ -26,7 +26,6 @@
 
 namespace CombatAbilityTests
 {
-	/** M3 自动化统一使用 EditorContext 与 EngineFilter。 */
 	constexpr EAutomationTestFlags Flags = EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter;
 
 	/** 在测试 World 中生成带稳定定义、队伍和基础属性的 Combat Unit。 */

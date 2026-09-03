@@ -290,13 +290,13 @@ bool FCombatDataIdentityTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-/** 验证 AssetManager 可冷启动发现 Unit 定义与 M1 测试地图。 */
+/** 验证 AssetManager 可在冷启动时发现 Unit 定义与 Combat 测试地图。 */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FCombatContentDiscoveryTest,
 	"Combat.Foundation.Content.AssetManagerAndTestMap",
 	CombatFoundationTests::Flags)
 
-/** 查询实际 AssetManager 注册表和磁盘包，验证 M1 内容可发现性。 */
+/** 查询实际 AssetManager 注册表和磁盘包，验证基础 Combat 内容可发现性。 */
 bool FCombatContentDiscoveryTest::RunTest(const FString& Parameters)
 {
 	UAssetManager& AssetManager = UAssetManager::Get();

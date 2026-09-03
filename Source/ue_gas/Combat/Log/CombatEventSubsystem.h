@@ -77,7 +77,10 @@ struct UE_GAS_API FCombatLogRecord
 /** 在一条结构化日志提交后同步通知观察者。 */
 DECLARE_MULTICAST_DELEGATE_OneParam(FOnCombatLogRecord, const FCombatLogRecord&);
 
-/** 为当前 World 分配事件 ID、维护因果深度并广播结构化日志。 */
+/**
+ * 当前 World 的战斗事件身份与结构化日志中心。
+ * 子系统为根事件和受深度限制的 follow-up 分配稳定 EventId/RootEventId，统一记录结果与失败原因并同步通知观察者；日志只反映权威结算，不反向驱动 gameplay。
+ */
 UCLASS()
 class UE_GAS_API UCombatEventSubsystem : public UWorldSubsystem
 {

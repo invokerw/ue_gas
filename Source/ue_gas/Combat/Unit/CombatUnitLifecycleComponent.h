@@ -14,14 +14,16 @@ DECLARE_MULTICAST_DELEGATE_TwoParams(FOnCombatUnitDied, ACombatUnitCharacter*, c
 /** Unit 建立新生命代次后广播的原生事件。 */
 DECLARE_MULTICAST_DELEGATE_TwoParams(FOnCombatUnitRespawned, ACombatUnitCharacter*, const FCombatEventContext&);
 
-/** 执行服务器权威 Alive/Dying/Dead/Respawning 同步状态机。 */
+/**
+ * 执行 Unit 的服务器权威 Alive/Dying/Dead/Respawning 状态机。
+ * 死亡路径按固定顺序隔离 Order、Attack、Motion、Modifier 和碰撞状态；复活建立新的 LifeGeneration，使上一生命创建的异步回调无法作用于新生命。
+ */
 UCLASS(ClassGroup=(Combat), meta=(BlueprintSpawnableComponent))
 class UE_GAS_API UCombatUnitLifecycleComponent : public UActorComponent
 {
 	GENERATED_BODY()
 
 public:
-	/** 默认关闭 Tick；状态转换只由 Damage 或显式 Respawn 事件驱动。 */
 	UCombatUnitLifecycleComponent();
 
 	/** 仅 Authority 接受 Alive 单位的死亡请求，并同步完成 Dying 清理和 Dead。 */

@@ -42,7 +42,6 @@ public:
 	virtual void Deinitialize() override;
 	/** 在支持的游戏 World 中以当前 World Game Time 执行到期任务。 */
 	virtual void Tick(float DeltaTime) override;
-	/** 返回 Scheduler Tick 的统计 ID。 */
 	virtual TStatId GetStatId() const override;
 
 	/** 注册一次性任务；无效 Owner、负 Delay 或空回调返回无效句柄。 */

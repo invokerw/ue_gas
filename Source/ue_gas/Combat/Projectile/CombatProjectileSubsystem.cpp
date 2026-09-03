@@ -16,7 +16,7 @@
 
 namespace CombatProjectilePrivate
 {
-	/** M0 冻结的同距离命中并列容差。 */
+	// 同一推进步内用固定容差合并命中距离，保证并列结果可稳定排序。
 	constexpr float HitTieToleranceCm = 0.1f;
 
 	/** Blocker 排在 Unit 前，最后使用 Actor UniqueID 稳定打破并列。 */

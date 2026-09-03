@@ -20,15 +20,12 @@ struct UE_GAS_API FCombatPhaseContext
 class UE_GAS_API FCombatDeferredOperationQueue
 {
 public:
-	/** 构造空队列。 */
 	FCombatDeferredOperationQueue() = default;
 	/** 禁止复制，避免同一操作被两个队列重复提交。 */
 	FCombatDeferredOperationQueue(const FCombatDeferredOperationQueue&) = delete;
 	/** 禁止复制赋值，避免重复拥有回调。 */
 	FCombatDeferredOperationQueue& operator=(const FCombatDeferredOperationQueue&) = delete;
-	/** 允许转移队列所有权。 */
 	FCombatDeferredOperationQueue(FCombatDeferredOperationQueue&&) = default;
-	/** 允许通过移动赋值转移队列所有权。 */
 	FCombatDeferredOperationQueue& operator=(FCombatDeferredOperationQueue&&) = default;
 
 	/** 压入一个嵌套阶段；超过 MaxDepth 时拒绝并返回 false。 */

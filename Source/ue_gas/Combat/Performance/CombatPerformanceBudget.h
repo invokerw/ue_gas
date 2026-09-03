@@ -6,7 +6,7 @@
 
 #include "CombatPerformanceBudget.generated.h"
 
-/** M7 冻结的单场景容量与 Dedicated 帧时/带宽预算。 */
+/** 发布契约冻结的单场景容量与 Dedicated 帧时、带宽预算。 */
 USTRUCT(BlueprintType)
 struct UE_GAS_API FCombatPerformanceBudget
 {

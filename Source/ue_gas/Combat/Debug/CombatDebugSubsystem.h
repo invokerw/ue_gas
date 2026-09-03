@@ -58,7 +58,10 @@ struct UE_GAS_API FCombatRuntimeMetrics
 	FString ToString() const;
 };
 
-/** 提供单位/RootEvent 转储、统一指标快照和非侵入式战斗调试绘制。 */
+/**
+ * 汇总 Unit、RootEvent、运行时 registry 和容量指标的只读调试入口。
+ * 子系统只消费公开快照生成日志或世界绘制，不持有战斗对象、不修正状态，也不参与任何服务器结算路径。
+ */
 UCLASS()
 class UE_GAS_API UCombatDebugSubsystem : public UTickableWorldSubsystem
 {
@@ -82,7 +85,6 @@ public:
 
 	/** 在启用时绘制当前服务器或客户端可见的只读状态。 */
 	virtual void Tick(float DeltaTime) override;
-	/** 返回调试子系统 Tick 的统计 ID。 */
 	virtual TStatId GetStatId() const override;
 
 protected:

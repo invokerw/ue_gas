@@ -312,7 +312,7 @@ bool UCombatTargetingSubsystem::HasLineOfSight(
 		Params.AddIgnoredActor(TargetToIgnore);
 	}
 	FHitResult Hit;
-	// M0 已冻结 GameTraceChannel4=CombatTargeting，Foundation 自动化同时防止配置映射漂移。
+	// 使用发布契约固定的 CombatTargeting 通道；Foundation 自动化负责检测配置映射漂移。
 	return !GetWorld()->LineTraceSingleByChannel(
 		Hit, Source.GetActorLocation(), AimPoint, ECC_GameTraceChannel4, Params);
 }

@@ -40,17 +40,18 @@ enum class ECombatAscReplicationPolicy : uint8
 	Full UMETA(DisplayName="Full（仅调试）")
 };
 
-/** 具备服务器权威 Team/Life 状态和自持 ASC 的基础战斗单位。 */
+/**
+ * Combat gameplay 的基础单位 Actor，拥有 ASC、AttributeSet 以及 Order、Attack、Modifier、Motion、Lifecycle 和 View 等核心组件。
+ * 服务器独占队伍、生命、初始化和指挥归属；客户端只消费复制状态与安全 View。服务器 AIController 始终负责导航，PlayerController 通过显式 Owner 绑定获得网络控制权而不直接 Possess 业务单位。
+ */
 UCLASS(Blueprintable)
 class UE_GAS_API ACombatUnitCharacter : public ACharacter, public IAbilitySystemInterface
 {
 	GENERATED_BODY()
 
 public:
-	/** 创建复制的 Combat ASC，并设置单位默认碰撞与网络属性。 */
 	ACombatUnitCharacter();
 
-	/** 通过 IAbilitySystemInterface 返回单位持有的 ASC。 */
 	virtual UAbilitySystemComponent* GetAbilitySystemComponent() const override;
 	/** 返回强类型 Combat ASC。 */
 	UCombatAbilitySystemComponent* GetCombatAbilitySystemComponent() const { return CombatAbilitySystemComponent; }
@@ -137,7 +138,6 @@ public:
 	UFUNCTION(BlueprintCallable, Category="Combat|Team", meta=(DisplayName="设置战斗队伍", ToolTip="仅在服务器设置有效队伍 ID，并广播结构化的队伍变更事件。"))
 	bool SetCombatTeamId(UPARAM(DisplayName="新队伍 ID") FCombatTeamId NewTeamId);
 
-	/** 注册 Team、LifeState 与 LifeGeneration 的复制字段。 */
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 	/** 获得 Controller 后刷新 Owner/Avatar ActorInfo。 */
 	virtual void PossessedBy(AController* NewController) override;

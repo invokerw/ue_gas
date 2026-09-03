@@ -22,7 +22,6 @@
 
 namespace CombatNetworkObservabilityTests
 {
-	/** M7 网络、诊断与容量测试统一使用 EditorContext 与 EngineFilter。 */
 	constexpr EAutomationTestFlags Flags = EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter;
 
 	/** 在测试 World 中生成带稳定 DefinitionId 的 Combat Unit。 */

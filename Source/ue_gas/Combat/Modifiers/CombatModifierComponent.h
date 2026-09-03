@@ -69,14 +69,16 @@ struct UE_GAS_API FCombatModifierApplyResult
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Modifier", meta=(DisplayName="失败标签", ToolTip="失败时可由程序稳定判定的原因标签。")) FGameplayTag FailureTag;
 };
 
-/** 管理 Unit 的 ActiveGE/Runtime 一一映射、稳定 Hook、周期、刷新和驱散。 */
+/**
+ * 管理 Unit 全部 ActiveGameplayEffect 与 ModifierRuntime 的一一映射。
+ * 组件按 Priority、ApplySequence 稳定派发 Hook，通过 Combat Scheduler 维护周期和过期，并把 Hook 中的施加、刷新、移除延迟到安全边界；ASC 聚合结果始终是最终属性来源。
+ */
 UCLASS(ClassGroup=(Combat), meta=(BlueprintSpawnableComponent))
 class UE_GAS_API UCombatModifierComponent : public UActorComponent
 {
 	GENERATED_BODY()
 
 public:
-	/** 默认关闭 Tick；所有周期由 Combat Scheduler 驱动。 */
 	UCombatModifierComponent();
 
 	/** 在 Authority 上施加或刷新 Modifier。 */

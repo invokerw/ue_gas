@@ -39,7 +39,10 @@ struct FCombatProjectileRuntimeRecord
 	bool bUsingLastKnownPoint = false;
 };
 
-/** 服务器权威 Projectile Handle registry、稳定 sweep 与 exactly-once Finish 入口。 */
+/**
+ * 每个 World 的服务器权威 Projectile registry 和唯一 Finish 入口。
+ * Spawn 时冻结业务 Spec 与生命代次，Actor 仅推进连续运动和复制位置；子系统负责稳定 substep sweep、目标复核、Impact 结算及任意命中、取消、超时或 teardown 路径的 exactly-once 收尾。
+ */
 UCLASS()
 class UE_GAS_API UCombatProjectileSubsystem : public UWorldSubsystem
 {

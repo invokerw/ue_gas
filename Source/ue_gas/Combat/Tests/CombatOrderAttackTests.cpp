@@ -35,7 +35,6 @@
 
 namespace CombatOrderAttackTests
 {
-	/** M4 自动化统一使用 EditorContext 与 EngineFilter。 */
 	constexpr EAutomationTestFlags Flags = EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter;
 
 	/** 生成指定队伍、属性和攻击策略的已初始化 Combat Unit。 */

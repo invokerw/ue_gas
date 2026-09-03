@@ -25,7 +25,10 @@ struct UE_GAS_API FCombatProjectilePresentationStats
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Projectile|Presentation", meta=(DisplayName="服务器身份去重次数", ToolTip="同一服务器 Handle 重复通知且未创建第二视觉的累计次数。")) int64 DuplicateServerIdentityCount = 0;
 };
 
-/** 只协调客户端预测视觉与服务器 Projectile Actor，不参与任何 gameplay 结算。 */
+/**
+ * 客户端 Projectile 预测视觉与服务器复制 Actor 的表现协调器。
+ * 子系统用预测键和服务器身份去重、接管或销毁可丢弃视觉对象；它不执行 sweep、命中、Damage、Modifier 或 Attack finalize，无法影响权威 gameplay。
+ */
 UCLASS()
 class UE_GAS_API UCombatProjectilePresentationSubsystem : public UWorldSubsystem
 {

@@ -4,5 +4,5 @@
 
 #include "CoreMinimal.h"
 
-/** Main log category used across the project */
+/** 项目 Runtime 共用的基础日志类别。 */
 DECLARE_LOG_CATEGORY_EXTERN(Logue_gas, Log, All);

@@ -10,14 +10,16 @@
 class ACombatUnitCharacter;
 struct FOnAttributeChangeData;
 
-/** 将服务器 Unit、Ability 与 Modifier 状态投影为 UI 安全的扁平复制 View。 */
+/**
+ * 将服务器 Unit、Ability 与 Modifier 状态投影为 UI 安全的扁平复制 View。
+ * Owner 与非 Owner 接收相同的白名单字段和 FastArray 快照；组件只从权威 gameplay 状态刷新并通知表现层，UI 不能通过 View 反向修改属性或结算。
+ */
 UCLASS(ClassGroup=(Combat), meta=(BlueprintSpawnableComponent))
 class UE_GAS_API UCombatUnitViewComponent : public UActorComponent
 {
 	GENERATED_BODY()
 
 public:
-	/** 默认关闭 Tick，并启用 Unit View 与 FastArray 复制。 */
 	UCombatUnitViewComponent();
 
 	/** 返回当前客户端或服务器的单位 View。 */
@@ -54,7 +56,6 @@ public:
 	/** FastArray 回调统一入口。 */
 	void HandleModifierViewsReplicated();
 
-	/** 注册 View 复制字段。 */
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 	/** 绑定 Attribute 与 Modifier 变化源并建立初始 View。 */
 	virtual void BeginPlay() override;

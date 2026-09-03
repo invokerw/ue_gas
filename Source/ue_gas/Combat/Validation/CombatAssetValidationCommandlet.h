@@ -79,7 +79,6 @@ class UE_GAS_API UCombatAssetValidationCommandlet : public UCommandlet
 	GENERATED_BODY()
 
 public:
-	/** 配置为无客户端、无服务器且只输出控制台日志的本地命令。 */
 	UCombatAssetValidationCommandlet();
 	/** 执行项目扫描，并把 JSON 报告写到 -Report 或 Saved/CombatValidation。 */
 	virtual int32 Main(const FString& Params) override;

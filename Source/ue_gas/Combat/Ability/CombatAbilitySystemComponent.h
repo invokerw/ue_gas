@@ -17,14 +17,16 @@ DECLARE_MULTICAST_DELEGATE_FourParams(
 	FGameplayTag,
 	ECombatChannelInterruptOrderPolicy);
 
-/** 扩展 GAS ASC，统一维护 Combat ActorInfo 的初始化与清理契约。 */
+/**
+ * Unit 自持的 GAS 扩展组件，负责 Combat AbilitySpec 的授予、等级、自动施法、消耗和冷却状态。
+ * 它在服务器保存激活所需的短生命周期 TargetData，并统一维护 ActorInfo、Intrinsic Modifier 与 Order 释放契约；客户端 RPC 只表达请求，最终激活条件仍由服务器复核。
+ */
 UCLASS(ClassGroup=(Combat), meta=(BlueprintSpawnableComponent))
 class UE_GAS_API UCombatAbilitySystemComponent : public UAbilitySystemComponent
 {
 	GENERATED_BODY()
 
 public:
-	/** 构造默认开启复制的 Combat ASC。 */
 	UCombatAbilitySystemComponent();
 
 	/** 使用明确的 Owner/Avatar 初始化 ActorInfo，并避免重复初始化同一对 Actor。 */
@@ -116,7 +118,7 @@ private:
 	/** 以 Duration GE 启动提交点快照后的 cooldown。 */
 	bool ApplyCombatCooldown(FGameplayAbilitySpecHandle Handle, float Duration);
 
-	/** per-Spec 服务器权威 AutoCast 状态；M7 再增加复制投影。 */
+	/** per-Spec 服务器权威 AutoCast 状态；客户端通过安全 View 读取投影结果。 */
 	TMap<FGameplayAbilitySpecHandle, bool> AutoCastStates;
 	/** TryActivate 与 Ability 实例之间的同步、一次性 TargetData 槽。 */
 	TMap<FGameplayAbilitySpecHandle, FCombatAbilityTargetData> PendingTargetData;

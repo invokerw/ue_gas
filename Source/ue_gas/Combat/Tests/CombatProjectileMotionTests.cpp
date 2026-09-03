@@ -22,7 +22,6 @@
 
 namespace CombatProjectileMotionTests
 {
-	/** M5 自动化统一使用 EditorContext 与 EngineFilter。 */
 	constexpr EAutomationTestFlags Flags = EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter;
 
 	/** 生成带稳定定义、队伍和基础属性的 Combat Unit。 */
@@ -326,7 +325,7 @@ bool FCombatAttackProjectileTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-/** 验证 Dragon Slave 与 Meat Hook 都只通过 M5 公共执行链实现。 */
+/** 验证 Dragon Slave 与 Meat Hook 都只通过公共弹体执行链实现。 */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FCombatProjectileDemoAbilitiesTest,
 	"Combat.ProjectileMotion.Demo.DragonSlaveAndMeatHook",
