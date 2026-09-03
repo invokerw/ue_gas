@@ -7,8 +7,13 @@
 #include "AbilitySystemGlobals.h"
 #include "Abilities/GameplayAbility.h"
 #include "AssetRegistry/AssetData.h"
+#include "Components/CapsuleComponent.h"
+#include "Components/StaticMeshComponent.h"
 #include "Engine/AssetManager.h"
+#include "Engine/Blueprint.h"
 #include "Engine/CollisionProfile.h"
+#include "Engine/SCS_Node.h"
+#include "Engine/SimpleConstructionScript.h"
 #include "Engine/World.h"
 #include "Misc/AutomationTest.h"
 #include "Misc/PackageName.h"
@@ -324,6 +329,42 @@ bool FCombatContentDiscoveryTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("Combat Demo uses the command-only PlayerController"),
 		DemoGameMode && DemoGameMode->PlayerControllerClass
 		&& DemoGameMode->PlayerControllerClass->IsChildOf(Aue_gasPlayerController::StaticClass()));
+
+	const UBlueprint* WoodenDummyBlueprint = LoadObject<UBlueprint>(
+		nullptr,
+		TEXT("/Game/Combat/Demo/Characters/WoodenDummy/BP_WoodenDummy.BP_WoodenDummy"));
+	TestNotNull(TEXT("Wooden Dummy Blueprint loads"), WoodenDummyBlueprint);
+	UClass* WoodenDummyClass = LoadClass<ACombatUnitCharacter>(
+		nullptr,
+		TEXT("/Game/Combat/Demo/Characters/WoodenDummy/BP_WoodenDummy.BP_WoodenDummy_C"));
+	const ACombatUnitCharacter* WoodenDummy = WoodenDummyClass
+		? Cast<ACombatUnitCharacter>(WoodenDummyClass->GetDefaultObject()) : nullptr;
+	TestNotNull(TEXT("Wooden Dummy class loads"), WoodenDummy);
+	TestEqual(TEXT("Wooden Dummy keeps CombatUnit as its sole gameplay collision profile"),
+		WoodenDummy ? WoodenDummy->GetCapsuleComponent()->GetCollisionProfileName() : NAME_None,
+		FName(TEXT("CombatUnit")));
+
+	// 木桩造型组件只负责显示；额外的阻挡体会超出 Capsule，并让导航路径与实际 sweep 结果分叉。
+	int32 WoodenDecorationMeshCount = 0;
+	const TArray<USCS_Node*> WoodenDummyNodes = WoodenDummyBlueprint && WoodenDummyBlueprint->SimpleConstructionScript
+		? WoodenDummyBlueprint->SimpleConstructionScript->GetAllNodes() : TArray<USCS_Node*>();
+	for (const USCS_Node* Node : WoodenDummyNodes)
+	{
+		const UStaticMeshComponent* DecorationMesh = Node ? Cast<UStaticMeshComponent>(Node->ComponentTemplate) : nullptr;
+		if (!DecorationMesh)
+		{
+			continue;
+		}
+		++WoodenDecorationMeshCount;
+		const FString ComponentName = DecorationMesh ? DecorationMesh->GetName() : TEXT("None");
+		TestEqual(*FString::Printf(TEXT("Wooden decoration %s has no collision"), *ComponentName),
+			DecorationMesh ? DecorationMesh->GetCollisionEnabled() : ECollisionEnabled::QueryAndPhysics,
+			ECollisionEnabled::NoCollision);
+		TestEqual(*FString::Printf(TEXT("Wooden decoration %s uses NoCollision profile"), *ComponentName),
+			DecorationMesh ? DecorationMesh->GetCollisionProfileName() : NAME_None,
+			FName(TEXT("NoCollision")));
+	}
+	TestEqual(TEXT("Wooden Dummy has the expected four decorative meshes"), WoodenDecorationMeshCount, 4);
 	return true;
 }
 

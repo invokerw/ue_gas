@@ -331,6 +331,8 @@ SAM-000..009 已按下列依赖完成；兼容分支已删除，没有 Shipping 
 | `Source/ue_gas/ue_gasGameMode.*` | 初始 Unit 分配、控制权事务和断线清理 |
 | `Source/ue_gas/Combat/Tests/*` | 拓扑、Owner、Role、Order、碰撞和生命周期自动化 |
 | `Content/Combat/Demo/Framework/BP_CombatDemoGameMode.uasset` | 通过 UE MCP 重设父类为 `Aue_gasGameMode`，保留现有 DefaultPawnClass/PlayerControllerClass 配置并启用原生出生编排 |
+| `Content/Combat/Demo/Characters/WoodenDummy/BP_WoodenDummy.uasset` | 四个木桩装饰 StaticMesh 使用 `NoCollision`，只保留根 `CombatUnit` Capsule 作为 gameplay 碰撞体，避免装饰几何与 NavMesh/Crowd 产生分叉 |
+| `Content/__ExternalActors__/Combat/Demo/Maps/L_CombatDemo/6/SX/76CWUDVFOTB0MM0UBFCZU0.uasset` | 同步清理 Demo 关卡中 Wooden Dummy 已放置实例的旧组件碰撞覆盖，避免实例继续覆盖已修正的蓝图模板 |
 | `Config/DefaultEngine.ini` | 默认地图/GameMode 指向 Combat Demo；CrowdManager 容量设为 128；冻结 Profile 名称不变 |
 
 二进制资产必须通过 UE MCP/Editor 受控修改、回读、编译并保存；不能用文本工具直接改写 `.uasset` 或 `.umap`。
@@ -417,6 +419,12 @@ Dedicated 日志保存在 `Saved/Logs/SAM_Server_Base_20260902.log`、`SAM_Clien
 - 同版本 UE 5.8.1 独立 Server + 两个独立 Client smoke 中，两端 Unit 均为 `LocalRole=1` 并成功提交 RPC；移动 A 的服务器水平净位移为 `324.508 cm`，静止 B 为 `0.000 cm`，结果 Pass。日志位于 `Saved/Logs/SAMFixInstalled_Server_20260902.log` 及对应 Client1/Client2 文件。
 
 源码 UE 5.8.0 的 Server/Client Target 编译通过；由于本次蓝图由安装版 UE 5.8.1 保存，5.8.0 独立进程不能读取更高补丁版本的资产包，因此运行时 Dedicated smoke 使用相同资产版本的 UE 5.8.1 独立进程完成。该环境差异不影响三 Target 的编译结论。
+
+### 11.7 2026-09-02 Wooden Dummy 装饰碰撞修正
+
+`BP_WoodenDummy` 的根 Capsule 已使用 `CombatUnit` Profile，但 `WoodenPost`、`WoodenCrossbarX/Y` 与 `WoodenTopCap` 四个装饰 StaticMesh 仍为 `QueryAndPhysics + BlockAllDynamic`。其中两条贴地横梁超出 Capsule，并且装饰组件不影响导航；服务器寻路认为目标可达时，移动 Capsule 仍会被横梁的 `WorldDynamic` 碰撞阻挡。右键 `Visibility` 射线也可能先命中横梁表面，使终点落入额外阻挡体。
+
+修正后蓝图模板与 `L_CombatDemo` 已放置实例的四个装饰组件统一为 `NoCollision`，木桩只由根 `CombatUnit` Capsule 表达 gameplay 几何。`Combat.Foundation.Content.AssetManagerAndTestMap` 固定四个装饰组件数量、CollisionEnabled/Profile 以及根 Capsule Profile；Blueprint 编译保存、关卡冷重载、PIE 运行时回读、资产校验和相关 Automation 作为本项 Gate。PIE 回读确认四个装饰组件均为 `NoCollision/NoCollision`，根 Capsule 仍为 `CombatUnit/QueryAndPhysics`。
 
 ## 12. 可观测性
 

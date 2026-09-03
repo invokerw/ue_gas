@@ -185,7 +185,7 @@
 | SAM-003 | Command Pawn 与控制绑定 | 已完成 | `Aue_gasGameMode` 在默认出生时独立生成 Combat Unit 与 Command Pawn，先完成 AI Possess/Owner 绑定，再只把 Command Pawn 返回给 PlayerController；Demo GameMode 已改为继承原生 GameMode，单玩家 PIE 保持 2 Unit/2 AIController，玩家 Unit 右键移动约 420 cm |
 | SAM-004 | 输入与网络角色迁移 | 已完成 | 点击与 Q/W/E/R 全部改读 CommandedUnit；Dedicated 两端 RPC 成功，UnitLocalRole=1，Player Pawn 为 `ue_gasCharacter` |
 | SAM-005 | 删除客户端路径分支 | 已完成 | 已删除 PC PathFollowing、`ClientFollowCombatOrderPath`、`ClientStopCombatOrderNavigation`、非 AI Move 分支与 `SetAutonomousProxy`；生产代码无遗留引用 |
-| SAM-006 | 服务器碰撞与 Crowd | 已完成 | Capsule 硬阻挡、SimProxy `MaxDepenetrationWithPawnAsProxy=0`、CMC RVO 关闭、单一 Detour Crowd 及 NoCollision/Root/Motion/Dead/Respawn/UnPossess 状态测试通过 |
+| SAM-006 | 服务器碰撞与 Crowd | 已完成 | Capsule 硬阻挡、SimProxy `MaxDepenetrationWithPawnAsProxy=0`、CMC RVO 关闭、单一 Detour Crowd 及 NoCollision/Root/Motion/Dead/Respawn/UnPossess 状态测试通过；`BP_WoodenDummy` 四个装饰网格已关闭碰撞，只保留根 Capsule 参与 gameplay collision |
 | SAM-007 | Demo 资产迁移 | 已完成 | 默认地图/GameMode 与 Crowd 配置已更新；`BP_CombatDemoGameMode` 已通过 UE MCP 改为继承 `Aue_gasGameMode`、编译并保存；全项目 Blueprint 编译 0 Error/0 Warning，资产 7/7、0 Error/0 Warning，Dedicated 回读真实 Demo GameMode/PC/Pawn |
 | SAM-008 | Automation 与 Dedicated Gate | 已完成 | 默认出生链路新增 GameMode/蓝图父类、AIController 唯一性与孤立计数断言；Editor/Server/Client Target 构建通过，`Combat.*` 44/44、资产 7/7 通过；单/双玩家 PIE 真实位移通过，同版本 Dedicated 双客户端移动 324.508 cm、静止单位 0 cm |
 | SAM-009 | 当前行为文档切换 | 已完成 | 01/07/34 已切换到服务器 AIController + Command Pawn + SimulatedProxy 当前语义；31 生命周期与本文证据同步更新 |
@@ -252,6 +252,7 @@
 | 2026-09-02 | 完成 SAM-001..009：服务器 Combat AIController/Detour Crowd、无碰撞 Command Pawn、owner-only 控制绑定与生命周期、输入/Order 收敛和客户端路径分支删除；三 Target、`Combat.*` 44/44、资产 7/7、蓝图 0 错误、三档 Dedicated 双客户端及 64/256 容量全绿；关闭 GAP-026，SAM 转为待用户验收 | SAM / SAM-001..009 / GAP-026 |
 | 2026-09-02 | 用户验收反馈 PIE 右键无法移动；运行时确认 RPC 与寻路已接受但速度/位移为零，同一玩家 Unit 出现重复 AIController，SAM-003 与 SAM-008 转为进行中并补默认出生链路回归 | SAM / SAM-003 / SAM-008 |
 | 2026-09-02 | 完成 PIE 右键不移动修正：GameMode 原子创建 Unit/Command Pawn 并建立 AI/Owner 绑定，Demo GameMode 改继承原生实现；单/双玩家 PIE、同版本 Dedicated 双客户端真实位移通过，三 Target、`Combat.*` 44/44、资产 7/7 全绿；SAM 重新转为待用户验收 | SAM / SAM-003 / SAM-007 / SAM-008 |
+| 2026-09-02 | 修复 `BP_WoodenDummy` 装饰腿阻挡移动：蓝图模板及 `L_CombatDemo` 已放置实例的 `WoodenPost`、`WoodenCrossbarX/Y`、`WoodenTopCap` 统一为 `NoCollision`，只保留 `CombatUnit` Capsule；增加资产回归断言，并完成 Blueprint 编译保存、冷重载、PIE 运行时碰撞回读、资产与 Automation 复验 | SAM / SAM-006 / SAM-008 |
 
 ## 15. 更新规则
 
