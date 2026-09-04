@@ -10,8 +10,8 @@
 class ACombatUnitCharacter;
 
 /**
- * 在 Damage/Heal 子系统应用 GameplayEffect 与 AttributeSet 回调之间传递真实属性变化。
- * 每个 EventId 只持有一个同步、短生命周期槽位；回报完成、应用失败或消费结果后立即关闭，不作为第二套战斗数值存储。
+ * 在伤害/治疗调用与 GAS 属性执行回调之间传递实际生命变化。
+ * 调用方先按事件 ID 建立临时槽，AttributeSet 同步回报一次结果，调用方再取走并删除；应用失败时必须显式取消。回报本身不会删除槽。
  */
 UCLASS()
 class UE_GAS_API UCombatTransactionSubsystem : public UWorldSubsystem
@@ -21,9 +21,9 @@ class UE_GAS_API UCombatTransactionSubsystem : public UWorldSubsystem
 public:
 	/** 为 Damage 或 Heal 创建唯一 EventId 槽；重复或无效输入返回 false。 */
 	bool BeginSlot(const FCombatEventContext& Context, ECombatTransactionKind Kind, ACombatUnitCharacter* Target);
-	/** 由 AttributeSet 回报一次真实 delta；未知、重复或类型错误的槽安全失败。 */
+	/** 由 AttributeSet 写入一次实际生命变化；槽不存在、类型不符、已回报或目标已销毁时返回 false。成功后保留结果，等待 ConsumeSlot 取走。 */
 	bool ReportDelta(FCombatEventId EventId, ECombatTransactionKind Kind, const FCombatTransactionDelta& Delta);
-	/** 在 Apply GE 返回后读取并关闭槽；尚未回报的槽返回 false。 */
+	/** 在效果应用返回后取走结果并删除槽；不存在、类型不符或尚未回报时返回 false，保持槽和 OutDelta 不变。 */
 	bool ConsumeSlot(FCombatEventId EventId, ECombatTransactionKind Kind, FCombatTransactionDelta& OutDelta);
 	/** GE 应用失败时显式关闭槽，避免后续 EventId 误命中。 */
 	bool CancelSlot(FCombatEventId EventId);
@@ -31,12 +31,12 @@ public:
 	int32 GetOpenSlotCount() const { return Slots.Num(); }
 
 private:
-	/** 单个 EventId 在同步 Apply 期间的等待状态。 */
+	/** 单个事件在同步应用效果期间的等待状态与一次性结果。 */
 	struct FSlot
 	{
 		/** 槽位期望的元属性类型。 */
 		ECombatTransactionKind Kind = ECombatTransactionKind::Damage;
-		/** 防止错误 AttributeSet 或目标回报到同一 EventId。 */
+		/** 弱引用预期目标，回报时只检查它是否仍存在；回报接口不携带目标参数，事件 ID 必须由调用链正确传递。 */
 		TWeakObjectPtr<ACombatUnitCharacter> Target;
 		/** AttributeSet 写入的真实结果。 */
 		FCombatTransactionDelta Delta;

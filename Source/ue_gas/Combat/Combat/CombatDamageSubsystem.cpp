@@ -151,7 +151,7 @@ FCombatDamageResult UCombatDamageSubsystem::DealDamage(const FCombatDamageReques
 		SourceModifiers->ExecutePostDealDamage(Result.Event);
 		TargetModifiers->ExecutePostTakeDamage(Result.Event);
 
-		// 吸血只读取真实 AppliedDamage，并通过子 Heal 事务继承同一 RootEventId。
+		// 吸血按实际扣除的生命计算，避免把护盾吸收和超出剩余生命的伤害计入；治疗作为子事件保留这次伤害的来源链。
 		if (Delta.AppliedAmount > 0.0f && Request.Source != Request.Target
 			&& !Request.Flags.HasTagExact(CombatTags::Damage_Flag_NoLifesteal))
 		{

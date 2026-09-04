@@ -14,12 +14,12 @@ class UE_GAS_API UCombatTeamSubsystem : public UWorldSubsystem
 	GENERATED_BODY()
 
 public:
-	/** 返回两个队伍的初始外交关系；无效队伍返回 Invalid。 */
+	/** 相同有效队伍固定为友军，不同队伍优先查有方向的配置关系，未配置时视为敌军；任一队伍无效时返回 Invalid。 */
 	ECombatTeamRelation GetRelation(FCombatTeamId SourceTeam, FCombatTeamId TargetTeam) const;
-	/** 检查 TargetTeamTag 是否允许 SourceTeam 选择 TargetTeam。 */
+	/** Friendly 只接受友军，Enemy 只接受敌军，Both 接受这两者但不包含中立；中立许可由目标规则中的单独开关处理。 */
 	bool IsTargetTeamAllowed(FCombatTeamId SourceTeam, FCombatTeamId TargetTeam, const FGameplayTag& TargetTeamTag) const;
 
-	/** 添加 World 初始化关系；v1 故意不支持运行时外交变化。 */
+	/** 配置从来源队伍到目标队伍的单向关系，重复键会覆盖；调用方应在 World 初始化阶段使用。无效队伍、相同队伍或 Invalid 关系返回 false；此函数不检查当前是否仍处于初始化阶段。 */
 	bool AddInitialRelation(FCombatTeamId SourceTeam, FCombatTeamId TargetTeam, ECombatTeamRelation Relation);
 
 private:

@@ -32,17 +32,17 @@ enum class ECombatAscReplicationPolicy : uint8
 {
 	/** 服务器根据是否存在 PlayerController Owner 选择 Mixed 或 Minimal。 */
 	Automatic UMETA(DisplayName="自动（玩家 Mixed / AI Minimal）"),
-	/** 玩家 owning connection 接收完整 ActiveGE，其他客户端接收最小数据。 */
+	/** 指挥该单位的玩家连接接收完整活动 GameplayEffect，其余接收该单位复制的客户端只接收最小效果信息。 */
 	Mixed UMETA(DisplayName="Mixed（拥有者完整）"),
 	/** 不向客户端复制完整 ActiveGE，适用于中立或纯服务器 AI。 */
 	Minimal UMETA(DisplayName="Minimal（仅最小复制）"),
-	/** 向所有客户端复制完整 ActiveGE，仅允许调试和自动化使用。 */
+	/** 向接收该单位复制的客户端提供完整活动 GameplayEffect；项目约定仅用于调试和自动化，设置函数本身不检查构建类型。 */
 	Full UMETA(DisplayName="Full（仅调试）")
 };
 
 /**
- * Combat gameplay 的基础单位 Actor，拥有 ASC、AttributeSet 以及 Order、Attack、Modifier、Motion、Lifecycle 和 View 等核心组件。
- * 服务器独占队伍、生命、初始化和指挥归属；客户端只消费复制状态与安全 View。服务器 AIController 始终负责导航，PlayerController 通过显式 Owner 绑定获得网络控制权而不直接 Possess 业务单位。
+ * 战斗单位的基础 Actor，组合 GAS 技能与属性、指令队列、普攻、持续效果、强制位移、生命状态和界面数据组件。
+ * 服务器负责初始化、队伍、生命及指挥归属；客户端读取复制状态。AIController 在服务器驱动导航，玩家控制器通过 Actor 的 Owner 获得指令 RPC 权限，并不直接控制单位的移动输入。
  */
 UCLASS(Blueprintable)
 class UE_GAS_API ACombatUnitCharacter : public ACharacter, public IAbilitySystemInterface
@@ -57,19 +57,19 @@ public:
 	UCombatAbilitySystemComponent* GetCombatAbilitySystemComponent() const { return CombatAbilitySystemComponent; }
 	/** 返回 Unit 注册到 ASC 的 Combat AttributeSet。 */
 	UCombatAttributeSet* GetCombatAttributeSet() const { return CombatAttributeSet; }
-	/** 返回 ActiveGE/Runtime 一一映射组件。 */
+	/** 返回持续效果组件，统一管理 GAS 活动效果与项目自定义效果实例。 */
 	UCombatModifierComponent* GetCombatModifierComponent() const { return CombatModifierComponent; }
 	/** 返回服务器权威生命状态机组件。 */
 	UCombatUnitLifecycleComponent* GetCombatLifecycleComponent() const { return CombatLifecycleComponent; }
 	/** 返回 Scheduler 驱动的恢复组件。 */
 	UCombatRegenerationComponent* GetCombatRegenerationComponent() const { return CombatRegenerationComponent; }
-	/** 返回唯一 AttackRecord registry 与普攻时序组件。 */
+	/** 返回管理本单位普攻记录、前摇和攻击间隔的组件。 */
 	UCombatAttackComponent* GetCombatAttackComponent() const { return CombatAttackComponent; }
-	/** 返回统一 Move/Cast/Attack FIFO 状态机组件。 */
+	/** 返回按提交顺序执行移动、施法和普攻指令的组件。 */
 	UCombatOrderComponent* GetCombatOrderComponent() const { return CombatOrderComponent; }
 	/** 返回水平/垂直强制位移通道组件。 */
 	UCombatMotionComponent* GetCombatMotionComponent() const { return CombatMotionComponent; }
-	/** 返回 Owner 与非 Owner UI 共用的扁平复制 View。 */
+	/** 返回向界面提供生命、法力、施法进度和可见效果快照的复制组件。 */
 	UCombatUnitViewComponent* GetCombatUnitViewComponent() const { return CombatUnitViewComponent; }
 	/** 返回默认挂载在 Unit 头顶的资源条、状态条与跳字组件。 */
 	UCombatOverheadWidgetComponent* GetCombatOverheadWidgetComponent() const { return CombatOverheadWidgetComponent; }
@@ -124,18 +124,18 @@ public:
 	/** owning client 收到批次结果时广播。 */
 	UPROPERTY(BlueprintAssignable, Category="Combat|Network", meta=(DisplayName="命令批次结果", ToolTip="owning client 收到服务器批次结果时广播。")) FCombatOrderBatchResultDelegate OnOrderBatchResult;
 
-	/** 服务器从 UnitData 幂等初始化基础属性、队伍、胶囊和 AbilitySet。 */
-	UFUNCTION(BlueprintCallable, Category="Combat|Unit", meta=(DisplayName="从单位数据初始化", ToolTip="仅在服务器从 UnitData 幂等初始化基础属性、队伍、碰撞体和 AbilitySet。"))
+	/** 服务器按单位定义初始化队伍、胶囊、基础属性和技能授予表。已成功初始化为同一定义时直接返回 true，换定义则拒绝；主要配置先统一校验，但后续效果应用或技能授予失败不会回滚已经写入的部分。 */
+	UFUNCTION(BlueprintCallable, Category="Combat|Unit", meta=(DisplayName="从单位数据初始化", ToolTip="服务器按单位定义初始化队伍、胶囊、基础属性和技能授予表。已成功初始化为同一定义时直接返回 true，换定义则拒绝；主要配置先统一校验，但后续效果应用或技能授予失败不会回滚已经写入的部分。"))
 	bool InitializeFromUnitData(UPARAM(DisplayName="单位数据") UCombatUnitData* InUnitData);
-	/** 返回当前状态标签是否禁止移动。 */
-	UFUNCTION(BlueprintPure, Category="Combat|State", meta=(DisplayName="移动是否被禁止", ToolTip="返回当前聚合状态标签是否禁止自主移动。")) bool IsMovementBlocked() const;
-	/** 返回当前状态标签是否禁止普通攻击。 */
-	UFUNCTION(BlueprintPure, Category="Combat|State", meta=(DisplayName="普通攻击是否被禁止", ToolTip="返回当前聚合状态标签是否禁止普通攻击。")) bool IsAttackBlocked() const;
-	/** 返回当前状态标签是否禁止普通 Ability 激活。 */
-	UFUNCTION(BlueprintPure, Category="Combat|State", meta=(DisplayName="普通技能是否被禁止", ToolTip="返回当前聚合状态标签是否禁止普通 Ability 激活。")) bool IsAbilityBlocked() const;
+	/** 非存活、缺少技能组件，或具有眩晕、定身、妖术、冻结状态时禁止普通移动；强制位移占用另由 Motion 组件处理。 */
+	UFUNCTION(BlueprintPure, Category="Combat|State", meta=(DisplayName="移动是否被禁止", ToolTip="非存活、缺少技能组件，或具有眩晕、定身、妖术、冻结状态时禁止普通移动；强制位移占用另由 Motion 组件处理。")) bool IsMovementBlocked() const;
+	/** 普通移动被禁止，或具有缴械状态时禁止普攻；因此当前规则也会阻止定身单位普攻。 */
+	UFUNCTION(BlueprintPure, Category="Combat|State", meta=(DisplayName="普通攻击是否被禁止", ToolTip="普通移动被禁止，或具有缴械状态时禁止普攻；因此当前规则也会阻止定身单位普攻。")) bool IsAttackBlocked() const;
+	/** 非存活、缺少技能组件，或具有眩晕、沉默、妖术、冻结状态时禁止普通技能激活；定身本身不在此判断中。 */
+	UFUNCTION(BlueprintPure, Category="Combat|State", meta=(DisplayName="普通技能是否被禁止", ToolTip="非存活、缺少技能组件，或具有眩晕、沉默、妖术、冻结状态时禁止普通技能激活；定身本身不在此判断中。")) bool IsAbilityBlocked() const;
 
-	/** 仅在 Authority 上设置有效 TeamId，并广播 TeamChanged 结构化事件。 */
-	UFUNCTION(BlueprintCallable, Category="Combat|Team", meta=(DisplayName="设置战斗队伍", ToolTip="仅在服务器设置有效队伍 ID，并广播结构化的队伍变更事件。"))
+	/** 服务器设置有效的新队伍并刷新光环、界面数据与队伍变化日志；权限不足、队伍无效或值未改变时返回 false。 */
+	UFUNCTION(BlueprintCallable, Category="Combat|Team", meta=(DisplayName="设置战斗队伍", ToolTip="服务器设置有效的新队伍并刷新光环、界面数据与队伍变化日志；权限不足、队伍无效或值未改变时返回 false。"))
 	bool SetCombatTeamId(UPARAM(DisplayName="新队伍 ID") FCombatTeamId NewTeamId);
 
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
@@ -156,21 +156,21 @@ protected:
 	/** 客户端 Controller 复制变化后刷新 ActorInfo。 */
 	virtual void OnRep_Controller() override;
 
-	/** TeamId 复制后输出 TeamChanged 诊断日志。 */
+	/** 队伍变化的共用回调；服务器主动调用时刷新界面数据、通知光环重查并记录日志，客户端复制回调不生成权威日志。 */
 	UFUNCTION()
 	void OnRep_TeamId(FCombatTeamId PreviousTeamId);
 
-	/** LifeState 复制后同步 ASC 的唯一生命状态标签。 */
+	/** 生命状态变化后同步技能组件的生命标签、移动与碰撞响应；服务器还刷新界面数据并通知光环重查目标。 */
 	UFUNCTION()
 	void OnRep_LifeState();
 
-	/** 根据 NetMode、Owner 与 Controller 重新建立或清理 ASC ActorInfo。 */
+	/** 重新绑定技能系统所需的角色信息；技能系统的 OwnerActor 与 AvatarActor 都指向本单位，网络指挥权由 Actor Owner 另行决定。 */
 	void RefreshAbilityActorInfo();
 	/** 仅在服务器根据产品策略设置 GAS GameplayEffect 复制模式。 */
 	void RefreshCombatReplicationPolicy();
 	/** 移除旧生命标签并添加与 LifeState 一致的 Native Tag。 */
 	void RefreshLifeStateTag();
-	/** 根据状态 Tag count 更新移动、碰撞和 Ability 取消响应。 */
+	/** 根据当前状态标签更新普通移动、胶囊碰撞和人群避让；存活单位同时通知普攻与指令组件重新判断当前行为。 */
 	void RefreshStatusResponse();
 	/** MoveSpeed 聚合值改变时投影到 CharacterMovement。 */
 	void HandleMoveSpeedChanged(const FOnAttributeChangeData& ChangeData);
@@ -190,7 +190,7 @@ protected:
 	/** ASC 持有并复制的完整基础战斗属性集合。 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Combat|Components")
 	TObjectPtr<UCombatAttributeSet> CombatAttributeSet;
-	/** Unit 的 Modifier ActiveGE/Runtime 管理组件。 */
+	/** 管理本单位的 GAS 活动效果及其自定义行为实例，处理叠层、持续时间和移除。 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Combat|Components")
 	TObjectPtr<UCombatModifierComponent> CombatModifierComponent;
 	/** Unit 的 Alive/Dying/Dead/Respawning 状态机组件。 */
@@ -199,17 +199,17 @@ protected:
 	/** Unit 的 Health/Mana 恢复调度组件。 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Combat|Components")
 	TObjectPtr<UCombatRegenerationComponent> CombatRegenerationComponent;
-	/** Unit 的唯一 AttackRecord registry 与 attack timing 执行器。 */
+	/** 管理本单位所有活动普攻记录、命中结算和攻击时序。 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Combat|Components")
 	TObjectPtr<UCombatAttackComponent> CombatAttackComponent;
-	/** Unit 的服务器权威 Order FIFO 与异步状态机。 */
+	/** 服务器指令队列及执行状态，负责衔接移动、施法和普攻完成通知。 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Combat|Components")
 	TObjectPtr<UCombatOrderComponent> CombatOrderComponent;
 	/** Unit 的水平/垂直强制位移通道与抢占执行器。 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Combat|Components")
 	TObjectPtr<UCombatMotionComponent> CombatMotionComponent;
-	/** Unit 的 UI 安全扁平复制 View。 */
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Combat|Components", meta=(DisplayName="战斗单位 View 组件", ToolTip="向 Owner 与非 Owner UI 复制相同的安全扁平战斗投影。"))
+	/** 提供给客户端界面的只读单位与效果快照，不包含服务器效果实例。 */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Combat|Components", meta=(DisplayName="战斗单位 View 组件", ToolTip="提供给客户端界面的只读单位与效果快照，不包含服务器效果实例。"))
 	TObjectPtr<UCombatUnitViewComponent> CombatUnitViewComponent;
 	/** DOTA 风格的屏幕空间头顶资源、施法、控制状态和战斗跳字表现。 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Combat|Components", meta=(DisplayName="战斗头顶 UI", ToolTip="读取 CombatUnitView，并接收服务器伤害/治疗跳字。"))

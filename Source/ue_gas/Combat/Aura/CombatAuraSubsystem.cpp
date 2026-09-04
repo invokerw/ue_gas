@@ -117,7 +117,7 @@ bool UCombatAuraSubsystem::ReconcileNow(const FCombatAuraHandle Handle)
 
 void UCombatAuraSubsystem::NotifyUnitChanged(ACombatUnitCharacter* Unit)
 {
-	// Modifier Tag 回调可能来自当前 reconcile 的 child Apply/Remove；当前轮已持有稳定目标快照，下一次调度会收敛。
+	// 施加或移除子效果会同步改变状态标签，可能再次通知光环。当前检查尚未完成时不递归查询，新变化由下一轮检查处理。
 	if (!IsValid(Unit) || bDeinitializing || bMutatingRegistry)
 	{
 		return;
@@ -135,7 +135,7 @@ void UCombatAuraSubsystem::NotifyUnitChanged(ACombatUnitCharacter* Unit)
 
 void UCombatAuraSubsystem::NotifyUnitEndPlay(ACombatUnitCharacter* Unit)
 {
-	// 若 EndPlay 由 child Runtime 回调重入，弱目标与 Owner 有效性会在下一次 reconcile/teardown 清理。
+	// 子效果回调可能销毁单位；在当前遍历中直接删除光环会破坏记录引用，因此延后到下一轮有效性检查或世界清理。
 	if (!Unit || bDeinitializing || bMutatingRegistry)
 	{
 		return;
@@ -247,6 +247,7 @@ bool UCombatAuraSubsystem::ReconcileRecord(FCombatAuraRuntimeRecord& Record)
 		if (IsValid(Target)) { Desired.Add(Target); }
 	}
 
+	// 先清掉已离开、已换生命或已丢失效果的记录，后续才能为仍合格的目标补回效果。
 	TArray<TWeakObjectPtr<ACombatUnitCharacter>> ExistingTargets;
 	Record.Children.GetKeys(ExistingTargets);
 	for (const TWeakObjectPtr<ACombatUnitCharacter>& WeakTarget : ExistingTargets)
@@ -266,6 +267,7 @@ bool UCombatAuraSubsystem::ReconcileRecord(FCombatAuraRuntimeRecord& Record)
 		}
 	}
 
+	// 有效子效果不重复施加，以免每轮累加层数或把有限持续时间无限续期。
 	for (ACombatUnitCharacter* Target : Targets)
 	{
 		if (!Target || Record.Children.Contains(Target))

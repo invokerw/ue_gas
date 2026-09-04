@@ -19,15 +19,15 @@ struct UE_GAS_API FCombatProjectilePresentationStats
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Projectile|Presentation", meta=(DisplayName="活动预测视觉数", ToolTip="尚未等到服务器弹体身份的客户端本地预测视觉数量。")) int32 ActivePredictedVisuals = 0;
 	/** 当前已注册的服务器弹体视觉数。 */
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Projectile|Presentation", meta=(DisplayName="活动服务器视觉数", ToolTip="当前已注册的唯一服务器弹体视觉数量。")) int32 ActiveServerVisuals = 0;
-	/** 成功用服务器 Actor 替换预测视觉的累计次数。 */
-	UPROPERTY(BlueprintReadOnly, Category="Combat|Projectile|Presentation", meta=(DisplayName="视觉协调次数", ToolTip="成功用服务器 Actor 替换预测视觉的累计次数。")) int64 ReconcileCount = 0;
-	/** 同一服务器 Handle 重复注册但未产生第二视觉的累计次数。 */
-	UPROPERTY(BlueprintReadOnly, Category="Combat|Projectile|Presentation", meta=(DisplayName="服务器身份去重次数", ToolTip="同一服务器 Handle 重复通知且未创建第二视觉的累计次数。")) int64 DuplicateServerIdentityCount = 0;
+	/** 服务器弹体找到并消费同键预测记录的累计次数；即使记录中的临时 Actor 已失效也计数。 */
+	UPROPERTY(BlueprintReadOnly, Category="Combat|Projectile|Presentation", meta=(DisplayName="视觉协调次数", ToolTip="服务器弹体找到并消费同键预测记录的累计次数；即使记录中的临时 Actor 已失效也计数。")) int64 ReconcileCount = 0;
+	/** 同一服务器句柄已有有效登记时，再次登记被忽略的累计次数。 */
+	UPROPERTY(BlueprintReadOnly, Category="Combat|Projectile|Presentation", meta=(DisplayName="服务器身份去重次数", ToolTip="同一服务器句柄已有有效登记时，再次登记被忽略的累计次数。")) int64 DuplicateServerIdentityCount = 0;
 };
 
 /**
- * 客户端 Projectile 预测视觉与服务器复制 Actor 的表现协调器。
- * 子系统用预测键和服务器身份去重、接管或销毁可丢弃视觉对象；它不执行 sweep、命中、Damage、Modifier 或 Attack finalize，无法影响权威 gameplay。
+ * 管理客户端提前播放的弹体视觉与之后复制到达的服务器弹体。用预测键找到同一次发射的临时视觉，将其销毁并登记服务器 Actor。
+ * 这里只管理视觉对象身份，不执行路径检测、命中、伤害或攻击结算；调用者应只注册可丢弃的纯视觉 Actor。
  */
 UCLASS()
 class UE_GAS_API UCombatProjectilePresentationSubsystem : public UWorldSubsystem
@@ -35,19 +35,19 @@ class UE_GAS_API UCombatProjectilePresentationSubsystem : public UWorldSubsystem
 	GENERATED_BODY()
 
 public:
-	/** 注册一个可随时丢弃的客户端本地预测视觉。 */
-	UFUNCTION(BlueprintCallable, Category="Combat|Projectile|Presentation", meta=(DisplayName="注册预测弹体视觉", ToolTip="按正数预测键注册本地视觉；服务器弹体到达后自动销毁该视觉。"))
+	/** 登记已创建的本地纯视觉 Actor；预测键必须为正且 Actor 有效、同世界。相同键已有另一视觉时会销毁旧视觉，再记录新对象。 */
+	UFUNCTION(BlueprintCallable, Category="Combat|Projectile|Presentation", meta=(DisplayName="注册预测弹体视觉", ToolTip="登记已创建的本地纯视觉 Actor；预测键必须为正且 Actor 有效、同世界。相同键已有另一视觉时会销毁旧视觉，再记录新对象。"))
 	bool RegisterPredictedVisual(
 		UPARAM(DisplayName="预测视觉键") int32 PredictionKey,
 		UPARAM(DisplayName="视觉 Actor") AActor* VisualActor);
-	/** 服务器 Actor 身份复制后销毁同键预测视觉并保持唯一服务器视觉。 */
+	/** 登记复制到达的服务器弹体，并移除同预测键的本地视觉；同一服务器句柄已有有效记录时忽略重复注册，不销毁重复传入的服务器 Actor。 */
 	void ReconcileServerProjectile(ACombatProjectileActor* ServerActor);
 	/** 服务器 Actor 在客户端结束时移除协调记录。 */
 	void NotifyServerProjectileEnded(ACombatProjectileActor* ServerActor);
 	/** 返回当前与累计协调统计。 */
 	UFUNCTION(BlueprintPure, Category="Combat|Projectile|Presentation", meta=(DisplayName="获取弹体视觉协调统计", ToolTip="返回预测视觉、服务器视觉与去重计数。"))
 	FCombatProjectilePresentationStats GetPresentationStats() const;
-	/** World teardown 时销毁仍未协调的本地预测视觉并清空弱引用。 */
+	/** 世界关闭时销毁尚未被服务器弹体替换的本地临时视觉，并清空本地与服务器弹体的弱引用记录。 */
 	virtual void Deinitialize() override;
 
 private:

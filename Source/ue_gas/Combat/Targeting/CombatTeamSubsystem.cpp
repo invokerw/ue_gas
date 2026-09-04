@@ -8,7 +8,7 @@ ECombatTeamRelation UCombatTeamSubsystem::GetRelation(const FCombatTeamId Source
 	{
 		return ECombatTeamRelation::Invalid;
 	}
-	// 相同紧凑值固定为 Friendly；不同队伍再查有方向的初始化关系。
+	// 同队固定为友军；外交配置是单向的，A 对 B 的关系不会自动决定 B 对 A 的关系。
 	if (SourceTeam == TargetTeam)
 	{
 		return ECombatTeamRelation::Friendly;

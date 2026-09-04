@@ -516,7 +516,7 @@ bool FCombatModifierCoreTest::RunTest(const FString& Parameters)
 	Apply.ModifierData = Strong; Modifiers->ApplyModifier(Apply);
 	Apply.ModifierData = Permanent;
 	const FCombatModifierHandle PermanentHandle = Modifiers->ApplyModifier(Apply).Handle;
-	TestEqual(TEXT("Basic dispel removes only Basic rule"), Modifiers->Dispel(ECombatDispelStrength::Basic), 2); // includes resistible Basic
+	TestEqual(TEXT("Basic dispel removes only Basic rule"), Modifiers->Dispel(ECombatDispelStrength::Basic), 2); // 还包括前面施加、受状态抗性缩短的普通可驱散效果，因此移除数为 2。
 	TestEqual(TEXT("Strong dispel removes StrongOnly but not NotDispellable"), Modifiers->Dispel(ECombatDispelStrength::Strong), 1);
 	TestEqual(TEXT("NotDispellable runtime remains"), Modifiers->GetActiveModifierCount(), 1);
 	Modifiers->RemoveModifier(PermanentHandle);

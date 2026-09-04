@@ -19,7 +19,7 @@ namespace CombatProjectilePrivate
 	// 同一推进步内用固定容差合并命中距离，保证并列结果可稳定排序。
 	constexpr float HitTieToleranceCm = 0.1f;
 
-	/** Blocker 排在 Unit 前，最后使用 Actor UniqueID 稳定打破并列。 */
+	/** 先按命中距离排序；距离在容差内相同时，世界阻挡物排在单位前，最后按 Actor ID 打破并列，避免穿过与单位重合的墙体。 */
 	bool IsHitBefore(const FHitResult& Left, const FHitResult& Right)
 	{
 		if (!FMath::IsNearlyEqual(Left.Distance, Right.Distance, HitTieToleranceCm))

@@ -11,8 +11,8 @@ class ACombatUnitCharacter;
 struct FOnAttributeChangeData;
 
 /**
- * 将服务器 Unit、Ability 与 Modifier 状态投影为 UI 安全的扁平复制 View。
- * Owner 与非 Owner 接收相同的白名单字段和 FastArray 快照；组件只从权威 gameplay 状态刷新并通知表现层，UI 不能通过 View 反向修改属性或结算。
+ * 从服务器单位、技能和持续效果提取界面所需的只读快照，并通过属性与 FastArray 增量复制。
+ * 接收该单位复制的拥有者和其他客户端得到相同的可见字段，不包含服务器效果实例；界面据此显示资源、施法进度和状态，不通过快照修改战斗结果。
  */
 UCLASS(ClassGroup=(Combat), meta=(BlueprintSpawnableComponent))
 class UE_GAS_API UCombatUnitViewComponent : public UActorComponent
@@ -44,14 +44,14 @@ public:
 	void RefreshUnitView();
 	/** 服务器从 ModifierComponent 当前稳定快照增量刷新 FastArray。 */
 	void RefreshModifierViews();
-	/** Ability CastStarted 时写入当前 UI 时间窗。 */
+	/** 服务器记录最新开始技能的定义、激活 ID 和界面时间窗，会覆盖此前展示的技能；这里只保留一条施法记录。 */
 	void NotifyAbilityStarted(
 		const FPrimaryAssetId& DefinitionId,
 		FCombatEventId ActivationId,
 		double StartTime,
 		double EndTime,
 		bool bChanneling);
-	/** Ability End 时只清理匹配的激活 ID。 */
+	/** 服务器只在激活 ID 与当前展示技能一致时清空施法信息，防止较早技能的结束通知抹掉新技能。 */
 	void NotifyAbilityEnded(FCombatEventId ActivationId);
 	/** FastArray 回调统一入口。 */
 	void HandleModifierViewsReplicated();
@@ -72,10 +72,10 @@ private:
 	/** 返回组件所属 Combat Unit。 */
 	ACombatUnitCharacter* GetOwnerUnit() const;
 
-	/** 所有客户端统一接收的单位基础投影。 */
+	/** 接收该单位复制的客户端共用的基础界面快照。 */
 	UPROPERTY(ReplicatedUsing=OnRep_UnitView)
 	FCombatUnitView UnitView;
-	/** 所有客户端统一接收的 Modifier FastArray。 */
+	/** 接收该单位复制的客户端共用的可见效果增量数组。 */
 	UPROPERTY(Replicated)
 	FCombatModifierViewArray ModifierViews;
 };

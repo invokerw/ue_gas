@@ -25,7 +25,7 @@ struct UE_GAS_API FCombatEventContext
 	/** 根事件为 0，子事件逐层加一。 */
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Event") int32 Depth = 0;
 
-	/** 检查当前 ID、根 ID 与深度是否组成有效上下文。 */
+	/** 只检查两个 ID 非零且深度非负；不验证父子关系、事件是否由本 World 分配或是否超过深度上限。 */
 	bool IsValid() const { return EventId.IsValid() && RootEventId.IsValid() && Depth >= 0; }
 };
 
@@ -53,13 +53,13 @@ struct UE_GAS_API FCombatLogRecord
 	UPROPERTY(BlueprintReadWrite, Category="Combat|Log") int32 TargetActorId = 0;
 	/** 结果发生时目标单位的生命代次。 */
 	UPROPERTY(BlueprintReadWrite, Category="Combat|Log") int64 UnitLifeGeneration = 0;
-	/** 进入 Damage/Heal 流水线的请求值。 */
+	/** 事件相关的请求数值：伤害/治疗为原始请求量，其他事件可用于数量、距离或旧队伍值，须结合 EventType 解读。 */
 	UPROPERTY(BlueprintReadWrite, Category="Combat|Log") float RequestedAmount = 0.0f;
-	/** 抗性或免疫消除的数值。 */
+	/** 伤害事件中抗性或免疫抵消的量；负抗性放大伤害时可为负数，不含护盾吸收。 */
 	UPROPERTY(BlueprintReadWrite, Category="Combat|Log") float MitigatedAmount = 0.0f;
-	/** Shield Runtime 吸收的数值。 */
+	/** 伤害事件中护盾吸收的量。 */
 	UPROPERTY(BlueprintReadWrite, Category="Combat|Log") float AbsorbedAmount = 0.0f;
-	/** AttributeSet clamp 后的真实 Health delta。 */
+	/** 事件相关的结果数值：伤害/治疗为实际生命变化量，其他事件可表示数量、距离或新队伍值，须结合 EventType 解读。 */
 	UPROPERTY(BlueprintReadWrite, Category="Combat|Log") float AppliedAmount = 0.0f;
 	/** HPLoss、Reflection、NoLifesteal 等结果标志。 */
 	UPROPERTY(BlueprintReadWrite, Category="Combat|Log") FGameplayTagContainer Flags;
@@ -78,8 +78,8 @@ struct UE_GAS_API FCombatLogRecord
 DECLARE_MULTICAST_DELEGATE_OneParam(FOnCombatLogRecord, const FCombatLogRecord&);
 
 /**
- * 当前 World 的战斗事件身份与结构化日志中心。
- * 子系统为根事件和受深度限制的 follow-up 分配稳定 EventId/RootEventId，统一记录结果与失败原因并同步通知观察者；日志只反映权威结算，不反向驱动 gameplay。
+ * 当前 World 的战斗事件编号和结构化日志中心。根事件表示一次行为的起点，子事件表示由它引发的后续伤害、治疗等；同一链共享根 ID，并限制最大嵌套深度。
+ * 日志只保留最近窗口并同步通知订阅者，用于诊断和观察；接口本身不检查服务器权限，调用方负责仅在正确的一端记录权威结果。
  */
 UCLASS()
 class UE_GAS_API UCombatEventSubsystem : public UWorldSubsystem
@@ -99,7 +99,7 @@ public:
 
 	/** 返回当前 World 的只读最近日志缓冲区。 */
 	const TArray<FCombatLogRecord>& GetRecentRecords() const { return RecentRecords; }
-	/** 按根事件 ID 返回当前诊断窗口内的完整因果链，并保持提交顺序。 */
+	/** 返回当前诊断窗口内具有相同根事件 ID 的记录，并保持日志提交顺序；较早记录可能已被淘汰，因此不保证因果链完整。 */
 	TArray<FCombatLogRecord> GetRecordsForRootEvent(FCombatEventId RootEventId) const;
 	/** 返回 World 生命周期内累计提交的日志数量，不受环形窗口淘汰影响。 */
 	uint64 GetTotalEmittedRecordCount() const { return NextLogSequence - 1; }

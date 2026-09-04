@@ -7,56 +7,60 @@
 
 #include "AbilityTask_WaitCombatInterval.generated.h"
 
-/** 向蓝图或 C++ 广播一次确定性 Channel tick。 */
+/** 报告一次引导周期到点，包含计划时刻和实际调度时刻；卡顿补执行时两者可能不同。 */
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FCombatIntervalTickDelegate, FCombatScheduledTickContext, TickContext);
-/** Channel duration 到期且任务已取消 repeating Handle 后广播。 */
+/** 引导计时正常到期、周期任务已取消后发出的完成通知；任务被提前销毁时不广播。 */
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FCombatIntervalFinishedDelegate);
 
-/** 用 Combat Scheduler 驱动 Ability Channel interval，并在销毁时统一清理句柄。 */
+/**
+ * 在技能引导期间按间隔通知调用方，并在总时长到期时通知完成。
+ * 首次周期发生在一个间隔之后，恰好落在结束时刻的周期不执行；例如间隔 1 秒、总长 3 秒，只在第 1、2 秒触发周期，第 3 秒完成。
+ * 全部计时使用 Combat Scheduler，技能取消或任务销毁时清理周期与结束任务。
+ */
 UCLASS()
 class UE_GAS_API UAbilityTask_WaitCombatInterval : public UAbilityTask
 {
 	GENERATED_BODY()
 
 public:
-	/** 创建 interval/duration 均为正数的受管理 Channel Task。 */
-	UFUNCTION(BlueprintCallable, Category="Combat|Ability|Tasks", meta=(DisplayName="等待战斗引导周期", ToolTip="使用 Combat Scheduler 驱动固定间隔和总时长均为正数的引导任务。", HidePin="OwningAbility", DefaultToSelf="OwningAbility", BlueprintInternalUseOnly="true"))
+	/** 构造引导计时任务；间隔与总时长须有限且大于 0，间隔不能大于总时长。激活时参数非法会直接结束任务，不发送正常完成通知。 */
+	UFUNCTION(BlueprintCallable, Category="Combat|Ability|Tasks", meta=(DisplayName="等待战斗引导周期", ToolTip="构造引导计时任务；间隔与总时长须有限且大于 0，间隔不能大于总时长。激活时参数非法会直接结束任务，不发送正常完成通知。", HidePin="OwningAbility", DefaultToSelf="OwningAbility", BlueprintInternalUseOnly="true"))
 	static UAbilityTask_WaitCombatInterval* WaitCombatInterval(
 		UPARAM(DisplayName="所属技能") UGameplayAbility* OwningAbility,
 		UPARAM(DisplayName="周期间隔") float Interval,
 		UPARAM(DisplayName="总时长") float Duration);
 
-	/** 注册 repeating tick 与高优先级 finish task。 */
+	/** 注册周期任务与优先执行的到期任务；任一注册失败都取消已注册任务并结束。 */
 	virtual void Activate() override;
-	/** Ability End/Cancel 或显式 EndTask 时取消全部 Scheduler Handle。 */
+	/** 技能结束、取消或调用 EndTask 时取消两个计时任务，防止引导结束后继续触发。 */
 	virtual void OnDestroy(bool bInOwnerFinished) override;
 
-	/** 每次逻辑 interval 到达时广播。 */
+	/** 每个尚未到总时长终点的计划周期触发；卡顿时按预算补执行，结束边界的周期始终跳过。 */
 	UPROPERTY(BlueprintAssignable) FCombatIntervalTickDelegate OnTick;
-	/** duration 到期时广播一次。 */
+	/** 总时长正常到期时广播一次；提前取消不广播，是否中断由技能自身的结束流程通知。 */
 	UPROPERTY(BlueprintAssignable) FCombatIntervalFinishedDelegate OnFinished;
 
-	/** 返回 repeating 与 finish 是否仍有任一活动句柄。 */
+	/** 检查周期或到期任务是否至少一个仍活动，供调用方确认计时任务启动成功或已经清理。 */
 	bool HasActiveSchedule() const;
 
 private:
-	/** 接收 Scheduler repeating 回调并转发 TickContext。 */
+	/** 转发未到结束边界的周期回调；补执行批次中也逐次检查计划时刻，避免补出结束之后的效果。 */
 	void HandleTick(const FCombatScheduledTickContext& TickContext);
-	/** 先取消 repeating，再广播完成并结束 Task。 */
+	/** 正常到期时先取消周期和到期任务，再广播完成并结束自身，重复完成回调不再次通知。 */
 	void HandleFinished(const FCombatScheduledTickContext& TickContext);
-	/** 幂等取消两个 Scheduler Handle。 */
+	/** 取消周期和到期任务并清空本地句柄，可在正常结束和销毁路径重复调用。 */
 	void CancelSchedules();
 
-	/** 固定逻辑 tick 间隔。 */
+	/** 引导相邻两次周期通知之间的游戏秒数。 */
 	float TickInterval = 0.0f;
-	/** Channel 总时长。 */
+	/** 从任务激活开始计算的引导总秒数。 */
 	float TotalDuration = 0.0f;
-	/** Channel 的绝对结束时刻，用于补帧批次内淘汰恰好位于边界的 tick。 */
+	/** 任务结束的世界游戏时间，单位为秒；补执行时用它排除计划时刻已达到终点的周期。 */
 	double FinishAt = 0.0;
-	/** repeating tick 句柄。 */
+	/** 引导周期任务的句柄，任务销毁或到期时取消。 */
 	FCombatScheduleHandle TickSchedule;
-	/** 高优先级 finish 句柄，确保边界 tick 不在 duration 时刻执行。 */
+	/** 到期任务的句柄；与周期同刻到期时优先结束，从而不执行边界周期。 */
 	FCombatScheduleHandle FinishSchedule;
-	/** 防止 finish 或 OnDestroy 重复广播。 */
+	/** 标记正常到期通知已发出，防止重复完成回调再次广播。 */
 	bool bFinished = false;
 };

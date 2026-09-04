@@ -13,7 +13,7 @@ ACombatUnitAIController::ACombatUnitAIController(const FObjectInitializer& Objec
 {
 	bReplicates = false;
 
-	// SAM 只允许 Detour Crowd 负责局部 steering；参数集中在专用 Controller，禁止与 CMC RVO 叠加。
+	// 普通移动统一由 Detour Crowd 计算绕行方向；不再叠加 CharacterMovement 的 RVO 避让，避免两套算法反复修正同一速度。
 	if (UCrowdFollowingComponent* Crowd = GetCombatCrowdFollowing())
 	{
 		Crowd->SetCrowdAnticipateTurns(true, false);
@@ -53,7 +53,7 @@ void ACombatUnitAIController::RefreshCrowdParticipation()
 		const UCombatMotionComponent* Motion = Unit->GetCombatMotionComponent();
 		if (!bIgnoresUnits)
 		{
-			// Root/Stun/Motion 期间保留硬阻挡身份，但不让 Crowd 继续为该 Unit 生成导航速度。
+			// 定身、眩晕或强制位移时，其他单位仍应绕开它，但人群导航不能继续驱动它移动。
 			DesiredState = Unit->IsMovementBlocked() || (Motion && Motion->HasActiveMotion())
 				? ECrowdSimulationState::ObstacleOnly
 				: ECrowdSimulationState::Enabled;

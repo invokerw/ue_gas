@@ -26,10 +26,10 @@ class UE_GAS_API UCombatUnitLifecycleComponent : public UActorComponent
 public:
 	UCombatUnitLifecycleComponent();
 
-	/** 仅 Authority 接受 Alive 单位的死亡请求，并同步完成 Dying 清理和 Dead。 */
+	/** 仅服务器接受存活单位的死亡请求，同步取消当前行为、处理死亡效果和碰撞，再进入 Dead 并广播一次。此入口不要求生命已经为 0，也不主动扣血；通常由致死伤害调用，也可显式触发死亡。 */
 	bool RequestDeath(const FCombatEventContext& CauseEvent, ACombatUnitCharacter* Killer);
-	/** 仅 Authority 接受 Dead 单位的复活请求，验证位置后建立新生命代次。 */
-	UFUNCTION(BlueprintCallable, Category="Combat|Life", meta=(DisplayName="在指定位置复活", ToolTip="仅在服务器接受死亡单位的复活请求，验证位置后建立新的生命代次。"))
+	/** 仅服务器接受已死亡单位的复活请求；检查坐标数值后直接传送，不做导航投射或落点避障。成功时递增生命代次、恢复满生命/法力、重建效果和恢复任务，最后进入 Alive 并广播；传送失败则退回 Dead。 */
+	UFUNCTION(BlueprintCallable, Category="Combat|Life", meta=(DisplayName="在指定位置复活", ToolTip="仅服务器接受已死亡单位的复活请求；检查坐标数值后直接传送，不做导航投射或落点避障。成功时递增生命代次、恢复满生命/法力、重建效果和恢复任务，最后进入 Alive 并广播；传送失败则退回 Dead。"))
 	bool RespawnAtLocation(UPARAM(DisplayName="复活位置") FVector NewLocation);
 
 	/** 返回 exactly-once 死亡广播。 */
@@ -42,7 +42,7 @@ private:
 	ACombatUnitCharacter* GetOwnerUnit() const;
 	/** 为显式复活或无 CauseEvent 死亡创建根事件。 */
 	FCombatEventContext CreateRootEvent() const;
-	/** 输出 UnitDeath/UnitRespawned 的 exactly-once 结构化日志。 */
+	/** 为成功完成的死亡或复活转换写入一次结构化日志；重复请求由状态检查提前拒绝。 */
 	void EmitLifecycleLog(const FCombatEventContext& Context, bool bRespawn, ACombatUnitCharacter* OtherUnit) const;
 
 	/** 当前 Unit 的死亡观察者。 */

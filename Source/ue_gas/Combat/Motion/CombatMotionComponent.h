@@ -10,8 +10,10 @@
 class ACombatUnitCharacter;
 
 /**
- * 每个 Unit 唯一的服务器权威强制位移执行器。
- * 组件以稳定 Handle 管理水平、垂直独占通道和优先级抢占，只通过 CharacterMovement 推进连续位移；死亡、释放或 EndPlay 都会使旧请求失效并 exactly-once 广播结果。
+ * 单位上的服务器强制位移组件，用于击退、拉拽等不由普通寻路产生的移动。
+ * 水平和垂直通道分别独占，新请求只有优先级严格更高才能中断冲突请求；同一请求可同时占用两个通道。
+ * 接受请求后暂停普通寻路，每帧通过 CharacterMovement 推进；最后一条请求结束后可投影到导航网格并重新评估原命令。
+ * 到达、受阻、抢占、取消、死亡及退出场景都汇入统一结束流程，旧生命或旧代次句柄不能控制当前单位。
  */
 UCLASS(ClassGroup=(Combat), meta=(BlueprintSpawnableComponent))
 class UE_GAS_API UCombatMotionComponent : public UActorComponent
@@ -21,28 +23,31 @@ class UE_GAS_API UCombatMotionComponent : public UActorComponent
 public:
 	UCombatMotionComponent();
 
-	/** 校验请求并获取通道；严格高优先级会中断旧 owner。 */
+	/**
+	 * 在服务器校验存活状态、目标和速度；所需通道空闲时接受，或在优先级严格高于全部冲突请求时先中断旧请求再接受。
+	 * 返回成功表示已经登记并暂停普通移动，尚未发生位移；失败不会改变现有通道。
+	 */
 	FCombatMotionResult TryAcquireMotion(const FCombatMotionRequest& Request);
-	/** 显式释放活动 Handle；旧/重复 Handle 安全返回 false。 */
+	/** 按指定原因结束活动位移并释放通道；最后一条结束时恢复普通移动和命令。旧、重复或身份不匹配的句柄返回 false。 */
 	bool ReleaseMotion(FCombatMotionHandle Handle, ECombatMotionFinishReason Reason = ECombatMotionFinishReason::Cancelled);
 	/** 返回完整 Handle 是否仍活动。 */
 	bool IsMotionActive(FCombatMotionHandle Handle) const;
-	/** 返回任意通道是否被占用。 */
+	/** 检查是否至少有一条活动强制位移；用于暂停普通指令，一个同时占两通道的请求仍只算一条。 */
 	bool HasActiveMotion() const { return !ActiveMotions.IsEmpty(); }
 	/** 返回活动请求数量，Both 只计一条。 */
 	int32 GetActiveMotionCount() const { return ActiveMotions.Num(); }
-	/** 返回最近 exactly-once 结束结果。 */
+	/** 取得最近一次强制位移的最终结果；首次结束前为默认值，后续结束会覆盖。 */
 	const FCombatMotionResult& GetLastMotionResult() const { return LastMotionResult; }
-	/** 返回完成观察委托。 */
+	/** 订阅强制位移最终结束的服务器本地通知；订阅者退出时应解绑。 */
 	FOnCombatMotionFinished& OnMotionFinished() { return MotionFinishedDelegate; }
 
-	/** Unit Dying 时释放全部通道并淘汰 generation。 */
+	/** 单位开始死亡时以 Death 原因结束全部请求并提升组件代次，防止旧回调作用于下一次生命。 */
 	void HandleOwnerDeath();
-	/** Respawn 后建立空的新 generation。 */
+	/** 复活时清空通道、提升组件代次并停止 Tick；不会恢复上一条生命的强制位移。 */
 	void HandleOwnerRespawn();
-	/** 每帧通过 CharacterMovement SafeMove 推进，不结算周期 gameplay。 */
+	/** 仅在服务器有活动请求时逐帧推进各请求；按通道计算位移，达到终点或扫掠受阻时结束。此 Tick 不造成周期伤害。 */
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
-	/** EndPlay exactly-once 释放通道和 delegate。 */
+	/** 单位退出场景时结束全部强制位移并提升代次；仍广播各记录的最终结束通知，但不再恢复寻路和命令。 */
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 private:
@@ -56,13 +61,13 @@ private:
 
 	/** 返回所属 Combat Unit。 */
 	ACombatUnitCharacter* GetOwnerUnit() const;
-	/** 完成/中断单条记录，释放通道后再广播和恢复 Order。 */
+	/** 统一结束入口：先移除记录和通道占用，刷新移动状态并广播结果；只在全部请求结束且当前没有抢占替换时恢复命令。 */
 	bool FinishMotion(FCombatMotionHandle Handle, ECombatMotionFinishReason Reason, FGameplayTag FailureTag);
 	/** 判断请求是否占用水平通道。 */
 	static bool UsesHorizontal(ECombatMotionChannel Channel);
 	/** 判断请求是否占用垂直通道。 */
 	static bool UsesVertical(ECombatMotionChannel Channel);
-	/** 全部 Motion 结束后投影 NavMesh 并只 Pump 当前 Order。 */
+	/** 停止残余速度；按请求选项尝试把单位校正到附近导航点，然后通知指令组件重新处理当前有效命令，不恢复旧路径请求。 */
 	void RestoreNavigationAndOrder(bool bProjectToNavigation);
 	/** 输出 MotionStarted/MotionFinished 结构化记录。 */
 	void EmitMotionLog(
@@ -73,7 +78,7 @@ private:
 
 	/** 以 Handle Id 索引的活动请求。 */
 	TMap<uint64, FActiveMotion> ActiveMotions;
-	/** 两个通道当前 owner。 */
+	/** 水平与垂直通道当前占用者的句柄；同时占用的请求会出现在两个字段中，但活动表只有一条记录。 */
 	FCombatMotionHandle HorizontalOwner;
 	FCombatMotionHandle VerticalOwner;
 	/** Handle 分配与生命周期 generation。 */
@@ -83,7 +88,7 @@ private:
 	bool bAcquiringReplacement = false;
 	/** EndPlay 期间不恢复导航或 Order。 */
 	bool bEnding = false;
-	/** 最近结果与观察者。 */
+	/** 最近最终结果和结束通知；结果只保留一份，不形成历史记录。 */
 	FCombatMotionResult LastMotionResult;
 	FOnCombatMotionFinished MotionFinishedDelegate;
 };

@@ -11,7 +11,10 @@ class ACombatUnitCharacter;
 class UCombatModifierData;
 class UCombatProjectileData;
 
-/** 为 L_CombatTest 提供可重复生成和清理的双队战斗场景入口。 */
+/**
+ * L_CombatTest 测试地图的场景编排器，生成双队单位并串联攻击、弹体、光环和联机冒烟检查。
+ * 本类的 Actor Timer 只用于等待落地、连接和采样窗口，不承担生产战斗中的周期伤害或技能计时。
+ */
 UCLASS(Blueprintable)
 class UE_GAS_API ACombatTestScenarioActor : public AActor
 {
@@ -55,7 +58,7 @@ public:
 protected:
 	/** 根据 bAutoSpawnOnBeginPlay 在游戏 World 中建立测试场景。 */
 	virtual void BeginPlay() override;
-	/** Actor 结束前销毁其生成的全部 Unit。 */
+	/** 结束时取消全部场景编排计时器；显式 Destroy 时再清理生成的单位与异步对象，其他 World 退出路径只释放单位跟踪数组，由 World 销毁 Actor。 */
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 private:

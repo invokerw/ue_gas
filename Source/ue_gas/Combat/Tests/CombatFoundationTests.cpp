@@ -374,7 +374,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	"Combat.Foundation.NumericRng.PolicyAndReplay",
 	CombatFoundationTests::Flags)
 
-/** 执行有限值、Clamp、key 隔离与确定性重放断言。 */
+/** 验证有限值处理、数值范围、随机键隔离及同一键重复计算的一致性；不验证跨进程的完整战斗重放。 */
 bool FCombatNumericRngTest::RunTest(const FString& Parameters)
 {
 	TestTrue(TEXT("Request zero is valid"), FCombatNumericPolicyV1::IsValidNonNegativeRequest(0.0f));
@@ -735,7 +735,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	"Combat.Foundation.Operations.DeferredAndEvents",
 	CombatFoundationTests::Flags)
 
-/** 执行嵌套阶段、稳定快照、失败结果和事件深度断言。 */
+/** 验证嵌套回调阶段退出后按顺序执行延迟操作，以及句柄、失败结果和事件深度边界。 */
 bool FCombatDeferredEventsTest::RunTest(const FString& Parameters)
 {
 	FCombatDeferredOperationQueue Queue;

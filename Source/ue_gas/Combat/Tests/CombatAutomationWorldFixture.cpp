@@ -10,7 +10,7 @@
 FCombatAutomationWorldFixture::FCombatAutomationWorldFixture(const ENetMode RequestedNetMode)
 {
 #if WITH_EDITOR
-	// Editor 自动化使用 PIE WorldType，确保 NetMode 和 WorldSubsystem 路径与真实 PIE 一致。
+	// Editor 自动化选用 PIE 类型，使网络模式判断和 World 子系统创建走对应分支；测试仍需自行设置连接、推进帧或派发生命周期。
 	const EWorldType::Type WorldType = EWorldType::PIE;
 #else
 	const EWorldType::Type WorldType = EWorldType::Game;

@@ -64,7 +64,7 @@ UCombatAttributeSet::UCombatAttributeSet()
 void UCombatAttributeSet::PreAttributeChange(const FGameplayAttribute& Attribute, float& NewValue)
 {
 	Super::PreAttributeChange(Attribute, NewValue);
-	// 所有分支都先消除 NaN/Inf；属性专属规则随后执行明确的 v1 clamp。
+	// 先把非有限值转成 0，再按属性范围限制，避免异常数值传播到生命、移动或战斗公式。
 	if (!FMath::IsFinite(NewValue))
 	{
 		NewValue = 0.0f;

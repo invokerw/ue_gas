@@ -50,19 +50,22 @@ enum class ECombatDirectSourceType : uint8
 	Attack
 };
 
-/** 决定调度任务落后于当前游戏时间时的补帧策略。 */
+/**
+ * 服务器卡顿使周期任务积压多次触发时，决定本轮如何补执行；一次性任务不使用此策略。
+ * 例如每秒一次的任务积压了第 1、2、3 秒三个触发点：逐次补执行最多回调三次，合并只回调一次并报告 TickCount=3，跳过只执行第 3 秒一次。
+ */
 UENUM(BlueprintType)
 enum class ECombatCatchUpPolicy : uint8
 {
-	/** 在单任务预算内逐次执行所有到期回调。 */
+	/** 按原定触发顺序逐次补执行，每次 TickCount=1；同时受全局、所有者和单任务预算限制，未执行部分留待后续调度。 */
 	ExecuteAllBounded,
-	/** 将多个过期 tick 合并成一次回调。 */
+	/** 把积压周期合为一次回调，TickCount 为积压次数，ScheduledTime 为最早积压时刻；下次触发推进到未来。 */
 	Coalesce,
-	/** 跳过已过期 tick，仅推进到未来触发点。 */
+	/** 丢弃较早的积压周期，只对最近一次到期点执行回调，TickCount=1；随后推进到未来触发点。 */
 	SkipExpired
 };
 
-/** 战斗队伍的稳定值类型；0 表示中立，255 表示无效。 */
+/** 战斗队伍的稳定编号；0 是中立营地编号，255 无效。营地编号不等于外交关系：是否中立、友军或敌军仍由队伍关系子系统判定。 */
 USTRUCT(BlueprintType)
 struct UE_GAS_API FCombatTeamId
 {
@@ -73,8 +76,8 @@ struct UE_GAS_API FCombatTeamId
 	/** 无效队伍的保留值。 */
 	static constexpr uint8 InvalidValue = MAX_uint8;
 
-	/** 队伍的紧凑网络值。 */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Combat|Team", meta=(ClampMin="0", ClampMax="255", DisplayName="队伍 ID", ToolTip="战斗队伍的紧凑值：0 表示中立，1 到 254 表示有效队伍，255 是无效保留值。"))
+	/** 队伍编号：0 为中立营地，1 到 254 为其他有效队伍，255 无效；编号本身不决定与另一队的外交关系。 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Combat|Team", meta=(ClampMin="0", ClampMax="255", DisplayName="队伍 ID", ToolTip="队伍编号：0 为中立营地，1 到 254 为其他有效队伍，255 无效；编号本身不决定与另一队的外交关系。"))
 	uint8 Value = InvalidValue;
 
 	FCombatTeamId() = default;
@@ -84,16 +87,12 @@ struct UE_GAS_API FCombatTeamId
 	bool IsValid() const { return Value != InvalidValue; }
 	/** 返回当前值是否表示中立阵营。 */
 	bool IsNeutralCamp() const { return Value == NeutralValue; }
-	/** 返回适合日志输出的稳定文本。 */
 	FString ToString() const;
 
-	/** 比较两个队伍标识的紧凑值。 */
 	bool operator==(const FCombatTeamId& Other) const { return Value == Other.Value; }
-	/** 返回两个队伍标识是否不同。 */
 	bool operator!=(const FCombatTeamId& Other) const { return !(*this == Other); }
 };
 
-/** 为队伍标识生成容器哈希值。 */
 FORCEINLINE uint32 GetTypeHash(const FCombatTeamId& TeamId)
 {
 	return GetTypeHash(TeamId.Value);
@@ -108,24 +107,23 @@ struct UE_GAS_API FCombatEventId
 	/** 0 表示无效，正数由事件子系统顺序分配。 */
 	uint64 Sequence = 0;
 
-	/** 返回事件序号是否已分配。 */
+	/** 只检查事件序号非零，不验证是否由事件子系统分配或属于当前 World。 */
 	bool IsValid() const { return Sequence != 0; }
-	/** 返回适合日志输出的稳定文本。 */
 	FString ToString() const;
 
-	/** 比较两个事件的序号。 */
 	bool operator==(const FCombatEventId& Other) const { return Sequence == Other.Sequence; }
-	/** 返回两个事件标识是否不同。 */
 	bool operator!=(const FCombatEventId& Other) const { return !(*this == Other); }
 };
 
-/** 为事件标识生成容器哈希值。 */
 FORCEINLINE uint32 GetTypeHash(const FCombatEventId& EventId)
 {
 	return GetTypeHash(EventId.Sequence);
 }
 
-/** 所有异步战斗句柄共享的稳定身份键。 */
+/**
+ * 用于查找异步战斗记录的身份凭证。Id 标识记录，Generation 区分记录版本，LifeGeneration 可区分单位复活前后。
+ * IsValid 只检查身份字段是否非零；记录是否仍活动必须向持有它的组件或子系统查询。
+ */
 USTRUCT(BlueprintType)
 struct UE_GAS_API FCombatHandleKey
 {
@@ -137,12 +135,12 @@ struct UE_GAS_API FCombatHandleKey
 	/** 槽位复用或重排时递增，用于淘汰旧回调。 */
 	uint32 Generation = 0;
 
-	/** 可选的单位生命代次，用于淘汰跨死亡/复活回调。 */
+	/** 关联单位的生命编号；0 表示未绑定。需要生命隔离的持有者以它拒绝复活前的旧请求和回调。 */
 	uint32 LifeGeneration = 0;
 
-	/** 返回句柄槽位和 generation 是否均有效。 */
+	/** 仅检查编号和代次非零；不查询记录是否已取消、对象是否还存在。 */
 	bool IsValid() const { return Id != 0 && Generation != 0; }
-	/** 清空全部身份字段，使所有旧引用立即失效。 */
+	/** 清空当前这份身份值；不会取消对应任务，也不会修改其他地方保存的句柄副本。 */
 	void Invalidate() { Id = 0; Generation = 0; LifeGeneration = 0; }
 	/** 使用业务类型名生成结构化日志文本。 */
 	FString ToString(const TCHAR* TypeName) const;
@@ -152,17 +150,15 @@ struct UE_GAS_API FCombatHandleKey
 	{
 		return Id == Other.Id && Generation == Other.Generation && LifeGeneration == Other.LifeGeneration;
 	}
-	/** 返回两个完整身份键是否不同。 */
 	bool operator!=(const FCombatHandleKey& Other) const { return !(*this == Other); }
 };
 
-/** 为完整身份键生成容器哈希值。 */
 FORCEINLINE uint32 GetTypeHash(const FCombatHandleKey& Key)
 {
 	return HashCombineFast(HashCombineFast(GetTypeHash(Key.Id), GetTypeHash(Key.Generation)), GetTypeHash(Key.LifeGeneration));
 }
 
-/** 标识一个 Modifier Runtime 实例。 */
+/** 标识一个由持续效果组件持有的效果实例；句柄是查询凭证，不延长实例生命。 */
 USTRUCT(BlueprintType)
 struct UE_GAS_API FCombatModifierHandle
 {
@@ -171,13 +167,10 @@ struct UE_GAS_API FCombatModifierHandle
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Handle") FCombatHandleKey Key;
 	/** 返回 Modifier 句柄是否有效。 */
 	bool IsValid() const { return Key.IsValid(); }
-	/** 返回适合日志输出的 Modifier 句柄文本。 */
 	FString ToString() const { return Key.ToString(TEXT("Modifier")); }
-	/** 比较两个 Modifier 句柄的完整身份。 */
 	bool operator==(const FCombatModifierHandle& Other) const { return Key == Other.Key; }
 };
 
-/** 为 Modifier 句柄生成包含 generation 与生命代次的哈希。 */
 FORCEINLINE uint32 GetTypeHash(const FCombatModifierHandle& Handle) { return GetTypeHash(Handle.Key); }
 
 /** 标识一次绑定单位生命代次的攻击记录。 */
@@ -187,18 +180,15 @@ struct UE_GAS_API FCombatAttackHandle
 	GENERATED_BODY()
 	/** 攻击记录的共享身份键。 */
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Handle") FCombatHandleKey Key;
-	/** 返回攻击句柄及其生命代次是否有效。 */
+	/** 只检查编号、版本和生命代次非零，不比较单位当前生命或查询活动记录。 */
 	bool IsValid() const { return Key.IsValid() && Key.LifeGeneration != 0; }
-	/** 返回适合日志输出的攻击句柄文本。 */
 	FString ToString() const { return Key.ToString(TEXT("Attack")); }
-	/** 比较两个攻击句柄的完整身份。 */
 	bool operator==(const FCombatAttackHandle& Other) const { return Key == Other.Key; }
 };
 
-/** 为 Attack 句柄生成包含 generation 与生命代次的哈希。 */
 FORCEINLINE uint32 GetTypeHash(const FCombatAttackHandle& Handle) { return GetTypeHash(Handle.Key); }
 
-/** 标识一条绑定单位生命代次的 Order。 */
+/** 标识一条绑定单位当前生命的指令；复活后旧指令回调应被拒绝。 */
 USTRUCT(BlueprintType)
 struct UE_GAS_API FCombatOrderHandle
 {
@@ -207,13 +197,10 @@ struct UE_GAS_API FCombatOrderHandle
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Handle") FCombatHandleKey Key;
 	/** 返回 Order 句柄及其生命代次是否有效。 */
 	bool IsValid() const { return Key.IsValid() && Key.LifeGeneration != 0; }
-	/** 返回适合日志输出的 Order 句柄文本。 */
 	FString ToString() const { return Key.ToString(TEXT("Order")); }
-	/** 比较两个 Order 句柄的完整身份。 */
 	bool operator==(const FCombatOrderHandle& Other) const { return Key == Other.Key; }
 };
 
-/** 为 Order 句柄生成包含 generation 与生命代次的哈希。 */
 FORCEINLINE uint32 GetTypeHash(const FCombatOrderHandle& Handle) { return GetTypeHash(Handle.Key); }
 
 /** 标识一个由 Subsystem 持有的弹体实例。 */
@@ -223,17 +210,13 @@ struct UE_GAS_API FCombatProjectileHandle
 	GENERATED_BODY()
 	/** 弹体的共享身份键。 */
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Handle") FCombatHandleKey Key;
-	/** 返回弹体句柄是否有效。 */
+	/** 只检查句柄身份字段；是否仍有活动记录须向对应持有者查询。 */
 	bool IsValid() const { return Key.IsValid(); }
-	/** 返回适合日志输出的弹体句柄文本。 */
 	FString ToString() const { return Key.ToString(TEXT("Projectile")); }
-	/** 比较两个弹体句柄的完整身份。 */
 	bool operator==(const FCombatProjectileHandle& Other) const { return Key == Other.Key; }
-	/** 返回两个弹体句柄是否不同。 */
 	bool operator!=(const FCombatProjectileHandle& Other) const { return !(*this == Other); }
 };
 
-/** 为 Projectile 句柄生成包含 generation 与生命代次的哈希。 */
 FORCEINLINE uint32 GetTypeHash(const FCombatProjectileHandle& Handle) { return GetTypeHash(Handle.Key); }
 
 /** 标识一个由 ThinkerSubsystem 持有的权威区域对象。 */
@@ -245,18 +228,14 @@ struct UE_GAS_API FCombatThinkerHandle
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Handle") FCombatHandleKey Key;
 	/** 返回 Thinker 句柄是否有效。 */
 	bool IsValid() const { return Key.IsValid(); }
-	/** 返回适合日志输出的 Thinker 句柄文本。 */
 	FString ToString() const { return Key.ToString(TEXT("Thinker")); }
-	/** 比较两个 Thinker 句柄的完整身份。 */
 	bool operator==(const FCombatThinkerHandle& Other) const { return Key == Other.Key; }
-	/** 返回两个 Thinker 句柄是否不同。 */
 	bool operator!=(const FCombatThinkerHandle& Other) const { return !(*this == Other); }
 };
 
-/** 为 Thinker 句柄生成包含 generation 与生命代次的哈希。 */
 FORCEINLINE uint32 GetTypeHash(const FCombatThinkerHandle& Handle) { return GetTypeHash(Handle.Key); }
 
-/** 标识一个绑定 Unit life generation 的强制位移请求。 */
+/** 标识一次绑定单位当前生命的强制位移；复活前的请求不能控制复活后的单位。 */
 USTRUCT(BlueprintType)
 struct UE_GAS_API FCombatMotionHandle
 {
@@ -265,35 +244,27 @@ struct UE_GAS_API FCombatMotionHandle
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Handle") FCombatHandleKey Key;
 	/** 返回 Motion 句柄及其生命代次是否有效。 */
 	bool IsValid() const { return Key.IsValid() && Key.LifeGeneration != 0; }
-	/** 返回适合日志输出的 Motion 句柄文本。 */
 	FString ToString() const { return Key.ToString(TEXT("Motion")); }
-	/** 比较两个 Motion 句柄的完整身份。 */
 	bool operator==(const FCombatMotionHandle& Other) const { return Key == Other.Key; }
-	/** 返回两个 Motion 句柄是否不同。 */
 	bool operator!=(const FCombatMotionHandle& Other) const { return !(*this == Other); }
 };
 
-/** 为 Motion 句柄生成包含 generation 与生命代次的哈希。 */
 FORCEINLINE uint32 GetTypeHash(const FCombatMotionHandle& Handle) { return GetTypeHash(Handle.Key); }
 
-/** 标识一个由 AuraSubsystem 持有并绑定 Owner 生命代次的 Aura。 */
+/** 标识一个由光环子系统维护、绑定产生者当前生命的光环。 */
 USTRUCT(BlueprintType)
 struct UE_GAS_API FCombatAuraHandle
 {
 	GENERATED_BODY()
 	/** Aura 的共享身份键。 */
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Handle") FCombatHandleKey Key;
-	/** 返回 Aura 句柄及 Owner 生命代次是否有效。 */
+	/** 只检查编号、版本和生命代次非零，不比较单位当前生命或查询活动记录。 */
 	bool IsValid() const { return Key.IsValid() && Key.LifeGeneration != 0; }
-	/** 返回适合日志输出的 Aura 句柄文本。 */
 	FString ToString() const { return Key.ToString(TEXT("Aura")); }
-	/** 比较两个 Aura 句柄的完整身份。 */
 	bool operator==(const FCombatAuraHandle& Other) const { return Key == Other.Key; }
-	/** 返回两个 Aura 句柄是否不同。 */
 	bool operator!=(const FCombatAuraHandle& Other) const { return !(*this == Other); }
 };
 
-/** 为 Aura 句柄生成包含 generation 与生命代次的哈希。 */
 FORCEINLINE uint32 GetTypeHash(const FCombatAuraHandle& Handle) { return GetTypeHash(Handle.Key); }
 
 /** 标识一个 Combat Scheduler 槽位。 */
@@ -303,17 +274,13 @@ struct UE_GAS_API FCombatScheduleHandle
 	GENERATED_BODY()
 	/** 调度槽位的共享身份键。 */
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Handle") FCombatHandleKey Key;
-	/** 返回调度句柄是否有效。 */
+	/** 只检查句柄身份字段；是否仍有活动记录须向对应持有者查询。 */
 	bool IsValid() const { return Key.IsValid(); }
-	/** 返回适合日志输出的调度句柄文本。 */
 	FString ToString() const { return Key.ToString(TEXT("Schedule")); }
-	/** 比较两个调度句柄的完整身份。 */
 	bool operator==(const FCombatScheduleHandle& Other) const { return Key == Other.Key; }
-	/** 返回两个调度句柄是否不同。 */
 	bool operator!=(const FCombatScheduleHandle& Other) const { return !(*this == Other); }
 };
 
-/** 为调度句柄生成容器哈希值。 */
 FORCEINLINE uint32 GetTypeHash(const FCombatScheduleHandle& Handle)
 {
 	return GetTypeHash(Handle.Key);
@@ -369,20 +336,20 @@ struct UE_GAS_API FCombatOperationResult
 	static FCombatOperationResult Failure(const FGameplayTag& InFailureTag, FString InDiagnostic = FString());
 };
 
-/** Scheduler 回调收到的确定性 tick 上下文。 */
+/** 一次调度回调的计划时间、实际时间及周期计数；时间采用世界游戏时间，单位为秒，卡顿时计划时间可能早于实际时间。 */
 USTRUCT(BlueprintType)
 struct UE_GAS_API FCombatScheduledTickContext
 {
 	GENERATED_BODY()
 
-	/** 当前逻辑 tick 原计划触发的 World Game Time。 */
+	/** 本次代表的计划触发时刻，单位为游戏秒；合并策略取最早积压点，跳过策略取最近到期点。 */
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Scheduling") double ScheduledTime = 0.0;
-	/** Scheduler 实际执行回调时的 World Game Time。 */
+	/** 本轮执行调度时的世界游戏时间，单位为秒；同一轮补执行的多个回调可能共享此值。 */
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Scheduling") double ActualTime = 0.0;
 	/** 重复任务的固定间隔；单次任务为 0。 */
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Scheduling") float Interval = 0.0f;
 	/** 当前任务从 0 开始的逻辑 tick 序号。 */
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Scheduling") int32 TickIndex = 0;
-	/** 本次合并回调代表的逻辑 tick 数量。 */
+	/** 本次回调代表的周期数，通常为 1；合并积压策略下可能大于 1，调用方自行决定是否据此累加效果。 */
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Scheduling") int32 TickCount = 1;
 };

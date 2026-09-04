@@ -31,7 +31,7 @@ class UE_GAS_API UCombatOverheadWidget : public UUserWidget
 public:
 	/** 绑定 WidgetComponent 所属 Unit 及其 UI 安全复制 View。 */
 	void InitializeForUnit(ACombatUnitCharacter* InUnit);
-	/** 添加一条带颜色区分的伤害或治疗浮动数字。 */
+	/** 在本地添加按伤害/治疗类型着色的跳字，显示值四舍五入为整数；最多同时保留 12 条，超限时移除最旧项。控件未就绪、数值非有限或接近 0 时忽略。 */
 	void AddFloatingText(float Amount, ECombatFloatingTextType Type);
 
 protected:
@@ -51,17 +51,17 @@ private:
 	void BuildWidgetTree();
 	/** 刷新名称、资源、队伍颜色和可见性。 */
 	void RefreshResources();
-	/** 从安全状态标签与 Modifier 时间窗刷新控制状态条。 */
+	/** 从可见状态中选最高优先级控制状态决定颜色，并从对应效果快照获取时间窗；文字列出当前所有可识别控制状态。这里只选择展示内容，不改变控制效果。 */
 	void RefreshControlState();
 	/** 从当前 Ability 时间窗刷新技能施法/引导条。 */
 	void RefreshAbilityState();
 	/** 施法/引导条或控制条出现时隐藏名字；两者都消失后恢复。 */
 	void RefreshNameVisibility();
-	/** 按最大生命值重建 DOTA 风格分段刻度。 */
+	/** 按最大生命每 250 点估算分段数，限制为 1 到 12 段后均分条宽；这是视觉刻度，不保证每段始终精确代表 250 点生命。 */
 	void RebuildHealthSegments(float MaxHealth);
-	/** 返回 UI 显示用的 DefinitionName。 */
+	/** 将定义名中的下划线替换为空格并转大写，供临时界面展示；无效 ID 返回 UNIT，不查询本地化名称资产。 */
 	static FString FormatDefinitionName(const FPrimaryAssetId& DefinitionId);
-	/** 返回控制标签的本地化短名称、优先级与颜色。 */
+	/** 将已知控制标签映射为固定中文短名称、展示优先级和颜色；未知标签返回 false，输出参数不变。 */
 	static bool DescribeControlTag(const FGameplayTag& Tag, FString& OutLabel, int32& OutPriority, FLinearColor& OutColor);
 
 	/** 单条本地浮动文字的控件引用、动画时间与错位信息。 */

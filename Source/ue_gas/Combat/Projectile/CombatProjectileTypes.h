@@ -30,7 +30,7 @@ enum class ECombatProjectileTargetLostPolicy : uint8
 {
 	/** 立即以 TargetLost 结束，不执行任何命中动作。 */
 	Fizzle UMETA(DisplayName="立即消散"),
-	/** 继续飞向最后一次有效位置；到达后以 TargetLost 结束，仍不执行命中动作。 */
+	/** 继续飞向最后一次有效位置，到点后以目标丢失结束；到达该位置本身不结算命中，途中仍会按命中策略检测单位和阻挡。 */
 	UseLastKnownPoint UMETA(DisplayName="飞向最后已知位置")
 };
 
@@ -41,7 +41,7 @@ enum class ECombatProjectileTargetLostPolicy : uint8
 UENUM(BlueprintType)
 enum class ECombatProjectileFinishReason : uint8
 {
-	/** first-hit Projectile 成功命中单位。 */
+	/** 配置为命中首个单位后停止的弹体碰到合格单位并结束；是否实际扣血由伤害结果决定。 */
 	Hit,
 	/** 命中 WorldStatic、WorldDynamic 或 CombatBlocker。 */
 	Blocked,
@@ -51,7 +51,7 @@ enum class ECombatProjectileFinishReason : uint8
 	Timeout,
 	/** Tracking 目标失效或到达最后已知位置。 */
 	TargetLost,
-	/** Ability/source 显式取消。 */
+	/** 技能或其他服务器调用者明确请求停止弹体。 */
 	Cancelled,
 	/** 权威 Actor 或 World 正在结束。 */
 	EndPlay
@@ -89,8 +89,8 @@ struct UE_GAS_API FCombatProjectileHitPolicy
 };
 
 /**
- * 弹体命中一个合法单位后按数组顺序执行的一项效果。
- * Type 决定 Damage 字段或 Modifier 字段哪一组生效；可选 Motion 只随 ApplyModifier 一起把目标拖向发射时记录的来源位置。
+ * 弹体命中合格单位后执行的一项伤害或效果动作，多个动作按数组顺序处理。
+ * 可选拉拽只随效果施加传入强制位移请求，目的地取命中时来源单位的位置，位移开始后不继续追随来源。
  */
 USTRUCT(BlueprintType)
 struct UE_GAS_API FCombatProjectileImpactAction
@@ -105,14 +105,14 @@ struct UE_GAS_API FCombatProjectileImpactAction
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Combat|Projectile|Impact", meta=(DisplayName="伤害类型", ToolTip="Damage 命中动作使用的物理、魔法或纯粹结算分支。")) ECombatDamageType DamageType = ECombatDamageType::Magical;
 	/** ApplyModifier 动作使用的稳定定义。 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Combat|Projectile|Impact", meta=(DisplayName="Modifier 定义", ToolTip="ApplyModifier 命中动作施加的稳定 ModifierData；该动作类型下不能为空。")) TObjectPtr<UCombatModifierData> ModifierData = nullptr;
-	/** Modifier 持续时间覆盖；小于 0 使用定义值。 */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Combat|Projectile|Impact", meta=(ClampMin="-1", Units="s", DisplayName="持续时间覆盖", ToolTip="ApplyModifier 的持续时间覆盖，单位为秒；小于 0 表示使用 ModifierData 定义值，0 表示无限持续，正数表示指定时长。")) float DurationOverride = -1.0f;
-	/** true 时为 Modifier Runtime 注入“拖向 Source 快照位置”的 Motion 请求。 */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Combat|Projectile|Impact", meta=(DisplayName="拖向来源位置", ToolTip="启用后，为命中的 Modifier Runtime 注入拖向弹体来源快照位置的 Motion 请求。")) bool bMotionToSource = false;
-	/** Hook Motion 的快照速度。 */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Combat|Projectile|Impact", meta=(ClampMin="0", Units="cm/s", DisplayName="运动速度", ToolTip="拖向来源位置时使用的 Hook Motion 速度，单位为厘米/秒；启用运动时必须大于 0。")) float MotionSpeed = 0.0f;
-	/** Hook Motion 抢占优先级。 */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Combat|Projectile|Impact", meta=(DisplayName="运动优先级", ToolTip="Hook Motion 申请水平运动通道时使用的抢占优先级；数值越大越容易抢占。")) int32 MotionPriority = 100;
+	/** 命中效果的持续秒数：[-1,0) 使用效果定义，0 为无限，正数覆盖定义；小于 -1 非法，负面效果可能再受状态抗性缩短。 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Combat|Projectile|Impact", meta=(ClampMin="-1", Units="s", DisplayName="持续时间覆盖", ToolTip="命中效果的持续秒数：[-1,0) 使用效果定义，0 为无限，正数覆盖定义；小于 -1 非法，负面效果可能再受状态抗性缩短。")) float DurationOverride = -1.0f;
+	/** 启用后在命中时记录来源单位的位置，随新建效果传入拉向该位置的强制位移请求；需效果运行时的创建回调实际消费。 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Combat|Projectile|Impact", meta=(DisplayName="拖向来源位置", ToolTip="启用后在命中时记录来源单位的位置，随新建效果传入拉向该位置的强制位移请求；需效果运行时的创建回调实际消费。")) bool bMotionToSource = false;
+	/** 拉拽速度，单位为厘米/秒；仅在启用拉向来源且效果实际发起位移时使用，位移入口要求速度大于 0。 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Combat|Projectile|Impact", meta=(ClampMin="0", Units="cm/s", DisplayName="运动速度", ToolTip="拉拽速度，单位为厘米/秒；仅在启用拉向来源且效果实际发起位移时使用，位移入口要求速度大于 0。")) float MotionSpeed = 0.0f;
+	/** 拉拽竞争目标水平位移通道的优先级，必须严格高于当前占用者才可抢占。 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Combat|Projectile|Impact", meta=(DisplayName="运动优先级", ToolTip="拉拽竞争目标水平位移通道的优先级，必须严格高于当前占用者才可抢占。")) int32 MotionPriority = 100;
 };
 
 /**
@@ -124,17 +124,17 @@ struct UE_GAS_API FCombatProjectileSpec
 {
 	GENERATED_BODY()
 
-	/** 运动/碰撞默认值来源；registry 在 Spawn 时复制数值。 */
+	/** 必填的弹体定义，提供 Actor、速度、半径、飞行上限和碰撞配置；直接调用生成接口时，运动类型和命中策略仍取本请求相应字段。 */
 	UPROPERTY(BlueprintReadWrite, Category="Combat|Projectile") TObjectPtr<UCombatProjectileData> ProjectileData = nullptr;
-	/** 发射 Projectile 的权威 Unit。 */
+	/** 发射来源，必须有效且属于本世界服务器；来源 Actor 销毁后，弹体在后续推进中结束。 */
 	UPROPERTY(BlueprintReadWrite, Category="Combat|Projectile") TObjectPtr<ACombatUnitCharacter> Source = nullptr;
-	/** Spawn 时由 Subsystem 覆盖的来源队伍快照。 */
+	/** 发射时由子系统写入来源当前队伍，用于后续命中筛选；调用者填写的值会被覆盖，来源换队不改写已发射快照。 */
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Projectile") FCombatTeamId SourceTeam;
-	/** Tracking 或 Attack Projectile 的目标。 */
+	/** 追踪弹体或普攻弹体的单位目标；追踪创建要求有效且同世界，普攻命中只能交回原攻击目标。 */
 	UPROPERTY(BlueprintReadWrite, Category="Combat|Projectile") TObjectPtr<ACombatUnitCharacter> Target = nullptr;
-	/** 权威起点。 */
+	/** 服务器发射位置的世界坐标，单位为厘米，必须是有限向量。 */
 	UPROPERTY(BlueprintReadWrite, Category="Combat|Projectile") FVector SpawnLocation = FVector::ZeroVector;
-	/** Linear 方向；Spawn 时规范化。 */
+	/** 直线弹体的初始方向，生成时归一化；零向量回退到世界正 X 方向，非有限向量拒绝。 */
 	UPROPERTY(BlueprintReadWrite, Category="Combat|Projectile") FVector Direction = FVector::ForwardVector;
 	/** 运动类型。 */
 	UPROPERTY(BlueprintReadWrite, Category="Combat|Projectile") ECombatProjectileMovementType MovementType = ECombatProjectileMovementType::Linear;
@@ -142,23 +142,23 @@ struct UE_GAS_API FCombatProjectileSpec
 	UPROPERTY(BlueprintReadWrite, Category="Combat|Projectile") ECombatProjectileTargetLostPolicy TargetLostPolicy = ECombatProjectileTargetLostPolicy::Fizzle;
 	/** 阵营、穿透与阻挡策略快照。 */
 	UPROPERTY(BlueprintReadWrite, Category="Combat|Projectile") FCombatProjectileHitPolicy HitPolicy;
-	/** 非负时覆盖 ProjectileData.Speed；用于按技能等级冻结速度。 */
+	/** 飞行速度覆盖，单位为厘米/秒；有限负数使用定义默认速度，正数覆盖，0 会因最终速度必须大于 0 而拒绝生成。 */
 	UPROPERTY(BlueprintReadWrite, Category="Combat|Projectile") float SpeedOverride = -1.0f;
-	/** 非负时覆盖 ProjectileData.Radius；用于按技能等级冻结宽度。 */
+	/** 碰撞半径覆盖，单位为厘米；有限负数使用定义值，非负值覆盖，实际球形扫掠半径至少为 0.1 厘米。 */
 	UPROPERTY(BlueprintReadWrite, Category="Combat|Projectile") float RadiusOverride = -1.0f;
-	/** 非负时覆盖 ProjectileData.MaxDistance；用于按技能等级冻结射程。 */
+	/** 累计飞行距离上限覆盖，单位为厘米；有限负数使用定义值，正数覆盖，0 会因最终距离必须大于 0 而拒绝生成。 */
 	UPROPERTY(BlueprintReadWrite, Category="Combat|Projectile") float MaxDistanceOverride = -1.0f;
-	/** 按顺序执行的不可变 Impact Action。 */
+	/** 每次命中合格单位时按数组顺序执行的动作副本；普攻弹体使用 AttackHandle 的攻击结算，不执行这组动作。 */
 	UPROPERTY(BlueprintReadWrite, Category="Combat|Projectile") TArray<FCombatProjectileImpactAction> ImpactActions;
-	/** Ability/Attack 根事件；每次 Damage 派生子事件。 */
+	/** 弹体所属的技能或攻击事件上下文，后续伤害继承事件链；未提供时在生成阶段创建根事件。 */
 	UPROPERTY(BlueprintReadWrite, Category="Combat|Projectile") FCombatEventContext ParentEvent;
 	/** 完整 Ability/Modifier/Projectile 来源链。 */
 	UPROPERTY(BlueprintReadWrite, Category="Combat|Projectile") FCombatSourceContext SourceContext;
-	/** Attack Projectile 使用的唯一 AttackRecord 句柄。 */
+	/** 普攻弹体关联的唯一攻击记录；有效时命中交回攻击组件，闪避、暴击和主伤害在那里结算。 */
 	UPROPERTY(BlueprintReadWrite, Category="Combat|Projectile") FCombatAttackHandle AttackHandle;
-	/** Ability 激活根 ID，供 cancel-with-source 批量取消。 */
+	/** 创建弹体的技能激活编号；与来源单位及取消选项一起用于技能结束时筛选弹体。 */
 	UPROPERTY(BlueprintReadWrite, Category="Combat|Projectile") FCombatEventId AbilityActivationId;
-	/** true 时 Ability End 可按 ActivationId 取消；默认 fire-and-forget。 */
+	/** 启用后，来源技能的清理入口可按激活编号取消弹体；默认关闭，弹体在技能结束后继续按自身规则飞行。 */
 	UPROPERTY(BlueprintReadWrite, Category="Combat|Projectile") bool bCancelWithSourceAbility = false;
 	/** 可选客户端预测视觉键；只用于表现 reconcile，不参与命中和伤害。 */
 	UPROPERTY(BlueprintReadWrite, Category="Combat|Projectile", meta=(DisplayName="预测视觉键", ToolTip="大于 0 时用于服务器弹体首次复制后替换同键客户端预测视觉；不参与 gameplay。"))
@@ -171,19 +171,19 @@ struct UE_GAS_API FCombatProjectileResult
 {
 	GENERATED_BODY()
 
-	/** Spawn 是否接受，或 Finish 是否来自合法活动记录。 */
+	/** 生成时表示弹体已创建；结束时表示成功结束了活动记录，因超时、阻挡或取消结束也可能为 true，不等于造成伤害。 */
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Projectile") bool bSuccess = false;
 	/** 对应 ProjectileHandle。 */
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Projectile") FCombatProjectileHandle Handle;
 	/** Finish 分类；Spawn 成功时保持默认。 */
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Projectile") ECombatProjectileFinishReason FinishReason = ECombatProjectileFinishReason::Cancelled;
-	/** 首个命中或最终阻挡 Actor。 */
+	/** 使弹体最终结束的单位或阻挡 Actor；超时、距离耗尽、取消及生成结果为空，不保留此前穿透命中的目标。 */
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Projectile") TObjectPtr<AActor> HitActor = nullptr;
-	/** Impact Action 真实造成的总生命减少。 */
+	/** 导致弹体以命中结束的那次结算所造成的实际扣血合计；其他结束原因和生成结果为 0，不累计此前穿透命中的伤害。 */
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Projectile") float AppliedDamage = 0.0f;
 	/** 失败或结束的稳定原因。 */
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Projectile") FGameplayTag FailureTag;
 };
 
-/** Projectile Spawn/Hit/Finish 的原生观察委托。 */
+/** 弹体最终结束的服务器本地通知；不用于生成通知或穿透途中逐次命中，后两者有各自日志事件。 */
 DECLARE_MULTICAST_DELEGATE_OneParam(FOnCombatProjectileFinished, const FCombatProjectileResult&);

@@ -62,7 +62,7 @@ public:
 /** 扫描 Combat PrimaryDataAsset 并复用 Editor DataValidation 与迁移规则。 */
 struct UE_GAS_API FCombatAssetValidator
 {
-	/** 校验已加载定义集合，供命令行和自动化共用。 */
+	/** 检查已加载集合的内容版本、定义身份、迁移映射和结构版本；Editor 构建还调用各资产的 IsDataValid。报告保留输入扫描顺序，命令行和自动化共用此入口。 */
 	static FCombatAssetValidationReport ValidateDefinitions(
 		const TArray<const UCombatDefinitionData*>& Definitions,
 		const UCombatAssetValidationSettings& Settings);
@@ -72,7 +72,7 @@ struct UE_GAS_API FCombatAssetValidator
 	static bool WriteJsonReport(const FCombatAssetValidationReport& Report, const FString& OutputPath);
 };
 
-/** 在 cook 前运行的 Combat 数据资产校验命令；任一错误都会以非零码阻止流水线。 */
+/** 供打包前流水线显式调用的数据资产校验命令；发现错误或无法保存报告时返回非零退出码。流水线需检查此退出码，本类不会自动挂接所有 cook 命令。 */
 UCLASS()
 class UE_GAS_API UCombatAssetValidationCommandlet : public UCommandlet
 {

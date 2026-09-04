@@ -20,21 +20,21 @@ class UE_GAS_API UCombatOverheadWidgetComponent : public UWidgetComponent
 public:
 	UCombatOverheadWidgetComponent();
 
-	/** 由服务器把目标实际承受的伤害显示给当前相关客户端。 */
-	UFUNCTION(BlueprintCallable, Category="Combat|UI", meta=(DisplayName="显示伤害跳字", ToolTip="仅服务器有效；按实际伤害值向相关客户端发送头顶跳字。"))
+	/** 服务器将传入的实际扣血量以不可靠多播发送为跳字；调用方负责传真实结算结果，组件只检查数值有限且大于容差，不重新结算伤害。 */
+	UFUNCTION(BlueprintCallable, Category="Combat|UI", meta=(DisplayName="显示伤害跳字", ToolTip="服务器将传入的实际扣血量以不可靠多播发送为跳字；调用方负责传真实结算结果，组件只检查数值有限且大于容差，不重新结算伤害。"))
 	void ShowDamageNumber(
 		UPARAM(DisplayName="实际伤害") float AppliedAmount,
 		UPARAM(DisplayName="伤害类型") ECombatDamageType DamageType);
 
-	/** 由服务器把目标实际获得的治疗显示给当前相关客户端。 */
-	UFUNCTION(BlueprintCallable, Category="Combat|UI", meta=(DisplayName="显示治疗跳字", ToolTip="仅服务器有效；按实际治疗值向相关客户端发送头顶跳字。"))
+	/** 服务器将传入的实际恢复量以不可靠多播发送为跳字；调用方负责传真实结算结果，组件只检查数值有限且大于容差，不重新结算治疗。 */
+	UFUNCTION(BlueprintCallable, Category="Combat|UI", meta=(DisplayName="显示治疗跳字", ToolTip="服务器将传入的实际恢复量以不可靠多播发送为跳字；调用方负责传真实结算结果，组件只检查数值有限且大于容差，不重新结算治疗。"))
 	void ShowHealingNumber(UPARAM(DisplayName="实际治疗") float AppliedAmount);
 
 	/** 在游戏 World 创建 Widget 后绑定所属 Unit 的复制 View；编辑器预览不建立运行时委托。 */
 	virtual void InitWidget() override;
 
 protected:
-	/** Dedicated Server 不创建或显示 Slate 表现。 */
+	/** 专用服务器开始运行时隐藏头顶组件；跳字多播实现也会在专用服务器端直接返回。 */
 	virtual void BeginPlay() override;
 
 private:

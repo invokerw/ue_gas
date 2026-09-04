@@ -11,8 +11,8 @@
 class ACombatUnitCharacter;
 
 /**
- * 决定伤害在公共结算管线中使用哪一种防御减免公式。
- * 该选择只控制 Armor、MagicResist 和魔法免疫分支；无敌、Hook、护盾、事件与死亡流程仍按统一管线处理。
+ * 决定伤害使用的抗性公式与魔法免疫规则；当前结算也只对非物理伤害应用技能伤害增幅。
+ * 纯粹伤害仍受无敌和护盾影响；HPLoss（生命移除）标志另行跳过这些防御与效果回调，不由此枚举控制。
  */
 UENUM(BlueprintType)
 enum class ECombatDamageType : uint8
@@ -45,19 +45,19 @@ struct UE_GAS_API FCombatDamageRequest
 	UPROPERTY(BlueprintReadWrite, Category="Combat|Damage") TObjectPtr<ACombatUnitCharacter> Source = nullptr;
 	/** 承受伤害的目标单位。 */
 	UPROPERTY(BlueprintReadWrite, Category="Combat|Damage") TObjectPtr<ACombatUnitCharacter> Target = nullptr;
-	/** Hook 前的非负请求伤害。 */
+	/** 效果回调和防御计算前的请求伤害；必须是有限非负数，实际扣血可能更少或为 0。 */
 	UPROPERTY(BlueprintReadWrite, Category="Combat|Damage") float Amount = 0.0f;
 	/** 选择物理、魔法或纯粹抗性分支。 */
 	UPROPERTY(BlueprintReadWrite, Category="Combat|Damage") ECombatDamageType DamageType = ECombatDamageType::Physical;
-	/** HPLoss、Reflection、NoLifesteal 等结算标志。 */
+	/** 伤害语义标签，例如 HPLoss 表示直接移除生命，NoLifesteal 禁止吸血；后续伤害回调还可据此防止反射递归。 */
 	UPROPERTY(BlueprintReadWrite, Category="Combat|Damage") FGameplayTagContainer Flags;
 	/** 可记录和复制的直接来源身份。 */
 	UPROPERTY(BlueprintReadWrite, Category="Combat|Damage") FCombatSourceContext SourceContext;
-	/** 有效时从该父事件创建 follow-up；无效时创建根事件。 */
+	/** 有效时创建该事件的子事件并共享根事件 ID，超过事件深度上限会失败；无效时创建新的根事件。 */
 	UPROPERTY(BlueprintReadWrite, Category="Combat|Damage") FCombatEventContext ParentEvent;
 };
 
-/** Damage Hook 共享的可变事件；只有 Amount 允许 Hook 修改。 */
+/** 伤害各阶段共享的事件数据。伤害前回调调整 Amount；护盾回调还需累计 AbsorbedAmount。来源、目标和事件身份由结算入口建立，不应由效果回调改写。 */
 USTRUCT(BlueprintType)
 struct UE_GAS_API FCombatDamageEvent
 {
@@ -71,11 +71,11 @@ struct UE_GAS_API FCombatDamageEvent
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Damage") TObjectPtr<ACombatUnitCharacter> Target = nullptr;
 	/** 进入流水线时的原始请求量。 */
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Damage") float RequestedAmount = 0.0f;
-	/** Hook 当前可继续调整的结算量。 */
+	/** 当前阶段待扣除的伤害量；伤害前和护盾回调可调整，最终仍受目标剩余生命限制。 */
 	UPROPERTY(BlueprintReadWrite, Category="Combat|Damage") float Amount = 0.0f;
-	/** 抗性与免疫累计消除的数值。 */
+	/** 抗性计算前后之差，或免疫完全挡下的请求量；负护甲/负魔抗放大伤害时可为负数，不包含护盾吸收。 */
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Damage") float MitigatedAmount = 0.0f;
-	/** Shield Hook 累计吸收的数值。 */
+	/** 护盾回调累计抵消的伤害；护盾应同步减少 Amount 并增加本字段。 */
 	UPROPERTY(BlueprintReadWrite, Category="Combat|Damage") float AbsorbedAmount = 0.0f;
 	/** AttributeSet 回报的真实生命减少量。 */
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Damage") float AppliedAmount = 0.0f;
@@ -117,11 +117,11 @@ struct UE_GAS_API FCombatHealRequest
 	UPROPERTY(BlueprintReadWrite, Category="Combat|Heal") float Amount = 0.0f;
 	/** 可记录和复制的直接来源身份。 */
 	UPROPERTY(BlueprintReadWrite, Category="Combat|Heal") FCombatSourceContext SourceContext;
-	/** 有效时从该父事件创建 follow-up；无效时创建根事件。 */
+	/** 有效时创建该事件的子事件并共享根事件 ID，超过事件深度上限会失败；无效时创建新的根事件。 */
 	UPROPERTY(BlueprintReadWrite, Category="Combat|Heal") FCombatEventContext ParentEvent;
 };
 
-/** Heal Hook 共享的可变事件；只有 Amount 允许 Hook 修改。 */
+/** 治疗各阶段共享的事件数据；治疗前回调通过 Amount 调整待恢复量，来源、目标与事件身份不应改写。 */
 USTRUCT(BlueprintType)
 struct UE_GAS_API FCombatHealEvent
 {
@@ -166,7 +166,7 @@ struct UE_GAS_API FCombatTransactionDelta
 	float PreviousHealth = 0.0f;
 	/** 变化后的 Health。 */
 	float NewHealth = 0.0f;
-	/** clamp 后的真实绝对变化量。 */
+	/** 限制在 0 到最大生命之间后实际减少或增加的生命量；例如剩余 30 点生命承受 100 点伤害，此处为 30。 */
 	float AppliedAmount = 0.0f;
 	/** 本次 Damage 是否首次跨过致死阈值。 */
 	bool bLethal = false;

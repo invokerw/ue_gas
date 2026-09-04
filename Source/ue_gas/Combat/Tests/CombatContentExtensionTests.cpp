@@ -105,7 +105,7 @@ namespace CombatContentExtensionTests
 	}
 }
 
-/** 验证 Frost Arrows winner 唯一扣蓝，升级/移除不改变已发射 Record。 */
+/** 验证冰霜之箭仅在同组竞争成功后扣一次法力，发射后升级或移除技能不改变该次攻击保存的伤害与减速参数。 */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FCombatFrostArrowsSnapshotTest,
 	"Combat.ContentExtension.FrostArrows.OrbProjectileSnapshot",
@@ -200,7 +200,7 @@ bool FCombatFrostArrowsSnapshotTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-/** 验证 Fissure 线段去重、公共伤害/控制、视觉 Thinker 和 blocker repath。 */
+/** 验证沟壑线段查询不重复命中，伤害与控制走公共入口，限时视觉区域与物理阻挡物创建后触发路径复查。 */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FCombatFissureSliceTest,
 	"Combat.ContentExtension.Fissure.LineControlBlockerRepath",
@@ -295,7 +295,7 @@ bool FCombatFissureSliceTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-/** 验证 Aura 进入、离开、换队、Break、死亡和取消均无 child 残留。 */
+/** 验证进出光环范围、换队、破坏、死亡和主动取消后，目标效果按规则添加或清理，不残留光环持有的效果。 */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FCombatAuraReconcileTest,
 	"Combat.ContentExtension.Aura.OwnerChildReconcile",

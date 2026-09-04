@@ -29,7 +29,7 @@ struct UE_GAS_API FCombatRngSubjectId
 	bool operator==(const FCombatRngSubjectId& Other) const { return High == Other.High && Low == Other.Low; }
 };
 
-/** 保存一次 keyed roll 的完整输入与结果，供日志和重放校验。 */
+/** 保存一次可复现随机判定的输入与结果；结合比赛种子可核对该次判定。 */
 USTRUCT(BlueprintType)
 struct UE_GAS_API FCombatRngRollRecord
 {
@@ -41,7 +41,7 @@ struct UE_GAS_API FCombatRngRollRecord
 	uint16 RngAlgorithmVersion = FCombatRngPolicyV1::AlgorithmVersion;
 	/** 本次随机判定所属的根战斗事件。 */
 	UPROPERTY(BlueprintReadOnly, Category="Combat|RNG") FCombatEventId RootEventId;
-	/** 区分闪避、暴击、Modifier proc 等随机域。 */
+	/** 区分闪避、暴击、效果概率触发等用途，避免不同用途复用同一个随机取样。 */
 	UPROPERTY(BlueprintReadOnly, Category="Combat|RNG") FGameplayTag DomainTag;
 	/** 随机判定主体的稳定身份。 */
 	UPROPERTY(BlueprintReadOnly, Category="Combat|RNG") FCombatRngSubjectId SubjectId;
@@ -60,8 +60,9 @@ struct UE_GAS_API FCombatRngRollRecord
 };
 
 /**
- * 当前 World 的确定性 keyed RNG 服务。
- * 每次取样由 MatchSeed、域、稳定对象身份和 RollIndex 独立决定，不依赖其他系统的调用顺序；服务器结果可通过同一键重放和诊断，客户端不得用它替代权威判定。
+ * 服务器上的可复现概率判定服务，用于闪避、暴击或效果触发。
+ * 比赛种子、根事件、用途标签、主体身份及判定序号 Ordinal 共同决定结果；同一组输入总是得到同一随机值，不受其他调用顺序影响。
+ * 它支持复核单次随机结果，不代表整个战斗世界可跨进程确定性重放；客户端不能调用 Roll 作权威判定。
  */
 UCLASS()
 class UE_GAS_API UCombatRngSubsystem : public UWorldSubsystem
@@ -73,8 +74,8 @@ public:
 	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
 
 	/**
-	 * 使用显式事件、随机域、主体和序号执行一次确定性概率判定。
-	 * @return 输入有效并成功生成记录时返回 true；无效事件或标签返回 false。
+	 * 按事件、用途、主体和序号生成概率判定，并写入 OutRecord；概率按统一规则限制到 [0,1]。
+	 * 返回 true 表示生成了记录，是否触发应读 OutRecord.bSuccess；无效事件、用途标签或非服务器世界返回 false，保持输出参数原值。
 	 */
 	bool Roll(
 		const FCombatEventId& RootEventId,

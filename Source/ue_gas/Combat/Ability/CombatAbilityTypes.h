@@ -29,15 +29,15 @@ enum class ECombatAbilityCommitStage : uint8
 };
 
 /**
- * 单位目标技能在施法前摇结束、服务器重新校验目标失败时的处理方式。
- * 它只处理已经记录过单位目标位置的技能，不会把无目标技能自动改成点目标技能。
+ * 单位目标技能在前摇结束或引导周期重新校验目标失败时的处理方式。
+ * 最后已知位置初次取激活时的位置，后续每次校验成功都会更新；丢弃目标后不再追踪，需要单位对象的动作仍无法执行。
  */
 UENUM(BlueprintType)
 enum class ECombatTargetLostPolicy : uint8
 {
 	/** 中断本次技能，不执行后续动作。 */
 	Fail UMETA(DisplayName="中断技能"),
-	/** 丢弃失效单位，改用激活时记录的位置继续执行点或范围动作；需要单位对象的动作仍不能执行。 */
+	/** 丢弃失效单位，保留最近一次校验成功的位置供点或范围动作使用；不是持续追踪目标，也不会让需要单位对象的动作变得合法。 */
 	UseLastKnownPoint UMETA(DisplayName="使用最后已知位置")
 };
 
@@ -58,19 +58,19 @@ enum class ECombatChannelInterruptOrderPolicy : uint8
 UENUM(BlueprintType)
 enum class ECombatAbilityActionType : uint8
 {
-	/** 调用 CombatDamageSubsystem。 */
+	/** 向公共伤害管线提交请求，统一处理抗性、护盾和实际扣血。 */
 	Damage UMETA(DisplayName="造成伤害"),
-	/** 调用 CombatHealSubsystem。 */
+	/** 向公共治疗管线提交请求，统一处理治疗增幅和最大生命上限。 */
 	Heal UMETA(DisplayName="造成治疗"),
-	/** 调用目标 ModifierComponent。 */
+	/** 在目标身上施加指定增益或减益，重复施加遵循该效果的叠层和刷新规则。 */
 	ApplyModifier UMETA(DisplayName="施加 Modifier"),
-	/** 向目标 ASC 发送 GameplayEvent。 */
+	/** 向目标的能力系统发送指定标签的玩法事件，供技能监听者处理。 */
 	SendGameplayEvent UMETA(DisplayName="发送 Gameplay Event"),
 	/** 生成服务器权威直线 Projectile。 */
 	SpawnLinearProjectile UMETA(DisplayName="生成直线弹体"),
 	/** 生成服务器权威追踪 Projectile。 */
 	SpawnTrackingProjectile UMETA(DisplayName="生成追踪弹体"),
-	/** 创建由 Combat Scheduler 驱动的区域 Thinker。 */
+	/** 在固定位置创建区域效果，由调度器控制范围作用的时机和寿命。 */
 	CreateThinker UMETA(DisplayName="创建区域 Thinker")
 };
 
@@ -80,9 +80,9 @@ enum class ECombatAbilityActionTarget : uint8
 {
 	/** Action 只作用于施法者。 */
 	Caster UMETA(DisplayName="施法者"),
-	/** Action 作用于权威 UnitTarget 快照。 */
+	/** 作用于服务器确认的单位目标；目标已丢失并降级为位置时，需要单位的动作不能执行。 */
 	UnitTarget UMETA(DisplayName="单位目标"),
-	/** Action 在权威点位置执行服务器半径查询。 */
+	/** 在服务器确认的位置重新查询半径内的单位，不使用客户端提交的命中列表。 */
 	UnitsInRadius UMETA(DisplayName="范围内单位")
 };
 
@@ -117,17 +117,17 @@ struct UE_GAS_API FCombatAbilityAction
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Ability|Action", meta=(DisplayName="弹体距离参数键", ToolTip="可选；从 SpecialValues 读取最大飞行距离覆盖，单位为厘米；None 表示使用 ProjectileData 的距离。")) FName ProjectileRangeKey;
 	/** CreateThinker 从 SpecialValues 读取持续时间的键。 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Ability|Action", meta=(DisplayName="持续时间参数键", ToolTip="CreateThinker 从 SpecialValues 读取持续时间的键，单位为秒；Thinker 动作下必须引用已有键。")) FName DurationKey;
-	/** CreateThinker 从 SpecialValues 读取 pulse 间隔的键；None 表示只 pulse 一次。 */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Ability|Action", meta=(DisplayName="触发间隔参数键", ToolTip="CreateThinker 从 SpecialValues 读取周期触发间隔的可选键，单位为秒；None 表示只触发一次。")) FName IntervalKey;
-	/** Projectile 命中后是否把 Modifier 与拖向 Source 的 Motion 请求一起快照。 */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Ability|Action", meta=(DisplayName="命中后拖向来源", ToolTip="仅弹体 Modifier 命中动作使用；启用后将目标拖向发射时快照的来源位置，并要求配置 Modifier 与运动速度键。")) bool bMotionToSource = false;
-	/** Hook Motion 从 SpecialValues 读取速度的键。 */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Ability|Action", meta=(DisplayName="运动速度参数键", ToolTip="从 SpecialValues 读取 Hook Motion 速度，单位为厘米/秒；启用命中后拖向来源时必须引用正数值。")) FName MotionSpeedKey;
-	/** Hook Motion 获取水平通道时使用的优先级。 */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Ability|Action", meta=(DisplayName="运动优先级", ToolTip="Hook Motion 申请水平运动通道时使用的抢占优先级；数值越大越容易抢占。")) int32 MotionPriority = 100;
+	/** 区域重复作用间隔的数值键，单位为秒；未设置时只作用一次，重复作用还要求区域寿命为正数。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Ability|Action", meta=(DisplayName="触发间隔参数键", ToolTip="区域重复作用间隔的数值键，单位为秒；未设置时只作用一次，重复作用还要求区域寿命为正数。")) FName IntervalKey;
+	/** 启用后把命中效果与拉向发射来源的强制位移参数存入弹体；由命中时施加的效果运行时处理拉拽。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Ability|Action", meta=(DisplayName="命中后拖向来源", ToolTip="启用后把命中效果与拉向发射来源的强制位移参数存入弹体；由命中时施加的效果运行时处理拉拽。")) bool bMotionToSource = false;
+	/** 弹体命中后拉拽目标的速度数值键，单位为厘米/秒，用于生成强制位移请求。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Ability|Action", meta=(DisplayName="运动速度参数键", ToolTip="弹体命中后拉拽目标的速度数值键，单位为厘米/秒，用于生成强制位移请求。")) FName MotionSpeedKey;
+	/** 拉拽请求竞争目标水平位移通道的优先级；只有严格高于当前请求时才可抢占。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Ability|Action", meta=(DisplayName="运动优先级", ToolTip="拉拽请求竞争目标水平位移通道的优先级；只有严格高于当前请求时才可抢占。")) int32 MotionPriority = 100;
 };
 
-/** 每次 Instanced Ability 保存的服务器权威激活快照。 */
+/** 一次技能激活的服务器上下文；技能实例保存它，目标位置可随执行点复核更新，等级和生命编号用于隔离后续变化。 */
 USTRUCT(BlueprintType)
 struct UE_GAS_API FCombatAbilityActivationContext
 {
@@ -137,9 +137,9 @@ struct UE_GAS_API FCombatAbilityActivationContext
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Ability") FCombatEventContext EventContext;
 	/** 激活来源 Unit。 */
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Ability") TObjectPtr<ACombatUnitCharacter> Caster = nullptr;
-	/** UnitTarget cast point 复核后的 Actor 快照。 */
+	/** 激活时记录的单位目标；执行点和引导周期继续复核，选择失去目标后保留位置时可被清空。 */
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Ability") TObjectPtr<ACombatUnitCharacter> TargetActor = nullptr;
-	/** PointTarget 或 UnitTarget 激活时记录的权威位置。 */
+	/** 服务器最近一次目标校验通过的位置，初始来自激活校验；后续复核成功会更新，失去目标降级时保留。 */
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Ability") FVector TargetLocation = FVector::ZeroVector;
 	/** 施法者激活时的生命代次，用于淘汰跨复活回调。 */
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Ability") int64 CasterLifeGeneration = 0;
@@ -155,7 +155,7 @@ struct UE_GAS_API FCombatAbilityActionResult
 {
 	GENERATED_BODY()
 
-	/** 全部动作是否通过公共入口成功执行。 */
+	/** 是否执行完全部配置动作；首个失败即停止，之前已产生的结果保留，异步对象的后续命中不计入此值。 */
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Ability") bool bSuccess = false;
 	/** 失败时第一条稳定原因标签。 */
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Ability") FGameplayTag FailureTag;

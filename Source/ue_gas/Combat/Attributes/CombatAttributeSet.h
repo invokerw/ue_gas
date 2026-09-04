@@ -31,8 +31,8 @@ struct UE_GAS_API FCombatUnitBaseStats
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Attributes", meta=(ClampMin="-10000", ClampMax="10000", DisplayName="物理护甲", ToolTip="物理伤害公式使用的护甲值，允许负护甲；有效范围为 -10000 到 10000。")) float Armor = 0.0f;
 	/** 魔法伤害减免比例；0.25 减免 25%，负值会放大伤害。 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Attributes", meta=(ClampMin="-1", ClampMax="0.95", DisplayName="魔法抗性比例", ToolTip="魔法伤害结算使用的比例，范围为 -1 到 0.95；例如 0.25 表示减免 25%，-1 表示承受双倍伤害。")) float MagicResist = 0.25f;
-	/** 闪避概率。 */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Attributes", meta=(ClampMin="0", ClampMax="1", DisplayName="闪避概率", ToolTip="普通攻击命中时使用的闪避概率，范围为 0 到 1；例如 0.2 表示 20%。")) float Evasion = 0.0f;
+	/** 普攻命中时使用的闪避概率，0 到 1；0.25 表示 25%。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Attributes", meta=(ClampMin="0", ClampMax="1", DisplayName="闪避概率", ToolTip="普攻命中时使用的闪避概率，0 到 1；0.25 表示 25%。")) float Evasion = 0.0f;
 	/** 基础攻击伤害。 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Attributes", meta=(ClampMin="0", DisplayName="基础攻击伤害", ToolTip="普通攻击记录快照的基础伤害，必须为非负值。")) float AttackDamage = 50.0f;
 	/** 缩放普通攻击前摇与间隔的攻速值；100 表示使用基础时长。 */
@@ -49,16 +49,16 @@ struct UE_GAS_API FCombatUnitBaseStats
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Attributes", meta=(ClampMin="0", DisplayName="每秒法力恢复", ToolTip="单位每秒恢复的基础法力值，必须为非负值。")) float ManaRegen = 0.0f;
 	/** 按真实伤害计算的吸血比例。 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Attributes", meta=(ClampMin="0", ClampMax="10", DisplayName="吸血比例", ToolTip="按实际造成伤害计算的吸血比例，范围为 0 到 10；例如 0.2 表示 20%。")) float LifestealPct = 0.0f;
-	/** 技能伤害增幅比例。 */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Attributes", meta=(ClampMin="-1", ClampMax="10", DisplayName="技能伤害增幅比例", ToolTip="技能伤害在公共结算前应用的增幅比例，范围为 -1 到 10；例如 0.25 表示增加 25%。")) float SpellAmplifyPct = 0.0f;
-	/** 冷却缩减比例。 */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Attributes", meta=(ClampMin="0", ClampMax="0.9", DisplayName="冷却缩减比例", ToolTip="技能冷却缩短的比例，范围为 0 到 0.9；例如 0.2 表示缩短 20%。")) float CooldownReductionPct = 0.0f;
+	/** 非物理伤害的增幅比例，0.25 表示增加 25%；生命移除或禁止技能增幅的伤害跳过该项。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Attributes", meta=(ClampMin="-1", ClampMax="10", DisplayName="技能伤害增幅比例", ToolTip="非物理伤害的增幅比例，0.25 表示增加 25%；生命移除或禁止技能增幅的伤害跳过该项。")) float SpellAmplifyPct = 0.0f;
+	/** 技能冷却缩减比例，0.25 将基础 10 秒缩短为 7.5 秒；按数值策略限制上限。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Attributes", meta=(ClampMin="0", ClampMax="0.9", DisplayName="冷却缩减比例", ToolTip="技能冷却缩减比例，0.25 将基础 10 秒缩短为 7.5 秒；按数值策略限制上限。")) float CooldownReductionPct = 0.0f;
 	/** 施法距离加成，单位为厘米。 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Attributes", meta=(Units="cm", DisplayName="施法距离加成", ToolTip="运行时叠加到技能基础施法范围的距离，单位为厘米；负值会缩短施法范围。")) float CastRangeBonus = 0.0f;
 	/** 只缩短明确标记为受状态抗性影响的 Debuff；0.25 会把 10 秒缩短到 7.5 秒。 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Attributes", meta=(ClampMin="0", ClampMax="0.9", DisplayName="状态抗性比例", ToolTip="对标记为受状态抗性影响的 Debuff 缩短持续时间，范围为 0 到 0.9。")) float StatusResistancePct = 0.0f;
-	/** 治疗来源提供的增幅比例。 */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Attributes", meta=(ClampMin="-1", ClampMax="10", DisplayName="治疗来源增幅比例", ToolTip="作为治疗来源时对治疗量应用的增幅比例，范围为 -1 到 10；例如 0.25 表示增加 25%。")) float HealAmplifyPct = 0.0f;
+	/** 施加治疗时的增幅比例；与目标接受增幅相乘，例如双方各 20% 时，100 点治疗变为 144 点。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Attributes", meta=(ClampMin="-1", ClampMax="10", DisplayName="治疗来源增幅比例", ToolTip="施加治疗时的增幅比例；与目标接受增幅相乘，例如双方各 20% 时，100 点治疗变为 144 点。")) float HealAmplifyPct = 0.0f;
 	/** 治疗目标接受的增幅比例。 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Attributes", meta=(ClampMin="-1", ClampMax="10", DisplayName="受到治疗增幅比例", ToolTip="作为治疗目标时对治疗量应用的增幅比例，范围为 -1 到 10；例如 -0.2 表示减少 20%。")) float HealReceivedPct = 0.0f;
 
@@ -67,8 +67,8 @@ struct UE_GAS_API FCombatUnitBaseStats
 };
 
 /**
- * Unit 战斗数值的唯一 GAS 属性集合，集中保存并复制资源、攻击、防御和施法相关聚合值。
- * Damage/Heal 只通过瞬时元属性进入；执行回调应用数值策略、写入真实 Health delta，并把结果同步回报给对应战斗事务。
+ * 单位战斗数值的唯一来源，由 GAS 汇总效果后保存并复制生命、法力、攻击、防御和施法属性。
+ * 伤害与治疗先写入不复制的临时属性 IncomingDamage/IncomingHealing；执行回调清空临时值、修改生命并向对应事件回报实际变化。
  */
 UCLASS()
 class UE_GAS_API UCombatAttributeSet : public UAttributeSet
@@ -80,7 +80,7 @@ public:
 
 	/** 在聚合值即将变化时应用 Numeric Policy v1 的有限值与区间约束。 */
 	virtual void PreAttributeChange(const FGameplayAttribute& Attribute, float& NewValue) override;
-	/** 在 Instant GE 执行后消费 Damage/Heal 元属性并回报真实 Health delta。 */
+	/** 立即生效的效果执行后，将临时伤害/治疗转换为实际生命变化并回报；临时数值随后清零，不会成为持续累积的属性。 */
 	virtual void PostGameplayEffectExecute(const FGameplayEffectModCallbackData& Data) override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
@@ -102,7 +102,7 @@ public:
 	/** 魔法伤害使用的抗性比例。 */
 	UPROPERTY(BlueprintReadOnly, ReplicatedUsing=OnRep_MagicResist, Category="Combat|Attributes") FGameplayAttributeData MagicResist;
 	COMBAT_ATTRIBUTE_ACCESSORS(UCombatAttributeSet, MagicResist)
-	/** 普攻命中使用的闪避概率。 */
+	/** 普攻命中时读取的闪避概率，限制为 0 到 1；0.25 表示 25%。 */
 	UPROPERTY(BlueprintReadOnly, ReplicatedUsing=OnRep_Evasion, Category="Combat|Attributes") FGameplayAttributeData Evasion;
 	COMBAT_ATTRIBUTE_ACCESSORS(UCombatAttributeSet, Evasion)
 	/** 普攻基础伤害。 */
@@ -114,10 +114,10 @@ public:
 	/** 普攻基础间隔。 */
 	UPROPERTY(BlueprintReadOnly, ReplicatedUsing=OnRep_BaseAttackTime, Category="Combat|Attributes") FGameplayAttributeData BaseAttackTime;
 	COMBAT_ATTRIBUTE_ACCESSORS(UCombatAttributeSet, BaseAttackTime)
-	/** 普攻边缘距离。 */
+	/** 普攻可达的胶囊边缘距离，单位为厘米；中心距离判定还计入双方胶囊半径。 */
 	UPROPERTY(BlueprintReadOnly, ReplicatedUsing=OnRep_AttackRange, Category="Combat|Attributes") FGameplayAttributeData AttackRange;
 	COMBAT_ATTRIBUTE_ACCESSORS(UCombatAttributeSet, AttackRange)
-	/** CharacterMovement 投影使用的移动速度。 */
+	/** 同步给 CharacterMovement 的普通移动速度，单位为厘米/秒；强制位移使用自己的请求速度。 */
 	UPROPERTY(BlueprintReadOnly, ReplicatedUsing=OnRep_MoveSpeed, Category="Combat|Attributes") FGameplayAttributeData MoveSpeed;
 	COMBAT_ATTRIBUTE_ACCESSORS(UCombatAttributeSet, MoveSpeed)
 	/** 每秒生命恢复。 */
@@ -129,10 +129,10 @@ public:
 	/** 按真实伤害触发的吸血比例。 */
 	UPROPERTY(BlueprintReadOnly, ReplicatedUsing=OnRep_LifestealPct, Category="Combat|Attributes") FGameplayAttributeData LifestealPct;
 	COMBAT_ATTRIBUTE_ACCESSORS(UCombatAttributeSet, LifestealPct)
-	/** 技能伤害增幅比例。 */
+	/** 非物理伤害的增幅比例，0.25 表示增加 25%；生命移除或禁止技能增幅的伤害跳过该项。 */
 	UPROPERTY(BlueprintReadOnly, ReplicatedUsing=OnRep_SpellAmplifyPct, Category="Combat|Attributes") FGameplayAttributeData SpellAmplifyPct;
 	COMBAT_ATTRIBUTE_ACCESSORS(UCombatAttributeSet, SpellAmplifyPct)
-	/** 冷却缩减比例。 */
+	/** 技能冷却缩减比例，0.25 将基础 10 秒缩短为 7.5 秒；按数值策略限制上限。 */
 	UPROPERTY(BlueprintReadOnly, ReplicatedUsing=OnRep_CooldownReductionPct, Category="Combat|Attributes") FGameplayAttributeData CooldownReductionPct;
 	COMBAT_ATTRIBUTE_ACCESSORS(UCombatAttributeSet, CooldownReductionPct)
 	/** 施法距离加成。 */
@@ -141,7 +141,7 @@ public:
 	/** 状态抗性比例。 */
 	UPROPERTY(BlueprintReadOnly, ReplicatedUsing=OnRep_StatusResistancePct, Category="Combat|Attributes") FGameplayAttributeData StatusResistancePct;
 	COMBAT_ATTRIBUTE_ACCESSORS(UCombatAttributeSet, StatusResistancePct)
-	/** 治疗来源增幅比例。 */
+	/** 施加治疗时的增幅比例；与目标接受增幅相乘，例如双方各 20% 时，100 点治疗变为 144 点。 */
 	UPROPERTY(BlueprintReadOnly, ReplicatedUsing=OnRep_HealAmplifyPct, Category="Combat|Attributes") FGameplayAttributeData HealAmplifyPct;
 	COMBAT_ATTRIBUTE_ACCESSORS(UCombatAttributeSet, HealAmplifyPct)
 	/** 治疗目标接受增幅比例。 */

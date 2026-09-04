@@ -6,7 +6,7 @@
 
 class UWorld;
 
-/** 为 Combat 自动化创建并完整销毁一个真实 UWorld 的 RAII fixture。 */
+/** 自动化测试的临时 World 持有者：构造时创建，离开作用域时依次结束 Actor、清理网络驱动并销毁 World；不代表已启动真实多人连接或完整编辑器 PIE 会话。 */
 class FCombatAutomationWorldFixture
 {
 public:

@@ -13,12 +13,12 @@ struct UE_GAS_API FCombatOrderBatchRequest
 {
 	GENERATED_BODY()
 
-	/** 每个连接重放窗口内必须唯一的非零请求 ID。 */
-	UPROPERTY(BlueprintReadWrite, Category="Combat|Network", meta=(DisplayName="请求 ID", ToolTip="同一连接最近窗口内必须唯一且非零；重复 ID 不会再次执行命令。"))
+	/** 正整数请求 ID，在同一玩家的最近请求窗口内必须唯一；0、负数和窗口内重复值都会被拒绝。 */
+	UPROPERTY(BlueprintReadWrite, Category="Combat|Network", meta=(DisplayName="请求 ID", ToolTip="正整数请求 ID，在同一玩家的最近请求窗口内必须唯一；0、负数和窗口内重复值都会被拒绝。"))
 	int32 RequestId = 0;
 
-	/** true 时首个命令追加到当前队列；false 时首个命令替换旧行为。 */
-	UPROPERTY(BlueprintReadWrite, Category="Combat|Network", meta=(DisplayName="追加到现有队列", ToolTip="启用后首个命令也加入现有队列；关闭时首个命令替换当前行为。"))
+	/** 控制首条命令：true 追加到已有队列，false 请求替换旧行为；数组中的后续命令一律按顺序追加。各命令仍独立接受业务校验。 */
+	UPROPERTY(BlueprintReadWrite, Category="Combat|Network", meta=(DisplayName="追加到现有队列", ToolTip="控制首条命令：true 追加到已有队列，false 请求替换旧行为；数组中的后续命令一律按顺序追加。各命令仍独立接受业务校验。"))
 	bool bAppendToExistingQueue = false;
 
 	/** 按数组顺序提交给同一个 Unit 的命令，数量受服务器单包上限约束。 */
@@ -40,8 +40,8 @@ struct UE_GAS_API FCombatOrderBatchResult
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Network", meta=(DisplayName="批次已接受", ToolTip="表示请求通过所有权、载荷、重放和限频校验。"))
 	bool bAccepted = false;
 
-	/** 实际由 OrderComponent 接受的命令数量。 */
-	UPROPERTY(BlueprintReadOnly, Category="Combat|Network", meta=(DisplayName="接受命令数", ToolTip="逐项业务校验后成功进入 OrderComponent 的数量。"))
+	/** 指令组件在提交时返回成功的条数，表示已接受；不表示这些异步命令最终全部执行成功。 */
+	UPROPERTY(BlueprintReadOnly, Category="Combat|Network", meta=(DisplayName="接受命令数", ToolTip="指令组件在提交时返回成功的条数，表示已接受；不表示这些异步命令最终全部执行成功。"))
 	int32 AcceptedOrderCount = 0;
 
 	/** 安全层拒绝时的稳定原因。 */

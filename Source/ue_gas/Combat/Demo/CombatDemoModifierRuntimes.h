@@ -6,7 +6,7 @@
 
 #include "CombatDemoModifierRuntimes.generated.h"
 
-/** Magic Shield 示例 Runtime：只在 Magical Damage 的 Block 阶段消耗护盾。 */
+/** 魔法护盾示例：在魔法伤害经过抗性计算后吸收伤害，余量只存在服务器效果实例中；物理、纯粹和生命移除伤害不消耗此护盾。 */
 UCLASS(Blueprintable)
 class UE_GAS_API UCombatMagicShieldRuntime : public UCombatModifierRuntime
 {
@@ -19,7 +19,7 @@ public:
 protected:
 	/** 从 shield_amount 参数初始化护盾余量。 */
 	virtual void OnCreated_Implementation() override;
-	/** Magical Damage 时稳定吸收并在耗尽后 deferred remove。 */
+	/** 抵消不超过当前护盾余量的魔法伤害，同时减少待扣血量并累计吸收量；耗尽后请求移除，实际删除等当前效果回调阶段结束。 */
 	virtual void OnDamageBlock_Implementation(FCombatDamageEvent& Event) override;
 
 private:
@@ -27,44 +27,44 @@ private:
 	float RemainingShield = 0.0f;
 };
 
-/** DOT 示例 Runtime：每个 Scheduler 逻辑 tick 调用公共 DamageSubsystem。 */
+/** 持续伤害示例：每次效果周期回调调用公共伤害入口；若调度合并了多个到期周期，则把单次伤害乘 TickCount 后一次结算。 */
 UCLASS(Blueprintable)
 class UE_GAS_API UCombatPeriodicDamageRuntime : public UCombatModifierRuntime
 {
 	GENERATED_BODY()
 
 protected:
-	/** 使用 damage_per_tick 与 damage_type 参数创建独立 Damage 事务。 */
+	/** 读取 damage_per_tick 作为每周期伤害，乘本次合并次数后创建新的根伤害事件；damage_type 四舍五入并限制为 0 物理、1 魔法、2 纯粹，默认魔法。 */
 	virtual void OnThink_Implementation(const FCombatScheduledTickContext& TickContext) override;
 };
 
-/** 反伤示例 Runtime：真实受伤后创建同 RootEventId 的防递归子事务。 */
+/** 反伤示例：按实际受伤量向原来源发起同一事件链的子伤害；跳过已标记为反射的伤害，避免双方反伤无限互相触发。 */
 UCLASS(Blueprintable)
 class UE_GAS_API UCombatDamageReflectionRuntime : public UCombatModifierRuntime
 {
 	GENERATED_BODY()
 
 protected:
-	/** 按 reflection_pct 和真实 AppliedDamage 反射给原来源。 */
+	/** 按实际扣血量乘 reflection_pct 反射给原来源，保留原伤害类型并禁止这次反伤吸血；自伤、零实际伤害和反射伤害不触发。 */
 	virtual void OnPostTakeDamage_Implementation(const FCombatDamageEvent& Event) override;
 };
 
-/** 基础法球 Runtime：无副作用预检，winner 提交 Mana 并写入伤害与 OnHit 快照。 */
+/** 普攻附加效果示例：先只读检查是否可参与同组竞争，只有被选中的效果才扣除法力，并把本次额外伤害和命中动作保存到攻击记录。 */
 UCLASS(Blueprintable)
 class UE_GAS_API UCombatDemoOrbRuntime : public UCombatModifierRuntime
 {
 	GENERATED_BODY()
 
 public:
-	/** 返回测试和调试可观察的 winner 提交次数。 */
-	UFUNCTION(BlueprintPure, Category="Combat|Demo|Orb", meta=(DisplayName="获取法球成功声明次数", ToolTip="返回该 Runtime 作为法球胜者成功提交资源的次数。")) int32 GetSuccessfulClaimCount() const { return SuccessfulClaimCount; }
+	/** 返回本效果被选中且成功扣费、提交攻击附加数据的次数，供测试与调试使用。 */
+	UFUNCTION(BlueprintPure, Category="Combat|Demo|Orb", meta=(DisplayName="获取法球成功声明次数", ToolTip="返回本效果被选中且成功扣费、提交攻击附加数据的次数，供测试与调试使用。")) int32 GetSuccessfulClaimCount() const { return SuccessfulClaimCount; }
 
 protected:
 	/** 示例法球统一参与 Orb.Primary 互斥组。 */
 	virtual FName GetAttackOrbExclusiveGroup_Implementation() const override;
 	/** 只读检查 orb_enabled、数值与当前 Mana，不产生任何资源副作用。 */
 	virtual bool CanClaimAttack_Implementation(const FCombatAttackCandidateContext& Context) const override;
-	/** 再次原子预检后扣除 Mana，并输出 bonus/on-hit 的不可变快照。 */
+	/** 再次检查条件后扣除法力，成功时输出本次攻击的额外伤害、伤害类型覆盖和命中动作；失败不写 OutSnapshot。 */
 	virtual bool OnAttackClaimed_Implementation(
 		const FCombatAttackCandidateContext& Context,
 		FCombatOrbSnapshot& OutSnapshot) override;
@@ -74,7 +74,7 @@ private:
 	int32 SuccessfulClaimCount = 0;
 };
 
-/** Frost Arrows Runtime：读取 AbilitySpec 等级与 AutoCast，并把减速和弹体信息完整快照进 AttackRecord。 */
+/** 冰霜之箭附加效果：根据授予技能的当前等级和自动施放开关决定能否参与普攻，成功扣蓝后把额外伤害、减速参数与弹体定义引用存入本次攻击记录。 */
 UCLASS(Blueprintable)
 class UE_GAS_API UCombatFrostArrowsRuntime : public UCombatModifierRuntime
 {
@@ -87,7 +87,7 @@ public:
 protected:
 	/** Frost Arrows 与其他主法球共享 Orb.Primary。 */
 	virtual FName GetAttackOrbExclusiveGroup_Implementation() const override;
-	/** 无副作用检查 AutoCast、Silence、Break、等级 special 和 Mana。 */
+	/** 只读检查自动施放开关、沉默、破坏状态、当前技能等级数值和可用法力；候选阶段不扣费。 */
 	virtual bool CanClaimAttack_Implementation(const FCombatAttackCandidateContext& Context) const override;
 	/** 原子提交 Mana，并冻结 bonus、slow 参数、Modifier 与 ProjectileData。 */
 	virtual bool OnAttackClaimed_Implementation(
@@ -99,21 +99,21 @@ private:
 	int32 SuccessfulClaimCount = 0;
 };
 
-/** SpellBlock Runtime：在 SpellStarted commit 后消耗自身并阻止一个显式可阻挡技能。 */
+/** 一次性技能格挡示例：技能已经提交费用和冷却后，阻止带有可格挡标签的单位目标技能；不返还施法费用。 */
 UCLASS(Blueprintable)
 class UE_GAS_API UCombatSpellBlockRuntime : public UCombatModifierRuntime
 {
 	GENERATED_BODY()
 
 protected:
-	/** exactly-once 声明阻挡并通过 deferred remove 消耗当前层。 */
+	/** 来源不是自身时请求移除整个当前效果实例，并返回 true 表示本次格挡已认领；不只是减少一层，删除延迟到当前效果回调阶段结束。 */
 	virtual bool TryBlockAbility_Implementation(
 		const FPrimaryAssetId& AbilityDefinitionId,
 		ACombatUnitCharacter* Caster,
 		const FCombatEventContext& Context) override;
 };
 
-/** Meat Hook 命中后获取高优先级 Horizontal Motion，并在任意结束路径移除自身。 */
+/** 肉钩拖拽效果：创建时使用施加请求携带的强制位移参数，优先级和方向由请求决定；位移结束时移除自身，效果先被移除时也释放所持位移。 */
 UCLASS()
 class UE_GAS_API UCombatHookDragRuntime : public UCombatModifierRuntime
 {

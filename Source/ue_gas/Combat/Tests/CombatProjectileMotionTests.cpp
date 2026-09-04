@@ -88,7 +88,7 @@ namespace CombatProjectileMotionTests
 	}
 }
 
-/** 验证 Linear 穿透、阵营过滤、AlreadyHit 与 Tracking 目标丢失策略。 */
+/** 验证直线弹体穿透与阵营过滤，同一单位不会被重复命中，并检查追踪弹体失去目标后的两种处理策略。 */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FCombatProjectilePoliciesTest,
 	"Combat.ProjectileMotion.Projectile.LinearAndTrackingPolicies",
@@ -181,7 +181,7 @@ bool FCombatProjectilePoliciesTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-/** 验证 Thinker 的 Scheduler pulse，以及 Motion 高优先级抢占和 Hook 清理。 */
+/** 验证区域效果按调度器周期触发、强制位移只有更高优先级才能抢占，以及肉钩效果结束后的位移清理。 */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FCombatThinkerMotionTest,
 	"Combat.ProjectileMotion.ThinkerMotion.SchedulerPreemptionAndHookCleanup",

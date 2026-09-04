@@ -112,7 +112,7 @@ bool UCombatDemoOrbRuntime::OnAttackClaimed_Implementation(
 	{
 		return false;
 	}
-	// 测试/内容可显式模拟 winner 提交失败；失败发生在任何 Mana 或 Runtime 状态写入之前。
+	// 示例参数可模拟候选被选中后的提交失败；必须在扣蓝和修改实例状态之前返回，让同组下一候选安全接替。
 	if (GetRuntimeParameter(TEXT("commit_succeeds"), 1.0f) <= 0.0f)
 	{
 		return false;
@@ -207,7 +207,7 @@ bool UCombatFrostArrowsRuntime::OnAttackClaimed_Implementation(
 		SlowAction.Type = ECombatOnHitActionType::ApplyModifier;
 		SlowAction.ModifierData = AbilityData->AttackOrbOnHitModifierData;
 		SlowAction.DurationOverride = SlowDuration;
-		// special 使用正数表达减速比例，GAS Multiplicitive magnitude 使用剩余倍率。
+		// 配置的 slow_pct 表示减速比例，传给 GAS 乘法修正的却是剩余速度倍率：减速 30% 应传 0.7。
 		SlowAction.RuntimeParameterOverrides.Add(TEXT("slow_pct"), FMath::Clamp(1.0f - SlowPct, 0.0f, 1.0f));
 	}
 

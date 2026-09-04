@@ -10,7 +10,7 @@
 
 class ACombatUnitCharacter;
 
-/** MotionComponent 的两个独占通道或同时占用。 */
+/** 强制位移要占用的方向通道；每个单位的水平和垂直通道各只能由一条活动请求控制。 */
 UENUM(BlueprintType)
 enum class ECombatMotionChannel : uint8
 {
@@ -22,7 +22,7 @@ enum class ECombatMotionChannel : uint8
 	Both
 };
 
-/** Motion exactly-once 结束原因。 */
+/** 一次强制位移最终结束的原因；每条活动请求只产生一次结束通知。 */
 UENUM(BlueprintType)
 enum class ECombatMotionFinishReason : uint8
 {
@@ -40,51 +40,54 @@ enum class ECombatMotionFinishReason : uint8
 	EndPlay
 };
 
-/** 向 Unit MotionComponent 提交的不可变请求。 */
+/**
+ * 推动单位向固定世界坐标移动的服务器请求。组件按通道和优先级决定是否接受，接受后复制请求并逐帧推进。
+ * 请求到达、受阻、被抢占、取消或单位死亡时结束；它只处理连续位移，不附带周期伤害。
+ */
 USTRUCT(BlueprintType)
 struct UE_GAS_API FCombatMotionRequest
 {
 	GENERATED_BODY()
 
-	/** 请求占用的水平、垂直或全部通道。 */
+	/** 选择要控制的方向；水平移动保持当前高度，垂直移动保持当前平面位置，同时占用则三维移动。 */
 	UPROPERTY(BlueprintReadWrite, Category="Combat|Motion") ECombatMotionChannel Channel = ECombatMotionChannel::Horizontal;
-	/** 严格更高值才能抢占已有通道 owner。 */
+	/** 竞争所需通道的优先级；新值必须严格高于每个冲突请求才被接受，随后中断这些旧请求。相同值不能抢占。 */
 	UPROPERTY(BlueprintReadWrite, Category="Combat|Motion") int32 Priority = 0;
-	/** Spawn/impact 时快照的世界目标位置。 */
+	/** 位移终点的固定世界坐标，单位为厘米；开始后不会继续跟随来源或目标 Actor。 */
 	UPROPERTY(BlueprintReadWrite, Category="Combat|Motion") FVector TargetLocation = FVector::ZeroVector;
-	/** 发起位移的来源单位；为空时使用被移动单位。 */
+	/** 产生位移的来源，仅用于事件身份和日志；为空时回退到正在移动的单位，不影响目的地。 */
 	UPROPERTY(BlueprintReadWrite, Category="Combat|Motion") TObjectPtr<ACombatUnitCharacter> Source = nullptr;
-	/** 连续运动速度。 */
+	/** 沿请求通道前进的速度，单位为厘米/秒，必须有限且大于 0。 */
 	UPROPERTY(BlueprintReadWrite, Category="Combat|Motion", meta=(ClampMin="0", Units="cm/s")) float Speed = 0.0f;
-	/** 小于该距离视为完成。 */
+	/** 单位与终点在所用通道上的距离不超过此值时完成，单位为厘米，必须有限且非负。 */
 	UPROPERTY(BlueprintReadWrite, Category="Combat|Motion", meta=(ClampMin="0", Units="cm")) float StopDistance = 2.0f;
-	/** true 时用 CharacterMovement sweep 并在 blocking hit 结束。 */
+	/** 启用后每步通过 CharacterMovement 扫掠移动，遇到阻挡立即结束；关闭时不做阻挡扫掠，但仍由服务器 CharacterMovement 移动。 */
 	UPROPERTY(BlueprintReadWrite, Category="Combat|Motion") bool bSweep = true;
-	/** 结束后是否尝试投影回 NavMesh。 */
+	/** 最后一条强制位移结束后，是否在当前位置附近寻找导航点并校正单位；投影失败时保留当前位置，随后仍重新评估当前命令。 */
 	UPROPERTY(BlueprintReadWrite, Category="Combat|Motion") bool bProjectToNavigation = true;
-	/** 继承 Projectile/Ability 的根事件；为空时 Motion 创建根事件。 */
+	/** 位移日志所属的技能、弹体或其他父事件；未提供有效事件时，接受请求时创建新的根事件。 */
 	UPROPERTY(BlueprintReadWrite, Category="Combat|Motion") FCombatEventContext ParentEvent;
 	/** 保留 Ability、Modifier 与 Projectile 的来源定义链。 */
 	UPROPERTY(BlueprintReadWrite, Category="Combat|Motion") FCombatSourceContext SourceContext;
 };
 
-/** Acquire 与 exactly-once Finish 的结构化结果。 */
+/** 强制位移获取或最终结束的结果；获取成功只表示已占用通道，单位尚未到达目标。 */
 USTRUCT(BlueprintType)
 struct UE_GAS_API FCombatMotionResult
 {
 	GENERATED_BODY()
 
-	/** Acquire 是否成功，或 Finish 是否来自活动记录。 */
+	/** 获取时表示请求已登记；结束时表示成功关闭活动记录。受阻、被抢占或死亡结束也可能为 true。 */
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Motion") bool bSuccess = false;
 	/** 对应 MotionHandle。 */
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Motion") FCombatMotionHandle Handle;
-	/** 结束分类。 */
+	/** 最终通知中的结束原因；获取结果中的默认值不表示位移已经取消。 */
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Motion") ECombatMotionFinishReason FinishReason = ECombatMotionFinishReason::Cancelled;
 	/** 失败或阻挡时稳定原因。 */
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Motion") FGameplayTag FailureTag;
-	/** 结束时 Unit 的权威位置。 */
+	/** 服务器结束本次位移、发送通知时的单位世界坐标，记录在可选导航落点修正之前；获取请求的返回结果保持零向量。 */
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Motion") FVector FinalLocation = FVector::ZeroVector;
 };
 
-/** Motion 完成、中断、阻挡或清理后的原生观察委托。 */
+/** 强制位移记录移除后的服务器本地通知；同一请求只广播一次，随后才可能恢复原命令。 */
 DECLARE_MULTICAST_DELEGATE_OneParam(FOnCombatMotionFinished, const FCombatMotionResult&);

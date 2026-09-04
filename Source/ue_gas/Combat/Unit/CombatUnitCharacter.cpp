@@ -51,7 +51,7 @@ ACombatUnitCharacter::ACombatUnitCharacter()
 	GetCharacterMovement()->GetNavMovementProperties()->bUseAccelerationForPaths = true;
 	// 所有客户端都只消费服务器移动；禁止 SimulatedProxy 因本地 Pawn 重叠改写其他 Unit 的表现位置。
 	GetCharacterMovement()->MaxDepenetrationWithPawnAsProxy = 0.0f;
-	// Detour Crowd 是普通移动唯一 steering，CMC RVO 必须关闭以避免双重避让。
+	// 普通移动只由 Detour Crowd 计算避让方向，关闭 CharacterMovement 的 RVO，避免两套算法争用速度。
 	GetCharacterMovement()->bUseRVOAvoidance = false;
 }
 
@@ -339,7 +339,7 @@ bool ACombatUnitCharacter::InitializeFromUnitData(UCombatUnitData* InUnitData)
 		GetCapsuleComponent()->SetCapsuleRadius(InUnitData->CapsuleRadiusOverride);
 	}
 	const FCombatUnitBaseStats& Stats = InUnitData->BaseStats;
-	// Max 属性排在 Current 属性之前，使同一 Instant 初始化 GE 按新上限完成 clamp。
+	// 先写最大生命/法力再写当前值，保证同一初始化效果按新的资源上限限制当前值。
 	const TArray<TPair<FGameplayAttribute, float>> InitialAttributes = {
 		{ UCombatAttributeSet::GetMaxHealthAttribute(), Stats.MaxHealth },
 		{ UCombatAttributeSet::GetHealthAttribute(), Stats.MaxHealth },
@@ -389,7 +389,7 @@ bool ACombatUnitCharacter::InitializeFromUnitData(UCombatUnitData* InUnitData)
 		CombatUnitViewComponent->RefreshUnitView();
 		CombatUnitViewComponent->RefreshModifierViews();
 	}
-	// 组件 BeginPlay 可能早于运行时 UnitData 注入；这里幂等确保恢复任务已按新属性建立。
+	// 组件可能先于单位定义开始运行；此处确保恢复任务存在，已有任务保留原节拍，下一次回调会读取新属性。
 	if (CombatRegenerationComponent)
 	{
 		CombatRegenerationComponent->HandleOwnerRespawn();

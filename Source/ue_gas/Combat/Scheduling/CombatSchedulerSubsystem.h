@@ -7,7 +7,7 @@
 
 #include "CombatSchedulerSubsystem.generated.h"
 
-/** Scheduler 在每个逻辑 tick 执行的原生回调。 */
+/** 战斗任务到期时的本地回调；补执行策略可能让一次回调代表多个周期，具体见 TickCount。 */
 DECLARE_DELEGATE_OneParam(FCombatScheduledDelegate, const FCombatScheduledTickContext&);
 
 /** 暴露当前 Scheduler 负载和预算延期情况。 */
@@ -20,15 +20,16 @@ struct UE_GAS_API FCombatSchedulerStats
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Scheduling") int32 ActiveSlots = 0;
 	/** 最近一次 RunDueTasks 实际执行的回调数量。 */
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Scheduling") int32 CallbacksLastFrame = 0;
-	/** 最近一次执行结束后仍已到期的槽位数量。 */
+	/** 最近一次调度处理中发现积压多个周期的重复任务数；不等于执行结束时尚未处理的全部到期任务数。 */
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Scheduling") int32 OverdueSlots = 0;
-	/** 最近一次执行因全局或 Owner 预算推迟的槽位数量。 */
+	/** 最近一次处理中因同一所有者回调额度耗尽而暂缓的节点数；全局额度耗尽后尚未取出的节点不计入此值。 */
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Scheduling") int32 BudgetDeferrals = 0;
 };
 
 /**
- * 按 World Game Time 驱动服务器权威的离散战斗任务。
- * Owner 或 World 结束时取消任务，generation 用于淘汰旧堆节点和过期回调。
+ * 用世界游戏时间统一驱动服务器上的前摇、周期效果、过期和范围检查，客户端不执行这些权威回调。
+ * 按计划时刻、优先级从高到低、创建先后顺序执行，并以预算限制一轮工作量；连续位移仍由相应组件推进。
+ * 任务仅弱引用所有者，所有者失效的任务不会执行；取消或重排后通过句柄代次拒绝旧节点，世界关闭时释放全部任务。
  */
 UCLASS()
 class UE_GAS_API UCombatSchedulerSubsystem : public UTickableWorldSubsystem
@@ -44,14 +45,17 @@ public:
 	virtual void Tick(float DeltaTime) override;
 	virtual TStatId GetStatId() const override;
 
-	/** 注册一次性任务；无效 Owner、负 Delay 或空回调返回无效句柄。 */
+	/** 安排 Delay 秒后的单次回调；延迟为 0 也只在后续调度时执行。所有者无效、延迟非有限或为负、回调为空时返回无效句柄。 */
 	FCombatScheduleHandle ScheduleOnce(
 		UObject* Owner,
 		double Delay,
 		int32 Priority,
 		FCombatScheduledDelegate Callback);
 
-	/** 注册重复任务，并使用指定 catch-up 策略处理落后 tick。 */
+	/**
+	 * 安排 InitialDelay 秒后的首次回调，此后每 Interval 秒触发；时间必须有限，首次延迟非负且间隔大于 0。
+	 * 积压触发由 Policy 决定如何补执行；所有者或回调无效、参数非法时返回无效句柄。
+	 */
 	FCombatScheduleHandle ScheduleRepeating(
 		UObject* Owner,
 		double InitialDelay,
@@ -60,16 +64,22 @@ public:
 		ECombatCatchUpPolicy Policy,
 		FCombatScheduledDelegate Callback);
 
-	/** 更新现有任务的下一触发时间和间隔，并递增 generation 使旧堆节点失效。 */
+	/**
+	 * 从当前游戏时间重新计算下一次触发，并为重复任务更新间隔，返回新代次的句柄；调用方必须保存返回值，原句柄随之失效。
+	 * 不会重置周期序号或改变单次/重复类型，单次任务忽略 NewInterval；参数或原句柄无效时返回无效句柄。
+	 */
 	FCombatScheduleHandle Reschedule(FCombatScheduleHandle Handle, double NewDelay, double NewInterval);
-	/** 取消与完整身份匹配的单个任务。 */
+	/** 移除匹配完整身份的任务，成功返回 true；重复取消或旧句柄返回 false，不再执行该任务后续回调。 */
 	bool Cancel(FCombatScheduleHandle Handle);
 	/** 取消指定 Owner 的全部任务，并返回取消数量。 */
 	int32 CancelAllForOwner(const UObject* Owner);
 	/** 检查句柄是否仍对应活动槽位。 */
 	bool IsHandleActive(FCombatScheduleHandle Handle) const;
 
-	/** 确定性执行全部到期任务；生产 Tick 传入 World Game Time，Automation 可注入固定时间。 */
+	/**
+	 * 按排序与预算处理截至 Now 秒已到期的任务，返回实际调用次数；生产传世界游戏时间，测试可传可控时间。
+	 * 超预算任务保留到下一轮，回调中新建或重排的任务也留待下一轮；客户端或非有限时间不执行。
+	 */
 	int32 RunDueTasks(double Now);
 
 	/** 返回最近一次执行后的统计快照。 */
@@ -135,7 +145,7 @@ private:
 	/** 将 TArray Heap 解释为最早时间、最高优先级、最早序号优先的堆。 */
 	struct FHeapPredicate
 	{
-		/** 返回 A 是否应排在 B 之后。 */
+		/** 按时间较早、优先级较高、创建序号较小的顺序比较两个节点，为任务堆提供同一排序规则。 */
 		bool operator()(const FHeapNode& A, const FHeapNode& B) const;
 	};
 

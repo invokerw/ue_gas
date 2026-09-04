@@ -21,26 +21,23 @@ public:
 	/** 用 UCrowdFollowingComponent 替换默认 PathFollowing，并集中设置唯一一套避让参数。 */
 	explicit ACombatUnitAIController(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
 
-	/**
-	 * 根据 Unit 的生命、控制状态、碰撞标签与 Motion 状态切换 Crowd participation。
-	 * 仅 Authority 调用；Disabled agent 会被其他 Crowd agent 忽略。
-	 */
+	/** 仅服务器更新单位是否参与人群避让：正常存活单位主动绕行；定身、眩晕或强制位移期间只作为障碍供其他单位避让；死亡或无单位碰撞时完全退出，其他单位也不再避让它。 */
 	void RefreshCrowdParticipation();
 
 	/** 返回本控制器持有的 CrowdFollowing；配置或类型异常时为空。 */
 	UFUNCTION(BlueprintPure, Category="Combat|Movement", meta=(DisplayName="获取战斗 Crowd 跟随组件", ToolTip="返回服务器战斗 AIController 使用的 Detour Crowd 跟随组件。"))
 	UCrowdFollowingComponent* GetCombatCrowdFollowing() const;
 
-	/** 返回 Crowd 当前是否实际参与 steering，供诊断与自动化验证。 */
-	UFUNCTION(BlueprintPure, Category="Combat|Movement", meta=(DisplayName="Crowd 是否活动", ToolTip="仅当单位状态允许且 Crowd simulation 未暂停时返回真。"))
+	/** 返回人群系统是否正在为本单位计算导航移动方向，供诊断与自动化验证。 */
+	UFUNCTION(BlueprintPure, Category="Combat|Movement", meta=(DisplayName="Crowd 是否活动", ToolTip="返回人群系统是否正在为本单位计算导航移动方向，供诊断与自动化验证。"))
 	bool IsCrowdSteeringActive() const;
 	/** 返回状态规则最近计算出的目标 Crowd 状态；无 NavData 的单元测试也可验证策略。 */
 	ECrowdSimulationState GetDesiredCrowdSimulationState() const { return DesiredCrowdSimulationState; }
 
 protected:
-	/** Possess Unit 后注册 Crowd 状态并让 Order 重新绑定唯一 PathFollowing delegate。 */
+	/** 控制单位后更新人群避让状态，并让指令组件重新绑定本控制器的路径完成通知。 */
 	virtual void OnPossess(APawn* InPawn) override;
-	/** UnPossess 前把 agent 移出 Crowd，避免 Controller teardown 留下活动 agent。 */
+	/** 解除控制前停止人群导航并移除避让参与状态，避免控制器销毁后仍保留活动单位记录。 */
 	virtual void OnUnPossess() override;
 
 private:

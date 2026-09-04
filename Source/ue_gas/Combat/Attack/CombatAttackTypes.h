@@ -19,17 +19,17 @@ enum class ECombatAttackState : uint8
 {
 	/** 已完成快照，等待前摇调度。 */
 	Pending,
-	/** 正在等待 attack point。 */
+	/** 处于普攻前摇，等待计划的发射时刻。 */
 	Windup,
-	/** 已越过 attack point，近战会立即请求命中。 */
+	/** 前摇已结束进入发射阶段；近战随即结算命中，远程等待弹体到达。 */
 	Launched,
-	/** Damage 与 OnHit 已完成。 */
+	/** 主伤害请求已成功处理，命中附加动作也已尝试执行；实际扣血可能为 0。 */
 	Landed,
 	/** 取消、闪避、目标失效或伤害入口失败。 */
 	Failed
 };
 
-/** AttackRecord exactly-once 结束时使用的稳定结果分类。 */
+/** 一次普攻最终结束时的结果分类；每条攻击记录只形成一次最终结果。 */
 UENUM(BlueprintType)
 enum class ECombatAttackOutcome : uint8
 {
@@ -45,7 +45,7 @@ enum class ECombatAttackOutcome : uint8
 	DamageFailed
 };
 
-/** 法球 winner 可以写入 AttackRecord 的 OnHit 快照动作类型。 */
+/** 普攻选中的法球可附带的命中动作，起手时保存，真正命中后才执行。 */
 UENUM(BlueprintType)
 enum class ECombatOnHitActionType : uint8
 {
@@ -55,7 +55,7 @@ enum class ECombatOnHitActionType : uint8
 	ApplyModifier
 };
 
-/** 不依赖后续 Ability/Modifier 状态的不可变 OnHit 动作快照。 */
+/** 起手时保存的命中附加动作参数；之后技能等级、自动施法或法球状态变化不改写这次动作。 */
 USTRUCT(BlueprintType)
 struct UE_GAS_API FCombatOnHitAction
 {
@@ -69,7 +69,7 @@ struct UE_GAS_API FCombatOnHitAction
 	UPROPERTY(BlueprintReadWrite, Category="Combat|Attack|OnHit") ECombatDamageType DamageType = ECombatDamageType::Physical;
 	/** ApplyModifier 动作使用的稳定定义对象。 */
 	UPROPERTY(BlueprintReadWrite, Category="Combat|Attack|OnHit") TObjectPtr<UCombatModifierData> ModifierData = nullptr;
-	/** ApplyModifier 的持续时间覆盖；小于 0 使用定义值。 */
+	/** 附加效果的持续秒数：[-1,0) 使用定义，0 为无限，正数覆盖定义；小于 -1 非法，负面效果仍可受状态抗性影响。 */
 	UPROPERTY(BlueprintReadWrite, Category="Combat|Attack|OnHit") float DurationOverride = -1.0f;
 	/** ApplyModifier 创建 Runtime 与动态 GE 时使用的不可变参数覆盖。 */
 	UPROPERTY(BlueprintReadWrite, Category="Combat|Attack|OnHit", meta=(DisplayName="运行时参数覆盖", ToolTip="施加 OnHit Modifier 时冻结的参数覆盖；同名键覆盖 Modifier 定义值。")) TMap<FName, float> RuntimeParameterOverrides;
@@ -91,17 +91,17 @@ struct UE_GAS_API FCombatAttackCandidateContext
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Attack") float BaseDamage = 0.0f;
 };
 
-/** 单个 exclusive group 的法球 winner 提交后产生的不可变快照。 */
+/** 一个互斥组中已选中并提交资源的法球参数；同组只使用一个候选，参数保存到这次普攻供后续命中使用。 */
 USTRUCT(BlueprintType)
 struct UE_GAS_API FCombatOrbSnapshot
 {
 	GENERATED_BODY()
 
-	/** 同组只能有一个 winner；None 表示不是合法法球。 */
+	/** 法球互斥组名，同一次普攻同组只允许一个候选成功提交；None 不是合法法球组。 */
 	UPROPERTY(BlueprintReadWrite, Category="Combat|Attack|Orb") FName ExclusiveGroup;
 	/** 成功提交该快照的 Modifier。 */
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Attack|Orb") FCombatModifierHandle SourceModifier;
-	/** 合并到主攻击伤害的快照加值。 */
+	/** 加到普攻基础伤害上的数值，先合计再乘本次暴击倍率；不是另外一次独立伤害。 */
 	UPROPERTY(BlueprintReadWrite, Category="Combat|Attack|Orb") float BonusDamage = 0.0f;
 	/** true 时覆盖主攻击 DamageType。 */
 	UPROPERTY(BlueprintReadWrite, Category="Combat|Attack|Orb") bool bOverrideDamageType = false;
@@ -113,7 +113,7 @@ struct UE_GAS_API FCombatOrbSnapshot
 	UPROPERTY(BlueprintReadWrite, Category="Combat|Attack|Orb", meta=(DisplayName="弹体定义覆盖", ToolTip="非空时由法球覆盖 UnitData 的普通攻击弹体定义，并随攻击记录冻结。")) TObjectPtr<UCombatProjectileData> ProjectileDataOverride = nullptr;
 };
 
-/** AttackTiming policy 对同一次前摇计算出的完整冻结结果。 */
+/** 一次普攻起手时计算并保存的时序；后续攻速变化不重新安排这一轮的前摇或再次就绪时间。 */
 USTRUCT(BlueprintType)
 struct UE_GAS_API FCombatAttackTiming
 {
@@ -121,17 +121,17 @@ struct UE_GAS_API FCombatAttackTiming
 
 	/** clamp 后参与公式的攻击速度。 */
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Attack|Timing") float EffectiveAttackSpeed = 100.0f;
-	/** 两次攻击起手之间的权威间隔。 */
+	/** 从本轮起手到允许下轮起手的游戏秒数；不从弹体命中时开始计时。 */
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Attack|Timing") float AttackInterval = 1.7f;
-	/** 本轮从起手到 AttackLaunched 的前摇。 */
+	/** 本轮起手到进入发射阶段的计划秒数，之后近战结算或远程发射弹体。 */
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Attack|Timing") float AttackPoint = 0.3f;
-	/** AttackLaunched 到再次 Ready 的剩余时间。 */
+	/** 计划前摇结束到允许下轮起手的秒数；卡顿使发射迟到时，只等待绝对间隔终点的剩余时间。 */
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Attack|Timing") float Recovery = 1.4f;
 	/** Montage 可读取但不能反向驱动 gameplay 的播放速率。 */
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Attack|Timing") float AnimationRate = 1.0f;
 };
 
-/** AttackComponent registry 中一条仍可被句柄解析的权威记录。 */
+/** 一次尚未最终结束的服务器普攻记录；起手保存伤害、时序和法球配置，远程发射后保留到弹体回报最终结果。 */
 USTRUCT(BlueprintType)
 struct UE_GAS_API FCombatAttackRecord
 {
@@ -159,7 +159,7 @@ struct UE_GAS_API FCombatAttackRecord
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Attack") float CriticalChance = 0.0f;
 	/** 暴击成功时乘到主伤害上的倍率。 */
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Attack") float CriticalMultiplier = 2.0f;
-	/** 本轮是否通过 Crit roll。 */
+	/** 命中阶段进行暴击判定后的结果；起手和前摇期间尚未判定，保持默认 false。 */
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Attack") bool bCritical = false;
 	/** 本轮集中计算的 attack point、interval 与表现速率。 */
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Attack") FCombatAttackTiming Timing;
@@ -169,9 +169,9 @@ struct UE_GAS_API FCombatAttackRecord
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Attack") TArray<FCombatOnHitAction> OnHitActions;
 	/** 法球 winner 选择的普攻弹体；为空时回退 UnitData。 */
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Attack", meta=(DisplayName="弹体定义覆盖", ToolTip="法球胜者冻结到本次攻击记录的弹体定义；为空时回退 UnitData。")) TObjectPtr<UCombatProjectileData> ProjectileDataOverride = nullptr;
-	/** 当前 exactly-once 状态。 */
+	/** 本轮攻击的当前阶段，用于拒绝未发射就命中或已经结束后再次结算的请求。 */
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Attack") ECombatAttackState State = ECombatAttackState::Pending;
-	/** 起手时的绝对服务器 World Game Time。 */
+	/** 攻击起手的世界游戏时间，单位为秒；再次就绪时刻由它加本轮攻击间隔得到。 */
 	double StartedAt = 0.0;
 };
 
@@ -181,11 +181,11 @@ struct UE_GAS_API FCombatAttackResult
 {
 	GENERATED_BODY()
 
-	/** 请求是否完成其预期操作。 */
+	/** 起手结果中表示前摇已登记；最终结果中表示攻击以命中结束。起手成功不保证之后命中或扣血。 */
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Attack") bool bSuccess = false;
 	/** 本次结果对应的 AttackHandle。 */
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Attack") FCombatAttackHandle Handle;
-	/** exactly-once 结束分类。 */
+	/** 最终攻击结果的分类；起手结果中的默认值不表示攻击已经取消。 */
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Attack") ECombatAttackOutcome Outcome = ECombatAttackOutcome::Cancelled;
 	/** 失败时提供的稳定原因。 */
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Attack") FGameplayTag FailureTag;

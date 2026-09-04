@@ -30,28 +30,28 @@ class UE_GAS_API UCombatPointAoeAbility : public UCombatGameplayAbility
 	GENERATED_BODY()
 };
 
-/** Dragon Slave：由 AbilityData 生成可穿透直线弹体，并按 special 冻结伤害、宽度、距离与速度。 */
+/** 龙破斩示例：通过技能定义中的公共动作生成穿透直线弹体，发射时按本次技能等级读取伤害、宽度、射程与速度。 */
 UCLASS()
 class UE_GAS_API UCombatDragonSlaveAbility : public UCombatGameplayAbility
 {
 	GENERATED_BODY()
 };
 
-/** Meat Hook：由 AbilityData 生成首命中弹体，依次伤害、施加 Hook Modifier 并请求水平拖拽。 */
+/** 肉钩示例：通过公共动作生成首命中即结束的弹体，命中后先造成伤害，再施加拖拽效果，由效果申请水平强制位移。 */
 UCLASS()
 class UE_GAS_API UCombatMeatHookAbility : public UCombatGameplayAbility
 {
 	GENERATED_BODY()
 };
 
-/** Frost Arrows：Passive/Attack/AutoCast Ability，实际法球行为由 Intrinsic Runtime 提供。 */
+/** 冰霜之箭示例：技能只提供被动、普攻附加效果和自动施放开关；授予技能时附带的持续效果负责扣蓝、追加伤害和命中减速。 */
 UCLASS()
 class UE_GAS_API UCombatFrostArrowsAbility : public UCombatGameplayAbility
 {
 	GENERATED_BODY()
 };
 
-/** Earthshaker Fissure：统一执行线伤、Stun、Knockback、视觉 Thinker 与物理 blocker。 */
+/** 沟壑示例：技能生效时查询线段内目标，依次提交伤害、眩晕与侧向击退，再创建限时视觉区域和物理阻挡物；各步骤复用公共战斗入口。 */
 UCLASS()
 class UE_GAS_API UCombatFissureAbility : public UCombatGameplayAbility
 {
@@ -59,7 +59,7 @@ class UE_GAS_API UCombatFissureAbility : public UCombatGameplayAbility
 
 public:
 	UCombatFissureAbility();
-	/** Spec 授予时把 Fissure 专属 CDO 引用同步到 InstancedPerActor 实例。 */
+	/** 技能授予单位时，将类默认对象上的眩晕效果和阻挡物类型复制到该单位的技能实例，保持热重载和测试动态配置一致。 */
 	virtual void OnGiveAbility(
 		const FGameplayAbilityActorInfo* ActorInfo,
 		const FGameplayAbilitySpec& Spec) override;
@@ -80,7 +80,7 @@ public:
 	TSubclassOf<ACombatFissureBlocker> BlockerClass;
 
 protected:
-	/** SpellStarted 时以公共子系统完成一条确定性 Fissure 切片。 */
+	/** 技能生效时执行沟壑的目标查询、伤害、控制、视觉与阻挡物创建；诊断字段分别记录命中候选和成功创建项，不代表所有步骤全部成功。 */
 	virtual void ReceiveSpellStart_Implementation(const FCombatAbilityActivationContext& Context) override;
 
 private:
@@ -91,7 +91,7 @@ private:
 	bool bBlockerCreated = false;
 };
 
-/** Scheduler Channel 自动化使用的可观察 Ability。 */
+/** 引导调度测试使用的技能：记录收到的逻辑周期数、结束次数和中断标记，供自动化断言。 */
 UCLASS()
 class UE_GAS_API UCombatChannelProbeAbility : public UCombatGameplayAbility
 {

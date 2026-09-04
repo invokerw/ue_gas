@@ -192,24 +192,24 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Unit", meta=(DisplayName="初始队伍", ToolTip="单位生成时使用的战斗队伍；0 表示中立，1 到 254 表示有效队伍，255 表示无效。"))
 	FCombatTeamId InitialTeamId = FCombatTeamId(1);
 
-	/** 大于 0 时覆盖 Character 默认胶囊半径，单位为厘米。 */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Unit", meta=(ClampMin="0", Units="cm", DisplayName="胶囊半径覆盖", ToolTip="大于 0 时覆盖 Character 默认碰撞胶囊半径，单位为厘米；0 表示保留 Character 配置。"))
+	/** 出生时使用的碰撞胶囊半径，单位为厘米；大于 0 时覆盖角色默认值，0 保留默认值，负数非法。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Unit", meta=(ClampMin="0", Units="cm", DisplayName="胶囊半径覆盖", ToolTip="出生时使用的碰撞胶囊半径，单位为厘米；大于 0 时覆盖角色默认值，0 保留默认值，负数非法。"))
 	float CapsuleRadiusOverride = 0.0f;
 
 	/** AttackSpeed=100 时，从发出攻击到生成 AttackLaunched 事件的基础前摇秒数。 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Unit|Attack", meta=(ClampMin="0", Units="s", DisplayName="基础攻击前摇", ToolTip="AttackSpeed 为 100 时，从攻击起手到生成 AttackLaunched 的基础时长，单位为秒。"))
 	float BaseAttackPoint = 0.3f;
 
-	/** 普攻起手允许的最大水平朝向误差；超过该角度时服务器先转向，满足后才开始前摇。 */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Unit|Attack", meta=(ClampMin="0", ClampMax="180", Units="deg", DisplayName="攻击朝向容差", ToolTip="普通攻击起手前允许的最大水平朝向误差，范围为 0 到 180 度；超出时 Order 会先在服务器转向。"))
+	/** 普攻起手允许的最大水平朝向误差，单位为度；攻击组件在超出时拒绝起手，指令组件负责先转向再重试。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Unit|Attack", meta=(ClampMin="0", ClampMax="180", Units="deg", DisplayName="攻击朝向容差", ToolTip="普攻起手允许的最大水平朝向误差，单位为度；攻击组件在超出时拒绝起手，指令组件负责先转向再重试。"))
 	float AttackFacingToleranceDegrees = 15.0f;
 
 	/** 开启后单位移动中也能进入攻击前摇；关闭后必须先停止移动。 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Unit|Attack", meta=(DisplayName="允许移动中攻击", ToolTip="启用后，CharacterMovement 仍在移动时也可以创建普通攻击记录。"))
 	bool bAllowAttackWhileMoving = false;
 
-	/** 开启后在普通攻击开始和真正命中时都重新检查攻击者与目标之间是否有几何遮挡。 */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Unit|Attack", meta=(DisplayName="攻击需要视线", ToolTip="启用后，普通攻击起手和命中都通过 CombatTargeting 重新检查几何视线。"))
+	/** 开启后普攻起手和近战结算会检查攻击者到目标的几何遮挡；远程弹体命中时使用弹体碰撞结果，不再重复检查发射者视线。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Unit|Attack", meta=(DisplayName="攻击需要视线", ToolTip="开启后普攻起手和近战结算会检查攻击者到目标的几何遮挡；远程弹体命中时使用弹体碰撞结果，不再重复检查发射者视线。"))
 	bool bRequireAttackLineOfSight = false;
 
 	/** 攻击开始时记录的暴击概率，范围 0..1；0.25 表示 25%。 */
@@ -254,8 +254,8 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Ability", meta=(Categories="Ability.Behavior", DisplayName="行为标签", ToolTip="声明目标模式、被动、引导、自动施法、可被法术格挡等技能行为；组合必须通过 Ability 数据校验。"))
 	FGameplayTagContainer BehaviorTags;
 
-	/** 服务器在激活和施法前摇结束时用来复核目标阵营、状态、距离、遮挡和可见性的规则。 */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Ability", meta=(DisplayName="目标规则", ToolTip="服务器用于复核单位或点目标的阵营、状态、范围、视线和可见性规则。"))
+	/** 服务器在技能激活、前摇结束和引导周期复核目标所用的阵营、状态、距离、遮挡与可见性规则。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Ability", meta=(DisplayName="目标规则", ToolTip="服务器在技能激活、前摇结束和引导周期复核目标所用的阵营、状态、距离、遮挡与可见性规则。"))
 	FCombatTargetingRules TargetingRules;
 
 	/** 技能伤害、治疗、半径等按名称保存的分级数值；Action 用键名按当前技能等级读取。 */
@@ -270,8 +270,8 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Ability", meta=(ClampMin="0", Units="s", DisplayName="引导总时长", ToolTip="引导技能从 SpellStarted 到 ChannelFinish 的总时长，单位为秒；只有带引导行为标签时可以大于 0。"))
 	float ChannelDuration = 0.0f;
 
-	/** 引导期间相邻两次 ChannelTick 的秒数；0 表示不安排周期 ChannelTick。 */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Ability", meta=(ClampMin="0", Units="s", DisplayName="引导触发间隔", ToolTip="引导期间两次 ChannelTick 之间的时长，单位为秒；必须与引导总时长和行为标签一致。"))
+	/** 引导期间相邻周期回调的秒数；引导技能要求大于 0 且不超过引导总时长。首次在一个间隔后触发，恰好落在结束时刻的周期不执行。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Ability", meta=(ClampMin="0", Units="s", DisplayName="引导触发间隔", ToolTip="引导期间相邻周期回调的秒数；引导技能要求大于 0 且不超过引导总时长。首次在一个间隔后触发，恰好落在结束时刻的周期不执行。"))
 	float ChannelInterval = 0.0f;
 
 	/** 选择在哪个施法阶段正式扣除 ManaCost；在该阶段前失败或中断不会扣除。 */
@@ -282,8 +282,8 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Ability", meta=(DisplayName="冷却提交阶段", ToolTip="选择 Cooldown 在技能激活生命周期中的权威提交阶段。"))
 	ECombatAbilityCommitStage CooldownCommitPoint = ECombatAbilityCommitStage::SpellStarted;
 
-	/** 单位目标在施法前摇结束时失效后，是中断技能还是改用激活时记录的位置继续点/范围动作。 */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Ability", meta=(DisplayName="目标丢失策略", ToolTip="单位目标在施法前摇结束时失效后的处理方式；仅点或范围行为可继续使用最后已知位置。"))
+	/** 单位目标在前摇结束或引导周期校验失败时，选择中断或丢弃目标并保留最近一次合法位置；只有不依赖单位对象的动作才能继续。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Ability", meta=(DisplayName="目标丢失策略", ToolTip="单位目标在前摇结束或引导周期校验失败时，选择中断或丢弃目标并保留最近一次合法位置；只有不依赖单位对象的动作才能继续。"))
 	ECombatTargetLostPolicy TargetLostPolicy = ECombatTargetLostPolicy::Fail;
 
 	/** 引导被中断并释放当前施法命令后，决定保留还是清空玩家已经排队的后续命令。 */
@@ -298,8 +298,8 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Ability", meta=(DisplayName="公共动作序列", ToolTip="SpellStarted 时由服务器按数组顺序执行的 DataDriven Action。", TitleProperty="Type"))
 	TArray<FCombatAbilityAction> Actions;
 
-	/** 技能被授予期间保持生效的被动或法球 Modifier；重复同步只刷新同一实例，技能移除时一并清理。 */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Ability", meta=(DisplayName="固有 Modifier", ToolTip="该 AbilitySpec 存在期间幂等施加的被动或法球 Modifier；为空表示没有固有效果。"))
+	/** 技能授予期间应维护的被动或法球效果；重复同步保留已有有效实例，缺失时在单位存活后补建，移除技能时清理。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Ability", meta=(DisplayName="固有 Modifier", ToolTip="技能授予期间应维护的被动或法球效果；重复同步保留已有有效实例，缺失时在单位存活后补建，移除技能时清理。"))
 	TObjectPtr<UCombatModifierData> IntrinsicModifier = nullptr;
 
 	/** 本法球赢得同组仲裁后，当前普通攻击改用的弹体；为空时继续使用单位默认攻击弹体。 */
@@ -310,7 +310,7 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Ability|Attack", meta=(DisplayName="法球命中 Modifier", ToolTip="该技能的法球命中后施加的 Modifier，例如 Frost Arrows 的减速。"))
 	TObjectPtr<UCombatModifierData> AttackOrbOnHitModifierData = nullptr;
 
-	/** 按键和 1-based 等级读取 SpecialValues；键不存在时返回 DefaultValue，等级越界时取首值或末值。 */
+	/** 按名称和从 1 开始的等级读取数值；键不存在时返回 DefaultValue，已有键的数组为空或等级小于 1 时返回 0，高于数组长度时取末值。 */
 	float GetSpecialValue(FName Key, int32 Level, float DefaultValue = 0.0f) const;
 	/** 在运行时和自动化中执行与 Editor validator 相同的 Ability schema 校验。 */
 	bool ValidateRuntime(FString& OutDiagnostic) const;
@@ -324,9 +324,9 @@ public:
 };
 
 /**
- * Modifier 的设计模板，描述持续效果如何叠层、过期、驱散、周期触发并修改 GAS 属性或标签。
- * ModifierComponent 施加它时创建一对 Active GameplayEffect 与 Runtime：前者持续聚合属性和标签，后者承载 Hook 与 OnThink。
- * 同一来源、同一定义和同一 Ability owner 再次施加时刷新现有实例；实例可因到期、驱散、死亡清理、明确移除或 World teardown 结束。
+ * 增益、减益、被动和法球效果的设计模板，定义叠层、持续时间、驱散、属性及状态标签。
+ * 施加后由持续 GameplayEffect 聚合属性和标签，运行时对象保存实例状态并接收战斗事件回调（Hook）及周期回调（OnThink）。
+ * 同一来源、定义和所属技能再次施加时刷新已有实例；组件负责到期、驱散、死亡及世界关闭时的清理。
  */
 UCLASS(BlueprintType)
 class UE_GAS_API UCombatModifierData : public UCombatDefinitionData
@@ -403,8 +403,8 @@ public:
 };
 
 /**
- * 服务器权威弹体的默认模板，配置 Actor 类型、运动方式、碰撞宽度、飞行上限和命中策略。
- * ProjectileSubsystem 在生成时把这些值复制到不可变 Spec；之后修改资产或结束来源 Ability 都不会自动改变已发射弹体。
+ * 服务器弹体的默认模板，配置表现 Actor、运动与命中策略、碰撞半径和飞行上限。
+ * 技能/普攻等调用方将运动与命中策略填入发射请求；生成接口再解析速度、半径、寿命等值并保存到运行记录。保留的资产引用并非整份资产深拷贝，来源技能结束是否取消弹体由绑定选项决定。
  */
 UCLASS(BlueprintType)
 class UE_GAS_API UCombatProjectileData : public UCombatDefinitionData
@@ -420,8 +420,8 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Projectile", meta=(DisplayName="运动类型", ToolTip="选择沿初始方向直线运动，或每帧追踪仍合法的目标。"))
 	ECombatProjectileMovementType MovementType = ECombatProjectileMovementType::Linear;
 
-	/** 追踪目标死亡或失效后，是立即无命中结束，还是飞到最后有效位置后再结束。 */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Projectile", meta=(DisplayName="追踪目标丢失策略", ToolTip="追踪目标失效后，选择立即结束或继续飞向最后一次合法位置。"))
+	/** 追踪目标失效后，选择立即结束或继续飞向最后合法位置；继续飞行仍会检测路径上的其他合法单位和阻挡物，不在终点自动补算原目标命中。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Projectile", meta=(DisplayName="追踪目标丢失策略", ToolTip="追踪目标失效后，选择立即结束或继续飞向最后合法位置；继续飞行仍会检测路径上的其他合法单位和阻挡物，不在终点自动补算原目标命中。"))
 	ECombatProjectileTargetLostPolicy TargetLostPolicy = ECombatProjectileTargetLostPolicy::Fizzle;
 
 	/** 配置可命中的阵营、能否命中来源自身、命中首个单位后是否穿透，以及世界碰撞是否停止弹体。 */
@@ -448,8 +448,8 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Projectile", meta=(ClampMin="1", Units="cm", DisplayName="最大模拟步长", ToolTip="单次碰撞 sweep 允许的最大路径长度，单位为厘米；高速弹体会据此拆分 substep。"))
 	float MaxSimulationStep = 100.0f;
 
-	/** 弹体碰撞组件使用的固定 Profile 名。 */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Projectile", meta=(DisplayName="碰撞配置名称", ToolTip="弹体碰撞组件使用的 Collision Profile 名称；项目默认值为 CombatProjectile。"))
+	/** 服务器沿弹体路径执行碰撞查询时使用的 Profile 名；弹体 Actor 自身只负责表现，不依赖其碰撞组件结算命中。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Projectile", meta=(DisplayName="碰撞配置名称", ToolTip="服务器沿弹体路径执行碰撞查询时使用的 Profile 名；弹体 Actor 自身只负责表现，不依赖其碰撞组件结算命中。"))
 	FName CollisionProfileName = TEXT("CombatProjectile");
 
 	virtual FPrimaryAssetType GetCombatPrimaryAssetType() const override;

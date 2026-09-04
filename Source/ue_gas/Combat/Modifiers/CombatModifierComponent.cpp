@@ -54,7 +54,7 @@ FCombatModifierApplyResult UCombatModifierComponent::ApplyModifier(const FCombat
 		}
 	}
 
-	// Hook 内不修改 ActiveModifiers；FIFO 在当前最外层阶段结束后执行真实 Apply。
+	// 回调遍历期间只排队，等最外层阶段结束再按请求顺序施加效果，避免新增实例改变正在遍历的集合。
 	if (DeferredOperations.IsInPhase())
 	{
 		TWeakObjectPtr<UCombatModifierComponent> WeakThis(this);
@@ -95,7 +95,7 @@ FCombatModifierApplyResult UCombatModifierComponent::ApplyNewModifier(
 		return Result;
 	}
 
-	// ActiveGE 只承担属性与可计数 Tag；周期和 Runtime 状态由本组件统一管理。
+	// GAS 活动效果只负责汇总属性和标签；持续时间、周期回调及实例状态统一由本组件控制，避免两套计时各自移除同一效果。
 	UGameplayEffect* EffectDefinition = NewObject<UGameplayEffect>(this);
 	EffectDefinition->DurationPolicy = EGameplayEffectDurationType::Infinite;
 	// Runtime 层数与 ActiveGE 层数共享同一来源聚合规则，避免出现第二套 stack 权威。
@@ -529,7 +529,7 @@ TArray<UCombatModifierRuntime*> UCombatModifierComponent::MakeSortedSnapshot() c
 	return Snapshot;
 }
 
-// 每个 Hook 函数都在同一 Deferred 阶段内遍历稳定快照，阶段退出后才提交结构修改。
+// 每个战斗回调阶段使用固定顺序的效果快照；阶段内请求的增删等遍历结束后才执行，避免迭代失效或跳过后续效果。
 #define COMBAT_EXECUTE_MUTABLE_HOOK(FunctionName, RuntimeCall, PhaseName, EventType) \
 	void UCombatModifierComponent::FunctionName(EventType& Event) \
 	{ \
@@ -578,7 +578,7 @@ void UCombatModifierComponent::ClaimAttackOrbs(
 	OutSnapshots.Reset();
 	TSet<FName> ClaimedGroups;
 	DeferredOperations.BeginPhase(TEXT("AttackOrbClaim"), FCombatEventId());
-	// MakeSortedSnapshot 已冻结 Priority desc / ApplySequence asc；提交失败时自然落到同组下一候选。
+	// 候选按优先级从高到低、同优先级按施加先后遍历；提交失败时继续尝试同组下一候选。
 	// OnAttackClaimed 返回 true 代表资源提交已经发生，此后必须锁定该组，不能因错误快照再尝试下一个候选。
 	for (UCombatModifierRuntime* Runtime : MakeSortedSnapshot())
 	{

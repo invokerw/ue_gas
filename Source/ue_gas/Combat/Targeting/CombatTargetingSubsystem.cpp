@@ -12,7 +12,7 @@
 
 namespace CombatTargetingPrivate
 {
-	/** 构造只包含稳定 FailureTag 的失败结果。 */
+	/** 构造包含原因标签和诊断文本的失败结果，位置保持默认值。 */
 	FCombatTargetValidationResult Failure(const FGameplayTag& FailureTag, const TCHAR* Diagnostic)
 	{
 		FCombatTargetValidationResult Result;
@@ -21,7 +21,7 @@ namespace CombatTargetingPrivate
 		return Result;
 	}
 
-	/** 构造包含服务器权威位置的成功结果。 */
+	/** 构造包含本次校验位置的成功结果；位置来自当前 World，是否权威取决于调用端。 */
 	FCombatTargetValidationResult Success(const FVector& Location)
 	{
 		FCombatTargetValidationResult Result;

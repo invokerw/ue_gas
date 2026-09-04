@@ -10,8 +10,8 @@
 class ACombatUnitCharacter;
 
 /**
- * UI、Order 和 Ability 共用的权威目标校验与空间查询入口。
- * 单位、点、半径和线段查询统一复用队伍、生命、距离与 LOS 规则；客户端 TargetData 只作为请求，命中集合始终由服务器重建并稳定排序。
+ * 指令、技能和界面预览共用的目标规则。校验单位/点的阵营、生命、状态、距离和视线，并查询范围内满足条件的单位。
+ * 接口按所在 World 的当前状态计算，本身不拒绝客户端调用；客户端结果只能用于预览，实际施法与命中必须由服务器重新调用确认。
  */
 UCLASS()
 class UE_GAS_API UCombatTargetingSubsystem : public UWorldSubsystem
@@ -27,8 +27,8 @@ public:
 		UPARAM(DisplayName="目标规则") const FCombatTargetingRules& Rules,
 		UPARAM(DisplayName="目标数据") const FCombatAbilityTargetData& TargetData) const;
 
-	/** 直接校验一个单位目标，供 UI/Order 预览和服务器 cast point 复核。 */
-	UFUNCTION(BlueprintCallable, Category="Combat|Targeting", meta=(DisplayName="验证单位目标", ToolTip="校验一个单位目标，适用于 UI、命令预览与服务器执行点复核。"))
+	/** 检查单位目标的状态、阵营、双方胶囊边缘距离与可选视线条件；供本地预览、指令预检和服务器施法生效前复核共用。成功位置取目标当前位置。 */
+	UFUNCTION(BlueprintCallable, Category="Combat|Targeting", meta=(DisplayName="验证单位目标", ToolTip="检查单位目标的状态、阵营、双方胶囊边缘距离与可选视线条件；供本地预览、指令预检和服务器施法生效前复核共用。成功位置取目标当前位置。"))
 	FCombatTargetValidationResult ValidateUnitTarget(
 		UPARAM(DisplayName="来源单位") ACombatUnitCharacter* Source,
 		UPARAM(DisplayName="目标单位") ACombatUnitCharacter* Target,
@@ -41,16 +41,16 @@ public:
 		UPARAM(DisplayName="目标位置") FVector TargetLocation,
 		UPARAM(DisplayName="目标规则") const FCombatTargetingRules& Rules) const;
 
-	/** 由服务器枚举半径内单位、复用状态/阵营规则、去重并稳定排序。 */
-	UFUNCTION(BlueprintCallable, Category="Combat|Targeting", meta=(DisplayName="查询半径内战斗单位", ToolTip="由服务器查询半径内符合阵营和状态规则的单位，并去重后稳定排序。"))
+	/** 枚举当前 World 中与 XY 圆形范围相交的单位，计入目标胶囊半径，复用状态/阵营/视线规则并按 Actor ID 排序。跳过来源施法距离限制；权威命中须在服务器调用。 */
+	UFUNCTION(BlueprintCallable, Category="Combat|Targeting", meta=(DisplayName="查询半径内战斗单位", ToolTip="枚举当前 World 中与 XY 圆形范围相交的单位，计入目标胶囊半径，复用状态/阵营/视线规则并按 Actor ID 排序。跳过来源施法距离限制；权威命中须在服务器调用。"))
 	TArray<ACombatUnitCharacter*> QueryUnitsInRadius(
 		UPARAM(DisplayName="来源单位") ACombatUnitCharacter* Source,
 		UPARAM(DisplayName="圆心") FVector Center,
 		UPARAM(DisplayName="半径") float Radius,
 		UPARAM(DisplayName="目标规则") const FCombatTargetingRules& Rules) const;
 
-	/** 由服务器查询有限 XY 线段宽度内单位，去重后按沿线距离与 Actor identity 稳定排序。 */
-	UFUNCTION(BlueprintCallable, Category="Combat|Targeting", meta=(DisplayName="查询线段范围内战斗单位", ToolTip="由服务器查询有限 XY 线段宽度内的合法单位，并按沿线距离稳定排序。"))
+	/** 查询 XY 线段两侧 HalfWidth 厘米内的单位，计入目标胶囊半径及端点圆形区域，按沿线投影位置再按 Actor ID 排序。零长度退化为圆形查询；跳过来源施法距离限制，权威命中须在服务器调用。 */
+	UFUNCTION(BlueprintCallable, Category="Combat|Targeting", meta=(DisplayName="查询线段范围内战斗单位", ToolTip="查询 XY 线段两侧 HalfWidth 厘米内的单位，计入目标胶囊半径及端点圆形区域，按沿线投影位置再按 Actor ID 排序。零长度退化为圆形查询；跳过来源施法距离限制，权威命中须在服务器调用。"))
 	TArray<ACombatUnitCharacter*> QueryUnitsAlongSegment(
 		UPARAM(DisplayName="来源单位") ACombatUnitCharacter* Source,
 		UPARAM(DisplayName="线段起点") FVector Start,

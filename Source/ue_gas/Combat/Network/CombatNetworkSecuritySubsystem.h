@@ -11,8 +11,8 @@ class ACombatUnitCharacter;
 class APlayerController;
 
 /**
- * Order RPC 的服务器连接级安全边界。
- * 子系统按 owning connection 保存有界限频和 RequestId 重放窗口，先验证控制权与批次载荷，再允许业务 Order 进入 Unit；状态只用于安全判定和诊断，不参与 gameplay 结算。
+ * 客户端指令 RPC 的服务器安全检查。以指挥玩家的 PlayerController 为键保存请求额度和最近请求 ID，检查单位所有权、正请求 ID、批次数量、估算载荷、重复请求与发送频率。
+ * 通过后才允许逐项提交业务指令；这不代表每条指令都合法或执行成功。
  */
 UCLASS()
 class UE_GAS_API UCombatNetworkSecuritySubsystem : public UWorldSubsystem
@@ -20,7 +20,7 @@ class UE_GAS_API UCombatNetworkSecuritySubsystem : public UWorldSubsystem
 	GENERATED_BODY()
 
 public:
-	/** 校验并原子消费一个请求额度；返回 true 后调用者才允许执行 Order。 */
+	/** 全部安全检查通过后消耗该玩家 1 个批次额度并记住请求 ID；返回 true 才能继续处理业务指令。检查失败时返回原因标签与诊断，不执行任何指令。 */
 	bool ValidateAndConsumeOrderRequest(
 		APlayerController* RequestingController,
 		ACombatUnitCharacter* Unit,
@@ -41,18 +41,18 @@ public:
 	/** 请求估算序列化大小上限。 */
 	UPROPERTY(EditAnywhere, Category="Combat|Network|Limits", meta=(ClampMin="128", Units="B", DisplayName="最大估算载荷", ToolTip="反序列化后按固定 schema 估算的单请求字节上限。"))
 	int32 MaxEstimatedPayloadBytes = 4096;
-	/** 每连接每秒持续补充的 token 数量。 */
-	UPROPERTY(EditAnywhere, Category="Combat|Network|Limits", meta=(ClampMin="1", DisplayName="每秒请求额度", ToolTip="每个连接 token bucket 每秒持续补充的 token 数。"))
+	/** 每个玩家每秒补充的请求额度，1 个额度允许提交 1 个批次，与批次中的指令条数无关；运行时至少按 1 计算。 */
+	UPROPERTY(EditAnywhere, Category="Combat|Network|Limits", meta=(ClampMin="1", DisplayName="每秒请求额度", ToolTip="每个玩家每秒补充的请求额度，1 个额度允许提交 1 个批次，与批次中的指令条数无关；运行时至少按 1 计算。"))
 	float RequestsPerSecond = 20.0f;
-	/** 每连接 token bucket 的最大突发容量。 */
-	UPROPERTY(EditAnywhere, Category="Combat|Network|Limits", meta=(ClampMin="1", DisplayName="突发请求容量", ToolTip="每个连接 token bucket 允许积累的最大 token 数。"))
+	/** 每个玩家最多积攒的请求额度，也作为首次请求的初始额度；运行时至少按 1 计算。 */
+	UPROPERTY(EditAnywhere, Category="Combat|Network|Limits", meta=(ClampMin="1", DisplayName="突发请求容量", ToolTip="每个玩家最多积攒的请求额度，也作为首次请求的初始额度；运行时至少按 1 计算。"))
 	float BurstCapacity = 32.0f;
-	/** 每连接保存的最近请求 ID 数量。 */
-	UPROPERTY(EditAnywhere, Category="Combat|Network|Limits", meta=(ClampMin="8", ClampMax="4096", DisplayName="请求 ID 重放窗口", ToolTip="每个连接保存并拒绝重复使用的最近请求 ID 数量。"))
+	/** 每个玩家保留的最近已接受请求 ID 数，运行时至少保留 8 个；被淘汰的旧 ID 不再由此窗口识别为重复。 */
+	UPROPERTY(EditAnywhere, Category="Combat|Network|Limits", meta=(ClampMin="8", ClampMax="4096", DisplayName="请求 ID 重放窗口", ToolTip="每个玩家保留的最近已接受请求 ID 数，运行时至少保留 8 个；被淘汰的旧 ID 不再由此窗口识别为重复。"))
 	int32 ReplayWindowSize = 128;
 
 private:
-	/** 单个 owning connection 的 token bucket 与重放窗口。 */
+	/** 一个指挥玩家的剩余批次额度、上次补充时间及最近已接受请求 ID。 */
 	struct FConnectionGuardState
 	{
 		double Tokens = 0.0;

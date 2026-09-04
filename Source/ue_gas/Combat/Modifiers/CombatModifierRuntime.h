@@ -42,53 +42,53 @@ public:
 	UFUNCTION(BlueprintNativeEvent, Category="Combat|Modifier", meta=(DisplayName="Modifier 周期执行", ToolTip="周期触发间隔大于 0 时调用；过期边界和刷新后何时再次触发由 ModifierData 配置。"))
 	void OnThink(UPARAM(DisplayName="周期上下文") const FCombatScheduledTickContext& TickContext);
 
-	/** 来源单位 Modifier 的伤害增幅 Hook。 */
-	UFUNCTION(BlueprintNativeEvent, Category="Combat|Modifier|Damage", meta=(DisplayName="造成伤害前", ToolTip="来源单位在伤害增幅阶段调用，可修改伤害事件。"))
+	/** 伤害来源的效果在抗性计算前收到的回调，可调整本次请求数值；不应直接写目标生命。 */
+	UFUNCTION(BlueprintNativeEvent, Category="Combat|Modifier|Damage", meta=(DisplayName="造成伤害前", ToolTip="伤害来源的效果在抗性计算前收到的回调，可调整本次请求数值；不应直接写目标生命。"))
 	void OnPreDealDamage(UPARAM(ref, DisplayName="伤害事件") FCombatDamageEvent& Event);
-	/** 目标单位抗性前的伤害 Hook。 */
-	UFUNCTION(BlueprintNativeEvent, Category="Combat|Modifier|Damage", meta=(DisplayName="承受伤害前", ToolTip="目标单位在抗性结算前调用，可修改伤害事件。"))
+	/** 受伤目标的效果在抗性计算前收到的回调，可调整本次请求数值。 */
+	UFUNCTION(BlueprintNativeEvent, Category="Combat|Modifier|Damage", meta=(DisplayName="承受伤害前", ToolTip="受伤目标的效果在抗性计算前收到的回调，可调整本次请求数值。"))
 	void OnPreTakeDamage(UPARAM(ref, DisplayName="伤害事件") FCombatDamageEvent& Event);
-	/** 目标单位抗性后的 Shield/Block Hook。 */
-	UFUNCTION(BlueprintNativeEvent, Category="Combat|Modifier|Damage", meta=(DisplayName="格挡伤害", ToolTip="目标单位在抗性结算后调用，用于护盾和格挡。"))
+	/** 目标在抗性计算后处理护盾或格挡的回调，可消耗护盾并减少待扣伤害。 */
+	UFUNCTION(BlueprintNativeEvent, Category="Combat|Modifier|Damage", meta=(DisplayName="格挡伤害", ToolTip="目标在抗性计算后处理护盾或格挡的回调，可消耗护盾并减少待扣伤害。"))
 	void OnDamageBlock(UPARAM(ref, DisplayName="伤害事件") FCombatDamageEvent& Event);
-	/** 来源单位获得真实伤害结果后的 Hook。 */
-	UFUNCTION(BlueprintNativeEvent, Category="Combat|Modifier|Damage", meta=(DisplayName="造成伤害后", ToolTip="来源单位获得真实伤害结果后调用。"))
+	/** 来源在实际扣血确定后收到的回调；后续吸血等计算应使用实际伤害而非请求值。 */
+	UFUNCTION(BlueprintNativeEvent, Category="Combat|Modifier|Damage", meta=(DisplayName="造成伤害后", ToolTip="来源在实际扣血确定后收到的回调；后续吸血等计算应使用实际伤害而非请求值。"))
 	void OnPostDealDamage(UPARAM(DisplayName="伤害事件") const FCombatDamageEvent& Event);
-	/** 目标单位获得真实伤害结果后的 Hook。 */
-	UFUNCTION(BlueprintNativeEvent, Category="Combat|Modifier|Damage", meta=(DisplayName="承受伤害后", ToolTip="目标单位获得真实伤害结果后调用。"))
+	/** 目标在实际扣血确定后收到的回调；可据此请求反伤等后续效果，须沿用事件链限制递归。 */
+	UFUNCTION(BlueprintNativeEvent, Category="Combat|Modifier|Damage", meta=(DisplayName="承受伤害后", ToolTip="目标在实际扣血确定后收到的回调；可据此请求反伤等后续效果，须沿用事件链限制递归。"))
 	void OnPostTakeDamage(UPARAM(DisplayName="伤害事件") const FCombatDamageEvent& Event);
 
-	/** 来源单位治疗增幅前的 Hook。 */
-	UFUNCTION(BlueprintNativeEvent, Category="Combat|Modifier|Heal", meta=(DisplayName="造成治疗前", ToolTip="来源单位在治疗增幅前调用，可修改治疗事件。"))
+	/** 来源在治疗增幅计算前收到的回调，可调整治疗请求值。 */
+	UFUNCTION(BlueprintNativeEvent, Category="Combat|Modifier|Heal", meta=(DisplayName="造成治疗前", ToolTip="来源在治疗增幅计算前收到的回调，可调整治疗请求值。"))
 	void OnPreDealHeal(UPARAM(ref, DisplayName="治疗事件") FCombatHealEvent& Event);
-	/** 目标单位接受治疗前的 Hook。 */
-	UFUNCTION(BlueprintNativeEvent, Category="Combat|Modifier|Heal", meta=(DisplayName="接受治疗前", ToolTip="目标单位在接受治疗前调用，可修改治疗事件。"))
+	/** 目标在双方治疗增幅计算后、实际恢复生命前收到的回调，可继续调整待恢复量。 */
+	UFUNCTION(BlueprintNativeEvent, Category="Combat|Modifier|Heal", meta=(DisplayName="接受治疗前", ToolTip="目标在双方治疗增幅计算后、实际恢复生命前收到的回调，可继续调整待恢复量。"))
 	void OnPreTakeHeal(UPARAM(ref, DisplayName="治疗事件") FCombatHealEvent& Event);
-	/** 来源单位获得真实治疗结果后的 Hook。 */
-	UFUNCTION(BlueprintNativeEvent, Category="Combat|Modifier|Heal", meta=(DisplayName="造成治疗后", ToolTip="来源单位获得真实治疗结果后调用。"))
+	/** 来源在实际恢复生命确定后收到的回调；请求治疗成功也可能因满血而实际恢复 0。 */
+	UFUNCTION(BlueprintNativeEvent, Category="Combat|Modifier|Heal", meta=(DisplayName="造成治疗后", ToolTip="来源在实际恢复生命确定后收到的回调；请求治疗成功也可能因满血而实际恢复 0。"))
 	void OnPostDealHeal(UPARAM(DisplayName="治疗事件") const FCombatHealEvent& Event);
-	/** 目标单位获得真实治疗结果后的 Hook。 */
-	UFUNCTION(BlueprintNativeEvent, Category="Combat|Modifier|Heal", meta=(DisplayName="接受治疗后", ToolTip="目标单位获得真实治疗结果后调用。"))
+	/** 目标在实际恢复生命确定后收到的回调，结果已受到最大生命上限限制。 */
+	UFUNCTION(BlueprintNativeEvent, Category="Combat|Modifier|Heal", meta=(DisplayName="接受治疗后", ToolTip="目标在实际恢复生命确定后收到的回调，结果已受到最大生命上限限制。"))
 	void OnPostTakeHeal(UPARAM(DisplayName="治疗事件") const FCombatHealEvent& Event);
-	/** 来源 Unit 的 Ability 已通过 commit 并进入 SpellStarted 时调用。 */
-	UFUNCTION(BlueprintNativeEvent, Category="Combat|Modifier|Ability", meta=(DisplayName="技能已执行", ToolTip="来源单位的技能提交并进入 SpellStarted 时调用。"))
+	/** 来源技能通过生效阶段提交、未被法术格挡且数据动作执行成功后调用；引导技能此时才准备启动引导计时。 */
+	UFUNCTION(BlueprintNativeEvent, Category="Combat|Modifier|Ability", meta=(DisplayName="技能已执行", ToolTip="来源技能通过生效阶段提交、未被法术格挡且数据动作执行成功后调用；引导技能此时才准备启动引导计时。"))
 	void OnAbilityExecuted(
 		UPARAM(DisplayName="技能定义 ID") const FPrimaryAssetId& AbilityDefinitionId,
 		UPARAM(DisplayName="事件上下文") const FCombatEventContext& Context);
 
-	/** 返回法球 exclusive group；None 表示该 Runtime 不参与普攻仲裁。 */
-	UFUNCTION(BlueprintNativeEvent, BlueprintPure, Category="Combat|Modifier|Attack", meta=(DisplayName="获取法球互斥组", ToolTip="返回法球互斥组；None 表示该 Runtime 不参与普通攻击法球仲裁。"))
+	/** 返回普攻法球的互斥组名，同组每次攻击最多选中一个效果；None 表示不参与法球竞争。 */
+	UFUNCTION(BlueprintNativeEvent, BlueprintPure, Category="Combat|Modifier|Attack", meta=(DisplayName="获取法球互斥组", ToolTip="返回普攻法球的互斥组名，同组每次攻击最多选中一个效果；None 表示不参与法球竞争。"))
 	FName GetAttackOrbExclusiveGroup() const;
-	/** 无副作用检查当前 Runtime 是否可以成为本轮法球候选。 */
-	UFUNCTION(BlueprintNativeEvent, BlueprintPure, Category="Combat|Modifier|Attack", meta=(DisplayName="可声明本次攻击", ToolTip="无副作用检查当前 Runtime 是否可以成为本轮法球候选。"))
+	/** 只检查这次普攻能否使用本效果的法球；不得在候选检查时扣资源或改变战斗状态。 */
+	UFUNCTION(BlueprintNativeEvent, BlueprintPure, Category="Combat|Modifier|Attack", meta=(DisplayName="可声明本次攻击", ToolTip="只检查这次普攻能否使用本效果的法球；不得在候选检查时扣资源或改变战斗状态。"))
 	bool CanClaimAttack(UPARAM(DisplayName="攻击候选上下文") const FCombatAttackCandidateContext& Context) const;
-	/** winner 提交资源并生成快照；返回 false 时同组继续尝试下一候选。 */
-	UFUNCTION(BlueprintNativeEvent, Category="Combat|Modifier|Attack", meta=(DisplayName="法球已声明攻击", ToolTip="法球胜出后提交资源并生成不可变快照；返回 false 时尝试同组下一候选。"))
+	/** 候选轮到本效果时提交资源并填写本次攻击快照；true 表示已提交并锁定互斥组，false 表示未提交，可尝试同组下一个候选。 */
+	UFUNCTION(BlueprintNativeEvent, Category="Combat|Modifier|Attack", meta=(DisplayName="法球已声明攻击", ToolTip="候选轮到本效果时提交资源并填写本次攻击快照；true 表示已提交并锁定互斥组，false 表示未提交，可尝试同组下一个候选。"))
 	bool OnAttackClaimed(
 		UPARAM(DisplayName="攻击候选上下文") const FCombatAttackCandidateContext& Context,
 		UPARAM(ref, DisplayName="输出法球快照") FCombatOrbSnapshot& OutSnapshot);
-	/** 返回当前 Runtime 是否消耗并阻挡本次 UnitTarget Ability。 */
-	UFUNCTION(BlueprintNativeEvent, Category="Combat|Modifier|Ability", meta=(DisplayName="尝试格挡技能", ToolTip="在 SpellStarted 提交后检查并消耗当前 Runtime，以阻挡一个显式可格挡技能。"))
+	/** 尝试消耗本效果来格挡一次单位目标技能；true 表示已经格挡并阻止技能动作，false 允许继续寻找其他格挡效果。 */
+	UFUNCTION(BlueprintNativeEvent, Category="Combat|Modifier|Ability", meta=(DisplayName="尝试格挡技能", ToolTip="尝试消耗本效果来格挡一次单位目标技能；true 表示已经格挡并阻止技能动作，false 允许继续寻找其他格挡效果。"))
 	bool TryBlockAbility(
 		UPARAM(DisplayName="技能定义 ID") const FPrimaryAssetId& AbilityDefinitionId,
 		UPARAM(DisplayName="施法者") ACombatUnitCharacter* Caster,
@@ -113,9 +113,9 @@ public:
 	int32 GetStackCount() const { return StackCount; }
 	/** 返回与 Runtime 一一对应的 GAS ActiveGameplayEffect 句柄。 */
 	FActiveGameplayEffectHandle GetActiveEffectHandle() const { return ActiveEffectHandle; }
-	/** 返回绝对 World Game Time；0 表示无限持续。 */
+	/** 返回效果的世界游戏时间终点，单位为秒；0 表示无限持续，不是剩余秒数。 */
 	double GetExpireAt() const { return ExpireAt; }
-	/** 返回本次创建或刷新发生的绝对 World Game Time。 */
+	/** 返回最近一次创建或刷新效果的世界游戏时间，单位为秒。 */
 	double GetAppliedAt() const { return AppliedAt; }
 	/** 返回 Think 调度句柄，供调试和刷新相位自动化断言。 */
 	FCombatScheduleHandle GetThinkScheduleHandle() const { return ThinkSchedule; }
@@ -123,7 +123,7 @@ public:
 	FCombatScheduleHandle GetExpireScheduleHandle() const { return ExpireSchedule; }
 	/** 返回来源单位；来源结束后可能为空。 */
 	ACombatUnitCharacter* GetSourceUnit() const { return SourceUnit.Get(); }
-	/** 返回 Intrinsic Modifier 的 AbilitySpec owner key；普通 Modifier 无效。 */
+	/** 返回此固有效果所属的已授予技能句柄；普通效果没有该归属，返回无效句柄。 */
 	FGameplayAbilitySpecHandle GetAbilityOwnerHandle() const { return AbilityOwnerHandle; }
 	/** 返回承载该 Runtime 的目标单位。 */
 	ACombatUnitCharacter* GetTargetUnit() const { return TargetUnit.Get(); }
@@ -169,15 +169,15 @@ private:
 	UPROPERTY(Transient) TObjectPtr<const UCombatModifierData> ModifierData;
 	/** 施加 Modifier 的单位。 */
 	TWeakObjectPtr<ACombatUnitCharacter> SourceUnit;
-	/** Intrinsic Modifier 的 AbilitySpec owner key。 */
+	/** 固有效果所属的技能句柄，与来源和定义共同区分刷新对象；普通效果为无效值。 */
 	FGameplayAbilitySpecHandle AbilityOwnerHandle;
 	/** 承载 Modifier 的单位。 */
 	TWeakObjectPtr<ACombatUnitCharacter> TargetUnit;
 	/** 与 Runtime 一一对应的公共句柄。 */
 	FCombatModifierHandle Handle;
-	/** Hook 第一稳定排序键。 */
+	/** 战斗回调优先级，数值越大越先处理。 */
 	int32 Priority = 0;
-	/** Hook 第二稳定排序键。 */
+	/** 施加时分配的递增序号，相同优先级的效果按先施加先处理。 */
 	uint64 ApplySequence = 0;
 	/** 当前聚合层数。 */
 	int32 StackCount = 1;
@@ -185,11 +185,11 @@ private:
 	FActiveGameplayEffectHandle ActiveEffectHandle;
 	/** 创建该 ActiveGE 的动态定义，用于精确释放强引用。 */
 	UPROPERTY(Transient) TObjectPtr<UGameplayEffect> EffectDefinition;
-	/** 0 表示无限，否则为绝对 World Game Time。 */
+	/** 自然过期的世界游戏时间终点，单位为秒；0 表示不会自然过期。 */
 	double ExpireAt = 0.0;
 	/** 最近一次创建或刷新该 Runtime 的绝对 World Game Time。 */
 	double AppliedAt = 0.0;
-	/** Think 调度句柄。 */
+	/** 周期 OnThink 回调的任务句柄，刷新是否重排由相位策略决定，效果结束时取消。 */
 	FCombatScheduleHandle ThinkSchedule;
 	/** 自然过期调度句柄。 */
 	FCombatScheduleHandle ExpireSchedule;
@@ -199,6 +199,6 @@ private:
 	bool bHasInitialMotionRequest = false;
 	/** 只供派生 Runtime 在 OnCreated 消费的强制位移请求。 */
 	FCombatMotionRequest InitialMotionRequest;
-	/** Apply 时冻结并优先于 ModifierData 的 Runtime 参数。 */
+	/** 最近一次施加或刷新保存的参数覆盖值；读取同名参数时优先于定义默认值。 */
 	TMap<FName, float> RuntimeParameterOverrides;
 };

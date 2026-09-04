@@ -10,15 +10,15 @@
 
 class ACombatUnitCharacter;
 
-/** 玩家输入、AI 意图和战斗执行共用的服务器 Order 类型。 */
+/** 客户端或 AI 可请求的单位命令类型；客户端只表达意图，指令组件在服务器验证并执行。 */
 UENUM(BlueprintType)
 enum class ECombatOrderType : uint8
 {
 	/** 移动到有限世界位置。 */
 	MoveToPoint,
-	/** 移动到当前单位位置。 */
+	/** 持续更新目的地并移动到目标单位附近；目标死亡或失效时失败。 */
 	MoveToUnit,
-	/** 持续追击并普通攻击目标。 */
+	/** 目标超出攻击范围时追击，进入范围后重复普攻，直到替换、停止、状态或目标失效结束。 */
 	AttackTarget,
 	/** 激活无目标 Ability。 */
 	CastNoTarget,
@@ -26,11 +26,11 @@ enum class ECombatOrderType : uint8
 	CastPoint,
 	/** 激活单位目标 Ability。 */
 	CastTarget,
-	/** 提升 generation 并取消全部当前与排队行为。 */
+	/** 取消当前命令及其异步行为、丢弃全部排队命令，并使旧回调失效；请求不得携带目标或技能。 */
 	Stop
 };
 
-/** 当前 Order 只允许由 PumpCurrentOrder 迁移的状态。 */
+/** 服务器指令状态机的阶段；状态用于诊断当前在校验、移动、施法、攻击还是暂停，不表示客户端已获得最终结果。 */
 UENUM(BlueprintType)
 enum class ECombatOrderState : uint8
 {
@@ -54,7 +54,7 @@ enum class ECombatOrderState : uint8
 	StartingAttack,
 	/** 单轮已发射，等待 AttackComponent 再次 Ready。 */
 	WaitingAttackReady,
-	/** 临时状态阻止，保留当前队首等待恢复。 */
+	/** 单位状态、强制位移或有界重试等待暂时阻止执行；仍保留当前命令，解除后重新验证。 */
 	Paused,
 	/** 当前项成功完成。 */
 	Completed,
@@ -64,7 +64,10 @@ enum class ECombatOrderState : uint8
 	Cancelled
 };
 
-/** 客户端允许提交、但服务器必须完整复核的最小 Order payload。 */
+/**
+ * 一条命令请求。字段按 Type 互斥：点移动/点技能携带位置，单位移动/攻击/单位技能携带目标，施法携带已授予技能句柄，停止命令不带载荷。
+ * 客户端提交的 Actor、位置和技能只作为意图，服务器仍检查所有权、状态、范围、视线及资源。
+ */
 USTRUCT(BlueprintType)
 struct UE_GAS_API FCombatOrderRequest
 {
@@ -74,23 +77,23 @@ struct UE_GAS_API FCombatOrderRequest
 	UPROPERTY(BlueprintReadWrite, Category="Combat|Order") ECombatOrderType Type = ECombatOrderType::MoveToPoint;
 	/** MoveToUnit、AttackTarget 或 CastTarget 的 Actor 身份。 */
 	UPROPERTY(BlueprintReadWrite, Category="Combat|Order") TObjectPtr<ACombatUnitCharacter> TargetUnit = nullptr;
-	/** MoveToPoint 或 CastPoint 的有限服务器复核位置。 */
+	/** 点移动或点目标技能的世界坐标，单位为厘米；只在 bHasTargetLocation 为 true 时表示调用者明确提供。 */
 	UPROPERTY(BlueprintReadWrite, Category="Combat|Order") FVector TargetLocation = FVector::ZeroVector;
-	/** 区分合法世界原点与未提交位置。 */
+	/** 标记 TargetLocation 是否属于请求载荷，避免把合法的世界原点误当作空值。 */
 	UPROPERTY(BlueprintReadWrite, Category="Combat|Order") bool bHasTargetLocation = false;
-	/** Cast Order 必须引用本单位已授予的 AbilitySpec。 */
+	/** 施法命令引用本单位当前已授予的技能记录；服务器检查它仍存在并重新验证技能条件。 */
 	UPROPERTY(BlueprintReadWrite, Category="Combat|Order") FGameplayAbilitySpecHandle AbilitySpecHandle;
 };
 
-/** OrderComponent 接受请求或完成当前项时返回的结构化结果。 */
+/** 命令的初始接收或最终完成结果。IssueOrder 返回的是初始状态，异步移动、施法和攻击的最终结果通过完成委托另行通知。 */
 USTRUCT(BlueprintType)
 struct UE_GAS_API FCombatOrderResult
 {
 	GENERATED_BODY()
 
-	/** 请求是否成功接受或当前项是否成功完成。 */
+	/** 初始结果中表示命令已进入状态机，不保证动作最终成功；完成结果中表示当前命令达成目标。 */
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Order") bool bSuccess = false;
-	/** 对应的稳定 OrderHandle。 */
+	/** 本条命令的身份，用于匹配异步回调和最终通知；Stop 成功也返回一个已完成但未登记为活动项的句柄。 */
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Order") FCombatOrderHandle Handle;
 	/** 结束时的状态；接受请求时通常为 Validating。 */
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Order") ECombatOrderState State = ECombatOrderState::Idle;
@@ -114,5 +117,5 @@ struct UE_GAS_API FCombatQueuedOrder
 	uint32 UnitLifeGeneration = 0;
 };
 
-/** 每个 Order 完成、失败或取消后广播的原生结果。 */
+/** 当前正在执行的命令最终完成、失败或被替换/停止时广播；尚在队列中就被整体清空的命令不会逐条广播。 */
 DECLARE_MULTICAST_DELEGATE_OneParam(FOnCombatOrderFinished, const FCombatOrderResult&);

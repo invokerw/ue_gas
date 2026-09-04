@@ -5,7 +5,7 @@
 
 #include "Combat/Core/CombatTypes.h"
 
-/** 描述当前 deferred 操作所处的嵌套战斗阶段。 */
+/** 记录当前战斗回调阶段；该阶段中的增删操作可先排队，等最外层阶段结束后再执行。 */
 struct UE_GAS_API FCombatPhaseContext
 {
 	/** 阶段的稳定名称。 */
@@ -16,7 +16,10 @@ struct UE_GAS_API FCombatPhaseContext
 	int32 Depth = 0;
 };
 
-/** 在战斗阶段结束后按入队顺序提交结构修改，避免遍历期间重入。 */
+/**
+ * 延迟执行战斗回调中的增删操作，避免遍历效果列表时修改同一列表。
+ * BeginPhase/EndPhase 可嵌套，只有退出最外层阶段才按入队顺序执行；没有活动阶段时，入队操作通常立即执行。
+ */
 class UE_GAS_API FCombatDeferredOperationQueue
 {
 public:
@@ -28,13 +31,13 @@ public:
 	FCombatDeferredOperationQueue(FCombatDeferredOperationQueue&&) = default;
 	FCombatDeferredOperationQueue& operator=(FCombatDeferredOperationQueue&&) = default;
 
-	/** 压入一个嵌套阶段；超过 MaxDepth 时拒绝并返回 false。 */
+	/** 进入一个具名战斗阶段；名称为空或已达到 MaxDepth 时返回 false，不改变阶段栈。 */
 	bool BeginPhase(FName Phase, FCombatEventId EventId = FCombatEventId());
-	/** 结束最内层阶段；退出根阶段时自动 Flush。 */
+	/** 退出最内层阶段；退出最后一层时执行等待的操作，没有活动阶段时返回 false。 */
 	bool EndPhase();
-	/** 将操作追加到稳定 FIFO；不在阶段内时立即 Flush。 */
+	/** 提交操作：处于阶段或正在清空队列时追加到队尾，否则当场调用；空回调被忽略。 */
 	void Enqueue(TUniqueFunction<void()>&& Operation);
-	/** 按稳定快照批次执行全部待处理操作，并支持回调继续入队。 */
+	/** 没有活动阶段时按入队顺序执行等待操作，回调新入队的操作也在本轮尾部执行；正在执行或仍在阶段中时不做处理。 */
 	void Flush();
 	/** 丢弃阶段和待处理操作，恢复为空队列。 */
 	void Reset();

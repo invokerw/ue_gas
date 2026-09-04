@@ -24,7 +24,7 @@ void UAbilityTask_WaitCombatInterval::Activate()
 		return;
 	}
 	FinishAt = GetWorld()->GetTimeSeconds() + TotalDuration;
-	// Finish 使用更高优先级，使恰好等于 duration 的 repeating tick 被取消而不执行。
+	// 引导终点不再产生周期效果；同一计划时刻先执行完成任务，取消落在终点的周期。
 	FinishSchedule = Scheduler->ScheduleOnce(
 		this, TotalDuration, 1,
 		FCombatScheduledDelegate::CreateUObject(this, &UAbilityTask_WaitCombatInterval::HandleFinished));
@@ -52,7 +52,7 @@ bool UAbilityTask_WaitCombatInterval::HasActiveSchedule() const
 
 void UAbilityTask_WaitCombatInterval::HandleTick(const FCombatScheduledTickContext& TickContext)
 {
-	// Scheduler 补帧会在一个 repeating 回调批次中消费多个到期 tick，必须在 Task 层再拒绝 duration 边界。
+	// 补执行可能先处理较早周期并在同一批中推进到结束边界；不能只靠到期任务的排序，转发前还要逐次核对计划时刻。
 	if (!bFinished && TickContext.ScheduledTime < FinishAt - UE_DOUBLE_SMALL_NUMBER
 		&& ShouldBroadcastAbilityTaskDelegates())
 	{

@@ -10,7 +10,7 @@
 
 class UBoxComponent;
 
-/** Fissure 的权威物理 blocker：无 Tick、由 Scheduler 管理生命周期，并主动通知相交 Order 重新寻路。 */
+/** 沟壑的服务器物理阻挡物：创建后固定在原处，不逐帧更新，由调度器到期销毁；创建和移除都通知指令组件按阻挡范围判断是否需要重新寻路。 */
 UCLASS()
 class UE_GAS_API ACombatFissureBlocker : public AActor
 {
@@ -18,7 +18,7 @@ class UE_GAS_API ACombatFissureBlocker : public AActor
 
 public:
 	ACombatFissureBlocker();
-	/** 在 Authority 上冻结线段几何与持续时间，并通知相关移动路径。 */
+	/** 仅服务器首次初始化：按 Start/End 的 XY 长度设置碰撞尺寸并安排限时销毁，宽度、高度和时长必须为有限正数。位置与朝向须由 SpawnActor 预先设置，此函数不移动 Actor；失败后由调用方销毁它。 */
 	bool InitializeBlocker(
 		FVector Start,
 		FVector End,
@@ -38,7 +38,7 @@ public:
 private:
 	/** Scheduler 到期后销毁 Actor；真实清理由 EndPlay 统一执行。 */
 	void HandleLifetimeExpired(const FCombatScheduledTickContext& TickContext);
-	/** 只通知路径线段与当前 bounds 相交的 Combat Unit。 */
+	/** 向当前 World 所有战斗单位发送阻挡包围盒；是否与路径相交、是否重试由各单位的指令组件判断。 */
 	void NotifyAffectedOrders() const;
 	/** 输出创建/移除同一 Event 链的结构化记录。 */
 	void EmitBlockerLog(bool bCreated) const;

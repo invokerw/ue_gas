@@ -23,7 +23,7 @@ struct UE_GAS_API FCombatSkillTemplateRequirements
 /** 不依赖 Editor-only 模块的技能模板身份、schema、事件与旁路检查工具。 */
 struct UE_GAS_API FCombatSkillTemplateValidator
 {
-	/** 校验 Ability Class CDO -> Data 单向引用、schema 和模板必需字段。 */
+	/** 检查技能类默认对象是否引用传入的同一份技能定义，并检查运行时配置和模板必需字段；错误追加到 OutErrors，返回值只表示本次是否新增错误。 */
 	static bool ValidateAbilityTemplate(
 		TSubclassOf<UCombatGameplayAbility> AbilityClass,
 		const UCombatAbilityData* AbilityData,
@@ -38,6 +38,6 @@ struct UE_GAS_API FCombatSkillTemplateValidator
 		const TArray<FGameplayTag>& Actual,
 		const TArray<FGameplayTag>& Expected,
 		TArray<FString>& OutErrors);
-	/** 返回项目源码旁路扫描必须覆盖的稳定模式清单。 */
+	/** 返回需要由外部源码扫描检查的禁用调用文本，如直接写生命、直接移位和 Actor Timer；本函数只提供清单，不实际扫描或阻止调用。 */
 	static const TArray<FString>& GetForbiddenBypassPatterns();
 };
