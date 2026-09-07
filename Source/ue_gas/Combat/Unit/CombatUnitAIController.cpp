@@ -22,7 +22,8 @@ ACombatUnitAIController::ACombatUnitAIController(const FObjectInitializer& Objec
 		Crowd->SetCrowdOptimizeVisibility(true, false);
 		Crowd->SetCrowdOptimizeTopology(true, false);
 		Crowd->SetCrowdPathOffset(true, false);
-		Crowd->SetCrowdSlowdownAtGoal(true, false);
+		// 到达前保持正常目标速度，避免短距离点击移动提前进入缓慢收尾。
+		Crowd->SetCrowdSlowdownAtGoal(false, false);
 		Crowd->SetCrowdSeparationWeight(2.0f, false);
 		Crowd->SetCrowdCollisionQueryRange(600.0f, false);
 		Crowd->SetCrowdPathOptimizationRange(3000.0f, false);

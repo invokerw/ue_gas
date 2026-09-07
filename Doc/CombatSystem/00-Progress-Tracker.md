@@ -1,6 +1,6 @@
 # 00 开发进度台账
 
-> 最后更新：2026-09-04
+> 最后更新：2026-09-07
 > 当前阶段：M8 已验收；`combat_v1_rc1` 核心契约保持冻结；SAM 验收反馈已修复并重新待验收
 > 历史 M0-M8：82/82 Task 完成，9/9 里程碑由用户验收
 > SAM 进度：10/10 Task 完成；修正 Gate 已通过，等待用户复验
@@ -190,6 +190,8 @@
 | SAM-008 | Automation 与 Dedicated Gate | 已完成 | 默认出生链路新增 GameMode/蓝图父类、AIController 唯一性与孤立计数断言；Editor/Server/Client Target 构建通过，`Combat.*` 44/44、资产 7/7 通过；单/双玩家 PIE 真实位移通过，同版本 Dedicated 双客户端移动 324.508 cm、静止单位 0 cm |
 | SAM-009 | 当前行为文档切换 | 已完成 | 01/07/34 已切换到服务器 AIController + Command Pawn + SimulatedProxy 当前语义；31 生命周期与本文证据同步更新 |
 
+2026-09-07 移动手感调优：已完成。按用户要求关闭 Crowd `SlowdownAtGoal`，将普通移动原生默认加速度设为 `6000 cm/s²`。Editor Development 模块后缀构建成功，相关 Automation 10/10、0 失败/0 测试警告；新进程确认原生单位与 Demo 蓝图均继承新加速度。单玩家 PIE 在相同起点/方向的 600 cm 空旷直线路径上，以 Demo 实际 `500 cm/s` 移速对照：达到 90% 移速由 `227.3 ms` 降至 `83.3 ms`，两组均到达并停止。证据与命令见 `Saved/MovementTuning/Validation.md`、`EditorSuffixBuild.log`、`Automation/index.json`、`MovementSmoke.json`。当前打开的 Editor 仍需重启加载新参数；本次未重跑 Server/Client Target 或 Dedicated 联机 Gate，不代表 SAM 用户验收通过。
+
 ## 13. 用户验收记录
 
 | 里程碑 | 提交验收日期 | 用户结论 | 修正要求 | 最终验收日期 | 下一阶段授权 |
@@ -255,6 +257,7 @@
 | 2026-09-02 | 修复 `BP_WoodenDummy` 装饰腿阻挡移动：蓝图模板及 `L_CombatDemo` 已放置实例的 `WoodenPost`、`WoodenCrossbarX/Y`、`WoodenTopCap` 统一为 `NoCollision`，只保留 `CombatUnit` Capsule；增加资产回归断言，并完成 Blueprint 编译保存、冷重载、PIE 运行时碰撞回读、资产与 Automation 复验 | SAM / SAM-006 / SAM-008 |
 | 2026-09-03 | 移除 `/Game/TopDown` 模板蓝图、示例关卡及其 World Partition 外部数据；仍被 Combat 使用的输入、点击光标和环境材质迁入 `/Game/Combat` 并修复引用。`BP_CombatDemoPlayerController` 编译保存、双玩家 Demo PIE smoke、相关 Automation 3/3、资产校验 7/7（0 Error/0 Warning）均通过 | post-M8 模板清理 |
 | 2026-09-04 | 完成 Combat 全目录注释审查：覆盖 25 个目录、126 个 C++ 文件，更新其中 75 个文件，改写或删除 723 处原注释，同步更新 112 处 ToolTip 及相关标签说明。补充周期时间线、参数覆盖、权限、失败与清理边界，纠正光环补建、技能回调顺序、治疗增幅、弹体快照等描述；未改变代码逻辑、公开签名、标签名称、数值或版本。逐文件去除说明文本后的代码 token 比较与 `git diff --check` 通过；UE 5.8 Win64 Development Editor 最终构建通过，`Combat.*` 44/44（含 `PublicExtensionSurface`）通过，0 失败/0 测试警告。证据：`Saved/CommentAudit/final-review.json`、`EditorBuild-Final.log`、`Automation/index.json`。本次未执行 PIE、独立联机或 Server/Client Target 验证，不替代 SAM 用户验收 | post-M8 注释维护 |
+| 2026-09-07 | 关闭 Crowd `SlowdownAtGoal`，将普通移动默认 `MaxAcceleration` 提高到 `6000 cm/s²`。Editor 模块后缀构建、相关 Automation 10/10、原生/Demo 蓝图参数回读及单玩家 PIE 起步/停止对照通过；相同空旷路线达到 90% 移速由 227.3 ms 降至 83.3 ms。同步当前行为文档，SAM 用户验收状态保持待验收 | post-M8 移动手感调优 |
 
 ## 15. 更新规则
 

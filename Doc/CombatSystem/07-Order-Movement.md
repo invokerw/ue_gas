@@ -116,6 +116,8 @@ Queued
 
 `UCombatOrderComponent` 已收敛为单一服务器导航器。CharacterMovement 使用 acceleration-driven PathFollowing 输入；Move 回调出现一帧残余速度时进入同一有界重试，避免把正常到达误判成永久移动阻止。RequestId、OrderHandle、NavigationAttemptGeneration 和 LifeGeneration 共同淘汰陈旧回调。
 
+普通移动的原生默认 `MaxAcceleration=6000 cm/s²`，以 `300 cm/s` 移速为例，空旷地面满输入下从静止达到上限约需 `0.05 s`；实际起步时间还受 Crowd 输入、帧间隔与客户端复制表现影响。最大地面速度继续由 GAS `MoveSpeed` 聚合值投影。Crowd 的 `SlowdownAtGoal` 关闭，接近终点时不再主动缩小期望速度；到达判定、移动结束后的制动和单位避让仍使用现有导航与 CharacterMovement 流程。
+
 玩家拥有 Unit 仍通过 `Unit.Owner` 建立 Order RPC 与 ASC Mixed replication，但移动网络角色与所有权分离：owning client 和其他客户端看到的 Unit 都是 `ROLE_SimulatedProxy`。服务器 `UCrowdFollowingComponent` 产生局部 steering，服务器 Capsule sweep 产生最终几何结果，再由 ReplicatedMovement 向所有客户端收敛。
 
 ### 5.1 当前 Demo 点击移动

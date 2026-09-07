@@ -49,6 +49,8 @@ ACombatUnitCharacter::ACombatUnitCharacter()
 	GetCapsuleComponent()->SetCollisionProfileName(TEXT("CombatUnit"));
 	// AI 路径使用输入加速度驱动，确保 PathFollowing 通过 PawnMovement 正式消费移动请求。
 	GetCharacterMovement()->GetNavMovementProperties()->bUseAccelerationForPaths = true;
+	// 缩短普通移动的起步过程：默认 300 cm/s 移速在满输入下约 0.05 秒达到上限。
+	GetCharacterMovement()->MaxAcceleration = 6000.0f;
 	// 所有客户端都只消费服务器移动；禁止 SimulatedProxy 因本地 Pawn 重叠改写其他 Unit 的表现位置。
 	GetCharacterMovement()->MaxDepenetrationWithPawnAsProxy = 0.0f;
 	// 普通移动只由 Detour Crowd 计算避让方向，关闭 CharacterMovement 的 RVO，避免两套算法争用速度。
