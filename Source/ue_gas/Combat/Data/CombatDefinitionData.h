@@ -200,8 +200,8 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Unit|Attack", meta=(ClampMin="0", Units="s", DisplayName="基础攻击前摇", ToolTip="AttackSpeed 为 100 时，从攻击起手到生成 AttackLaunched 的基础时长，单位为秒。"))
 	float BaseAttackPoint = 0.3f;
 
-	/** 普攻起手允许的最大水平朝向误差，单位为度；攻击组件在超出时拒绝起手，指令组件负责先转向再重试。 */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Unit|Attack", meta=(ClampMin="0", ClampMax="180", Units="deg", DisplayName="攻击朝向容差", ToolTip="普攻起手允许的最大水平朝向误差，单位为度；攻击组件在超出时拒绝起手，指令组件负责先转向再重试。"))
+	/** 施法指令与普攻起手共用的最大水平朝向误差，默认 15 度；超出时指令先转向，保留字段名以兼容已有资产。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Unit|Attack", meta=(ClampMin="0", ClampMax="180", Units="deg", DisplayName="施法与攻击朝向容差", ToolTip="施法指令与普攻起手允许的最大水平朝向误差，默认 15 度；范围为 0 到 180 度，0 要求完全对准，180 无需转身。超出时指令组件按转速转向，达到容差后开始前摇；攻击组件使用同一容差复核起手。"))
 	float AttackFacingToleranceDegrees = 15.0f;
 
 	/** 开启后单位移动中也能进入攻击前摇；关闭后必须先停止移动。 */

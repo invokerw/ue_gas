@@ -65,6 +65,8 @@ public:
 	/** 返回当前 OrderHandle；空闲时无效。 */
 	UFUNCTION(BlueprintPure, Category="Combat|Order", meta=(DisplayName="获取当前命令句柄", ToolTip="返回当前命令的稳定句柄；空闲时句柄无效。"))
 	FCombatOrderHandle GetCurrentOrderHandle() const;
+	/** 仅供服务器移动组件读取当前 Facing 阶段的水平目标方向；命令、生命或控制状态失效时返回 false，不持有跨帧目标副本。 */
+	bool GetFacingDirection(FVector& OutDirection) const;
 	/** 返回尚未开始执行的排队命令数；当前正在执行或暂停的命令不计入。 */
 	UFUNCTION(BlueprintPure, Category="Combat|Order", meta=(DisplayName="获取待处理命令数量", ToolTip="返回尚未开始执行的排队命令数；当前正在执行或暂停的命令不计入。"))
 	int32 GetPendingOrderCount() const { return PendingOrders.Num(); }
@@ -96,8 +98,8 @@ public:
 	UPROPERTY(EditAnywhere, Category="Combat|Order|Chase", meta=(ClampMin="1", Units="cm")) float ChaseWakeDistance = 50.0f;
 	/** 服务器检查追击目标、范围和位置变化的间隔，单位为秒；卡顿积压时合并成一次当前状态检查。 */
 	UPROPERTY(EditAnywhere, Category="Combat|Order|Chase", meta=(ClampMin="0.02", Units="s")) float ChaseCheckInterval = 0.10f;
-	/** 追随单位、追击施法或攻击命令在追击检查中允许的最长世界游戏秒数；从命令成为当前项时开始计算，不因重新寻路而重置，超过后失败。 */
-	UPROPERTY(EditAnywhere, Category="Combat|Order|Chase", meta=(ClampMin="0.1", Units="s")) float MaxChaseDuration = 10.0f;
+	/** 追击检查允许的最长世界游戏秒数，从命令成为当前项计时；每次连续原地转身阶段也使用该时长上限，超时命令失败。 */
+	UPROPERTY(EditAnywhere, Category="Combat|Order|Chase", meta=(ClampMin="0.1", Units="s", DisplayName="追击与转身等待上限", ToolTip="单位追击从命令成为当前项起计时；每次连续原地转身另从进入 Facing 起计时。任一阶段超过此游戏秒数则命令失败，避免无限等待。")) float MaxChaseDuration = 10.0f;
 	/** 移动受阻、请求无效、路径只到部分目的地或角色尚未停稳时允许的重试次数；每次等待 0.20 秒，超过上限后命令失败。 */
 	UPROPERTY(EditAnywhere, Category="Combat|Order|Movement", meta=(ClampMin="0")) int32 MaxMoveRetries = 3;
 	/** 等待执行的命令容量，不含当前项；达到上限时新的追加命令被拒绝，替换命令不受旧队列容量影响。 */
@@ -127,7 +129,7 @@ private:
 	void CompleteCurrentOrder(bool bSuccess, FGameplayTag FailureTag, const FString& Diagnostic);
 	/** 先提升命令代次使导航、技能和攻击旧回调失效，再取消当前异步行为并清空队列；可选只为当前项广播取消。 */
 	void AdvanceGenerationAndCancel(FGameplayTag Reason, bool bBroadcastCurrent);
-	/** 取消 EQS、Move、追击、Ability 和 attack windup。 */
+	/** 取消 EQS、Move、追击、转身复核、Ability 和 attack windup。 */
 	void CancelCurrentAsync(FGameplayTag Reason);
 	/** 仅取消 EQS/Move/追击，不改变当前队列项。 */
 	void CancelMovementAsync();
@@ -135,8 +137,16 @@ private:
 	bool IsCurrentDestinationReached() const;
 	/** 返回当前行为需要的边缘范围。 */
 	float GetCurrentDesiredRange() const;
-	/** 朝当前 Actor/Point 目标设置服务器 XY 朝向。 */
+	/** 已对准时继续；否则保持 Facing 并安排复核，由移动组件按自身转速旋转。false 表示目标或转速配置无法完成转身。 */
 	bool FaceCurrentTarget();
+	/** 解析当前命令的目标方向；无目标或同位置返回零向量，已失效的单位目标返回 false。 */
+	bool ResolveFacingDirection(FVector& OutDirection) const;
+	/** 施法与普攻共用 UnitData 的起手容差，默认 15 度。 */
+	bool IsFacingDirection(const FVector& Direction) const;
+	/** 取消当前转身的 Scheduler 复核与期限；不改变命令句柄。 */
+	void CancelFacingAsync();
+	/** 仅复核同一命令和生命的转向；到位、目标变化或控制状态变化时重走公共校验，超时统一失败。 */
+	void HandleFacingCheck(FCombatOrderHandle Handle, const FCombatScheduledTickContext& TickContext);
 	/** 更新目标位置并递增导航尝试代次；普通点移动可先跑 EQS，动态目标直接发起服务器 AI 移动并安排追击检查。 */
 	bool BeginMovement(bool bChasing);
 	/** 要求单位由专用服务器 AIController 控制，向 PathFollowing 提交目标位置和接受半径；保存请求编号、命令句柄及本次导航代次用于回调验证。 */
@@ -207,6 +217,10 @@ private:
 	/** 追击与重试 Scheduler 句柄。 */
 	FCombatScheduleHandle ChaseSchedule;
 	FCombatScheduleHandle RetrySchedule;
+	/** 当前朝向准备的复核任务；停止、暂停、转入导航、前摇或 teardown 时取消。 */
+	FCombatScheduleHandle FacingSchedule;
+	/** 当前连续转身阶段的截止世界游戏时间，使用 MaxChaseDuration 限制追随旋转目标的等待。 */
+	double FacingDeadline = 0.0;
 	/** 当前等待释放的 AbilitySpec。 */
 	FGameplayAbilitySpecHandle ActiveAbilitySpecHandle;
 	/** 每个结束结果的观察者。 */

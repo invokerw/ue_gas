@@ -50,7 +50,7 @@ class UE_GAS_API ACombatUnitCharacter : public ACharacter, public IAbilitySystem
 	GENERATED_BODY()
 
 public:
-	ACombatUnitCharacter();
+	ACombatUnitCharacter(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
 
 	virtual UAbilitySystemComponent* GetAbilitySystemComponent() const override;
 	/** 返回强类型 Combat ASC。 */

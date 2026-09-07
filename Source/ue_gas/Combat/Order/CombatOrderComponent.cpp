@@ -19,6 +19,7 @@
 #include "Combat/Scheduling/CombatSchedulerSubsystem.h"
 #include "Combat/Targeting/CombatTargetingSubsystem.h"
 #include "Combat/Unit/CombatUnitAIController.h"
+#include "Combat/Unit/CombatCharacterMovementComponent.h"
 #include "Combat/Unit/CombatUnitCharacter.h"
 
 UCombatOrderComponent::UCombatOrderComponent()
@@ -105,6 +106,7 @@ void UCombatOrderComponent::PumpCurrentOrder()
 		}
 		if (Unit->GetCombatMotionComponent() && Unit->GetCombatMotionComponent()->HasActiveMotion())
 		{
+			CancelFacingAsync();
 			TransitionTo(ECombatOrderState::Paused, CombatTags::Order_Failure_UnitStateBlocked,
 				TEXT("Forced motion temporarily pauses the current order"));
 			return;
@@ -126,8 +128,15 @@ void UCombatOrderComponent::PumpCurrentOrder()
 			|| (Type == ECombatOrderType::AttackTarget && Unit->IsAttackBlocked())
 			|| (bCastOrder && Unit->IsAbilityBlocked()))
 		{
+			CancelFacingAsync();
 			TransitionTo(ECombatOrderState::Paused, CombatTags::Order_Failure_UnitStateBlocked,
 				TEXT("Current unit state temporarily blocks the order"));
+			return;
+		}
+		// 技能或普攻已接管时由其完成通知推进，状态投影不能重新进入朝向准备或重复激活。
+		if (CurrentState == ECombatOrderState::WaitingOrderRelease
+			|| CurrentState == ECombatOrderState::WaitingAttackReady)
+		{
 			return;
 		}
 
@@ -186,9 +195,11 @@ void UCombatOrderComponent::PumpCurrentOrder()
 			CancelMovementAsync();
 			if (!FaceCurrentTarget())
 			{
-				CompleteCurrentOrder(false, CombatTags::Order_Failure_TargetInvalid, TEXT("Cannot face cast target"));
+				CompleteCurrentOrder(false, CombatTags::Order_Failure_UnitStateBlocked,
+					TEXT("Cannot face cast target: target, movement component or positive finite yaw rotation rate is invalid"));
 				continue;
 			}
+			if (CurrentState == ECombatOrderState::Facing) { return; }
 			DispatchCurrentAbility();
 			return;
 		}
@@ -208,9 +219,11 @@ void UCombatOrderComponent::PumpCurrentOrder()
 			CancelMovementAsync();
 			if (!FaceCurrentTarget())
 			{
-				CompleteCurrentOrder(false, CombatTags::Order_Failure_TargetInvalid, TEXT("Cannot face attack target"));
+				CompleteCurrentOrder(false, CombatTags::Order_Failure_UnitStateBlocked,
+					TEXT("Cannot face attack target: target, movement component or positive finite yaw rotation rate is invalid"));
 				continue;
 			}
+			if (CurrentState == ECombatOrderState::Facing) { return; }
 			StartCurrentAttack();
 			return;
 
@@ -276,6 +289,7 @@ void UCombatOrderComponent::HandleOwnerMotionStarted()
 		return;
 	}
 	CancelMovementAsync();
+	CancelFacingAsync();
 	TransitionTo(ECombatOrderState::Paused, CombatTags::Order_Failure_UnitStateBlocked,
 		TEXT("Current order paused by forced motion"));
 }
@@ -550,6 +564,7 @@ void UCombatOrderComponent::AdvanceGenerationAndCancel(
 
 void UCombatOrderComponent::CancelCurrentAsync(const FGameplayTag Reason)
 {
+	CancelFacingAsync();
 	CancelMovementAsync();
 	ACombatUnitCharacter* Unit = GetOwnerUnit();
 	const FGameplayAbilitySpecHandle AbilityToCancel = ActiveAbilitySpecHandle;
@@ -643,19 +658,126 @@ float UCombatOrderComponent::GetCurrentDesiredRange() const
 bool UCombatOrderComponent::FaceCurrentTarget()
 {
 	ACombatUnitCharacter* Unit = GetOwnerUnit();
-	if (!Unit || !CurrentOrder.IsSet())
+	FVector Direction;
+	if (!Unit || !ResolveFacingDirection(Direction))
 	{
 		return false;
 	}
-	TransitionTo(ECombatOrderState::Facing);
-	const FVector TargetLocation = CurrentOrder->Request.TargetUnit
-		? CurrentOrder->Request.TargetUnit->GetActorLocation() : CurrentOrder->Request.TargetLocation;
-	const FVector Direction = (TargetLocation - Unit->GetActorLocation()).GetSafeNormal2D();
-	if (!Direction.IsNearlyZero())
+	if (IsFacingDirection(Direction))
 	{
-		Unit->SetActorRotation(Direction.Rotation());
+		CancelFacingAsync();
+		return true;
 	}
+	UCombatCharacterMovementComponent* Movement = Cast<UCombatCharacterMovementComponent>(Unit->GetCharacterMovement());
+	UCombatSchedulerSubsystem* Scheduler = GetWorld()->GetSubsystem<UCombatSchedulerSubsystem>();
+	if (!Movement || !Scheduler || !FMath::IsFinite(Movement->RotationRate.Yaw)
+		|| Movement->RotationRate.Yaw <= 0.0f || !FMath::IsFinite(MaxChaseDuration) || MaxChaseDuration <= 0.0f)
+	{
+		return false;
+	}
+	if (!Scheduler->IsHandleActive(FacingSchedule))
+	{
+		const FCombatOrderHandle Handle = CurrentOrder->Handle;
+		FacingDeadline = GetWorld()->GetTimeSeconds() + MaxChaseDuration;
+		// 旋转由 CharacterMovement 按帧推进；这里只复核朝向、目标和命令，积压时不补跑旧几何。
+		FacingSchedule = Scheduler->ScheduleRepeating(this, 0.02, 0.02, 0, ECombatCatchUpPolicy::Coalesce,
+			FCombatScheduledDelegate::CreateWeakLambda(this,
+				[this, Handle](const FCombatScheduledTickContext& Context) { HandleFacingCheck(Handle, Context); }));
+		if (!FacingSchedule.IsValid()) { return false; }
+	}
+	Movement->StopMovementImmediately();
+	TransitionTo(ECombatOrderState::Facing);
 	return true;
+}
+
+bool UCombatOrderComponent::ResolveFacingDirection(FVector& OutDirection) const
+{
+	const ACombatUnitCharacter* Unit = GetOwnerUnit();
+	OutDirection = FVector::ZeroVector;
+	if (!Unit || !CurrentOrder.IsSet()) { return false; }
+	const FCombatOrderRequest& Request = CurrentOrder->Request;
+	if (Request.Type == ECombatOrderType::CastNoTarget) { return true; }
+	FVector TargetLocation;
+	if (Request.Type == ECombatOrderType::CastTarget || Request.Type == ECombatOrderType::AttackTarget)
+	{
+		if (!IsValid(Request.TargetUnit)) { return false; }
+		if (Request.TargetUnit->GetLifeState() != ECombatLifeState::Alive)
+		{
+			// 允许以尸体为目标的技能仍须能完成朝向准备；完整合法性继续交给 Targeting 的前后复核。
+			const UCombatAbilitySystemComponent* Asc = Unit->GetCombatAbilitySystemComponent();
+			const UCombatAbilityData* Data = Request.Type == ECombatOrderType::CastTarget && Asc
+				? Asc->GetCombatAbilityData(Request.AbilitySpecHandle) : nullptr;
+			if (!Data || !Data->TargetingRules.bAllowDead || Request.TargetUnit->GetLifeState() != ECombatLifeState::Dead)
+			{
+				return false;
+			}
+		}
+		TargetLocation = Request.TargetUnit->GetActorLocation();
+	}
+	else if (Request.Type == ECombatOrderType::CastPoint && Request.bHasTargetLocation)
+	{
+		TargetLocation = Request.TargetLocation;
+	}
+	else { return false; }
+	OutDirection = (TargetLocation - Unit->GetActorLocation()).GetSafeNormal2D();
+	return !OutDirection.ContainsNaN();
+}
+
+bool UCombatOrderComponent::GetFacingDirection(FVector& OutDirection) const
+{
+	const ACombatUnitCharacter* Unit = GetOwnerUnit();
+	if (!Unit || !Unit->HasAuthority() || !CurrentOrder.IsSet() || CurrentState != ECombatOrderState::Facing
+		|| CurrentOrder->Handle.Key.Generation != OrderGeneration
+		|| CurrentOrder->UnitLifeGeneration != Unit->GetLifeGeneration() || Unit->GetLifeState() != ECombatLifeState::Alive
+		|| (Unit->GetCombatMotionComponent() && Unit->GetCombatMotionComponent()->HasActiveMotion())
+		|| (CurrentOrder->Request.Type == ECombatOrderType::AttackTarget ? Unit->IsAttackBlocked() : Unit->IsAbilityBlocked()))
+	{
+		return false;
+	}
+	return ResolveFacingDirection(OutDirection);
+}
+
+bool UCombatOrderComponent::IsFacingDirection(const FVector& Direction) const
+{
+	if (Direction.IsNearlyZero()) { return true; }
+	const ACombatUnitCharacter* Unit = GetOwnerUnit();
+	if (!Unit || !CurrentOrder.IsSet()) { return false; }
+	const float Tolerance = Unit->GetUnitData() ? Unit->GetUnitData()->AttackFacingToleranceDegrees : 15.0f;
+	return FMath::Abs(FMath::FindDeltaAngleDegrees(Unit->GetActorRotation().Yaw, Direction.Rotation().Yaw))
+		<= Tolerance + KINDA_SMALL_NUMBER;
+}
+
+void UCombatOrderComponent::CancelFacingAsync()
+{
+	if (UCombatSchedulerSubsystem* Scheduler = GetWorld() ? GetWorld()->GetSubsystem<UCombatSchedulerSubsystem>() : nullptr)
+	{
+		Scheduler->Cancel(FacingSchedule);
+	}
+	FacingSchedule = FCombatScheduleHandle();
+	FacingDeadline = 0.0;
+}
+
+void UCombatOrderComponent::HandleFacingCheck(
+	const FCombatOrderHandle Handle, const FCombatScheduledTickContext& TickContext)
+{
+	if (!CurrentOrder.IsSet() || CurrentOrder->Handle != Handle || Handle.Key.Generation != OrderGeneration
+		|| CurrentState != ECombatOrderState::Facing)
+	{
+		return;
+	}
+	FVector Direction;
+	const ACombatUnitCharacter* Unit = GetOwnerUnit();
+	const UCharacterMovementComponent* Movement = Unit ? Unit->GetCharacterMovement() : nullptr;
+	if (!GetFacingDirection(Direction) || !IsCurrentDestinationReached() || IsFacingDirection(Direction)
+		|| !Movement || !FMath::IsFinite(Movement->RotationRate.Yaw) || Movement->RotationRate.Yaw <= 0.0f)
+	{
+		// 保留既有公共校验和唯一终结入口；目标离开范围时同一命令重新追击。
+		PumpCurrentOrder();
+	}
+	else if (TickContext.ActualTime >= FacingDeadline)
+	{
+		CompleteCurrentOrder(false, CombatTags::Order_Failure_UnitStateBlocked, TEXT("Facing target exceeded MaxChaseDuration"));
+	}
 }
 
 bool UCombatOrderComponent::BeginMovement(const bool bChasing)
@@ -665,6 +787,7 @@ bool UCombatOrderComponent::BeginMovement(const bool bChasing)
 	{
 		return false;
 	}
+	CancelFacingAsync();
 	CancelMovementAsync();
 	++NavigationAttemptGeneration;
 	if (NavigationAttemptGeneration == 0) { NavigationAttemptGeneration = 1; }

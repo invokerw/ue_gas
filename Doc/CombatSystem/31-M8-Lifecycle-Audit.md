@@ -19,6 +19,7 @@
 | Modifier Runtime + ActiveGE | ModifierComponent | `ActiveModifiers`、ActiveGE 一一映射 | Remove/Dispel/Expire | Death 规则、Unit EndPlay 和组件 EndPlay 汇入移除；清 Think/Expire Schedule | ModifierHandle、ApplySequence、当前 ActiveGE |
 | Scheduler slot | CombatSchedulerSubsystem | slot 持弱 Owner、堆持 generation 快照 | 一次回调完成或显式 Cancel | `CancelAllForOwner`；Subsystem Deinitialize 清 slot/heap/callback | Id + Generation，陈旧堆节点丢弃 |
 | Order record | Unit OrderComponent | 当前 + FIFO 队列 | Completed/Failed | Replace/Stop/Death/EndPlay 取消 EQS、Path、Move、Ability、Attack delegate | OrderHandle + 请求句柄 + LifeGeneration |
+| Order 转身准备（ADR-044） | OrderComponent 持有命令与 FacingSchedule；Unit 默认子对象 CombatCharacterMovement 执行旋转 | Scheduler 弱 Owner 回调；移动组件每帧只读当前命令，不复制目标或保存独立转向 Handle | 对准后取消复核，重走公共校验再激活技能/攻击 | 替换/Stop/Death/EndPlay 取消，控制状态/Motion 暂停，重新追击或超时退出；World teardown 清 Scheduler | Schedule generation + OrderHandle + UnitLifeGeneration；移动组件还检查服务器权限、状态和当前 Facing 阶段 |
 | EQS / Path / AI Move | OrderComponent 发起 | 引擎异步请求和显式 delegate handle | 回调推进当前 Order | Cancel generation、Abort/Remove delegate | OrderHandle、EQS instance、Path/MoveRequestId 三重匹配 |
 | AttackRecord | Unit AttackComponent | `ActiveRecords` | Landed/Failed/Cancelled Finalize | Death/Stop/EndPlay 取消 attack point/ready 与 Projectile delegate | AttackHandle + LifeGeneration；Finalize 幂等 |
 | Projectile record + Actor | ProjectileSubsystem | registry 持 Spec/Actor；World 持 Actor | Hit/Blocked/Distance/Timeout/TargetLost | Ability 可选取消、Source/World EndPlay 汇入 `FinishProjectile` | ProjectileHandle + Source LifeGeneration + AlreadyHit |

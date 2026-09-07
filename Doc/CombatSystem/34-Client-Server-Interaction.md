@@ -180,7 +180,7 @@ sequenceDiagram
 
 1. Cast Order 使用客户端提交的目标 Unit 或目标点，但这些字段只是请求。
 2. OrderComponent 首次调用 `UCombatTargetingSubsystem::ValidateAbilityTarget`。目标无效时失败；单位/点目标仅因距离不足时进入 `Chasing`。
-3. 进入范围后取消移动、服务器转向，再调用 `TryActivateCombatAbility`。
+3. 进入范围后取消移动，由服务器 CharacterMovement 按 `RotationRate.Yaw` 逐帧转向；Order 在 `Facing` 等待误差降至与普攻共用的起手容差内（默认 `15°`），重新校验后调用 `TryActivateCombatAbility`。无目标技能跳过转身，详细规则见 [07 §3.1](07-Order-Movement.md#31-统一转身速率adr-044)。
 4. ASC 重新检查服务器 Authority、Unit 存活、技能是否已授予/正在激活、Stunned/Hexed/Frozen/Silenced、目标规则、法力和冷却。
 5. `UCombatGameplayAbility` 当前使用 `InstancedPerActor` 和 `ServerOnly`，客户端不会运行权威 GameplayAbility 实例。
 

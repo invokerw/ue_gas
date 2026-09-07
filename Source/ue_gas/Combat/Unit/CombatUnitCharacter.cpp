@@ -15,6 +15,7 @@
 #include "Combat/Order/CombatOrderComponent.h"
 #include "Combat/UI/CombatOverheadWidgetComponent.h"
 #include "Combat/Unit/CombatRegenerationComponent.h"
+#include "Combat/Unit/CombatCharacterMovementComponent.h"
 #include "Combat/Unit/CombatUnitAIController.h"
 #include "Combat/Unit/CombatUnitLifecycleComponent.h"
 #include "Combat/View/CombatUnitViewComponent.h"
@@ -26,10 +27,13 @@
 #include "Navigation/CrowdFollowingComponent.h"
 #include "ue_gasPlayerController.h"
 
-ACombatUnitCharacter::ACombatUnitCharacter()
+ACombatUnitCharacter::ACombatUnitCharacter(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer.SetDefaultSubobjectClass<UCombatCharacterMovementComponent>(ACharacter::CharacterMovementComponentName))
 {
 	bReplicates = true;
 	SetReplicateMovement(true);
+	// 水平朝向统一由移动组件按转速推进，Controller 只提供导航意图。
+	bUseControllerRotationYaw = false;
 
 	CombatAbilitySystemComponent = CreateDefaultSubobject<UCombatAbilitySystemComponent>(TEXT("CombatAbilitySystem"));
 	CombatAttributeSet = CreateDefaultSubobject<UCombatAttributeSet>(TEXT("CombatAttributes"));

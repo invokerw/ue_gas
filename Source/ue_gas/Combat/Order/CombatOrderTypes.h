@@ -44,7 +44,7 @@ enum class ECombatOrderState : uint8
 	Moving,
 	/** 动态目标追击并定期复核。 */
 	Chasing,
-	/** 到达后正在服务器设置并复核朝向。 */
+	/** 到达后按移动组件的水平转速逐帧转身，服务器复核对准后才开始技能或普攻前摇。 */
 	Facing,
 	/** 正在调用 ASC 激活 Ability。 */
 	DispatchingAbility,

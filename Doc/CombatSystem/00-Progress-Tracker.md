@@ -4,6 +4,7 @@
 > 当前阶段：M8 已验收；`combat_v1_rc1` 核心契约保持冻结；SAM 验收反馈已修复并重新待验收
 > 历史 M0-M8：82/82 Task 完成，9/9 里程碑由用户验收
 > SAM 进度：10/10 Task 完成；修正 Gate 已通过，等待用户复验
+> 当前专项：施法／普攻起手容差统一为 15°（ADR-044）已完成；Editor 构建、Combat 48/48 与 Demo 配置回读通过
 
 本文件是项目执行状态的唯一来源。[10 实施路线图](10-Implementation-Roadmap.md)定义任务内容和依赖，本文件记录实际状态、验证证据和用户验收结论。
 
@@ -192,6 +193,10 @@
 
 2026-09-07 移动手感调优：已完成。按用户要求关闭 Crowd `SlowdownAtGoal`，将普通移动原生默认加速度设为 `6000 cm/s²`。Editor Development 模块后缀构建成功，相关 Automation 10/10、0 失败/0 测试警告；新进程确认原生单位与 Demo 蓝图均继承新加速度。单玩家 PIE 在相同起点/方向的 600 cm 空旷直线路径上，以 Demo 实际 `500 cm/s` 移速对照：达到 90% 移速由 `227.3 ms` 降至 `83.3 ms`，两组均到达并停止。证据与命令见 `Saved/MovementTuning/Validation.md`、`EditorSuffixBuild.log`、`Automation/index.json`、`MovementSmoke.json`。当前打开的 Editor 仍需重启加载新参数；本次未重跑 Server/Client Target 或 Dedicated 联机 Gate，不代表 SAM 用户验收通过。
 
+2026-09-07 转身速率统一专项首轮验证（起手容差调整前）：已完成。CastPoint/CastTarget 与普攻通过 `Facing` 等待移动组件按 `RotationRate.Yaw` 转身，当时施法在 1° 内才开始前摇，无目标技能保持朝向；保留允许尸体目标的配置。Editor Development 模块后缀构建成功，最终 `Combat.*` 48/48（新增 4 项）、0 失败/0 测试警告，资产校验 7/7、0 Error/0 Warning。独立单玩家 Demo PIE 回读新移动组件及 640°/s，背身 180° 后 0.283 s 进入前摇、0.534 s 释放 Order，停止转身和普通导航实测通过。命令、边界与日志见 `Saved/AbilityFacing/Validation.md`、`Automation/index.json`、`AssetReport.json`、`PieSmoke.json`。当前已打开的 Editor 需重启加载新模块；本次未运行 Server/Client Target 与 Dedicated 联机，不替代 SAM 用户验收。
+
+2026-09-07 起手容差统一：已完成。按用户反馈，施法与普攻共用 UnitData 的起手容差，默认均为 15°；保留 `AttackFacingToleranceDegrees` 字段名与资产兼容，中文配置说明同步更新。Editor Development 模块后缀构建成功，`Combat.*` 48/48、0 失败/0 测试警告，覆盖容差外等待、进入 15° 后起手及跨 ±180° 最短转向；UE MCP 回读 Demo 玩家与木桩容差均为 15。证据见 `Saved/AbilityFacingTolerance/Validation.md`、`EditorBuild.log`、`Automation/index.json`。本轮未重跑 PIE、资产 commandlet 或 Server/Client/Dedicated；当前 Editor 需重启加载新模块。
+
 ## 13. 用户验收记录
 
 | 里程碑 | 提交验收日期 | 用户结论 | 修正要求 | 最终验收日期 | 下一阶段授权 |
@@ -258,6 +263,8 @@
 | 2026-09-03 | 移除 `/Game/TopDown` 模板蓝图、示例关卡及其 World Partition 外部数据；仍被 Combat 使用的输入、点击光标和环境材质迁入 `/Game/Combat` 并修复引用。`BP_CombatDemoPlayerController` 编译保存、双玩家 Demo PIE smoke、相关 Automation 3/3、资产校验 7/7（0 Error/0 Warning）均通过 | post-M8 模板清理 |
 | 2026-09-04 | 完成 Combat 全目录注释审查：覆盖 25 个目录、126 个 C++ 文件，更新其中 75 个文件，改写或删除 723 处原注释，同步更新 112 处 ToolTip 及相关标签说明。补充周期时间线、参数覆盖、权限、失败与清理边界，纠正光环补建、技能回调顺序、治疗增幅、弹体快照等描述；未改变代码逻辑、公开签名、标签名称、数值或版本。逐文件去除说明文本后的代码 token 比较与 `git diff --check` 通过；UE 5.8 Win64 Development Editor 最终构建通过，`Combat.*` 44/44（含 `PublicExtensionSurface`）通过，0 失败/0 测试警告。证据：`Saved/CommentAudit/final-review.json`、`EditorBuild-Final.log`、`Automation/index.json`。本次未执行 PIE、独立联机或 Server/Client Target 验证，不替代 SAM 用户验收 | post-M8 注释维护 |
 | 2026-09-07 | 关闭 Crowd `SlowdownAtGoal`，将普通移动默认 `MaxAcceleration` 提高到 `6000 cm/s²`。Editor 模块后缀构建、相关 Automation 10/10、原生/Demo 蓝图参数回读及单玩家 PIE 起步/停止对照通过；相同空旷路线达到 90% 移速由 227.3 ms 降至 83.3 ms。同步当前行为文档，SAM 用户验收状态保持待验收 | post-M8 移动手感调优 |
+| 2026-09-07 | 按 ADR-044 实现施法/普攻按移动组件转速准备朝向；增加停止、状态、动态目标、生命周期和目标策略兼容测试。Editor 构建、最终 Combat 48/48、资产 7/7 与真实单玩家 Demo PIE 转身/前摇/停止/移动通过；命令和证据见 `Saved/AbilityFacing/Validation.md` | post-M8 转身速率统一 |
+| 2026-09-07 | 按用户反馈将施法与普攻起手容差统一为 15°，共用已有 UnitData 配置；Editor 构建、Combat 48/48、Demo 玩家/木桩配置回读和文档检查通过 | post-M8 起手容差统一 / ADR-044 |
 
 ## 15. 更新规则
 

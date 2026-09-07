@@ -71,7 +71,7 @@ Queued
 ### Cast Order
 
 - 距离不足时进入 Moving，不直接激活 Ability。
-- 到达后停止移动、权威复核目标/距离/LOS、转向，再激活 Ability。
+- 到达后停止移动、权威复核目标/距离/LOS，按移动组件的转速进入 `Facing`；对准后重新校验并激活 Ability。
 - 成功进入 cast point 标记 dispatched。
 - 非引导在 `OrderReleased` 后 pop；引导在 `AbilityChannelEnded -> OrderReleased` 后处理。
 - 前摇/引导中断按 AbilityData policy 继续或清队列。
@@ -82,6 +82,19 @@ Queued
 - 是持续 Order，直到目标失效、新非排队 Order、Stop、Unit 状态或显式策略终止。
 - 每次 AttackLaunched 后等待 attack-ready，再重新验证距离并开始下一轮。
 - 不在 OnAttackLanded 时 pop，远程弹体可与后续攻击周期并存。
+
+### 3.1 统一转身速率（ADR-044）
+
+- `ACombatUnitCharacter` 的默认移动子对象为 `UCombatCharacterMovementComponent`。普通导航与 Order 原地转向都使用同一个 `RotationRate.Yaw`，单位为度/秒；Demo 玩家蓝图的值为 `640`，原生未覆盖的单位使用引擎默认 `360`。不另存技能转速，也不通过客户端动画判断对准。
+- 导航时保留 `bOrientRotationToMovement` 的逐帧旋转；点目标/单位目标施法及普攻在进入范围后停止位移，沿最短水平角度逐帧转向当前目标。`Facing` 期间移动组件抑制普通移动旋转，避免同一帧叠加两次转角。
+- 施法与普攻共用 UnitData 的 `AttackFacingToleranceDegrees`（默认 `15°`），朝向误差不超过该容差时进入前摇；字段名保持兼容，Details 显示为“施法与攻击朝向容差”。无目标技能及与自身水平位置重合的目标无需转身，保持当前朝向。转身准备不产生 `AbilityCastStarted`，不提交技能消耗或冷却；原有提交阶段从真正激活 Ability 时开始计算。
+- 例如转速 `640°/s` 时，完整旋转 `90°` 需要约 `0.141 s`，完整旋转 `180°` 需要约 `0.281 s`。起手还受朝向容差、服务器帧间隔和 Scheduler 复核影响，转身耗时不计入 `CastPoint`。
+- CharacterMovement 只推进连续旋转；Order 使用 Scheduler 每 `0.02 s` 合并复核一次。对准后重走公共目标/距离/LOS/状态校验，目标离开范围时以原 OrderHandle 重新追击。每次连续转身阶段受 `MaxChaseDuration`（默认 `10 s`）限制，避免目标持续绕圈造成无限等待。
+- 转身需要有限且大于零的 `RotationRate.Yaw`；需要转身但配置为零、负数或非有限值时命令失败，不使用 UE 负转速代表的瞬转语义。已经对准或无须朝向的命令无需等待转速。
+- 替换、Stop、死亡、Owner EndPlay 和 World teardown 取消转身复核；眩晕/沉默等技能阻止状态及 Motion 暂停转身，解除后重判同一队首。定身只关闭普通位移，仍允许的施法可以在 `MOVE_None` 下转身。
+- 权威朝向只在服务器更新，所有客户端继续消费既有 ReplicatedMovement。直接调用 ASC 激活接口仍只执行 Ability 自身校验；需要移动/朝向准备的输入和 AI 必须提交 Cast Order。
+
+专项自动化：`Combat.OrderAttack.Facing.*` 覆盖转速与前摇时机、动态目标、无目标技能、停止/替换、控制状态、Motion、非法速率、超时、普攻及生命/teardown。当前运行结果以 [00 进度台账](00-Progress-Tracker.md) 为准。
 
 ## 4. 移动执行
 

@@ -117,6 +117,8 @@ protected:
 
 ## 5. 施法生命周期
 
+通过 Cast Order 发起的点目标或单位目标技能，先在服务器按单位移动组件的 `RotationRate.Yaw` 转向，误差达到与普攻共用的起手容差内（默认 `15°`）后，再进入下面的 Ability 生命周期。转身期间尚未激活 Ability，不开始 `CastPoint`，不扣资源或进入冷却；无目标技能保持朝向并直接激活。规则与取消边界见 [07 §3.1](07-Order-Movement.md#31-统一转身速率adr-044)。
+
 1. `CanActivateAbility`
    - 检查死亡、眩晕、妖术、沉默、冷却、魔法、目标规则和并发策略。
 2. `ActivateAbility`
