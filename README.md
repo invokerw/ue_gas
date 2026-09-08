@@ -21,6 +21,10 @@ Combat 当前仍位于 `ue_gas` 单 Runtime Module 中，不是独立插件或�
 3. 自动化测试地图位于 `/Game/Combat/Tests/L_CombatTest`。
 4. Combat C++ 入口位于 `Source/ue_gas/Combat`；新增技能先阅读 [公共技能扩展与迁移指南](Doc/CombatSystem/32-M8-Public-Extension-Guide.md)。
 
+Demo 操作：右键点敌方单位持续普攻，超出范围时自动追击；右键点地面移动。按 **A** 进入选敌模式，再左键点敌人确认普攻；**S** 停止，**Escape** 取消选敌，Q/W/E/R 施放技能。A 模式点地面不会自动找敌或执行攻击移动（Attack Move）。
+
+以上按键统一通过 `/Game/Combat/Demo/Input/IMC_Default` 映射到 Input Action；可在该资产中改键。普攻选敌、确认、取消和停止的 Action 引用配置在 `BP_CombatDemoPlayerController` 的 `Input|Combat` 默认属性中。
+
 ## 运行时主链路
 
 ```text

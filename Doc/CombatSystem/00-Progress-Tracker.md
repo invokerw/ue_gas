@@ -4,7 +4,7 @@
 > 当前阶段：M8 已验收；`combat_v1_rc1` 核心契约保持冻结；SAM 验收反馈已修复并重新待验收
 > 历史 M0-M8：82/82 Task 完成，9/9 里程碑由用户验收
 > SAM 进度：10/10 Task 完成；修正 Gate 已通过，等待用户复验
-> 当前专项：头顶 UI 蓝图拆分已完成；工作区最终 Combat 53/53、资产 7/7、三 Target 构建和 Dedicated 双客户端回归通过。UE 5.8.1 启动占用已修复，常规构建和头顶 UI 3/3 复验通过
+> 当前专项：Demo 普攻输入已统一为 Enhanced Input Action；本轮常规 Editor 构建、蓝图编译保存回读、全量 Combat 53/53 和资产 7/7 通过。头顶 UI 蓝图拆分及此前三 Target/Dedicated 回归已完成；本轮未重跑联机矩阵
 
 本文件是项目执行状态的唯一来源。[10 实施路线图](10-Implementation-Roadmap.md)定义任务内容和依赖，本文件记录实际状态、验证证据和用户验收结论。
 
@@ -210,9 +210,25 @@
 
 证据：`Saved/OverheadBlueprint/Validation.md`；最终 Automation 为 `AutomationFinal2/index.json`（2026-09-07 09:46:07 UTC，53 成功、0 失败/警告/未运行），资产为 `AssetReportFinal.json`（7 个定义、0 Error/Warning）。`PieSmoke.json` 记录两端前摇/引导、投射物跳字、驱散和重生清理通过；`DedicatedServerFinal.log` 与两个 `DedicatedClient*Final.log` 记录最终模块 64 单位 / 256 Modifier、两连接、正式 RPC 与移动回归，Budget=Pass、静止目标水平位移 0。该轮验证已重启 Editor 到最终模块并打开头顶蓝图。
 
-边界：未完整 cook / 打包；源码版 UE 5.8 用于 Server/Client Target 编译，安装版 UE 5.8.1 用于资产、Editor 和独立 `-server/-game` smoke。Dedicated 沿用基线的工具插件初始化和 Mixed ASC 动态 GE 定义告警，详见验证记录；不将其计为本次新增 UI 错误，也不宣称整份日志零错误。SAM 用户验收仍待复验。
+边界：未完整 cook / 打包；源码版 UE 5.8 用于 Server/Client Target 编译，安装版 UE 5.8.1 用于资产、Editor 和独立 `-server/-game` smoke。Dedicated 沿用基线的工具插件初始化和 Mixed ASC 动态 GE 定义告警，详见验证记录；不将其计为本次新增 UI 错误，也不宣称整份日志零错误。下节普攻专项的 52/53 保留为当时结果，其缺失头顶蓝图问题已由本节最终 53/53 关闭；SAM 用户验收仍待复验。
 
 2026-09-08 启动收尾修正：上轮残留的隐藏 Editor 进程占用 `UnrealEditor-ue_gas-9140.dll`，导致 Rider 常规构建在清理热重载文件时失败。UE MCP 确认 All Saved、PIE 未运行后结束该旧进程；UE 5.8.1 常规 Editor 构建通过，UBT 自动清理后缀产物并把模块引用恢复为 `UnrealEditor-ue_gas.dll`。实际启动 Editor、加载 Demo 后 `Combat.UI.Overhead.*` 3/3 通过，测试实例自动退出（ExitCode=0）。本轮未修改源码或资产；启动与构建证据见 `Saved/EditorStartupFix/Validation.md`、`EditorBuild.log`、`EditorStartup.log` 和 `Automation/index.json`。
+
+## 12.2 Post-M8：Demo 普攻输入
+
+2026-09-08 输入配置修正：已完成。按用户反馈移除直接 Key 绑定，改为四个 Boolean Enhanced Input Action、Demo Controller 默认引用及 `IMC_Default` 映射（ADR-046）；默认 A/左键/Escape/S，Controller 只绑定 `Started`，可在映射资产中改键。右键/触摸/QWER 的六条原映射逐项回读保持一致，普攻与停止的服务器行为不变。
+
+- 常规 UE 5.8.1 Editor Win64 Development 构建通过（52.66 秒），模块引用为 `UnrealEditor-ue_gas.dll`；Demo Controller 蓝图通过 UE MCP 编译、显式保存并回读四个 Action 引用。
+- 独立冷启动 `Combat.*` 53/53，0 测试警告；输入测试验证真实 Demo 蓝图、Boolean Action、默认映射、Action 事件绑定及原有普攻/取消语义。`CombatAssetValidation` 扫描 7 个 Combat 定义资产，0 Error/0 Warning；Input Action 配置由前述输入测试覆盖。
+- 证据：`Saved/AttackInputActions/Validation.md`、`EditorBuild.log`、`MCPReadback.json`、`Automation/index.json`、`CombatAssetReport.json`。本轮未执行真实鼠标/键盘 PIE、Server/Client Target、Dedicated 或 cook/打包；SAM 用户验收状态保持不变。下方保留首轮历史验证记录。
+
+> 状态：已完成（2026-09-07）。兼容新增玩家输入：右键点敌人和 A 后左键确认提交已有 `AttackTarget`，S 提交 `Stop`；共用原 Order RPC、服务器追击与攻击生命周期，不改变结算契约或网络载荷。
+
+- `Aue_gasPlayerController` 增加实际命中选敌、A/左键/Escape/S 绑定及统一单条批次提交；普攻手势的按住/松开不发送移动，技能/停止/控制绑定刷新清除旧拖动状态。A 模式点地面不自动找敌，也不执行 Attack Move。
+- 新增 `Combat.Input.Attack.RightClickAndContinuousOrder`、`TargetSelectionAndCancellation` 两项，通过正式 RPC/Order/Attack 验证持续扣血、超距追击、选敌、取消与 Unit EndPlay；输入、OrderAttack、SAM、Network 合计 18/18 成功，0 测试警告。
+- UE 5.8 Editor Development 模块后缀 `9076` 最终构建成功。完整 `Combat.*` 报告为 52 成功、1 失败、0 未运行：唯一失败 `Combat.UI.Overhead.BlueprintBindingLifecycle` 属于工作区既有 UI 改造，缺少 `/Game/Combat/Demo/UI/WBP_CombatOverhead`；没有删改该用例或资产，也不把全量 Gate 标成通过。
+- UE MCP 回读 `IMC_Default` 右键/触摸/QWER 映射及玩家 DataAsset：AttackDamage=20、AttackRange=150 cm、BaseAttackTime=1.7 s、BaseAttackPoint=0.25 s、AttackProjectileData=None（当前 Demo 普攻为近战）。本次无二进制资产修改。
+- 证据：`Saved/BasicAttackInput/Validation.md`、`EditorBuild.log`、`Automation/index.json`（2026-09-07 08:38:17 UTC）。当前打开的 Editor 需重启加载新模块；未执行真实鼠标 PIE、Server/Client Target 或 Dedicated 联机验证。SAM 用户验收状态保持不变。
 
 ## 13. 用户验收记录
 
@@ -282,6 +298,8 @@
 | 2026-09-07 | 关闭 Crowd `SlowdownAtGoal`，将普通移动默认 `MaxAcceleration` 提高到 `6000 cm/s²`。Editor 模块后缀构建、相关 Automation 10/10、原生/Demo 蓝图参数回读及单玩家 PIE 起步/停止对照通过；相同空旷路线达到 90% 移速由 227.3 ms 降至 83.3 ms。同步当前行为文档，SAM 用户验收状态保持待验收 | post-M8 移动手感调优 |
 | 2026-09-07 | 按 ADR-044 实现施法/普攻按移动组件转速准备朝向；增加停止、状态、动态目标、生命周期和目标策略兼容测试。Editor 构建、最终 Combat 48/48、资产 7/7 与真实单玩家 Demo PIE 转身/前摇/停止/移动通过；命令和证据见 `Saved/AbilityFacing/Validation.md` | post-M8 转身速率统一 |
 | 2026-09-07 | 按用户反馈将施法与普攻起手容差统一为 15°，共用已有 UnitData 配置；Editor 构建、Combat 48/48、Demo 玩家/木桩配置回读和文档检查通过 | post-M8 起手容差统一 / ADR-044 |
+| 2026-09-07 | 补齐 Demo 右键普攻、A 后左键确认、S 停止与旧拖动清理；Editor 构建、相关 18/18 通过。完整 Combat 52/53，唯一失败为既有 UI 改造缺少头顶 Widget Blueprint；原样记录并保留该测试 | post-M8 普攻输入 |
+| 2026-09-08 | 按用户反馈将 A/左键/Escape/S 改为四个 Input Action，接入 Demo Controller 与 IMC_Default；常规 Editor 构建、蓝图编译保存回读、冷启动 Combat 53/53 和资产 7/7 通过 | post-M8 普攻输入 / ADR-046 |
 
 ## 15. 更新规则
 

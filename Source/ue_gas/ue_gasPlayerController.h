@@ -11,6 +11,8 @@ class Aue_gasCharacter;
 class UNiagaraSystem;
 class UInputAction;
 class UInputMappingContext;
+class UEnhancedInputComponent;
+struct FCombatOrderRequest;
 
 DECLARE_LOG_CATEGORY_EXTERN(LogTemplateCharacter, Log, All);
 
@@ -59,7 +61,7 @@ protected:
 	/** Controller teardown 时取消旧 Unit Order、清除 Owner 并提升绑定代次。 */
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
-	/** 初始化 Enhanced Input 映射与移动/技能输入。 */
+	/** 初始化 Enhanced Input 映射与移动、普攻、停止及技能输入。 */
 	virtual void SetupInputComponent() override;
 
 	/** CommandedUnit 指针复制后幂等刷新本地相机与输入就绪状态。 */
@@ -99,12 +101,28 @@ protected:
 	TObjectPtr<UInputMappingContext> DefaultMappingContext;
 
 	/** 鼠标目的地输入。 */
-	UPROPERTY(EditAnywhere, Category="Input", meta=(DisplayName="鼠标目的地输入", ToolTip="点击或拖动地面时提交 MoveToPoint Order。"))
+	UPROPERTY(EditAnywhere, Category="Input", meta=(DisplayName="鼠标目的地输入", ToolTip="点击敌方单位时提交持续普攻；点击或拖动地面时提交移动指令。"))
 	TObjectPtr<UInputAction> SetDestinationClickAction;
 
 	/** 触摸目的地输入。 */
 	UPROPERTY(EditAnywhere, Category="Input", meta=(DisplayName="触摸目的地输入", ToolTip="触摸地面时提交 MoveToPoint Order。"))
 	TObjectPtr<UInputAction> SetDestinationTouchAction;
+
+	/** 进入普攻选敌模式的输入；具体按键由映射上下文决定，默认 A。 */
+	UPROPERTY(EditAnywhere, Category="Input|Combat", meta=(DisplayName="普攻选敌输入", ToolTip="开始选择普通攻击目标；在输入映射中配置按键，Demo 默认 A。为空时禁用此输入。"))
+	TObjectPtr<UInputAction> AttackTargetAction;
+
+	/** 确认光标下普攻目标的输入；只在选敌模式中生效，默认鼠标左键。 */
+	UPROPERTY(EditAnywhere, Category="Input|Combat", meta=(DisplayName="确认普攻目标输入", ToolTip="在选敌模式中确认光标命中的敌方单位，Demo 默认鼠标左键。为空时禁用此输入。"))
+	TObjectPtr<UInputAction> ConfirmAttackTargetAction;
+
+	/** 取消本地选敌模式的输入，不停止正在执行的服务器命令，默认 Escape。 */
+	UPROPERTY(EditAnywhere, Category="Input|Combat", meta=(DisplayName="取消普攻选敌输入", ToolTip="退出本地普攻选敌模式，不停止单位当前命令，Demo 默认 Escape。为空时禁用此输入。"))
+	TObjectPtr<UInputAction> CancelAttackTargetAction;
+
+	/** 提交服务器停止命令的输入，默认 S。 */
+	UPROPERTY(EditAnywhere, Category="Input|Combat", meta=(DisplayName="停止命令输入", ToolTip="取消本地选敌和拖动，并向主控单位提交停止命令，Demo 默认 S。为空时禁用此输入。"))
+	TObjectPtr<UInputAction> StopCommandAction;
 
 	/** Q 技能槽输入。 */
 	UPROPERTY(EditAnywhere, Category="Input|Abilities") TObjectPtr<UInputAction> AbilitySlotQAction;
@@ -116,6 +134,11 @@ protected:
 	UPROPERTY(EditAnywhere, Category="Input|Abilities") TObjectPtr<UInputAction> AbilitySlotRAction;
 
 private:
+#if WITH_DEV_AUTOMATION_TESTS
+	friend class FCombatPlayerAttackInputTest;
+	friend class FCombatPlayerAttackInputCancellationTest;
+#endif
+
 	/** 指针或代次任一复制到达时刷新 Command Pawn 跟随目标。 */
 	void RefreshCommandBinding();
 	/** 提升绑定代次并跳过保留值 0。 */
@@ -123,8 +146,14 @@ private:
 	/** 返回 Owner 复制也已到达、可以安全发 Unit RPC 的当前目标。 */
 	ACombatUnitCharacter* GetReadyCommandedUnit() const;
 
-	/** 鼠标/触摸移动输入入口。 */
+	/** 为已配置的普攻与停止 Action 绑定 Started 事件；不绑定物理按键，空引用跳过。 */
+	void BindCombatCommandActions(UEnhancedInputComponent& EnhancedInputComponent);
+	/** 鼠标/触摸输入入口；鼠标命中合法敌人时优先提交普攻。 */
 	void OnInputStarted();
+	/** 按本次实际命中选择普攻或移动；普攻不启用后续拖动移动。 */
+	void BeginDestinationInput(const FHitResult& Hit);
+	/** 清除当前拖动手势，防止后续 Triggered/Released 覆盖新的攻击、技能或停止命令。 */
+	void ResetDestinationInput();
 	/** 拖动过程中按频率/距离阈值更新目标。 */
 	void OnSetDestinationTriggered();
 	/** 松开时提交最终目标并播放本地反馈。 */
@@ -135,6 +164,20 @@ private:
 	void OnTouchTriggered();
 	/** 触摸结束入口。 */
 	void OnTouchReleased();
+	/** 选敌输入只改变本地光标，确认目标后才发送普攻。 */
+	void OnAttackTargetingStarted();
+	/** 确认输入在选敌模式下读取实际命中；未选敌时不提交命令。 */
+	void OnAttackTargetConfirmed();
+	/** 确认实际命中的敌方单位；无效目标保留选敌模式，不退化为移动或自动选附近单位。 */
+	void ConfirmAttackTarget(const FHitResult& Hit);
+	/** 退出本地选敌模式并恢复默认光标；不取消服务器当前命令。 */
+	void CancelAttackTargeting();
+	/** 停止输入清除本地手势并通过统一 RPC 提交 Stop。 */
+	void OnStopCommand();
+	/** 按公共目标规则预选敌人并提交 AttackTarget；距离与 LOS 留给服务器执行/追击时复核。返回值仅表示请求已发送。 */
+	bool IssueCombatAttackOrder(ACombatUnitCharacter* Target);
+	/** 向就绪主控单位提交单条替换型命令，共用连接维度 RequestId；不表示服务器已接受。 */
+	bool SubmitCombatOrder(const FCombatOrderRequest& Order);
 
 	/** 激活第一个技能槽。 */
 	void OnAbilitySlotQ();
@@ -165,6 +208,10 @@ private:
 	bool bHasCachedDestination = false;
 	/** 当前输入手势是否至少提交过一个移动 Order。 */
 	bool bHasIssuedMoveOrder = false;
+	/** 只有从移动命中开始的有效手势可以继续发送拖动/松开移动。 */
+	bool bDestinationInputActive = false;
+	/** 本地 A 键选敌模式；确认、取消、其他命令或控制绑定刷新时清除，不复制。 */
+	bool bAttackTargeting = false;
 	/** PlayerController 连接维度单调递增的非零 RPC replay id。 */
 	int32 NextCombatOrderRequestId = 1;
 };

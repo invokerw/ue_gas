@@ -133,15 +133,18 @@ Queued
 
 玩家拥有 Unit 仍通过 `Unit.Owner` 建立 Order RPC 与 ASC Mixed replication，但移动网络角色与所有权分离：owning client 和其他客户端看到的 Unit 都是 `ROLE_SimulatedProxy`。服务器 `UCrowdFollowingComponent` 产生局部 steering，服务器 Capsule sweep 产生最终几何结果，再由 ReplicatedMovement 向所有客户端收敛。
 
-### 5.1 当前 Demo 点击移动
+### 5.1 当前 Demo 点击移动与普攻
 
 `Aue_gasPlayerController` 的输入处理不再直接调用 `AddMovementInput` 或 `SimpleMoveToLocation`：
 
 - `BP_CombatDemoGameMode` 继承 `Aue_gasGameMode`；默认出生由原生 GameMode 独立生成 Unit 与 Command Pawn，先完成 Unit 的 AIController/Owner 绑定，再只把 Command Pawn 交给 PlayerController Possess。禁止在 `PlayerController::OnPossess` 中嵌套迁移 Unit。
 
 - 鼠标右键（当前 `IMC_Default` 映射）/触摸按下命中地面后，立即构造替换型 `MoveToPoint` 批次并调用 `ServerIssueOrderBatch`。
+- 右键直接点中可选敌方单位时提交 `AttackTarget`，由服务器完成追击与持续普攻；这次手势的拖动及松开不再产生移动命令。A 后左键点敌人同样提交普攻，S 提交 `Stop`；Escape 取消本地选敌。A 模式点地面保持选敌，不实现 Attack Move。
+- 普攻选敌、确认、取消与停止使用四个 Boolean Input Action，由 `BP_CombatDemoPlayerController` 配置引用并绑定 `Started`；A/左键/Escape/S 仅为 `IMC_Default` 的默认映射，可直接改键，详见 [客户端输入配置](34-Client-Server-Interaction.md#2-统一命令入口)。
 - 按住拖动时，只在距离上一目标至少 25 cm 且距离上一请求至少 0.20 秒时重发，避免 Reliable RPC 按帧发送。
 - 松开时若最终落点明显变化，则补发一次最终目标；光标特效仍是客户端可丢弃反馈。
+- A、技能、Stop 或控制绑定刷新会清除旧移动手势，旧 Triggered/Released 不得覆盖新命令或发给新绑定单位。普攻只用实际光标命中，不使用技能的附近目标辅助。
 - `bAppendToExistingQueue=false`，因此新的点击移动通过服务器 Order generation 取消并替换旧行为，不在客户端直接 `StopMovement`。
 - `GetReadyCommandedUnit()` 会等待 `CommandedUnit` 与 Unit Owner 都复制就绪才允许发 RPC；客户端仅播放光标/路径预览，不启动 Unit PathFollowing。
 

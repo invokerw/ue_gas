@@ -61,6 +61,12 @@
 | ADR-044 | 已定 | Order 的施法与普攻朝向准备复用 `CharacterMovement.RotationRate.Yaw`，由移动组件逐帧旋转；两者共用 UnitData 起手容差，默认 15°，达到容差后才开始前摇，无目标施法不转身 | 修正 `Facing` 直接设置最终朝向的实现；连续旋转只在服务器执行，Scheduler 负责复核、超时与推进队列。按用户反馈统一起手容差，复用 `AttackFacingToleranceDegrees` 并保留字段名、既有 RPC、Ability/Attack 事件顺序及数据 schema，无新增转速/容差副本或资产迁移；规则和验证见 [07](07-Order-Movement.md) |
 | ADR-045 | 已定 | 头顶 UI 使用 C++ 只读展示适配基类与 Widget Blueprint；布局、样式、血量拖影和跳字动画在蓝图，复制、状态归并、服务器时间与绑定生命周期在 C++ | 头顶展示接口及 View 投影进入 v2：显式区分前摇/引导，跳字携带目标生命代次，FastArray 完整接收后通知；保留伤害/治疗公开签名及核心 `combat_v1_rc1`。新增显示名称字段有安全空值，不改变 DefinitionId 或内容 schema；迁移与验证见 [36](36-Overhead-Blueprint-UI.md) |
 
+### ADR-046：Demo 普攻输入统一使用 Enhanced Input（2026-09-08）
+
+按用户反馈修正直接 `BindKey` 的实现：选敌、确认、取消与停止分别使用 Input Action，在 `IMC_Default` 中配置默认 A / 左键 / Escape / S。Controller 只绑定 Action 的 `Started` 事件，键位由映射资产管理，不保留硬编码 Key 兜底。
+
+兼容新增四个可编辑 `UInputAction` 引用，空值表示禁用对应输入。迁移 `BP_CombatDemoPlayerController` 的默认引用及 Demo 输入映射；移动、触摸、Q/W/E/R 的既有引用和映射保持不变。该改动只调整本地输入配置，不改变公开蓝图函数、RPC 载荷、DefinitionId、战斗结算或 `combat_v1_rc1` 的版本。验证覆盖资产配置、Action 事件绑定、原有普攻/取消行为、蓝图编译保存回读及资产校验。
+
 ## 3. 本轮查漏补缺摘要
 
 原单体文档对 Damage、Modifier、Scheduler、AttackRecord 和网络权威已有较强约束；本轮新增或显式登记了以下遗漏：

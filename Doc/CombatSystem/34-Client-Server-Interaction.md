@@ -58,7 +58,25 @@ owning client 调用 `ACombatUnitCharacter::ServerIssueOrderBatch`。服务器�
 
 这个回执只说明请求已被接收或拒绝，不承诺异步行为已经完成。移动到达、技能生效和弹体命中分别有自己的服务器生命周期。
 
-当前 Demo 的 `Aue_gasPlayerController` 在鼠标右键（`IMC_Default` 当前映射）/触摸按下命中地面时立即提交一个 `MoveToPoint` 批次，不再由输入代码调用客户端 `SimpleMoveToLocation` 或按帧 `AddMovementInput`。按住拖动会以 0.20 秒最短间隔、25 cm 目标变化阈值重发替换型移动 Order；松开时只在最终落点仍有明显变化时补发，因此不会用 Reliable RPC 按帧刷包。
+当前 Demo 的 `Aue_gasPlayerController` 提供以下输入：
+
+- 鼠标右键（`IMC_Default` 当前映射）直接点中可选敌方单位时，提交一次替换型 `AttackTarget`；由服务器追击、转身、前摇并持续普攻。按住及松开这次右键不会再提交移动或重置攻击周期。
+- 按 A 显示选敌准星，再左键点中可选敌人确认 `AttackTarget`。点地面、友军、自身或不可选目标时保留选敌模式，不自动选择附近敌人，也不执行 Attack Move。
+- S 通过同一 RPC 提交 `Stop`；Escape 只退出本地选敌模式。右键和 Q/W/E/R 输入也会退出选敌模式；攻击确认、技能、停止和控制绑定刷新会清除旧拖动手势。
+- 右键/触摸按下命中地面时立即提交 `MoveToPoint`；触摸保持移动操作。拖动以 0.20 秒最短间隔、25 cm 目标变化阈值重发，松开时读取最终落点并按距离阈值补发。
+
+所有操作统一使用 Enhanced Input。`/Game/Combat/Demo/Input/IMC_Default` 保留右键、触摸与 Q/W/E/R 的原映射，并增加以下默认映射：
+
+| 默认输入 | Input Action | Controller 默认属性 |
+| --- | --- | --- |
+| A | `IA_AttackTarget` | `AttackTargetAction` |
+| 左键 | `IA_ConfirmAttackTarget` | `ConfirmAttackTargetAction` |
+| Escape | `IA_CancelAttackTarget` | `CancelAttackTargetAction` |
+| S | `IA_StopCommand` | `StopCommandAction` |
+
+四个 Action 位于同一 Input 目录，类型为 Boolean；`BP_CombatDemoPlayerController` 的 `Input|Combat` 默认属性引用对应资产，原生 Controller 只绑定它们的 `Started` 事件。改键在 Mapping Context 中完成；新增的 Action 引用留空时禁用对应操作，没有固定物理键兜底。迁移说明见 ADR-046。
+
+普攻只使用本次 `Visibility` 射线实际命中的单位；客户端通过 `TargetingSubsystem` 预筛目标，服务器重新执行目标、距离、LOS 与状态校验。所有输入共用同一连接 `RequestId` 和 `ServerIssueOrderBatch`，不直接调用客户端导航、攻击结算或伤害入口。
 
 ## 3. 移动交互流程
 

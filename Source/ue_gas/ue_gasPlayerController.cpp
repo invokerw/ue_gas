@@ -19,6 +19,7 @@
 #include "Combat/Log/CombatEventSubsystem.h"
 #include "Combat/Network/CombatNetworkTypes.h"
 #include "Combat/Order/CombatOrderComponent.h"
+#include "Combat/Targeting/CombatTargetingSubsystem.h"
 #include "Combat/Unit/CombatUnitAIController.h"
 #include "Combat/Unit/CombatUnitCharacter.h"
 #include "ue_gas.h"
@@ -145,6 +146,8 @@ void Aue_gasPlayerController::OnPossess(APawn* InPawn)
 
 void Aue_gasPlayerController::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+	CancelAttackTargeting();
+	ResetDestinationInput();
 	if (HasAuthority())
 	{
 		SetCommandedUnitAuthority(nullptr);
@@ -164,6 +167,8 @@ void Aue_gasPlayerController::OnRep_CommandBindingGeneration()
 
 void Aue_gasPlayerController::RefreshCommandBinding()
 {
+	CancelAttackTargeting();
+	ResetDestinationInput();
 	if (Aue_gasCharacter* CommandPawn = Cast<Aue_gasCharacter>(GetPawn()))
 	{
 		// Unit Owner 可能比 CommandedUnit 晚到；相机可以先安全观察，输入仍由 GetReadyCommandedUnit 阻止。
@@ -182,7 +187,7 @@ void Aue_gasPlayerController::AdvanceCommandBindingGeneration()
 
 ACombatUnitCharacter* Aue_gasPlayerController::GetReadyCommandedUnit() const
 {
-	return CommandedUnit && CommandedUnit->GetCommandingPlayerController() == this
+	return IsValid(CommandedUnit) && CommandedUnit->GetCommandingPlayerController() == this
 		? CommandedUnit.Get() : nullptr;
 }
 
@@ -217,21 +222,64 @@ void Aue_gasPlayerController::SetupInputComponent()
 	if (AbilitySlotWAction) EnhancedInputComponent->BindAction(AbilitySlotWAction, ETriggerEvent::Started, this, &Aue_gasPlayerController::OnAbilitySlotW);
 	if (AbilitySlotEAction) EnhancedInputComponent->BindAction(AbilitySlotEAction, ETriggerEvent::Started, this, &Aue_gasPlayerController::OnAbilitySlotE);
 	if (AbilitySlotRAction) EnhancedInputComponent->BindAction(AbilitySlotRAction, ETriggerEvent::Started, this, &Aue_gasPlayerController::OnAbilitySlotR);
+	BindCombatCommandActions(*EnhancedInputComponent);
+}
+
+void Aue_gasPlayerController::BindCombatCommandActions(UEnhancedInputComponent& EnhancedInputComponent)
+{
+	if (AttackTargetAction) EnhancedInputComponent.BindAction(AttackTargetAction, ETriggerEvent::Started, this, &Aue_gasPlayerController::OnAttackTargetingStarted);
+	if (ConfirmAttackTargetAction) EnhancedInputComponent.BindAction(ConfirmAttackTargetAction, ETriggerEvent::Started, this, &Aue_gasPlayerController::OnAttackTargetConfirmed);
+	if (CancelAttackTargetAction) EnhancedInputComponent.BindAction(CancelAttackTargetAction, ETriggerEvent::Started, this, &Aue_gasPlayerController::CancelAttackTargeting);
+	if (StopCommandAction) EnhancedInputComponent.BindAction(StopCommandAction, ETriggerEvent::Started, this, &Aue_gasPlayerController::OnStopCommand);
 }
 
 void Aue_gasPlayerController::OnInputStarted()
 {
-	MoveOrderRefreshElapsed = 0.0f;
-	bHasIssuedMoveOrder = false;
-	bHasCachedDestination = UpdateCachedDestination();
-	if (bHasCachedDestination)
+	FHitResult Hit;
+	if (bIsTouch)
 	{
-		IssueCombatMoveOrder();
+		GetHitResultUnderFinger(ETouchIndex::Touch1, ECC_Visibility, true, Hit);
 	}
+	else
+	{
+		GetHitResultUnderCursor(ECC_Visibility, true, Hit);
+	}
+	BeginDestinationInput(Hit);
+}
+
+void Aue_gasPlayerController::BeginDestinationInput(const FHitResult& Hit)
+{
+	CancelAttackTargeting();
+	ResetDestinationInput();
+	if (!Hit.bBlockingHit || Hit.Location.ContainsNaN())
+	{
+		return;
+	}
+	// 只认射线实际点到的单位；技能的“附近目标”辅助会把地面右键误判成普攻。
+	if (!bIsTouch && IssueCombatAttackOrder(Cast<ACombatUnitCharacter>(Hit.GetActor())))
+	{
+		return;
+	}
+	CachedDestination = Hit.Location;
+	bHasCachedDestination = true;
+	bDestinationInputActive = true;
+	IssueCombatMoveOrder();
+}
+
+void Aue_gasPlayerController::ResetDestinationInput()
+{
+	bDestinationInputActive = false;
+	MoveOrderRefreshElapsed = 0.0f;
+	bHasCachedDestination = false;
+	bHasIssuedMoveOrder = false;
 }
 
 void Aue_gasPlayerController::OnSetDestinationTriggered()
 {
+	if (!bDestinationInputActive)
+	{
+		return;
+	}
 	MoveOrderRefreshElapsed += GetWorld() ? GetWorld()->GetDeltaSeconds() : 0.0f;
 	if (UpdateCachedDestination())
 	{
@@ -249,6 +297,11 @@ void Aue_gasPlayerController::OnSetDestinationTriggered()
 
 void Aue_gasPlayerController::OnSetDestinationReleased()
 {
+	if (!bDestinationInputActive)
+	{
+		return;
+	}
+	UpdateCachedDestination();
 	if (bHasCachedDestination
 		&& (!bHasIssuedMoveOrder
 			|| FVector::DistSquared2D(CachedDestination, LastIssuedMoveDestination)
@@ -262,9 +315,7 @@ void Aue_gasPlayerController::OnSetDestinationReleased()
 			this, FXCursor, CachedDestination, FRotator::ZeroRotator, FVector::OneVector,
 			true, true, ENCPoolMethod::None, true);
 	}
-	MoveOrderRefreshElapsed = 0.0f;
-	bHasCachedDestination = false;
-	bHasIssuedMoveOrder = false;
+	ResetDestinationInput();
 }
 
 void Aue_gasPlayerController::OnTouchStarted()
@@ -285,6 +336,86 @@ void Aue_gasPlayerController::OnTouchReleased()
 	bIsTouch = false;
 }
 
+void Aue_gasPlayerController::OnAttackTargetingStarted()
+{
+	ResetDestinationInput();
+	bAttackTargeting = GetReadyCommandedUnit() != nullptr;
+	CurrentMouseCursor = bAttackTargeting ? EMouseCursor::Crosshairs : DefaultMouseCursor.GetValue();
+}
+
+void Aue_gasPlayerController::OnAttackTargetConfirmed()
+{
+	if (!bAttackTargeting)
+	{
+		return;
+	}
+	FHitResult Hit;
+	GetHitResultUnderCursor(ECC_Visibility, true, Hit);
+	ConfirmAttackTarget(Hit);
+}
+
+void Aue_gasPlayerController::ConfirmAttackTarget(const FHitResult& Hit)
+{
+	if (bAttackTargeting && Hit.bBlockingHit
+		&& IssueCombatAttackOrder(Cast<ACombatUnitCharacter>(Hit.GetActor())))
+	{
+		CancelAttackTargeting();
+	}
+}
+
+void Aue_gasPlayerController::CancelAttackTargeting()
+{
+	bAttackTargeting = false;
+	CurrentMouseCursor = DefaultMouseCursor;
+}
+
+void Aue_gasPlayerController::OnStopCommand()
+{
+	CancelAttackTargeting();
+	ResetDestinationInput();
+	FCombatOrderRequest Order;
+	Order.Type = ECombatOrderType::Stop;
+	SubmitCombatOrder(Order);
+}
+
+bool Aue_gasPlayerController::IssueCombatAttackOrder(ACombatUnitCharacter* Target)
+{
+	ACombatUnitCharacter* Unit = GetReadyCommandedUnit();
+	UCombatTargetingSubsystem* Targeting = GetWorld() ? GetWorld()->GetSubsystem<UCombatTargetingSubsystem>() : nullptr;
+	if (!Unit || !IsValid(Target) || !Targeting)
+	{
+		return false;
+	}
+	FCombatTargetingRules Rules;
+	Rules.TargetTeamTag = CombatTags::TargetTeam_Enemy;
+	// 输入只预选阵营和可选中状态；允许超出攻击范围的请求进入服务器追击。
+	Rules.CastRange = TNumericLimits<float>::Max() * 0.5f;
+	if (!Targeting->ValidateUnitTarget(Unit, Target, Rules).bValid)
+	{
+		return false;
+	}
+	FCombatOrderRequest Order;
+	Order.Type = ECombatOrderType::AttackTarget;
+	Order.TargetUnit = Target;
+	return SubmitCombatOrder(Order);
+}
+
+bool Aue_gasPlayerController::SubmitCombatOrder(const FCombatOrderRequest& Order)
+{
+	ACombatUnitCharacter* Unit = GetReadyCommandedUnit();
+	if (!Unit)
+	{
+		return false;
+	}
+	FCombatOrderBatchRequest Batch;
+	Batch.RequestId = NextCombatOrderRequestId;
+	Batch.bAppendToExistingQueue = false;
+	Batch.Orders.Add(Order);
+	NextCombatOrderRequestId = NextCombatOrderRequestId == MAX_int32 ? 1 : NextCombatOrderRequestId + 1;
+	Unit->ServerIssueOrderBatch(MoveTemp(Batch));
+	return true;
+}
+
 void Aue_gasPlayerController::OnAbilitySlotQ() { ActivateCombatAbilitySlot(0); }
 void Aue_gasPlayerController::OnAbilitySlotW() { ActivateCombatAbilitySlot(1); }
 void Aue_gasPlayerController::OnAbilitySlotE() { ActivateCombatAbilitySlot(2); }
@@ -292,6 +423,8 @@ void Aue_gasPlayerController::OnAbilitySlotR() { ActivateCombatAbilitySlot(3); }
 
 void Aue_gasPlayerController::ActivateCombatAbilitySlot(const int32 SlotIndex)
 {
+	CancelAttackTargeting();
+	ResetDestinationInput();
 	ACombatUnitCharacter* Unit = GetReadyCommandedUnit();
 	UCombatAbilitySystemComponent* Asc = Unit ? Unit->GetCombatAbilitySystemComponent() : nullptr;
 	if (!Unit || !Asc)
@@ -352,11 +485,7 @@ void Aue_gasPlayerController::ActivateCombatAbilitySlot(const int32 SlotIndex)
 		Order.Type = ECombatOrderType::CastNoTarget;
 	}
 
-	FCombatOrderBatchRequest Batch;
-	Batch.RequestId = NextCombatOrderRequestId;
-	Batch.Orders.Add(Order);
-	NextCombatOrderRequestId = NextCombatOrderRequestId == MAX_int32 ? 1 : NextCombatOrderRequestId + 1;
-	Unit->ServerIssueOrderBatch(MoveTemp(Batch));
+	SubmitCombatOrder(Order);
 }
 
 bool Aue_gasPlayerController::IssueCombatMoveOrder()
@@ -370,12 +499,10 @@ bool Aue_gasPlayerController::IssueCombatMoveOrder()
 	Order.Type = ECombatOrderType::MoveToPoint;
 	Order.TargetLocation = CachedDestination;
 	Order.bHasTargetLocation = true;
-	FCombatOrderBatchRequest Batch;
-	Batch.RequestId = NextCombatOrderRequestId;
-	Batch.bAppendToExistingQueue = false;
-	Batch.Orders.Add(Order);
-	NextCombatOrderRequestId = NextCombatOrderRequestId == MAX_int32 ? 1 : NextCombatOrderRequestId + 1;
-	Unit->ServerIssueOrderBatch(MoveTemp(Batch));
+	if (!SubmitCombatOrder(Order))
+	{
+		return false;
+	}
 	LastIssuedMoveDestination = CachedDestination;
 	MoveOrderRefreshElapsed = 0.0f;
 	bHasIssuedMoveOrder = true;
