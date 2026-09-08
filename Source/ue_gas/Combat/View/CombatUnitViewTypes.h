@@ -9,6 +9,15 @@
 
 class UCombatUnitViewComponent;
 
+/** UI 明确消费的当前技能阶段；由服务器技能生命周期投影，不能据此驱动技能。 */
+UENUM(BlueprintType)
+enum class ECombatAbilityViewPhase : uint8
+{
+	None UMETA(DisplayName="无活动阶段"),
+	Casting UMETA(DisplayName="施法前摇"),
+	Channeling UMETA(DisplayName="技能引导")
+};
+
 /** 客户端 UI 可见的扁平 Modifier 投影，不包含 Runtime UObject 或秘密状态。 */
 USTRUCT(BlueprintType)
 struct UE_GAS_API FCombatModifierView : public FFastArraySerializerItem
@@ -64,12 +73,8 @@ struct UE_GAS_API FCombatModifierViewArray : public FFastArraySerializer
 			Items, DeltaParams, *this);
 	}
 
-	/** 客户端新增条目后统一通知一次。 */
-	void PostReplicatedAdd(const TArrayView<int32> AddedIndices, int32 FinalSize);
-	/** 客户端修改条目后统一通知一次。 */
-	void PostReplicatedChange(const TArrayView<int32> ChangedIndices, int32 FinalSize);
-	/** 客户端即将移除一批条目时通知所属组件；此回调发生在删除之前，订阅者此时读取数组仍可能看到待删除条目。 */
-	void PreReplicatedRemove(const TArrayView<int32> RemovedIndices, int32 FinalSize);
+	/** 一批增删改完整应用后再通知，避免 UI 在删除前读到过期条目。 */
+	void PostReplicatedReceive(const FFastArraySerializer::FPostReplicatedReceiveParameters& Parameters);
 };
 
 template<>
@@ -104,6 +109,8 @@ struct UE_GAS_API FCombatUnitView
 	UPROPERTY(BlueprintReadOnly, Category="Combat|View", meta=(DisplayName="活动技能定义 ID", ToolTip="最近一次开始后尚未收到匹配结束通知的技能定义；仅保存一个展示槽，不枚举所有活动技能。")) FPrimaryAssetId ActiveAbilityDefinitionId;
 	/** 当前 Ability 根激活 ID，用于 exactly-once 清理 View。 */
 	UPROPERTY(BlueprintReadOnly, Category="Combat|View", meta=(DisplayName="技能激活 ID", ToolTip="当前 Ability 的根激活事件 ID。")) FCombatEventId AbilityActivationId;
+	/** 当前服务器技能阶段；与技能是否配置为引导相互独立。 */
+	UPROPERTY(BlueprintReadOnly, Category="Combat|View", meta=(DisplayName="技能展示阶段", ToolTip="当前处于前摇还是引导；新的头顶 UI 使用此字段。")) ECombatAbilityViewPhase AbilityPhase = ECombatAbilityViewPhase::None;
 	/** 当前 Ability 的服务器起止时间。 */
 	UPROPERTY(BlueprintReadOnly, Category="Combat|View", meta=(DisplayName="技能服务器开始时间", ToolTip="当前 Ability 的服务器绝对开始时间。", Units="s")) double AbilityServerStartTime = 0.0;
 	UPROPERTY(BlueprintReadOnly, Category="Combat|View", meta=(DisplayName="技能服务器结束时间", ToolTip="当前 Ability 的服务器绝对结束时间；0 表示尚未确定。", Units="s")) double AbilityServerEndTime = 0.0;

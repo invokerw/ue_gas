@@ -100,16 +100,18 @@ struct FCombatModifierView
 };
 ```
 
-Modifier View 当前使用 FastArray 增量复制。名称/图标/文本由 DefinitionId 本地解析；护盾剩余值等秘密 Runtime 状态只在产品明确需要展示时增加量化字段。
+Modifier View 当前使用 FastArray 增量复制，在 `PostReplicatedReceive` 完整应用本次增删改后通知 UI，避免移除前回调仍读到旧条目。名称/图标/文本由 DefinitionId 本地解析；护盾剩余值等秘密 Runtime 状态只在产品明确需要展示时增加量化字段。
 
 当前 `FCombatUnitView` 投影：
 
 - Unit DefinitionId、TeamId、life generation、完整 LifeState 和 UI 可见状态标签。
 - Health/MaxHealth、Mana/MaxMana。
-- 当前 cast/channel DefinitionId、ActivationId、ServerStart/EndTime 和 Channeling 标记。
+- 当前 cast/channel DefinitionId、ActivationId、阶段时间窗和明确的 `Casting/Channeling` 阶段；保留旧 `bChanneling` 作为“配置为引导技能”的兼容标记。
 - 独立 FastArray 中的可见 ModifierView。
 
-`UCombatOverheadWidgetComponent` 消费上述 View，显示资源、控制状态、施法/引导进度；短生命周期伤害/治疗跳字只读取服务器 Result，并通过不可靠多播投影到相关客户端。View 和 Widget 只服务 UI/表现，不可反向成为服务器战斗判定来源。
+`UCombatOverheadWidgetComponent` 负责创建、挂载和转发服务器结果，专用服务器跳过 Widget 创建。`UCombatOverheadWidget` 绑定 View，整理安全展示数据与校准服务器时间进度，通过事件交给 `WBP_CombatOverhead`；控件树、样式、血条缓降和跳字动画由 Widget 蓝图实现。
+
+伤害/治疗跳字只读取服务器 Result，通过携带 `LifeGeneration` 的不可靠多播发送给相关客户端；旧生命载荷直接丢弃。展示接口与 View 投影版本为 2，需要服务器/客户端同版本部署，冻结的核心事件与发布契约保持不变。名称使用本地定义上的 `DisplayNameText`，空值回退稳定 ID。关系颜色通过本地指挥单位的 View 和 TeamSubsystem 计算。具体接线与边界见 [36 头顶 UI](36-Overhead-Blueprint-UI.md)；View 和 Widget 不可反向成为服务器战斗判定来源。
 
 ## 6. Projectile 表现复制
 

@@ -166,6 +166,6 @@ M8 后增加并整理了 `/Game/Combat/Demo`：
 - 玩家与木桩：`/Game/Combat/Demo/Characters/Player`、`/Game/Combat/Demo/Characters/WoodenDummy`。
 - 远程攻击：`/Game/Combat/Demo/Abilities/RangedAttack`，通过 AbilityData、Tracking Projectile 和公共 Damage 管线完成。
 - 框架与输入：`/Game/Combat/Demo/Framework`、`/Game/Combat/Demo/Input`。
-- 每个 Combat Unit 默认挂载 C++ 头顶 Widget，显示生命/法力、控制状态、施法或引导进度，以及服务器真实 Applied Damage/Healing 跳字。
+- 玩家与木桩通过 `CombatOverheadUI.WidgetClass` 配置 `/Game/Combat/Demo/UI/WBP_CombatOverhead`；该蓝图消费 C++ 展示事件，显示生命/法力、控制状态与施法阶段，使用 `WBP_CombatFloatingText` 播放服务器真实 Applied Damage/Healing 跳字。纯 C++ 单位默认不指定视觉类，扩展方式见 [36](36-Overhead-Blueprint-UI.md)。
 
 该 Demo 用于人工体验和内容接线；核心语义仍以 `Combat.*` Automation、资产校验和 Dedicated 测试为准。

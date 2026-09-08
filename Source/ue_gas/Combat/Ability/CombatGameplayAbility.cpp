@@ -173,7 +173,7 @@ void UCombatGameplayAbility::ActivateAbility(
 			AbilityData->GetPrimaryAssetId(),
 			CombatContext.EventContext.RootEventId,
 			StartTime,
-			StartTime + AbilityData->CastPoint + (bIsChannelled ? AbilityData->ChannelDuration : 0.0f),
+			StartTime + AbilityData->CastPoint,
 			bIsChannelled);
 	}
 	if (AbilityData->CastPoint <= 0.0f)
@@ -551,6 +551,12 @@ void UCombatGameplayAbility::HandleCastPoint(const FCombatScheduledTickContext& 
 		if (!ChannelTask->HasActiveSchedule())
 		{
 			InterruptAbility(CombatTags::Failure_ActionUnsupported, TEXT("Could not start channel task"));
+		}
+		else if (UCombatUnitViewComponent* View = CombatContext.Caster->GetCombatUnitViewComponent())
+		{
+			const double StartTime = GetWorld()->GetTimeSeconds();
+			View->NotifyAbilityChannelStarted(CombatContext.EventContext.RootEventId,
+				StartTime, StartTime + AbilityData->ChannelDuration);
 		}
 		return;
 	}

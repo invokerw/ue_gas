@@ -7,7 +7,7 @@
 UCombatOverheadWidgetComponent::UCombatOverheadWidgetComponent()
 {
 	SetIsReplicatedByDefault(true);
-	SetWidgetClass(UCombatOverheadWidget::StaticClass());
+	// 视觉资产由角色蓝图配置；无视觉资产的原生测试单位仍可正常结算和复制。
 	SetWidgetSpace(EWidgetSpace::Screen);
 	SetDrawSize(FVector2D(250.0f, 180.0f));
 	SetPivot(FVector2D(0.5f, 1.0f));
@@ -40,7 +40,8 @@ void UCombatOverheadWidgetComponent::ShowDamageNumber(
 	default:
 		break;
 	}
-	MulticastShowFloatingText(AppliedAmount, Type);
+	const ACombatUnitCharacter* Unit = Cast<ACombatUnitCharacter>(OwnerActor);
+	MulticastShowFloatingText(AppliedAmount, Type, Unit ? Unit->GetLifeGeneration() : 0);
 }
 
 void UCombatOverheadWidgetComponent::ShowHealingNumber(const float AppliedAmount)
@@ -51,11 +52,16 @@ void UCombatOverheadWidgetComponent::ShowHealingNumber(const float AppliedAmount
 	{
 		return;
 	}
-	MulticastShowFloatingText(AppliedAmount, ECombatFloatingTextType::Healing);
+	const ACombatUnitCharacter* Unit = Cast<ACombatUnitCharacter>(OwnerActor);
+	MulticastShowFloatingText(AppliedAmount, ECombatFloatingTextType::Healing, Unit ? Unit->GetLifeGeneration() : 0);
 }
 
 void UCombatOverheadWidgetComponent::InitWidget()
 {
+	if (GetNetMode() == NM_DedicatedServer)
+	{
+		return;
+	}
 	Super::InitWidget();
 	// WidgetComponent 也会为编辑器预览创建临时 Widget；这里只允许游戏 World 绑定，
 	// 避免预览对象通过动态委托进入 World Partition External Actor 的保存依赖。
@@ -81,7 +87,8 @@ void UCombatOverheadWidgetComponent::BeginPlay()
 
 void UCombatOverheadWidgetComponent::MulticastShowFloatingText_Implementation(
 	const float Amount,
-	const ECombatFloatingTextType Type)
+	const ECombatFloatingTextType Type,
+	const int64 LifeGeneration)
 {
 	if (GetNetMode() == NM_DedicatedServer)
 	{
@@ -93,6 +100,15 @@ void UCombatOverheadWidgetComponent::MulticastShowFloatingText_Implementation(
 	}
 	if (UCombatOverheadWidget* OverheadWidget = Cast<UCombatOverheadWidget>(GetUserWidgetObject()))
 	{
-		OverheadWidget->AddFloatingText(Amount, Type);
+		OverheadWidget->AddFloatingText(Amount, Type, LifeGeneration);
 	}
+}
+
+void UCombatOverheadWidgetComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	if (UCombatOverheadWidget* OverheadWidget = Cast<UCombatOverheadWidget>(GetUserWidgetObject()))
+	{
+		OverheadWidget->InitializeForUnit(nullptr);
+	}
+	Super::EndPlay(EndPlayReason);
 }

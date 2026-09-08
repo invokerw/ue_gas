@@ -9,7 +9,7 @@ Combat 当前仍位于 `ue_gas` 单 Runtime Module 中，不是独立插件或�
 - 核心发布契约：`combat_v1_rc1`，Contract/Content/GameplayTag/Formula/RNG/Event schema 均为 v1。
 - 权威模型：服务器结算；客户端 TargetData 仅作为请求，目标、资源和结果由服务器复核。
 - M0-M8 共 82 个 Task 已完成并通过用户验收；最近一次发布 Gate 记录为 `Combat.*` 40/40、Editor/Server/Client 构建、资产校验和 Dedicated 双客户端容量场景通过。
-- M8 之后仓库继续增加了可玩的远程攻击 Demo、整理后的 Demo 资产结构，以及纯 C++ 的单位头顶资源/状态/施法条和伤害治疗跳字。
+- M8 之后仓库继续增加了可玩的远程攻击 Demo、整理后的 Demo 资产结构，以及由 C++ 提供只读数据、Widget 蓝图实现视觉的头顶资源/状态/施法条和伤害治疗跳字。
 - 完整 gameplay 预测回滚、跨进程确定性 Replay、召唤物/幻象、物品与经济不属于当前 v1 范围。
 
 以上测试数字是已归档的最近验收证据，不自动代表任意工作区修改已经重新验证。实时任务状态以 [开发进度台账](Doc/CombatSystem/00-Progress-Tracker.md) 为准。
@@ -58,6 +58,7 @@ Combat 当前仍位于 `ue_gas` 单 Runtime Module 中，不是独立插件或�
 - 初次了解：本文 → [文档总索引](Doc/DotaLikeGASCombatSystemDesign.md) → [范围、架构与硬约束](Doc/CombatSystem/01-Scope-Architecture.md)。
 - 理解联机交互：[客户端与服务器交互流程](Doc/CombatSystem/34-Client-Server-Interaction.md) → [Order 与移动](Doc/CombatSystem/07-Order-Movement.md) → [Ability 与目标](Doc/CombatSystem/03-Ability-Targeting-Blueprint.md) → [网络与 UI](Doc/CombatSystem/08-Data-Network-Observability.md)。
 - 理解服务器权威单位移动：[服务器权威单位移动改造与验收](Doc/CombatSystem/35-Server-Authoritative-Movement-Kickoff.md)；当前端到端链路以 34 为准。
+- 调整头顶 UI：[C++ 与蓝图边界、事件接口和资产配置](Doc/CombatSystem/36-Overhead-Blueprint-UI.md)。
 - 开发技能：[Ability、目标与蓝图接口](Doc/CombatSystem/03-Ability-Targeting-Blueprint.md) → [Damage/Heal](Doc/CombatSystem/05-Damage-Heal.md) → [示例技能](Doc/CombatSystem/09-Example-Skills.md) → [技能模板检查表](Doc/CombatSystem/25-M6-Skill-Template-Checklist.md)。
 - 修改内核：先读对应 02-08 专题，再检查 [决策与缺口登记](Doc/CombatSystem/12-Decisions-Gaps.md) 和 [生命周期审计](Doc/CombatSystem/31-M8-Lifecycle-Audit.md)。
 - 验证发布边界：[候选发布决策](Doc/CombatSystem/30-M8-Release-Candidate-Decision.md) → [M8 验收记录](Doc/CombatSystem/33-M8-Acceptance.md)。
@@ -81,3 +82,5 @@ Combat 当前仍位于 `ue_gas` 单 Runtime Module 中，不是独立插件或�
 ```
 
 Dedicated Server/Client Target 需要支持该 Target 的源码引擎。详细环境边界见 [M1 环境决策](Doc/CombatSystem/15-M1-Environment-Decision.md)，完整测试分层见 [测试计划](Doc/CombatSystem/11-Test-Plan.md)。
+
+若 IDE 构建报 `Unable to delete hot-reload file`，先检查日志中的 DLL 是否仍被同工程的 UE 进程占用；后台没有可见窗口的进程也可能持有模块。保存资产并完全退出占用进程后，运行上面的常规 Editor 构建，让 UBT 清理热重载记录并恢复 `UnrealEditor-ue_gas.dll`。使用 `-ModuleWithSuffix` 做临时验证后，交付前应完成这一步，并退出仅用于启动验证的 Editor 实例，避免影响下一次 IDE 构建。

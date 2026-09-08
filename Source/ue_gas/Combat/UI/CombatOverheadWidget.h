@@ -2,113 +2,102 @@
 
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
-
 #include "Combat/UI/CombatOverheadTypes.h"
-
+#include "Combat/View/CombatUnitViewTypes.h"
 #include "CombatOverheadWidget.generated.h"
 
 class ACombatUnitCharacter;
-class UCanvasPanel;
 class UCombatUnitViewComponent;
-class UHorizontalBox;
-class UOverlay;
-class UProgressBar;
-class USizeBox;
-class UTextBlock;
-class UVerticalBox;
-struct FCombatModifierView;
-struct FGameplayTag;
+class UCombatFloatingTextWidget;
+struct FStreamableHandle;
 
 /**
- * 无需 Blueprint 资产即可使用的 DOTA 风格 Unit 头顶信息 Widget。
- * Widget 只消费 CombatUnitView 的复制快照和可丢弃跳字事件，负责资源条、施法/控制状态与本地动画；它不读取 Runtime UObject，也不能修改 gameplay 状态。
+ * 头顶蓝图的只读适配基类：持有 Unit/View 弱绑定、展示快照及名称加载句柄。
+ * 控件树和动画在蓝图实现，本类不构造资源条、不读取 Modifier Runtime、不修改战斗。
+ * 换单位、换生命及销毁时清理旧表现；控件重建后重绑并重送快照。
  */
-UCLASS(BlueprintType)
+UCLASS(BlueprintType, Blueprintable, meta=(DisplayName="战斗头顶界面", ToolTip="提供只读展示数据和生命周期；控件树与动画由蓝图实现。"))
 class UE_GAS_API UCombatOverheadWidget : public UUserWidget
 {
 	GENERATED_BODY()
 
 public:
-	/** 绑定 WidgetComponent 所属 Unit 及其 UI 安全复制 View。 */
+	/** 幂等绑定；空指针立即解绑并清空展示，设计预览不绑定运行时单位。 */
 	void InitializeForUnit(ACombatUnitCharacter* InUnit);
-	/** 在本地添加按伤害/治疗类型着色的跳字，显示值四舍五入为整数；最多同时保留 12 条，超限时移除最旧项。控件未就绪、数值非有限或接近 0 时忽略。 */
-	void AddFloatingText(float Amount, ECombatFloatingTextType Type);
+	/** 接收服务器结果；数值非法、控件未就绪或生命代次不匹配时忽略。 */
+	void AddFloatingText(float Amount, ECombatFloatingTextType Type, int64 LifeGeneration);
+
+	/** 创建配置的跳字并限制最多十二条；蓝图负责添加到容器和播放动画。 */
+	UFUNCTION(BlueprintCallable, BlueprintCosmetic, Category="Combat|UI", meta=(DisplayName="创建战斗跳字", ToolTip="创建本地跳字，最多保留十二条；返回后由蓝图添加到容器。无配置或旧生命载荷返回空。"))
+	UCombatFloatingTextWidget* CreateFloatingText(UPARAM(DisplayName="跳字数据") const FCombatFloatingTextPayload& Data);
+
+	/** 返回最近一次本地只读快照，供蓝图分区刷新。 */
+	UFUNCTION(BlueprintPure, Category="Combat|UI", meta=(DisplayName="获取头顶展示数据", ToolTip="返回本地只读展示快照，不查询战斗 Runtime。"))
+	const FCombatOverheadDisplayData& GetDisplayData() const { return DisplayData; }
+
+	/** 从安全 View 归并多来源状态和资源，不访问控件，便于独立验证。 */
+	static FCombatOverheadDisplayData BuildDisplayData(const FCombatUnitView& View,
+		const TArray<FCombatModifierView>& Modifiers, const TArray<FCombatControlPresentationRule>& Rules,
+		ECombatTeamRelation Relation, const FText& UnitName, const FText& AbilityName);
+	/** 根据服务器绝对时间窗计算进度；无限状态剩余时间为负一。 */
+	static FCombatOverheadProgressData ComputeProgress(const FCombatOverheadDisplayData& Data, double ServerTime);
 
 protected:
-	/** 在纯 C++ Widget 类第一次构建 Slate 树前创建 UMG 控件层级。 */
-	virtual TSharedRef<SWidget> RebuildWidget() override;
-	/** 驱动技能条、控制条、血量拖影和浮动数字动画。 */
-	virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
-	/** 解绑复制 View 委托。 */
+	virtual void NativePreConstruct() override;
+	virtual void NativeConstruct() override;
 	virtual void NativeDestruct() override;
+	virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
+
+	/** 数据变化或重建时推送完整快照，蓝图设置资源、文字与状态。 */
+	UFUNCTION(BlueprintImplementableEvent, BlueprintCosmetic, Category="Combat|UI", meta=(DisplayName="展示数据已变化", ToolTip="数据变化或重建时推送完整只读展示快照。"))
+	void OnDisplayDataChanged(UPARAM(DisplayName="展示数据") const FCombatOverheadDisplayData& Data);
+	/** 只更新活动时间窗；蓝图不得据此结束技能。 */
+	UFUNCTION(BlueprintImplementableEvent, BlueprintCosmetic, Category="Combat|UI", meta=(DisplayName="展示进度已变化", ToolTip="使用校准服务器时间更新本地进度，不改变技能状态。"))
+	void OnProgressChanged(UPARAM(DisplayName="进度数据") const FCombatOverheadProgressData& Progress);
+	/** 收到当前生命的真实结果后触发，可在蓝图创建跳字。 */
+	UFUNCTION(BlueprintImplementableEvent, BlueprintCosmetic, Category="Combat|UI", meta=(DisplayName="收到战斗跳字", ToolTip="有效的当前生命结果到达时触发，只能用于本地表现。"))
+	void OnFloatingTextRequested(UPARAM(DisplayName="跳字数据") const FCombatFloatingTextPayload& Data);
+	/** 原生层移除跳字后，蓝图清空自己的动画和缓存。 */
+	UFUNCTION(BlueprintImplementableEvent, BlueprintCosmetic, Category="Combat|UI", meta=(DisplayName="清空头顶表现", ToolTip="换单位、换生命、销毁或重建时清除旧动画。"))
+	void OnPresentationReset();
+
+	/** 蓝图配置显示策略，C++ 只执行稳定归并。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|UI", meta=(DisplayName="控制状态展示规则", ToolTip="控制标签、名称、优先级和颜色；空数组不显示控制条。", TitleProperty="Label"))
+	TArray<FCombatControlPresentationRule> ControlRules;
+	/** 单条跳字的视觉蓝图。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|UI", meta=(DisplayName="跳字控件类", ToolTip="用于客户端创建跳字；空值禁用跳字，服务器结算不受影响。"))
+	TSubclassOf<UCombatFloatingTextWidget> FloatingTextWidgetClass;
+	/** 仅设计器使用，不建立 World 绑定。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|UI", meta=(DisplayName="设计预览数据", ToolTip="仅在 UMG 设计器使用，可预览资源和状态布局。"))
+	FCombatOverheadDisplayData PreviewData;
 
 private:
-	/** Unit View 或 Modifier View 变化后的统一刷新入口。 */
-	UFUNCTION()
-	void HandleViewChanged();
+	/** View 变化后的唯一刷新入口。 */
+	UFUNCTION() void HandleViewChanged();
+	/** 解绑委托并取消名称加载，可重复执行。 */
+	void UnbindView();
+	/** 移除登记的跳字并通知蓝图复位。 */
+	void ResetPresentation();
+	/** 解析已加载定义；缺失时使用稳定 ID 占位。 */
+	static FText ResolveDefinitionName(const FPrimaryAssetId& DefinitionId);
+	/** 定义变化时异步加载名称，回调检查绑定版本和生命代次。 */
+	void RequestDefinitionNames(const FCombatUnitView& View);
+	/** 用本地指挥单位的复制队伍查询统一 Team 关系。 */
+	ECombatTeamRelation ResolveViewerRelation() const;
 
-	/** 创建固定尺寸的头顶 UI 控件树。 */
-	void BuildWidgetTree();
-	/** 刷新名称、资源、队伍颜色和可见性。 */
-	void RefreshResources();
-	/** 从可见状态中选最高优先级控制状态决定颜色，并从对应效果快照获取时间窗；文字列出当前所有可识别控制状态。这里只选择展示内容，不改变控制效果。 */
-	void RefreshControlState();
-	/** 从当前 Ability 时间窗刷新技能施法/引导条。 */
-	void RefreshAbilityState();
-	/** 施法/引导条或控制条出现时隐藏名字；两者都消失后恢复。 */
-	void RefreshNameVisibility();
-	/** 按最大生命每 250 点估算分段数，限制为 1 到 12 段后均分条宽；这是视觉刻度，不保证每段始终精确代表 250 点生命。 */
-	void RebuildHealthSegments(float MaxHealth);
-	/** 将定义名中的下划线替换为空格并转大写，供临时界面展示；无效 ID 返回 UNIT，不查询本地化名称资产。 */
-	static FString FormatDefinitionName(const FPrimaryAssetId& DefinitionId);
-	/** 将已知控制标签映射为固定中文短名称、展示优先级和颜色；未知标签返回 false，输出参数不变。 */
-	static bool DescribeControlTag(const FGameplayTag& Tag, FString& OutLabel, int32& OutPriority, FLinearColor& OutColor);
-
-	/** 单条本地浮动文字的控件引用、动画时间与错位信息。 */
-	struct FFloatingEntry
-	{
-		TWeakObjectPtr<UTextBlock> Text;
-		float Age = 0.0f;
-		float Lifetime = 1.15f;
-		float HorizontalOffset = 0.0f;
-	};
-
-	/** 当前绑定的 Unit 与 UI 安全 View；任一失效后停止刷新。 */
+	/** Unit 弱引用允许 Widget 重建后恢复绑定；组件 EndPlay 会显式清空。 */
 	TWeakObjectPtr<ACombatUnitCharacter> BoundUnit;
 	TWeakObjectPtr<UCombatUnitViewComponent> BoundView;
-
-	/** 运行时构建的 UMG 控件树引用，只用于本地表现更新。 */
-	UPROPERTY(Transient) TObjectPtr<UVerticalBox> InfoStack;
-	UPROPERTY(Transient) TObjectPtr<UTextBlock> NameText;
-	UPROPERTY(Transient) TObjectPtr<USizeBox> StatusContainer;
-	UPROPERTY(Transient) TObjectPtr<UProgressBar> StatusBar;
-	UPROPERTY(Transient) TObjectPtr<UTextBlock> StatusText;
-	UPROPERTY(Transient) TObjectPtr<USizeBox> AbilityContainer;
-	UPROPERTY(Transient) TObjectPtr<UProgressBar> AbilityBar;
-	UPROPERTY(Transient) TObjectPtr<UTextBlock> AbilityText;
-	UPROPERTY(Transient) TObjectPtr<UProgressBar> HealthLagBar;
-	UPROPERTY(Transient) TObjectPtr<UProgressBar> HealthBar;
-	UPROPERTY(Transient) TObjectPtr<UCanvasPanel> HealthSegmentCanvas;
-	UPROPERTY(Transient) TObjectPtr<UTextBlock> HealthText;
-	UPROPERTY(Transient) TObjectPtr<USizeBox> ManaContainer;
-	UPROPERTY(Transient) TObjectPtr<UProgressBar> ManaBar;
-	UPROPERTY(Transient) TObjectPtr<UCanvasPanel> FloatingCanvas;
-
-	/** 当前仍在播放的可丢弃浮动文字。 */
-	TArray<FFloatingEntry> FloatingEntries;
-	/** 生命条即时值、拖影值和分段重建缓存。 */
-	float HealthPercent = 1.0f;
-	float DisplayedLagHealthPercent = 1.0f;
-	float CachedMaxHealth = -1.0f;
-	/** 当前控制状态与技能状态的服务器绝对时间窗。 */
-	double StatusStartTime = 0.0;
-	double StatusEndTime = 0.0;
-	double AbilityStartTime = 0.0;
-	double AbilityEndTime = 0.0;
-	/** 时间窗对应的显示文本和技能引导状态。 */
-	FString StatusBaseLabel;
-	FString AbilityBaseLabel;
-	bool bAbilityChanneling = false;
-	/** 为同帧跳字提供稳定的本地错位序号。 */
+	/** 本 Widget 独占的异步加载句柄，换绑定或销毁时取消。 */
+	TSharedPtr<FStreamableHandle> DefinitionLoadHandle;
+	FPrimaryAssetId RequestedUnitId;
+	FPrimaryAssetId RequestedAbilityId;
+	/** 异步加载版本；每次解绑递增，拒绝旧回调。 */
+	uint64 BindingRevision = 0;
+	bool bReadyForEvents = false;
 	int32 FloatingSequence = 0;
+	/** 本地派生快照，不复制、不写回 ASC。 */
+	UPROPERTY(Transient) FCombatOverheadDisplayData DisplayData;
+	/** 持有至动画结束或上限淘汰，不跨 Unit 生命。 */
+	UPROPERTY(Transient) TArray<TObjectPtr<UCombatFloatingTextWidget>> FloatingWidgets;
 };

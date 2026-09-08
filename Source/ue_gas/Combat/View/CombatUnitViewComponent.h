@@ -20,6 +20,8 @@ class UE_GAS_API UCombatUnitViewComponent : public UActorComponent
 	GENERATED_BODY()
 
 public:
+	/** v2 增加显式技能阶段及阶段时间窗；不改变核心 Combat Event schema。 */
+	static constexpr int32 PresentationSchemaVersion = 2;
 	UCombatUnitViewComponent();
 
 	/** 返回当前客户端或服务器的单位 View。 */
@@ -51,6 +53,8 @@ public:
 		double StartTime,
 		double EndTime,
 		bool bChanneling);
+	/** 服务器在引导调度成功建立时切换当前阶段；只接受匹配的激活 ID。 */
+	void NotifyAbilityChannelStarted(FCombatEventId ActivationId, double StartTime, double EndTime);
 	/** 服务器只在激活 ID 与当前展示技能一致时清空施法信息，防止较早技能的结束通知抹掉新技能。 */
 	void NotifyAbilityEnded(FCombatEventId ActivationId);
 	/** FastArray 回调统一入口。 */

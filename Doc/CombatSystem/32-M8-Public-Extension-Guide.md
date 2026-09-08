@@ -40,6 +40,8 @@
 
 ## 3. 禁止旁路
 
+头顶 UI 的当前扩展入口是继承 `UCombatOverheadWidget` 的 Widget 蓝图：实现“展示数据已变化”“展示进度已变化”“收到战斗跳字”“清空头顶表现”四个事件，在角色的 `CombatOverheadUI.WidgetClass` 中指定视觉资产。单条数字继承 `UCombatFloatingTextWidget`，实现“初始化跳字表现”；布局、颜色与动画由蓝图维护，View 绑定、代次和销毁清理由 C++ 管理。无需在 C++ 中声明具体控件名，详见 [36](36-Overhead-Blueprint-UI.md)。
+
 - 蓝图或技能代码不能直接修改 Health，必须调用 Damage/Heal 公共入口。
 - 不能用 Actor Timer 驱动 DOT、引导、攻击点或 Aura 协调，必须使用 Combat Scheduler。
 - 不能直接 `SetActorLocation` 实现强制位移，必须使用 MotionComponent。

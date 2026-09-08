@@ -59,6 +59,7 @@
 | ADR-042 | 已定 | M8 不做无 profiler owner 的推测性 pooling/relevancy/批处理优化 | M7 容量实测远低于预算；保留 Handle generation、稳定顺序和 exactly-once，未来超预算时按具体 owner 独立优化与回归 |
 | ADR-043 | 已定 | 可玩 Combat Unit 统一由服务器 `ACombatUnitAIController` Possess 和移动；`PlayerController` 只 Possess Command Pawn、通过 Unit Owner 建立指挥连接；Combat Unit 在所有客户端均为 SimulatedProxy | 消除 owning client PathFollowing 与本地 Pawn 解穿透造成的非权威位移；保留 Order RPC、ASC Mixed、服务器 Capsule 硬阻挡，并只使用一种服务器 Crowd 避让；实施与 Gate 见 [35](35-Server-Authoritative-Movement-Kickoff.md) |
 | ADR-044 | 已定 | Order 的施法与普攻朝向准备复用 `CharacterMovement.RotationRate.Yaw`，由移动组件逐帧旋转；两者共用 UnitData 起手容差，默认 15°，达到容差后才开始前摇，无目标施法不转身 | 修正 `Facing` 直接设置最终朝向的实现；连续旋转只在服务器执行，Scheduler 负责复核、超时与推进队列。按用户反馈统一起手容差，复用 `AttackFacingToleranceDegrees` 并保留字段名、既有 RPC、Ability/Attack 事件顺序及数据 schema，无新增转速/容差副本或资产迁移；规则和验证见 [07](07-Order-Movement.md) |
+| ADR-045 | 已定 | 头顶 UI 使用 C++ 只读展示适配基类与 Widget Blueprint；布局、样式、血量拖影和跳字动画在蓝图，复制、状态归并、服务器时间与绑定生命周期在 C++ | 头顶展示接口及 View 投影进入 v2：显式区分前摇/引导，跳字携带目标生命代次，FastArray 完整接收后通知；保留伤害/治疗公开签名及核心 `combat_v1_rc1`。新增显示名称字段有安全空值，不改变 DefinitionId 或内容 schema；迁移与验证见 [36](36-Overhead-Blueprint-UI.md) |
 
 ## 3. 本轮查漏补缺摘要
 

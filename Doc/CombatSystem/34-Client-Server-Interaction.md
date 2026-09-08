@@ -233,6 +233,8 @@ DamageSubsystem 只接受服务器请求。它按固定管线执行权限/生命
 
 ASC 默认按 Unit 网络 Owner 自动选择复制模式：玩家拥有的 Unit 使用 Mixed，纯 AI Unit 使用 Minimal。Owner 与非 Owner UI 都优先读取 `UCombatUnitViewComponent` 的安全扁平投影；View 和 Widget 不能反向驱动服务器 gameplay。
 
+头顶界面的 C++ 父类负责 View 订阅、状态归并、明确的前摇/引导阶段、服务器时间和生命代次校验，再推送只读展示事件。`WBP_CombatOverhead` 负责资源条、状态文字和血量缓降，`WBP_CombatFloatingText` 负责数字动画。跳字 RPC 携带结果发生时的目标 LifeGeneration，重生后丢弃旧生命数字；专用服务器不创建 Widget。展示接口 v2 要求联机双方使用相同构建，拆分与配置入口见 [36 头顶 UI](36-Overhead-Blueprint-UI.md)。
+
 Projectile 表现层允许客户端创建纯视觉预测对象，并通过 PredictionKey 与复制到达的服务器 Projectile reconcile。预测对象只能负责视觉，禁止 sweep、Damage、ApplyModifier、Finalize Attack 或生成权威事件。
 
 ## 6. 三个常见误解

@@ -36,9 +36,11 @@ public:
 protected:
 	/** 专用服务器开始运行时隐藏头顶组件；跳字多播实现也会在专用服务器端直接返回。 */
 	virtual void BeginPlay() override;
+	/** 组件结束时主动断开 Widget 与 Unit/View，清空旧生命的表现。 */
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 private:
 	/** 跳字是可丢弃的瞬时表现，不参与任何 gameplay 判定。 */
 	UFUNCTION(NetMulticast, Unreliable)
-	void MulticastShowFloatingText(float Amount, ECombatFloatingTextType Type);
+	void MulticastShowFloatingText(float Amount, ECombatFloatingTextType Type, int64 LifeGeneration);
 };

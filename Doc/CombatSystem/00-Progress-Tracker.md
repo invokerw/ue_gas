@@ -1,10 +1,10 @@
 # 00 开发进度台账
 
-> 最后更新：2026-09-07
+> 最后更新：2026-09-08
 > 当前阶段：M8 已验收；`combat_v1_rc1` 核心契约保持冻结；SAM 验收反馈已修复并重新待验收
 > 历史 M0-M8：82/82 Task 完成，9/9 里程碑由用户验收
 > SAM 进度：10/10 Task 完成；修正 Gate 已通过，等待用户复验
-> 当前专项：施法／普攻起手容差统一为 15°（ADR-044）已完成；Editor 构建、Combat 48/48 与 Demo 配置回读通过
+> 当前专项：头顶 UI 蓝图拆分已完成；工作区最终 Combat 53/53、资产 7/7、三 Target 构建和 Dedicated 双客户端回归通过。UE 5.8.1 启动占用已修复，常规构建和头顶 UI 3/3 复验通过
 
 本文件是项目执行状态的唯一来源。[10 实施路线图](10-Implementation-Roadmap.md)定义任务内容和依赖，本文件记录实际状态、验证证据和用户验收结论。
 
@@ -196,6 +196,23 @@
 2026-09-07 转身速率统一专项首轮验证（起手容差调整前）：已完成。CastPoint/CastTarget 与普攻通过 `Facing` 等待移动组件按 `RotationRate.Yaw` 转身，当时施法在 1° 内才开始前摇，无目标技能保持朝向；保留允许尸体目标的配置。Editor Development 模块后缀构建成功，最终 `Combat.*` 48/48（新增 4 项）、0 失败/0 测试警告，资产校验 7/7、0 Error/0 Warning。独立单玩家 Demo PIE 回读新移动组件及 640°/s，背身 180° 后 0.283 s 进入前摇、0.534 s 释放 Order，停止转身和普通导航实测通过。命令、边界与日志见 `Saved/AbilityFacing/Validation.md`、`Automation/index.json`、`AssetReport.json`、`PieSmoke.json`。当前已打开的 Editor 需重启加载新模块；本次未运行 Server/Client Target 与 Dedicated 联机，不替代 SAM 用户验收。
 
 2026-09-07 起手容差统一：已完成。按用户反馈，施法与普攻共用 UnitData 的起手容差，默认均为 15°；保留 `AttackFacingToleranceDegrees` 字段名与资产兼容，中文配置说明同步更新。Editor Development 模块后缀构建成功，`Combat.*` 48/48、0 失败/0 测试警告，覆盖容差外等待、进入 15° 后起手及跨 ±180° 最短转向；UE MCP 回读 Demo 玩家与木桩容差均为 15。证据见 `Saved/AbilityFacingTolerance/Validation.md`、`EditorBuild.log`、`Automation/index.json`。本轮未重跑 PIE、资产 commandlet 或 Server/Client/Dedicated；当前 Editor 需重启加载新模块。
+
+## 12.1 Post-M8：头顶 UI 蓝图拆分
+
+> 状态：已完成（2026-09-07）。设计、维护入口与迁移见 [36](36-Overhead-Blueprint-UI.md)，决策 ADR-045；核心 `combat_v1_rc1` 不变，独立展示接口 / View 投影为 v2。
+
+| Task | 内容 | 状态 | 证据 |
+| --- | --- | --- | --- |
+| UI-001 | C++ 展示接口、状态时间窗与生命周期 | 已完成 | 3 项 `Combat.UI.Overhead.*`；客户端展示不依赖服务器内部事件序号 |
+| UI-002 | 头顶与跳字 Widget Blueprint、Demo 配置迁移 | 已完成 | 2 个 WBP + 2 个角色蓝图编译，7 个修改/新增资产保存和冷回读；Demo 显示名解析正常 |
+| UI-003 | Editor/蓝图/资产、Automation 与联机验证 | 已完成 | Editor `9140` / Server / Client 构建；Combat 53/53、资产定义 7/7、双端 PIE 及 Dedicated 两客户端 |
+| UI-004 | 当前行为、公开接口和迁移文档同步 | 已完成 | README、索引、08/09/12/32/34/36 与本台账同步 |
+
+证据：`Saved/OverheadBlueprint/Validation.md`；最终 Automation 为 `AutomationFinal2/index.json`（2026-09-07 09:46:07 UTC，53 成功、0 失败/警告/未运行），资产为 `AssetReportFinal.json`（7 个定义、0 Error/Warning）。`PieSmoke.json` 记录两端前摇/引导、投射物跳字、驱散和重生清理通过；`DedicatedServerFinal.log` 与两个 `DedicatedClient*Final.log` 记录最终模块 64 单位 / 256 Modifier、两连接、正式 RPC 与移动回归，Budget=Pass、静止目标水平位移 0。该轮验证已重启 Editor 到最终模块并打开头顶蓝图。
+
+边界：未完整 cook / 打包；源码版 UE 5.8 用于 Server/Client Target 编译，安装版 UE 5.8.1 用于资产、Editor 和独立 `-server/-game` smoke。Dedicated 沿用基线的工具插件初始化和 Mixed ASC 动态 GE 定义告警，详见验证记录；不将其计为本次新增 UI 错误，也不宣称整份日志零错误。SAM 用户验收仍待复验。
+
+2026-09-08 启动收尾修正：上轮残留的隐藏 Editor 进程占用 `UnrealEditor-ue_gas-9140.dll`，导致 Rider 常规构建在清理热重载文件时失败。UE MCP 确认 All Saved、PIE 未运行后结束该旧进程；UE 5.8.1 常规 Editor 构建通过，UBT 自动清理后缀产物并把模块引用恢复为 `UnrealEditor-ue_gas.dll`。实际启动 Editor、加载 Demo 后 `Combat.UI.Overhead.*` 3/3 通过，测试实例自动退出（ExitCode=0）。本轮未修改源码或资产；启动与构建证据见 `Saved/EditorStartupFix/Validation.md`、`EditorBuild.log`、`EditorStartup.log` 和 `Automation/index.json`。
 
 ## 13. 用户验收记录
 

@@ -17,24 +17,10 @@ bool FCombatModifierView::HasSamePayload(const FCombatModifierView& Other) const
 		&& bIsDebuff == Other.bIsDebuff && bDispellable == Other.bDispellable;
 }
 
-void FCombatModifierViewArray::PostReplicatedAdd(const TArrayView<int32> AddedIndices, const int32 FinalSize)
+void FCombatModifierViewArray::PostReplicatedReceive(
+	const FFastArraySerializer::FPostReplicatedReceiveParameters& Parameters)
 {
-	(void)AddedIndices;
-	(void)FinalSize;
-	if (Owner) { Owner->HandleModifierViewsReplicated(); }
-}
-
-void FCombatModifierViewArray::PostReplicatedChange(const TArrayView<int32> ChangedIndices, const int32 FinalSize)
-{
-	(void)ChangedIndices;
-	(void)FinalSize;
-	if (Owner) { Owner->HandleModifierViewsReplicated(); }
-}
-
-void FCombatModifierViewArray::PreReplicatedRemove(const TArrayView<int32> RemovedIndices, const int32 FinalSize)
-{
-	(void)RemovedIndices;
-	(void)FinalSize;
+	(void)Parameters;
 	if (Owner) { Owner->HandleModifierViewsReplicated(); }
 }
 
@@ -170,9 +156,25 @@ void UCombatUnitViewComponent::NotifyAbilityStarted(
 	}
 	UnitView.ActiveAbilityDefinitionId = DefinitionId;
 	UnitView.AbilityActivationId = ActivationId;
+	UnitView.AbilityPhase = ECombatAbilityViewPhase::Casting;
 	UnitView.AbilityServerStartTime = StartTime;
 	UnitView.AbilityServerEndTime = EndTime;
 	UnitView.bChanneling = bChanneling;
+	OnUnitViewChanged.Broadcast();
+	Unit->ForceNetUpdate();
+}
+
+void UCombatUnitViewComponent::NotifyAbilityChannelStarted(
+	const FCombatEventId ActivationId, const double StartTime, const double EndTime)
+{
+	ACombatUnitCharacter* Unit = GetOwnerUnit();
+	if (!Unit || !Unit->HasAuthority() || UnitView.AbilityActivationId != ActivationId)
+	{
+		return;
+	}
+	UnitView.AbilityPhase = ECombatAbilityViewPhase::Channeling;
+	UnitView.AbilityServerStartTime = StartTime;
+	UnitView.AbilityServerEndTime = EndTime;
 	OnUnitViewChanged.Broadcast();
 	Unit->ForceNetUpdate();
 }
@@ -186,6 +188,7 @@ void UCombatUnitViewComponent::NotifyAbilityEnded(const FCombatEventId Activatio
 	}
 	UnitView.ActiveAbilityDefinitionId = FPrimaryAssetId();
 	UnitView.AbilityActivationId = FCombatEventId();
+	UnitView.AbilityPhase = ECombatAbilityViewPhase::None;
 	UnitView.AbilityServerStartTime = 0.0;
 	UnitView.AbilityServerEndTime = 0.0;
 	UnitView.bChanneling = false;

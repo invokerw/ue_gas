@@ -154,6 +154,10 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, AssetRegistrySearchable, Category="Combat|Identity", meta=(DisplayName="稳定定义名", ToolTip="用于生成 PrimaryAssetId 的 lower_snake_case 名称，在同一定义类型内必须唯一；重命名资产文件不会改变此身份。"))
 	FName DefinitionName;
 
+	/** 客户端本地化展示名称；不参与稳定身份与服务器判定，空值回退 DefinitionName。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Presentation", meta=(DisplayName="显示名称", ToolTip="用于 UI 的本地化名称；空值显示稳定定义名，修改名称不会改变 DefinitionId 或战斗数值。"))
+	FText DisplayNameText;
+
 	/** 当前 C++ 数据结构版本，由代码维护，内容迁移与兼容检查使用。 */
 	UPROPERTY(VisibleDefaultsOnly, BlueprintReadOnly, AssetRegistrySearchable, Category="Combat|Identity", meta=(DisplayName="数据结构版本", ToolTip="当前 Combat 定义的数据结构版本，由代码维护并用于内容兼容与迁移校验。"))
 	int32 SchemaVersion = 1;
