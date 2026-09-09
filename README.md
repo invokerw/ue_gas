@@ -12,14 +12,21 @@ Combat 当前仍位于 `ue_gas` 单 Runtime Module 中，不是独立插件或�
 - M8 之后仓库继续增加了可玩的远程攻击 Demo、整理后的 Demo 资产结构，以及由 C++ 提供只读数据、Widget 蓝图实现视觉的头顶资源/状态/施法条和伤害治疗跳字。
 - 完整 gameplay 预测回滚、跨进程确定性 Replay、召唤物/幻象、物品与经济不属于当前 v1 范围。
 
-以上测试数字是已归档的最近验收证据，不自动代表任意工作区修改已经重新验证。实时任务状态以 [开发进度台账](Doc/CombatSystem/00-Progress-Tracker.md) 为准。
+以上测试数字是已归档的最近验收证据，不自动代表任意工作区修改已经重新验证。实时任务状态以 [开发进度台账](Doc/CombatSystem/00-Project/00-01-Progress-Tracker.md) 为准。
 
 ## 快速入口
 
 1. 安装 UE 5.8，并确保 Git LFS 已拉取 `.uasset`、`.umap` 等二进制资产。
 2. 打开 `ue_gas.uproject`。可玩 Demo 地图位于 `/Game/Combat/Demo/Maps/L_CombatDemo`。
 3. 自动化测试地图位于 `/Game/Combat/Tests/L_CombatTest`。
-4. Combat C++ 入口位于 `Source/ue_gas/Combat`；新增技能先阅读 [公共技能扩展与迁移指南](Doc/CombatSystem/32-M8-Public-Extension-Guide.md)。
+4. Combat C++ 入口位于 `Source/ue_gas/Combat`；新增技能先阅读 [公共技能扩展与迁移指南](Doc/CombatSystem/20-Content/20-03-M8-Public-Extension-Guide.md)。
+5. AI 协作开发先阅读 [AI-Native 开发流程与文档体系](Doc/CombatSystem/00-Project/00-05-AI-Native-Development-Workflow.md)，新需求或修复使用 [Spec 模板](Doc/CombatSystem/Specs/_template.spec.md)。
+6. 任务开始用 [Intake](Doc/CombatSystem/00-Project/_intake-template.md) 整理边界，交付前按 [Gate 检查表](Doc/CombatSystem/00-Project/_gate-checklist.md) 记录验证结果；这些内容可以合并到任务 Spec，独立记录时使用 [交付记录模板](Doc/CombatSystem/00-Project/_delivery-record-template.md)。
+7. 让 Agent 判断应该调用哪个 Skill 时使用 [Combat 任务路由 Skill](Skills/combat-task-router/SKILL.md)，它会在交付后按证据自评并执行受控调优。
+8. 开发功能任务时使用 [Combat 功能开发 Skill](Skills/combat-feature-development/SKILL.md)，它会按 AI-Native 流程推进 Spec、Gate、验证和 Reflect。
+9. 实现 GAS/Combat 技能时使用 [Combat 技能开发 Skill](Skills/combat-skill-development/SKILL.md)，它会在通用流程上补齐 Ability、DataAsset、Modifier、Projectile、蓝图和技能验收。
+
+项目 Skill 全部位于仓库内的 `Skills/`，按项目路径读取，不安装到用户级 Codex Skill 目录，也不影响其他项目。
 
 Demo 操作：右键点敌方单位持续普攻，超出范围时自动追击；右键点地面移动。按 **A** 进入选敌模式，再左键点敌人确认普攻；**S** 停止，**Escape** 取消选敌，Q/W/E/R 施放技能。A 模式点地面不会自动找敌或执行攻击移动（Attack Move）。
 
@@ -55,18 +62,23 @@ Demo 操作：右键点敌方单位持续普攻，超出范围时自动追击；
 | `Source/ue_gas/Combat/Tests` | `Combat.*` Automation 测试 |
 | `Content/Combat/Demo` | 可玩 Demo 地图、角色、远程攻击和输入资产 |
 | `Content/Combat/Tests` | PIE、Dedicated 与容量测试地图 |
-| `Doc/CombatSystem` | 架构、专题契约、决策、测试和验收证据 |
+| `Doc/CombatSystem/00-Project` | 当前状态、AI 开发流程、路线图、测试计划和决策入口 |
+| `Doc/CombatSystem/10-Architecture` | 当前运行时、联机、移动和 UI 架构契约 |
+| `Doc/CombatSystem/20-Content` | 示例技能、技能模板和公共扩展指南 |
+| `Doc/CombatSystem/30-Tooling` | UE MCP 操作与诊断配方 |
+| `Doc/CombatSystem/90-History` | M0–M8 冻结决策和验收证据 |
 
 ## 文档阅读顺序
 
-- 初次了解：本文 → [文档总索引](Doc/DotaLikeGASCombatSystemDesign.md) → [范围、架构与硬约束](Doc/CombatSystem/01-Scope-Architecture.md)。
-- 理解联机交互：[客户端与服务器交互流程](Doc/CombatSystem/34-Client-Server-Interaction.md) → [Order 与移动](Doc/CombatSystem/07-Order-Movement.md) → [Ability 与目标](Doc/CombatSystem/03-Ability-Targeting-Blueprint.md) → [网络与 UI](Doc/CombatSystem/08-Data-Network-Observability.md)。
-- 理解服务器权威单位移动：[服务器权威单位移动改造与验收](Doc/CombatSystem/35-Server-Authoritative-Movement-Kickoff.md)；当前端到端链路以 34 为准。
-- 调整头顶 UI：[C++ 与蓝图边界、事件接口和资产配置](Doc/CombatSystem/36-Overhead-Blueprint-UI.md)。
-- 开发技能：[Ability、目标与蓝图接口](Doc/CombatSystem/03-Ability-Targeting-Blueprint.md) → [Damage/Heal](Doc/CombatSystem/05-Damage-Heal.md) → [示例技能](Doc/CombatSystem/09-Example-Skills.md) → [技能模板检查表](Doc/CombatSystem/25-M6-Skill-Template-Checklist.md)。
-- 修改内核：先读对应 02-08 专题，再检查 [决策与缺口登记](Doc/CombatSystem/12-Decisions-Gaps.md) 和 [生命周期审计](Doc/CombatSystem/31-M8-Lifecycle-Audit.md)。
-- 验证发布边界：[候选发布决策](Doc/CombatSystem/30-M8-Release-Candidate-Decision.md) → [M8 验收记录](Doc/CombatSystem/33-M8-Acceptance.md)。
+- 初次了解：本文 → [文档总索引](Doc/CombatSystem/README.md) → [范围、架构与硬约束](Doc/CombatSystem/10-Architecture/10-01-Scope-Architecture.md)。
+- 理解联机交互：[客户端与服务器交互流程](Doc/CombatSystem/10-Architecture/10-09-Client-Server-Interaction.md) → [Order 与移动](Doc/CombatSystem/10-Architecture/10-07-Order-Movement.md) → [Ability 与目标](Doc/CombatSystem/10-Architecture/10-03-Ability-Targeting-Blueprint.md) → [网络与 UI](Doc/CombatSystem/10-Architecture/10-08-Data-Network-Observability.md)。
+- 理解服务器权威单位移动：[服务器权威单位移动改造与验收](Doc/CombatSystem/10-Architecture/10-10-Server-Authoritative-Movement-Kickoff.md)；当前端到端链路以 10-09 为准。
+- 调整头顶 UI：[C++ 与蓝图边界、事件接口和资产配置](Doc/CombatSystem/10-Architecture/10-11-Overhead-Blueprint-UI.md)。
+- 开发技能：[Ability、目标与蓝图接口](Doc/CombatSystem/10-Architecture/10-03-Ability-Targeting-Blueprint.md) → [Damage/Heal](Doc/CombatSystem/10-Architecture/10-05-Damage-Heal.md) → [示例技能](Doc/CombatSystem/20-Content/20-01-Example-Skills.md) → [技能模板检查表](Doc/CombatSystem/20-Content/20-02-M6-Skill-Template-Checklist.md)。
+- 修改内核：先读对应 10-02–10-08 专题，再检查 [决策与缺口登记](Doc/CombatSystem/00-Project/00-04-Decisions-Gaps.md) 和 [生命周期审计](Doc/CombatSystem/90-History/90-16-M8-Lifecycle-Audit.md)。
+- 验证发布边界：[候选发布决策](Doc/CombatSystem/90-History/90-15-M8-Release-Candidate-Decision.md) → [M8 验收记录](Doc/CombatSystem/90-History/90-17-M8-Acceptance.md)。
 - Agent 或自动化开发：先读根目录 [agent.md](agent.md)。
+- AI 开发流程与 Spec：先读 [00-05 AI-Native 开发流程](Doc/CombatSystem/00-Project/00-05-AI-Native-Development-Workflow.md)，状态和证据仍以 [00-01 开发进度台账](Doc/CombatSystem/00-Project/00-01-Progress-Tracker.md) 为准。
 
 ## 验证命令模板
 
@@ -85,6 +97,21 @@ Demo 操作：右键点敌方单位持续普攻，超出范围时自动追击；
   -Report="<REPO>\Saved\CombatValidation\CombatAssetReport.json"
 ```
 
-Dedicated Server/Client Target 需要支持该 Target 的源码引擎。详细环境边界见 [M1 环境决策](Doc/CombatSystem/15-M1-Environment-Decision.md)，完整测试分层见 [测试计划](Doc/CombatSystem/11-Test-Plan.md)。
+Dedicated Server/Client Target 需要支持该 Target 的源码引擎。详细环境边界见 [M1 环境决策](Doc/CombatSystem/90-History/90-02-M1-Environment-Decision.md)，完整测试分层见 [测试计划](Doc/CombatSystem/00-Project/00-03-Test-Plan.md)。
+
+文档体系校验可在仓库根目录运行：
+
+```bash
+python3 -B Tools/validate_docs.py
+git diff --check
+```
+
+文档检查覆盖必需入口、目录迁移、Markdown 本地目标路径、尾随空格和 Spec 格式；页内锚点、外部链接和文档语义需要另行审查。当前采用本地开发与用户验收流程，交付或提交前运行上述命令。它们不能替代 UE 编译、Automation、PIE 或 Dedicated 验证。
+
+需要保存文档校验结果时，添加 `--report Saved/DocValidation/report.json`。修改校验脚本时，再运行其正反例测试：
+
+```bash
+python3 -B -m unittest discover -s Tools/Tests -p 'test_validate_docs.py' -v
+```
 
 若 IDE 构建报 `Unable to delete hot-reload file`，先检查日志中的 DLL 是否仍被同工程的 UE 进程占用；后台没有可见窗口的进程也可能持有模块。保存资产并完全退出占用进程后，运行上面的常规 Editor 构建，让 UBT 清理热重载记录并恢复 `UnrealEditor-ue_gas.dll`。使用 `-ModuleWithSuffix` 做临时验证后，交付前应完成这一步，并退出仅用于启动验证的 Editor 实例，避免影响下一次 IDE 构建。

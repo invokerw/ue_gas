@@ -1,24 +1,27 @@
 # Combat 项目 Agent 开发规则
 
-本文是 `ue_gas` 仓库的长期开发约束，适用于整个仓库。开始任务前必须完整阅读本文；用户当前任务中的明确要求优先于本文。若确需突破规则，先说明影响，并在 `Doc/CombatSystem/12-Decisions-Gaps.md` 增加或更新 ADR/Gap。
+本文是 `ue_gas` 仓库的长期开发约束，适用于整个仓库。开始任务前必须完整阅读本文；用户当前任务中的明确要求优先于本文。若确需突破规则，先说明影响，并在 `Doc/CombatSystem/00-Project/00-04-Decisions-Gaps.md` 增加或更新 ADR/Gap。
 
 ## 1. 项目事实
 
 - 引擎基线是 Unreal Engine 5.8。
 - Combat 位于 `Source/ue_gas/Combat`，当前保持在 `ue_gas` 单 Runtime Module 中。
 - 核心发布契约是 `combat_v1_rc1`；发布边界由 `FCombatReleaseContract`、版本常量、自动化和文档共同保护。
-- `Doc/CombatSystem/00-Progress-Tracker.md` 是任务状态的唯一来源。`10-Implementation-Roadmap.md` 是历史 WBS 和 Gate 定义，不能用它判断当前完成度。
+- `Doc/CombatSystem/00-Project/00-01-Progress-Tracker.md` 是任务状态的唯一来源。`Doc/CombatSystem/00-Project/00-02-Implementation-Roadmap.md` 是历史 WBS 和 Gate 定义，不能用它判断当前完成度。
 - `Content/Combat/Demo` 是可玩内容；`Content/Combat/Tests` 和 `Source/ue_gas/Combat/Tests` 是验证基础设施，不能把测试专用旁路带入生产玩法。
 
 ## 2. 开工前
 
-1. 阅读 `README.md`、进度台账、架构硬约束和与任务直接相关的专题文档。
-2. 修改技能或公开扩展面时，额外阅读 `32-M8-Public-Extension-Guide.md` 和 `25-M6-Skill-Template-Checklist.md`。
-3. 修改单位控制、普通移动、PathFollowing、单位碰撞或服务器避让时，额外阅读 `35-Server-Authoritative-Movement-Kickoff.md`，并以 `34-Client-Server-Interaction.md` 核对当前端到端行为。
-4. 修改异步对象、Handle、Delegate 或 teardown 时，额外阅读 `31-M8-Lifecycle-Audit.md`。
-5. 检查工作区状态，保留用户已有修改；不覆盖、不格式化、不回退无关文件。
-6. 若仓库根目录存在 `.codegraph/`，理解或定位代码时先使用 CodeGraph；没有索引再使用 `rg` 和直接阅读源码。
-7. 涉及蓝图、DataAsset、关卡或 PIE 时，优先通过 UE MCP 读取真实 Editor 状态；修改后回读、编译蓝图、保存资产并执行相应验证。MCP 不可用时记录降级方式。
+1. 先按 [Combat 任务路由 Skill](Skills/combat-task-router/SKILL.md) 判断主 Skill；纯咨询不创建虚假 Spec。
+2. 阅读 `README.md`、进度台账、架构硬约束和与任务直接相关的专题文档。
+3. 修改技能或公开扩展面时，额外阅读 `Doc/CombatSystem/20-Content/20-03-M8-Public-Extension-Guide.md` 和 `Doc/CombatSystem/20-Content/20-02-M6-Skill-Template-Checklist.md`。
+4. 修改单位控制、普通移动、PathFollowing、单位碰撞或服务器避让时，额外阅读 `Doc/CombatSystem/10-Architecture/10-10-Server-Authoritative-Movement-Kickoff.md`，并以 `Doc/CombatSystem/10-Architecture/10-09-Client-Server-Interaction.md` 核对当前端到端行为。
+5. 修改异步对象、Handle、Delegate 或 teardown 时，额外阅读 `Doc/CombatSystem/90-History/90-16-M8-Lifecycle-Audit.md`。
+6. 检查工作区状态，保留用户已有修改；不覆盖、不格式化、不回退无关文件。
+7. 若仓库根目录存在 `.codegraph/`，理解或定位代码时先使用 CodeGraph；没有索引再使用 `rg` 和直接阅读源码。
+8. 涉及蓝图、DataAsset、关卡或 PIE 时，优先通过 UE MCP 读取真实 Editor 状态；修改后回读、编译蓝图、保存资产并执行相应验证。MCP 不可用时记录降级方式。
+
+项目级 Skill 只允许存放并读取于仓库 `Skills/`；不得复制到 `/Users/admin/.codex/skills` 或其他用户级目录。Skill 的创建和维护使用 `skill-creator` 规则，但产物仍保留在本仓库。
 
 ## 3. 不可破坏的架构约束
 
@@ -85,7 +88,8 @@
 
 | 变更类型 | 最低验证 |
 | --- | --- |
-| 仅 Markdown 文档 | 相对链接检查、过时状态检索、`git diff --check` |
+| 仅 Markdown 文档 | `python3 -B Tools/validate_docs.py`、过时状态与事实核对、`git diff --check` |
+| 文档校验脚本 | `python3 -B -m unittest discover -s Tools/Tests -p 'test_validate_docs.py' -v`、真实仓库文档校验、`git diff --check` |
 | 普通 C++ 实现 | `ue_gasEditor` Development 构建 + 直接相关 `Combat.*` Automation |
 | Damage/Heal/Modifier/Ability/时序语义 | Editor 构建 + 相关专项测试；公共顺序或契约变化时运行完整 `Combat.*` |
 | DataAsset/蓝图/关卡 | Editor/蓝图编译与保存回读 + `CombatAssetValidation` + 相关 Automation/PIE |
@@ -99,18 +103,24 @@
 
 ## 7. 文档职责
 
+AI 协作任务遵循 [00-05-AI-Native-Development-Workflow.md](Doc/CombatSystem/00-Project/00-05-AI-Native-Development-Workflow.md)：先完成 F0 framing 和 Spec，再按 TDD、分层验证、F2 对抗审查和 Push-Ready Gate 交付。本文的 F0/F1/F2 是交付流程门；路线图的 G0-G8 仍是里程碑 Gate。新功能、Bug 修复、资产迁移和契约变更使用 `Doc/CombatSystem/Specs/_template.spec.md` 建立 Spec；`Doc/CombatSystem/00-Project/00-01-Progress-Tracker.md` 仍是唯一实时状态来源。
+功能任务可直接使用 [Skills/combat-feature-development/SKILL.md](Skills/combat-feature-development/SKILL.md)，其步骤必须服从本文和当前台账，不替代项目硬约束。
+实现 GAS/Combat 技能时使用 [Skills/combat-skill-development/SKILL.md](Skills/combat-skill-development/SKILL.md)，并按技能扩展指南、模板检查表和相关架构专题选择公共入口。
+根据用户需求判断主 Skill、记录路由置信度并在交付后自评和受控调优时使用 [Skills/combat-task-router/SKILL.md](Skills/combat-task-router/SKILL.md)；Skill 本身的创建或维护按 `skill-creator` 规则执行。
+
 - `README.md`：当前项目入口、快速上手和导航。
-- `Doc/DotaLikeGASCombatSystemDesign.md`：完整文档索引和阅读路径。
-- `00-Progress-Tracker.md`：唯一实时状态与证据台账。
-- `01-Scope-Architecture.md`：当前架构、范围和不可破坏约束。
-- `02`-`09`：各运行时专题的 v1 语义契约。
-- `10-Implementation-Roadmap.md`：M0-M8 历史 WBS/Gate，不代表当前状态。
-- `11-Test-Plan.md`：验证分层和准入标准。
-- `12-Decisions-Gaps.md`：ADR、Gap、延期与契约变更入口。
-- `14`-`31`、`33`：冻结决策与验收证据；除纠正事实错误外不重写历史结论。
-- `32-M8-Public-Extension-Guide.md`：新技能和迁移的当前公开入口。
-- `34-Client-Server-Interaction.md`：客户端 Order、服务器移动/施法/结算和客户端复制回显的当前端到端说明。
-- `35-Server-Authoritative-Movement-Kickoff.md`：服务器权威单位移动的架构、迁移记录、生命周期与验收 Gate。
+- `Doc/CombatSystem/README.md`：完整文档索引和阅读路径。
+- `Doc/CombatSystem/00-Project/00-01-Progress-Tracker.md`：唯一实时状态与证据台账。
+- `Doc/CombatSystem/10-Architecture/10-01-Scope-Architecture.md`：当前架构、范围和不可破坏约束。
+- `Doc/CombatSystem/10-Architecture/10-02`–`10-08`：各运行时专题的 v1 语义契约；`Doc/CombatSystem/20-Content/20-01-Example-Skills.md` 保存示例技能。
+- `Doc/CombatSystem/00-Project/00-02-Implementation-Roadmap.md`：M0-M8 历史 WBS/Gate，不代表当前状态。
+- `Doc/CombatSystem/00-Project/00-03-Test-Plan.md`：验证分层和准入标准。
+- `Doc/CombatSystem/00-Project/00-04-Decisions-Gaps.md`：ADR、Gap、延期与契约变更入口。
+- `Doc/CombatSystem/00-Project/_intake-template.md`、`_gate-checklist.md`、`_delivery-record-template.md`：任务入口、流程门和交付证据模板。
+- `Doc/CombatSystem/90-History/`：冻结决策与验收证据；除纠正事实错误外不重写历史结论。
+- `Doc/CombatSystem/20-Content/20-03-M8-Public-Extension-Guide.md`：新技能和迁移的当前公开入口。
+- `Doc/CombatSystem/10-Architecture/10-09-Client-Server-Interaction.md`：客户端 Order、服务器移动/施法/结算和客户端复制回显的当前端到端说明。
+- `Doc/CombatSystem/10-Architecture/10-10-Server-Authoritative-Movement-Kickoff.md`：服务器权威单位移动的架构、迁移记录、生命周期与验收 Gate。
 
 ## 8. 完成与交付
 
@@ -119,4 +129,5 @@
 - 实际任务状态变化才更新进度台账；没有证据时不得写“已通过”。
 - 检查文档、代码、DataAsset、GameplayTag、网络载荷和发布版本是否同步。
 - 默认不创建提交、不推送、不重写历史，除非用户明确要求。
+- 当前采用本地开发与用户验收流程，不要求 PR 或 GitHub Actions；适用的质量 Gate 在本地执行并记录证据。
 - 交付说明必须列出改动、验证、未验证项和剩余风险。

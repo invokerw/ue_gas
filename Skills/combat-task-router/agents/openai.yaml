@@ -1,0 +1,4 @@
+interface:
+  display_name: "Combat Task Router"
+  short_description: "按需求路由 Combat Skill，并完成证据化自评与调优"
+  default_prompt: "使用 $combat-task-router 判断应调用哪个 Combat Skill，完成任务后进行自评并按证据调优流程。"

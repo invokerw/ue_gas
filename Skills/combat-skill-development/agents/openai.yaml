@@ -1,0 +1,4 @@
+interface:
+  display_name: "Combat Skill Development"
+  short_description: "按 AI-Native 流程实现、测试并验收 GAS Combat 技能"
+  default_prompt: "使用 $combat-skill-development 实现这个 Combat 技能，并完成 Spec、测试和验收证据。"

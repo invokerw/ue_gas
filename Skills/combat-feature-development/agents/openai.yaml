@@ -1,0 +1,4 @@
+interface:
+  display_name: "Combat Feature Development"
+  short_description: "按 AI-Native 流程交付 Combat 功能"
+  default_prompt: "使用 $combat-feature-development 完成这个 Combat 功能任务，并按 Spec、Gate 和本地验证流程交付。"
