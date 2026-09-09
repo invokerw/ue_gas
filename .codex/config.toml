@@ -1,2 +1,6 @@
+sandbox_mode = "workspace-write"
 [mcp_servers.unreal-mcp]
 url = "http://127.0.0.1:8000/mcp"
+
+[sandbox_workspace_write]
+network_access = true
