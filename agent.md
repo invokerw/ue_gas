@@ -20,6 +20,7 @@
 6. 检查工作区状态，保留用户已有修改；不覆盖、不格式化、不回退无关文件。
 7. 若仓库根目录存在 `.codegraph/`，理解或定位代码时先使用 CodeGraph；没有索引再使用 `rg` 和直接阅读源码。
 8. 涉及蓝图、DataAsset、关卡或 PIE 时，优先通过 UE MCP 读取真实 Editor 状态；修改后回读、编译蓝图、保存资产并执行相应验证。MCP 不可用时记录降级方式。
+9. 修改底部 HUD、拥有者展示快照或技能槽视觉时，额外阅读 `Doc/CombatSystem/10-Architecture/10-12-Bottom-HUD-Design.md` 和 `00-04` 的 ADR-047。
 
 项目级 Skill 只允许存放并读取于仓库 `Skills/`；不得复制到 `/Users/admin/.codex/skills` 或其他用户级目录。Skill 的创建和维护使用 `skill-creator` 规则，但产物仍保留在本仓库。
 
@@ -121,6 +122,7 @@ AI 协作任务遵循 [00-05-AI-Native-Development-Workflow.md](Doc/CombatSystem
 - `Doc/CombatSystem/20-Content/20-03-M8-Public-Extension-Guide.md`：新技能和迁移的当前公开入口。
 - `Doc/CombatSystem/10-Architecture/10-09-Client-Server-Interaction.md`：客户端 Order、服务器移动/施法/结算和客户端复制回显的当前端到端说明。
 - `Doc/CombatSystem/10-Architecture/10-10-Server-Authoritative-Movement-Kickoff.md`：服务器权威单位移动的架构、迁移记录、生命周期与验收 Gate。
+- `Doc/CombatSystem/10-Architecture/10-12-Bottom-HUD-Design.md`：底部 HUD 的定稿布局、拥有者投影、蓝图绑定、生命周期和验收边界。
 
 ## 8. 完成与交付
 

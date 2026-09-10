@@ -80,6 +80,8 @@ private:
 	void FinishSamMovementConsistencyScenario();
 	/** owning client 输出 Command Pawn、SimulatedProxy 角色和当前可见 Unit 位置。 */
 	void LogSamClientPositions();
+	/** HUD 专项联机采样，只读核对拥有者属性、技能顺序及其他单位的隐私边界。 */
+	void LogHUDNetworkSnapshot();
 	/** 每 30 秒输出 Dedicated 帧时、带宽、容量和统一预算结果。 */
 	void LogM7PerformanceSnapshot();
 	/** 输出冻结版本、服务器权威边界和显式延期能力。 */
@@ -102,6 +104,8 @@ private:
 	FTimerHandle SamMovementTimer;
 	/** SAM 客户端等待复制收敛后的位置快照计时器。 */
 	FTimerHandle SamClientPositionTimer;
+	/** 仅 -CombatHUDSmoke 测试启动，等待真实网络初始复制完成。 */
+	FTimerHandle HUDNetworkSnapshotTimer;
 	/** SAM 对撞开始时静止 B 的服务器权威位置。 */
 	FVector SamStationaryUnitStart = FVector::ZeroVector;
 	/** SAM 对撞开始时移动 A 的服务器权威位置，用于防止“只验证静止目标”的假阳性。 */

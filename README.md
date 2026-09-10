@@ -9,7 +9,7 @@ Combat 当前仍位于 `ue_gas` 单 Runtime Module 中，不是独立插件或�
 - 核心发布契约：`combat_v1_rc1`，Contract/Content/GameplayTag/Formula/RNG/Event schema 均为 v1。
 - 权威模型：服务器结算；客户端 TargetData 仅作为请求，目标、资源和结果由服务器复核。
 - M0-M8 共 82 个 Task 已完成并通过用户验收；最近一次发布 Gate 记录为 `Combat.*` 40/40、Editor/Server/Client 构建、资产校验和 Dedicated 双客户端容量场景通过。
-- M8 之后仓库继续增加了可玩的远程攻击 Demo、整理后的 Demo 资产结构，以及由 C++ 提供只读数据、Widget 蓝图实现视觉的头顶资源/状态/施法条和伤害治疗跳字。
+- M8 之后增加了远程攻击 Demo、头顶资源/状态/施法条、伤害治疗跳字，以及底部居中的英雄、技能、Buff HUD。C++ 提供只读数据，Widget Blueprint 维护布局和视觉；等级经验、六格物品及三格背包先显示占位。
 - 完整 gameplay 预测回滚、跨进程确定性 Replay、召唤物/幻象、物品与经济不属于当前 v1 范围。
 
 以上测试数字是已归档的最近验收证据，不自动代表任意工作区修改已经重新验证。实时任务状态以 [开发进度台账](Doc/CombatSystem/00-Project/00-01-Progress-Tracker.md) 为准。
@@ -32,6 +32,8 @@ Demo 操作：右键点敌方单位持续普攻，超出范围时自动追击；
 
 以上按键统一通过 `/Game/Combat/Demo/Input/IMC_Default` 映射到 Input Action；可在该资产中改键。普攻选敌、确认、取消和停止的 Action 引用配置在 `BP_CombatDemoPlayerController` 的 `Input|Combat` 默认属性中。
 
+底部 HUD 随本地玩家的指挥单位切换。悬停技能、Buff 或头像上的属性可查看详情，点击固定，关闭按钮或 Escape 取消固定；点击 HUD 不发出移动或施法请求。Demo 当前授予一个主动技能，其余三个技能槽保留空位。界面配置入口见 [10-12 底部 HUD](Doc/CombatSystem/10-Architecture/10-12-Bottom-HUD-Design.md)。
+
 ## 运行时主链路
 
 ```text
@@ -43,7 +45,7 @@ Demo 操作：右键点敌方单位持续普攻，超出范围时自动追击；
   -> Combat Scheduler 驱动前摇、引导、周期与过期
   -> Damage / Heal / Modifier / Projectile / Thinker / Motion 公共入口
   -> GAS Attribute / ActiveGE 真实落账
-  -> Combat Event、Unit View、Projectile Presentation、Overhead UI
+  -> Combat Event、Unit View、Projectile Presentation、Overhead UI / Bottom HUD
 ```
 
 关键原则是“一个事实只有一个权威来源”：最终属性来自 ASC 聚合，Health/Mana 通过统一资源与事务入口修改，异步实体由稳定 Handle 和 generation 管理，结束和广播保持 exactly-once。
@@ -58,7 +60,7 @@ Demo 操作：右键点敌方单位持续普攻，超出范围时自动追击；
 | `Source/ue_gas/Combat/Order`、`Attack` | 指令状态机、追击、AttackRecord、法球和普攻时序 |
 | `Source/ue_gas/Combat/Projectile`、`Thinker`、`Aura`、`Motion` | 异步空间实体与强制位移 |
 | `Source/ue_gas/Combat/Data` | Unit/Ability/Modifier/Projectile/AbilitySet PrimaryDataAsset |
-| `Source/ue_gas/Combat/Network`、`View`、`UI` | RPC 防护、扁平复制 View 和头顶表现 |
+| `Source/ue_gas/Combat/Network`、`View`、`UI` | RPC 防护、公共/拥有者 View、头顶表现与底部 HUD |
 | `Source/ue_gas/Combat/Tests` | `Combat.*` Automation 测试 |
 | `Content/Combat/Demo` | 可玩 Demo 地图、角色、远程攻击和输入资产 |
 | `Content/Combat/Tests` | PIE、Dedicated 与容量测试地图 |
@@ -74,6 +76,7 @@ Demo 操作：右键点敌方单位持续普攻，超出范围时自动追击；
 - 理解联机交互：[客户端与服务器交互流程](Doc/CombatSystem/10-Architecture/10-09-Client-Server-Interaction.md) → [Order 与移动](Doc/CombatSystem/10-Architecture/10-07-Order-Movement.md) → [Ability 与目标](Doc/CombatSystem/10-Architecture/10-03-Ability-Targeting-Blueprint.md) → [网络与 UI](Doc/CombatSystem/10-Architecture/10-08-Data-Network-Observability.md)。
 - 理解服务器权威单位移动：[服务器权威单位移动改造与验收](Doc/CombatSystem/10-Architecture/10-10-Server-Authoritative-Movement-Kickoff.md)；当前端到端链路以 10-09 为准。
 - 调整头顶 UI：[C++ 与蓝图边界、事件接口和资产配置](Doc/CombatSystem/10-Architecture/10-11-Overhead-Blueprint-UI.md)。
+- 调整底部 HUD：[定稿布局、Widget Blueprint、拥有者快照和占位边界](Doc/CombatSystem/10-Architecture/10-12-Bottom-HUD-Design.md)。
 - 开发技能：[Ability、目标与蓝图接口](Doc/CombatSystem/10-Architecture/10-03-Ability-Targeting-Blueprint.md) → [Damage/Heal](Doc/CombatSystem/10-Architecture/10-05-Damage-Heal.md) → [示例技能](Doc/CombatSystem/20-Content/20-01-Example-Skills.md) → [技能模板检查表](Doc/CombatSystem/20-Content/20-02-M6-Skill-Template-Checklist.md)。
 - 修改内核：先读对应 10-02–10-08 专题，再检查 [决策与缺口登记](Doc/CombatSystem/00-Project/00-04-Decisions-Gaps.md) 和 [生命周期审计](Doc/CombatSystem/90-History/90-16-M8-Lifecycle-Audit.md)。
 - 验证发布边界：[候选发布决策](Doc/CombatSystem/90-History/90-15-M8-Release-Candidate-Decision.md) → [M8 验收记录](Doc/CombatSystem/90-History/90-17-M8-Acceptance.md)。

@@ -3,6 +3,7 @@
 > 当前状态：`combat_v1_rc1` 核心发布契约已冻结，M0-M8 共 82/82 Task、9/9 里程碑已通过用户验收。
 > 当前工程：UE 5.8；GameplayAbilities/GameplayTags/GameplayTasks 已接入，Combat 实现位于 `Source/ue_gas/Combat`。
 > 当前 Post-M8：SAM 服务器权威单位移动已完成技术 Gate，并已通过用户验收。
+> 底部 HUD：工程验证已完成，待用户实机复验；状态与远端验证记录见台账 §12.3。
 > 状态权威：[00-01 开发进度台账](00-Project/00-01-Progress-Tracker.md)。
 
 原单体设计文档已按“当前架构、运行时语义、实施与测试、冻结决策、验收证据”拆分。本文只维护导航和文档职责；项目概览与启动方式见根目录 [README](../../README.md)。
@@ -49,6 +50,7 @@
 | [10-09 客户端与服务器交互流程](10-Architecture/10-09-Client-Server-Interaction.md) | 从客户端 Order 到服务器移动、施法、伤害和复制回显的完整时序 | 联机、单位控制、技能与 UI 开发 |
 | [10-10 服务器权威单位移动改造与验收](10-Architecture/10-10-Server-Authoritative-Movement-Kickoff.md) | PlayerController 指挥、AIController 服务器移动、Command Pawn、Crowd 与 Dedicated Gate 的当前实现和证据 | 单位控制、网络、AI、测试与维护者 |
 | [10-11 头顶 UI：C++ 与蓝图边界](10-Architecture/10-11-Overhead-Blueprint-UI.md) | 展示快照、生命周期、UMG 蓝图维护入口与迁移 | UI、美术、战斗与网络开发 |
+| [10-12 底部居中 HUD：设计与实现](10-Architecture/10-12-Bottom-HUD-Design.md) | 定稿布局、拥有者快照、Widget Blueprint 与占位边界 | UI、美术、网络开发与验收 |
 
 ### 20-Content：技能与扩展
 
@@ -79,6 +81,7 @@
 | [DOC-004 Combat 技能开发 Skill](Specs/DOC-004-combat-skill-development.spec.md) | GAS/Combat 技能的专项实现、测试和验收流程 | 技能开发者、自动化 Agent |
 | [DOC-005 Combat 功能开发 Skill](Specs/DOC-005-combat-feature-development.spec.md) | 通用 Combat 功能的 F0/F1/F2、Spec、验证和交付流程 | 功能开发者、自动化 Agent |
 | [DOC-006 Combat 任务路由与复盘 Skill](Specs/DOC-006-combat-task-router.spec.md) | 主 Skill 选择、证据化自评和受控流程调优 | 需求提出者、开发者、自动化 Agent |
+| [DOC-007 远端 HUD 与文档体系合并](Specs/DOC-007-remote-hud-doc-merge.spec.md) | HUD 提交的集成、目录冲突处理与验证来源 | 维护者、审查者 |
 
 冻结与发布文档位于 `90-History`，只保存当时的决策和验收证据：
 
@@ -99,6 +102,7 @@
 - 理解当前单位控制与联机：`10-Architecture/10-09-Client-Server-Interaction.md` → `10-Architecture/10-07-Order-Movement.md` → `10-Architecture/10-08-Data-Network-Observability.md` → `30-Tooling/30-02-M7-MCP-Diagnostic-Recipe.md` → `00-Project/00-03-Test-Plan.md`。
 - 维护服务器权威移动：`10-Architecture/10-10-Server-Authoritative-Movement-Kickoff.md` → `10-Architecture/10-09-Client-Server-Interaction.md` → `10-Architecture/10-07-Order-Movement.md` → `10-Architecture/10-01-Scope-Architecture.md` → `90-History/90-16-M8-Lifecycle-Audit.md` → `00-Project/00-04-Decisions-Gaps.md` → `00-Project/00-03-Test-Plan.md`。
 - 维护头顶界面：`10-Architecture/10-11-Overhead-Blueprint-UI.md` → `10-Architecture/10-08-Data-Network-Observability.md` → `20-Content/20-03-M8-Public-Extension-Guide.md` → `90-History/90-16-M8-Lifecycle-Audit.md`。
+- 维护底部 HUD：`10-Architecture/10-12-Bottom-HUD-Design.md` → `10-Architecture/10-08-Data-Network-Observability.md` → `00-Project/00-04-Decisions-Gaps.md` 的 ADR-047 → `20-Content/20-03-M8-Public-Extension-Guide.md`。
 - 核对发布状态：`00-Project/00-01-Progress-Tracker.md` → `90-History/90-15-M8-Release-Candidate-Decision.md` → `90-History/90-17-M8-Acceptance.md`。
 
 ## 原章节迁移

@@ -24,7 +24,7 @@
 | 判断类型 | 当前入口 | 维护时机 |
 | --- | --- | --- |
 | 产品目标、范围、Non-Goals | `README.md`、`10-Architecture/10-01-Scope-Architecture.md` §1 | 范围或成功标准变化 |
-| 技术架构与不可破坏约束 | `10-Architecture/10-01`–`10-08`、`90-History/90-16`、`10-Architecture/10-09`–`10-11`、`agent.md` | 架构、权限、生命周期或公开 API 变化 |
+| 技术架构与不可破坏约束 | `10-Architecture/10-01`–`10-08`、`90-History/90-16`、`10-Architecture/10-09`–`10-12`、`agent.md` | 架构、权限、生命周期或公开 API 变化 |
 | 失败经验、开放决策与迁移 | `00-Project/00-04-Decisions-Gaps.md`、`90-History` 验收报告和 `00-Project/00-01` 更新日志 | Gate 失败、用户纠正、回归或延期 |
 | 当前项目状态、依赖和证据 | `00-Project/00-01-Progress-Tracker.md` | Task、Gate、验收或证据变化 |
 
@@ -62,7 +62,7 @@ Spec 发生语义变化时先递增版本并写原因，再改代码。若只是
 | Ability/技能/公开扩展 | `10-Architecture/10-01`、`10-03`、`10-05`、`20-Content/20-01`、`20-02`、`20-03` | 相关 DataAsset、测试与 `00-Project/00-04` |
 | Scheduler/Modifier/Damage/生命周期 | `10-Architecture/10-01`、`10-02`、`10-04`、`10-05`、`90-History/90-16` | `00-Project/00-03` 和相关 ADR |
 | Order/移动/控制/碰撞 | `10-Architecture/10-01`、`10-07`、`10-09`、`10-10` | `90-History/90-16`、`00-Project/00-03`、UE MCP 工作流 |
-| 网络、复制、Projectile、UI | `10-Architecture/10-01`、`10-06`、`10-08`、`10-09`、`10-11` | `90-History/90-13`–`90-14`、`00-Project/00-03` |
+| 网络、复制、Projectile、UI | `10-Architecture/10-01`、`10-06`、`10-08`、`10-09`、`10-11`；底部 HUD 追加 `10-12` | `90-History/90-13`–`90-14`、`00-Project/00-03` |
 | 资产、蓝图、关卡、PIE | `10-Architecture/10-01`、`10-08`、`30-Tooling/30-01` | 目标资产、`00-Project/00-03`、对应验收报告 |
 
 加载完后先读 `00-01` 当前状态，再确认工作区 diff，保留用户已有修改。

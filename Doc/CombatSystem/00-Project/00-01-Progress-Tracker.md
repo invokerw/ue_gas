@@ -1,10 +1,11 @@
 # 00-01 开发进度台账
 
-> 最后更新：2026-09-09
+> 最后更新：2026-09-10
 > 当前阶段：M8 已验收；`combat_v1_rc1` 核心契约保持冻结；SAM 服务器权威单位移动已验收
 > 历史 M0-M8：82/82 Task 完成，9/9 里程碑由用户验收
 > SAM 进度：10/10 Task 完成；修正 Gate 和用户验收均已通过
-> 当前专项：Demo 普攻输入已统一为 Enhanced Input Action；本轮常规 Editor 构建、蓝图编译保存回读、全量 Combat 53/53 和资产 7/7 通过。头顶 UI 蓝图拆分及此前三 Target/Dedicated 回归已完成；本轮未重跑联机矩阵
+> 最近工程验证（2026-09-08）：Demo 普攻输入已统一为 Enhanced Input Action；该轮常规 Editor 构建、蓝图编译保存回读、全量 Combat 53/53 和资产 7/7 通过。头顶 UI 蓝图拆分及此前三 Target/Dedicated 回归已完成；该轮未重跑联机矩阵
+> HUD 专项（2026-09-09）：已实现并完成工程验证，待用户实机复验；三 Target、Combat 57/57、资产 7/7、双玩家 PIE 与 Dedicated 双客户端通过，见 [10-12](../10-Architecture/10-12-Bottom-HUD-Design.md) 与 ADR-047
 
 本文件是项目执行状态的唯一来源。[00-02 实施路线图](00-02-Implementation-Roadmap.md)定义任务内容和依赖，本文件记录实际状态、验证证据和用户验收结论。
 
@@ -230,6 +231,20 @@
 - UE MCP 回读 `IMC_Default` 右键/触摸/QWER 映射及玩家 DataAsset：AttackDamage=20、AttackRange=150 cm、BaseAttackTime=1.7 s、BaseAttackPoint=0.25 s、AttackProjectileData=None（当前 Demo 普攻为近战）。本次无二进制资产修改。
 - 证据：`Saved/BasicAttackInput/Validation.md`、`EditorBuild.log`、`Automation/index.json`（2026-09-07 08:38:17 UTC）。当前打开的 Editor 需重启加载新模块；未执行真实鼠标 PIE、Server/Client Target 或 Dedicated 联机验证。SAM 用户验收状态保持不变。
 
+## 12.3 Post-M8：底部居中 HUD
+
+> 状态：工程实现与验证已完成，待用户实机复验（2026-09-09）。用户已验收布局设计并授权实现；维护入口见 [10-12](../10-Architecture/10-12-Bottom-HUD-Design.md)，接入决策见 ADR-047。核心 `combat_v1_rc1` 不变，展示投影 schema 3。
+
+| Task | 内容 | 状态 | 证据 |
+| --- | --- | --- | --- |
+| HUD-001 | 底部面板布局与占位规则 | 已完成 | 用户确认紧凑头像、属性覆盖、左下等级经验环、无资源标题、六格物品及三格背包；预览上下边距一致 |
+| HUD-002 | C++ 展示适配与 Widget Blueprint 接入 | 已完成 | owner-only 属性 / 技能快照、4 技能槽、可见 Buff / Debuff、英雄属性详情、经验环与 6+3 常驻空槽；3 个 Widget Blueprint、HUD Actor 蓝图、示意头像，Demo GameMode 已接入 |
+| HUD-003 | 工程、资产、生命周期及相应网络验证 | 已完成 | 常规 Editor 与源码 Server/Client 构建成功；Combat 57/57（新增 HUD 4 项）、0 测试警告；资产定义 7/7；真实双玩家 PIE 布局和详情交互；Dedicated 双客户端 owner-only 投影及移动回归通过 |
+
+证据：`Saved/BottomHUD/Validation.md`、`EditorBuild.log`、`ServerBuildFinal.log`、`ClientBuild.log`、`AutomationFinal/index.json`（2026.09.09-10.16.49 UTC）、`AssetReport.json`、`PIE-Client.png`、`DedicatedSummary.txt`。HUD 网络专项服务端检查 2 个拥有者 / 2 个技能，两客户端各检查 1 个拥有者 / 1 个技能，其他可见单位快照均为空。64 Unit / 256 Modifier 容量样本 Budget=Pass，移动单位位移 316.617 cm，静止单位 0 cm。
+
+范围：等级 / 经验 / 物品 / 背包仍为视觉占位；Demo 当前只有一个主动技能，其余三槽为空。头像为可替换的原创示意美术，技能 / Buff 无配置纹理时使用名称首字。未执行 cook / 打包；源码 UE 5.8.0 验证 Server/Client 编译，安装版 UE 5.8.1 验证资产和同版本独立 `-server/-game` 联机，沿用既有工具插件初始化和动态 GE 定义日志边界。后台测试进程已退出，不影响原有 SAM 用户验收状态。
+
 ## 13. 用户验收记录
 
 | 里程碑 | 提交验收日期 | 用户结论 | 修正要求 | 最终验收日期 | 下一阶段授权 |
@@ -304,11 +319,13 @@
 | 2026-09-09 | 新增 `Tools/validate_docs.py` 文档体系校验脚本，覆盖必需入口、目录迁移、旧路径、Markdown 本地链接、尾随空格和 Spec 格式；首次运行通过 | 文档与流程自动化 |
 | 2026-09-09 | 按 DOC-002 增加本地校验脚本的 13 个正反例测试和 JSON 报告；本地 unittest 与文档校验通过，项目不依赖远端 CI | 文档与流程自动化 |
 | 2026-09-09 | 用户确认 SAM 服务器权威单位移动验收通过；将 SAM 状态、用户验收日期和当前阶段同步更新 | SAM / 用户验收 |
-
 | 2026-09-09 | 完成 DOC-003：38 份文档改为目录号与目录内序号，索引、正文引用和本地编号校验同步更新；不改变运行时与验收结论 | 文档编号整理 |
 | 2026-09-09 | 新增 `Skills/combat-skill-development`，封装 Ability、DataAsset、Modifier、Projectile/Thinker、技能测试和专项验收；已接入项目入口并完成文档校验 | AI-Native 技能开发 |
 | 2026-09-09 | 完成 DOC-005：为通用 Combat 功能任务补充可直接调用的 Skill，并补齐输入、前置条件、工具、输出、验证和升级边界；与专项技能 Skill 分层复用 | AI-Native 功能开发 |
 | 2026-09-09 | 新增 DOC-006 任务路由与复盘 Skill：按动作目标选择主 Skill，交付后按六维证据自评，并按重复失败分类调优流程、模板、校验器或专项 Skill | AI-Native 路由与复盘 |
+| 2026-09-09 | 用户确认底部居中 HUD 设计；记录头像、等级经验环、技能 / 资源和六格物品 + 三格背包的定稿比例与对齐规则，工程实现未开始 | post-M8 HUD / HUD-001 |
+| 2026-09-09 | 用户授权后完成底部 HUD 接入；新增 owner-only 展示快照与 3 个 Widget Blueprint、HUD Actor / 头像配置；三 Target、Combat 57/57、资产 7/7、双玩家 PIE 和 Dedicated 双客户端通过 | post-M8 HUD / HUD-002..003 |
+| 2026-09-10 | 合并远端 `d844f0e` 的 HUD 代码、资产和文档；HUD 专题纳入 `10-12`，保留本地文档体系、项目 Skill、配置与 SAM 已验收状态。运行时文件与远端一致，7 个 LFS 实体 hash/size 通过；本机文档校验和工具测试 16/16 通过，未重跑 UE Gate；详见 [DOC-007](../Specs/DOC-007-remote-hud-doc-merge.spec.md) | 远端集成 / 文档合并 |
 
 ## 15. 更新规则
 

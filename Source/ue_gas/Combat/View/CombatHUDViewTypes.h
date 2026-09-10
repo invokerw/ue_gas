@@ -1,0 +1,61 @@
+#pragma once
+
+#include "CoreMinimal.h"
+#include "GameplayAbilitySpec.h"
+#include "CombatHUDViewTypes.generated.h"
+
+/** 一个已授予技能的拥有者展示数据；时间窗来自已提交的服务器冷却，不参与技能判定。 */
+USTRUCT(BlueprintType)
+struct UE_GAS_API FCombatHUDAbilityView
+{
+	GENERATED_BODY()
+
+	UPROPERTY(BlueprintReadOnly, Category="Combat|HUD", meta=(DisplayName="技能句柄", ToolTip="用于匹配拥有者复制的技能记录；不是新的施法入口。"))
+	FGameplayAbilitySpecHandle SpecHandle;
+	UPROPERTY(BlueprintReadOnly, Category="Combat|HUD", meta=(DisplayName="技能定义", ToolTip="本地解析名称与图标的稳定定义 ID。"))
+	FPrimaryAssetId DefinitionId;
+	UPROPERTY(BlueprintReadOnly, Category="Combat|HUD", meta=(DisplayName="技能等级", ToolTip="服务器 AbilitySpec 的当前等级。"))
+	int32 Level = 0;
+	UPROPERTY(BlueprintReadOnly, Category="Combat|HUD", meta=(DisplayName="最大等级", ToolTip="定义允许的最高技能等级，用于显示等级刻度。"))
+	int32 MaxLevel = 0;
+	UPROPERTY(BlueprintReadOnly, Category="Combat|HUD", meta=(DisplayName="法力消耗", ToolTip="当前等级的配置费用；实际提交仍由服务器重新校验。"))
+	float ManaCost = 0.0f;
+	UPROPERTY(BlueprintReadOnly, Category="Combat|HUD", meta=(DisplayName="冷却结束时间", ToolTip="已提交冷却的服务器绝对游戏时间；0 表示没有活动冷却。", Units="s"))
+	double CooldownEndTime = 0.0;
+	UPROPERTY(BlueprintReadOnly, Category="Combat|HUD", meta=(DisplayName="已提交冷却时长", ToolTip="开始冷却时冻结的时长；后续冷却缩减变化不会重算。", Units="s"))
+	float CooldownDuration = 0.0f;
+	UPROPERTY(BlueprintReadOnly, Category="Combat|HUD", meta=(DisplayName="忽略沉默", ToolTip="该技能的行为配置允许忽略沉默；仅用于阻断状态展示。"))
+	bool bIgnoreSilence = false;
+
+	/** 比较完整显示内容，避免未变化快照触发复制。 */
+	bool operator==(const FCombatHUDAbilityView& Other) const;
+};
+
+/** 仅复制给单位拥有者的 HUD 补充快照；生命/法力及 Buff 继续使用现有公共 View。 */
+USTRUCT(BlueprintType)
+struct UE_GAS_API FCombatHUDOwnerView
+{
+	GENERATED_BODY()
+
+	UPROPERTY(BlueprintReadOnly, Category="Combat|HUD", meta=(DisplayName="单位定义", ToolTip="与公共 View 匹配，防止显示另一单位的技能和属性。"))
+	FPrimaryAssetId UnitDefinitionId;
+	UPROPERTY(BlueprintReadOnly, Category="Combat|HUD", meta=(DisplayName="生命代次", ToolTip="与公共 View 同代次时才显示该快照；0 表示尚未就绪。"))
+	int64 LifeGeneration = 0;
+	UPROPERTY(BlueprintReadOnly, Category="Combat|HUD", meta=(DisplayName="攻击力", ToolTip="服务器 ASC 当前聚合后的普通攻击基础伤害。"))
+	float AttackDamage = 0.0f;
+	UPROPERTY(BlueprintReadOnly, Category="Combat|HUD", meta=(DisplayName="护甲", ToolTip="服务器 ASC 当前聚合护甲，允许负值。"))
+	float Armor = 0.0f;
+	UPROPERTY(BlueprintReadOnly, Category="Combat|HUD", meta=(DisplayName="魔法抗性", ToolTip="服务器 ASC 当前抗性比例；0.25 显示为 25%。"))
+	float MagicResist = 0.0f;
+	UPROPERTY(BlueprintReadOnly, Category="Combat|HUD", meta=(DisplayName="移动速度", ToolTip="服务器 ASC 当前聚合地面移速，单位厘米每秒。", Units="cm/s"))
+	float MoveSpeed = 0.0f;
+	UPROPERTY(BlueprintReadOnly, Category="Combat|HUD", meta=(DisplayName="生命恢复速率", ToolTip="服务器 ASC 每秒生命恢复属性；死亡时界面显示暂停。"))
+	float HealthRegen = 0.0f;
+	UPROPERTY(BlueprintReadOnly, Category="Combat|HUD", meta=(DisplayName="法力恢复速率", ToolTip="服务器 ASC 每秒法力恢复属性；死亡时界面显示暂停。"))
+	float ManaRegen = 0.0f;
+	UPROPERTY(BlueprintReadOnly, Category="Combat|HUD", meta=(DisplayName="技能槽", ToolTip="最多四个非被动技能；客户端按自身输入所用的 AbilitySpec 顺序匹配。"))
+	TArray<FCombatHUDAbilityView> Abilities;
+
+	/** 比较完整快照，不把本地倒计时写入复制数据。 */
+	bool operator==(const FCombatHUDOwnerView& Other) const;
+};
