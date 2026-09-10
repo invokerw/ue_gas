@@ -42,6 +42,8 @@
 
 头顶 UI 的当前扩展入口是继承 `UCombatOverheadWidget` 的 Widget 蓝图：实现“展示数据已变化”“展示进度已变化”“收到战斗跳字”“清空头顶表现”四个事件，在角色的 `CombatOverheadUI.WidgetClass` 中指定视觉资产。单条数字继承 `UCombatFloatingTextWidget`，实现“初始化跳字表现”；布局、颜色与动画由蓝图维护，View 绑定、代次和销毁清理由 C++ 管理。无需在 C++ 中声明具体控件名，详见 [36](36-Overhead-Blueprint-UI.md)。
 
+底部 HUD 继承 `UCombatHUDWidget`，技能 / Buff 槽继承 `UCombatHUDSlotWidget`。该界面使用可选 `BindWidget` 名称接线，布局、字体、颜色和图标仍由 Widget Blueprint 维护；与头顶 UI 的事件驱动方式并存。完整组件名和配置入口见 [37](37-Bottom-HUD-Design.md)。`GetHUDOwnerView()` 提供只读属性与技能快照，版本为展示 schema 3；蓝图不读取 ASC / Modifier Runtime，不修改资源，也不把倒计时结束当作权威效果移除。
+
 - 蓝图或技能代码不能直接修改 Health，必须调用 Damage/Heal 公共入口。
 - 不能用 Actor Timer 驱动 DOT、引导、攻击点或 Aura 协调，必须使用 Combat Scheduler。
 - 不能直接 `SetActorLocation` 实现强制位移，必须使用 MotionComponent。

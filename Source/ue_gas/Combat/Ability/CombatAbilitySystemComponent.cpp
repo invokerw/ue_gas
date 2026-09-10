@@ -498,6 +498,22 @@ float UCombatAbilitySystemComponent::GetCombatAbilityCooldownRemaining(
 		? static_cast<float>(FMath::Max(0.0, *EndTime - GetWorld()->GetTimeSeconds())) : 0.0f;
 }
 
+void UCombatAbilitySystemComponent::GetCombatAbilityCooldownWindow(
+	const FGameplayAbilitySpecHandle Handle, double& OutEndTime, float& OutDuration) const
+{
+	OutEndTime = 0.0;
+	OutDuration = 0.0f;
+	if (GetCombatAbilityCooldownRemaining(Handle) <= 0.0f) return;
+	if (const double* EndTime = CooldownEndTimes.Find(Handle)) OutEndTime = *EndTime;
+	if (const FActiveGameplayEffectHandle* EffectHandle = CooldownEffectHandles.Find(Handle))
+	{
+		if (const FActiveGameplayEffect* Effect = GetActiveGameplayEffect(*EffectHandle))
+		{
+			OutDuration = Effect->Spec.GetDuration();
+		}
+	}
+}
+
 void UCombatAbilitySystemComponent::ReconcileIntrinsicModifiers()
 {
 	if (!GetOwnerActor() || !GetOwnerActor()->HasAuthority())

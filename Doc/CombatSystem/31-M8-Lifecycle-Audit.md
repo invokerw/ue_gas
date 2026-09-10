@@ -27,6 +27,7 @@
 | Aura record + child Modifier | AuraSubsystem | registry 持 Schedule 和 Target→Handle/LifeGeneration | 显式 Cancel | Owner 死亡/换生命/EndPlay，Target 离开/死亡/EndPlay，World Deinitialize | AuraHandle；child 同时校验 Target LifeGeneration |
 | Motion record | Unit MotionComponent | Horizontal/Vertical 通道记录 | Completed | 高优先级抢占、Blocked、Death、EndPlay | MotionHandle + channel generation，Finish exactly-once |
 | Unit/Modifier View 委托 | UnitViewComponent | Attribute/Modifier 原生 delegate handles | Actor 持续期间更新 | EndPlay 显式 Remove，View 不反向驱动 gameplay | 只读当前 Unit 与稳定 DefinitionId |
+| 底部 HUD（2026-09-09 新增） | 本地 `ACombatPlayerHUD` | 强持有主 Widget，Widget 弱观察 `CommandedUnit` / View，强持有效 Buff 子控件 | View 变化或本地显示刷新 | 换单位解绑；换生命清空详情与子控件；Widget Destruct / Unit EndPlay 取消加载并移除委托；HUD EndPlay 移除视口控件 | 异步回调校验 BindingRevision + LifeGeneration；专用服务器不创建 Widget |
 | Damage/Heal transaction slot | CombatTransactionSubsystem | EventId → 同步 slot | AttributeSet 回报后 Consume | GE 失败 Cancel；World 销毁释放 map | EventId 唯一、Kind/Target/Reported 复核 |
 | Combat event 与诊断 | CombatEventSubsystem | World 内 512 条环形缓冲和同步 delegate | 超限淘汰最旧记录 | World 生命周期结束整体释放 | 单调 EventId/Sequence，schema v1 |
 | RPC 安全状态 | CombatNetworkSecuritySubsystem | 每连接 token/replay window | 连接请求持续更新 | World/连接结束释放；Unit EndPlay 不留下 gameplay 入口 | ownership + RequestId + bounded replay window |

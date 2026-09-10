@@ -26,7 +26,8 @@ void FCombatModifierViewArray::PostReplicatedReceive(
 
 UCombatUnitViewComponent::UCombatUnitViewComponent()
 {
-	PrimaryComponentTick.bCanEverTick = false;
+	PrimaryComponentTick.bCanEverTick = true;
+	PrimaryComponentTick.TickInterval = 0.1f;
 	SetIsReplicatedByDefault(true);
 	ModifierViews.Owner = this;
 }
@@ -206,11 +207,13 @@ void UCombatUnitViewComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProper
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 	DOREPLIFETIME(UCombatUnitViewComponent, UnitView);
 	DOREPLIFETIME(UCombatUnitViewComponent, ModifierViews);
+	DOREPLIFETIME_CONDITION(UCombatUnitViewComponent, HUDOwnerView, COND_OwnerOnly);
 }
 
 void UCombatUnitViewComponent::BeginPlay()
 {
 	Super::BeginPlay();
+	SetComponentTickEnabled(GetOwner() && GetOwner()->HasAuthority());
 	ModifierViews.Owner = this;
 	ACombatUnitCharacter* Unit = GetOwnerUnit();
 	UCombatAbilitySystemComponent* Asc = Unit ? Unit->GetCombatAbilitySystemComponent() : nullptr;
@@ -239,6 +242,14 @@ void UCombatUnitViewComponent::BeginPlay()
 	}
 	RefreshUnitView();
 	RefreshModifierViews();
+	RefreshHUDOwnerView();
+}
+
+void UCombatUnitViewComponent::TickComponent(
+	float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
+{
+	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
+	RefreshHUDOwnerView();
 }
 
 void UCombatUnitViewComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
@@ -266,6 +277,8 @@ void UCombatUnitViewComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 		}
 	}
 	Super::EndPlay(EndPlayReason);
+	HUDOwnerView = FCombatHUDOwnerView();
+	OnHUDOwnerViewChanged.Clear();
 }
 
 void UCombatUnitViewComponent::OnRep_UnitView()

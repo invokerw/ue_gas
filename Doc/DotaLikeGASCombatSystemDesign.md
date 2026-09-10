@@ -27,6 +27,7 @@
 | [34 客户端与服务器交互流程](CombatSystem/34-Client-Server-Interaction.md) | 从客户端 Order 到服务器移动、施法、伤害和复制回显的完整时序 | 联机、单位控制、技能与 UI 开发 |
 | [35 服务器权威单位移动改造与验收](CombatSystem/35-Server-Authoritative-Movement-Kickoff.md) | PlayerController 指挥、AIController 服务器移动、Command Pawn、Crowd 与 Dedicated Gate 的当前实现和证据 | 单位控制、网络、AI、测试与维护者 |
 | [36 头顶 UI：C++ 与蓝图边界](CombatSystem/36-Overhead-Blueprint-UI.md) | 展示快照、生命周期、UMG 蓝图维护入口与迁移 | UI、美术、战斗与网络开发 |
+| [37 底部居中 HUD](CombatSystem/37-Bottom-HUD-Design.md) | 定稿布局、蓝图维护入口、拥有者展示投影、物品背包与等级经验占位 | UI、美术与战斗开发 |
 
 冻结与发布文档：
 

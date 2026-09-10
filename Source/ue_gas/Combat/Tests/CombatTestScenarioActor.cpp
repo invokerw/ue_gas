@@ -47,6 +47,10 @@ ACombatTestScenarioActor::ACombatTestScenarioActor()
 void ACombatTestScenarioActor::BeginPlay()
 {
 	Super::BeginPlay();
+	if (FParse::Param(FCommandLine::Get(), TEXT("CombatHUDSmoke")))
+	{
+		GetWorldTimerManager().SetTimer(HUDNetworkSnapshotTimer, this, &ACombatTestScenarioActor::LogHUDNetworkSnapshot, 18.0f, false);
+	}
 	if (bAutoSpawnOnBeginPlay && HasAuthority())
 	{
 		SpawnScenario();
@@ -75,6 +79,7 @@ void ACombatTestScenarioActor::EndPlay(const EEndPlayReason::Type EndPlayReason)
 		GetWorldTimerManager().ClearTimer(M7PerformanceTimer);
 		GetWorldTimerManager().ClearTimer(SamMovementTimer);
 		GetWorldTimerManager().ClearTimer(SamClientPositionTimer);
+		GetWorldTimerManager().ClearTimer(HUDNetworkSnapshotTimer);
 	}
 	if (EndPlayReason == EEndPlayReason::Destroyed)
 	{
@@ -466,6 +471,56 @@ void ACombatTestScenarioActor::LogSamClientPositions()
 	}
 }
 
+void ACombatTestScenarioActor::LogHUDNetworkSnapshot()
+{
+	if (!GetWorld()) return;
+	const Aue_gasPlayerController* LocalPlayer = Cast<Aue_gasPlayerController>(GetWorld()->GetFirstPlayerController());
+	const ACombatUnitCharacter* LocalUnit = LocalPlayer ? LocalPlayer->GetCommandedUnit() : nullptr;
+	int32 CheckedOwners = 0, CheckedForeign = 0, CheckedSkills = 0;
+	bool bPassed = true;
+	for (TActorIterator<ACombatUnitCharacter> It(GetWorld()); It; ++It)
+	{
+		const UCombatUnitViewComponent* View = It->GetCombatUnitViewComponent();
+		const UCombatAbilitySystemComponent* Asc = It->GetCombatAbilitySystemComponent();
+		if (!View || !Asc) { bPassed = false; continue; }
+		const FCombatHUDOwnerView Snapshot = View->GetHUDOwnerView();
+		const bool bCheckOwner = HasAuthority() ? It->GetCommandingPlayerController() != nullptr : *It == LocalUnit;
+		if (!bCheckOwner)
+		{
+			++CheckedForeign;
+			bPassed &= Snapshot.LifeGeneration == 0 && !Snapshot.UnitDefinitionId.IsValid() && Snapshot.Abilities.IsEmpty();
+			continue;
+		}
+		++CheckedOwners;
+		bPassed &= Snapshot.LifeGeneration == View->GetUnitView().LifeGeneration && Snapshot.LifeGeneration > 0
+			&& Snapshot.UnitDefinitionId == View->GetUnitView().UnitDefinitionId
+			&& FMath::IsNearlyEqual(Snapshot.AttackDamage, Asc->GetNumericAttribute(UCombatAttributeSet::GetAttackDamageAttribute()))
+			&& FMath::IsNearlyEqual(Snapshot.Armor, Asc->GetNumericAttribute(UCombatAttributeSet::GetArmorAttribute()))
+			&& FMath::IsNearlyEqual(Snapshot.MoveSpeed, Asc->GetNumericAttribute(UCombatAttributeSet::GetMoveSpeedAttribute()));
+		int32 ExpectedIndex = 0;
+		for (const FGameplayAbilitySpec& Spec : Asc->GetActivatableAbilities())
+		{
+			const UCombatAbilityData* Data = Asc->GetCombatAbilityData(Spec.Handle);
+			if (!Data || Data->BehaviorTags.HasTagExact(CombatTags::Ability_Behavior_Passive)) continue;
+			if (ExpectedIndex == 4) break;
+			if (Snapshot.Abilities.IsValidIndex(ExpectedIndex))
+			{
+				const FCombatHUDAbilityView& Ability = Snapshot.Abilities[ExpectedIndex];
+				bPassed &= Ability.SpecHandle == Spec.Handle && Ability.DefinitionId == Data->GetPrimaryAssetId()
+					&& Ability.Level == Spec.Level && FMath::IsNearlyEqual(Ability.ManaCost, Data->GetSpecialValue(TEXT("mana_cost"), Spec.Level));
+				++CheckedSkills;
+			}
+			else bPassed = false;
+			++ExpectedIndex;
+		}
+		bPassed &= Snapshot.Abilities.Num() == ExpectedIndex;
+	}
+	bPassed &= CheckedOwners == (HasAuthority() ? 2 : 1) && CheckedForeign > 0 && CheckedSkills > 0;
+	UE_LOG(LogCombat, Display, TEXT("HUDNetworkSnapshot Role=%s Owners=%d Foreign=%d Skills=%d Result=%s"),
+		HasAuthority() ? TEXT("Server") : TEXT("Client"), CheckedOwners, CheckedForeign, CheckedSkills,
+		bPassed ? TEXT("Pass") : TEXT("Fail"));
+}
+
 void ACombatTestScenarioActor::LogM7PerformanceSnapshot()
 {
 	if (!HasAuthority() || !GetWorld())
@@ -597,7 +652,14 @@ ACombatUnitCharacter* ACombatTestScenarioActor::SpawnUnit(const FVector& Relativ
 	// 测试地图包含带厚度的 StaticMesh；让 UE 先寻找非穿透位置，避免 CharacterMovement 被初始重叠锁死。
 	Parameters.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
 	const FVector SpawnLocation = GetActorTransform().TransformPosition(RelativeOffset);
-	ACombatUnitCharacter* Unit = GetWorld()->SpawnActor<ACombatUnitCharacter>(UnitClass, SpawnLocation, GetActorRotation(), Parameters);
+	TSubclassOf<ACombatUnitCharacter> SpawnClass = UnitClass;
+	// HUD 联机夹具用正式 Demo 英雄覆盖前两个拥有者，保证验证真实技能 DataAsset 与客户端 Spec 顺序。
+	if (FParse::Param(FCommandLine::Get(), TEXT("CombatHUDSmoke")) && SpawnedUnits.Num() < 2)
+	{
+		SpawnClass = LoadClass<ACombatUnitCharacter>(nullptr, TEXT("/Game/Combat/Demo/Characters/Player/BP_CombatDemoPlayer.BP_CombatDemoPlayer_C"));
+		if (!SpawnClass) return nullptr;
+	}
+	ACombatUnitCharacter* Unit = GetWorld()->SpawnActor<ACombatUnitCharacter>(SpawnClass, SpawnLocation, GetActorRotation(), Parameters);
 	if (Unit && Unit->GetCombatTeamId() != FCombatTeamId(TeamValue))
 	{
 		Unit->SetCombatTeamId(FCombatTeamId(TeamValue));

@@ -96,6 +96,8 @@ public:
 		FGameplayTag& OutFailureTag);
 	/** 返回冻结 cooldown 剩余秒数；到期或未开始为 0。 */
 	float GetCombatAbilityCooldownRemaining(FGameplayAbilitySpecHandle Handle) const;
+	/** 只读返回服务器已提交冷却的时间窗；无活动冷却时清零，不重新应用当前冷却缩减。 */
+	void GetCombatAbilityCooldownWindow(FGameplayAbilitySpecHandle Handle, double& OutEndTime, float& OutDuration) const;
 	/** 检查每个已授予技能应有的固有效果；已有有效实例保持原状，缺失时在单位存活后补建，不重复叠层或续期。 */
 	void ReconcileIntrinsicModifiers();
 	/** 状态 Tag 新增时取消被该状态阻断的活动 Ability，并保留 IgnoreSilence 例外。 */
