@@ -4,6 +4,8 @@
 > 当前阶段：M8、SAM 与 DEMO-901 卓尔游侠 Demo 均已通过用户验收
 > 历史 M0-M8：82/82 Task 完成，9/9 里程碑由用户验收
 > SAM 进度：10/10 Task 完成；修正 Gate 和用户验收均已通过
+> 成长专项（2026-09-11）：PROG-001 已完成，待用户验收；全量 `Combat.` 62/62 与 Editor 构建通过，Server/Client Target 受安装版 UE 5.8 限制
+> 流程专项（2026-09-11）：DOC-008 已完成，待用户验收；Spec、Skill 路由和验证证据已纳入可失败 Gate
 > 最近工程验证（2026-09-08）：Demo 普攻输入已统一为 Enhanced Input Action；该轮常规 Editor 构建、蓝图编译保存回读、全量 Combat 53/53 和资产 7/7 通过。头顶 UI 蓝图拆分及此前三 Target/Dedicated 回归已完成；该轮未重跑联机矩阵
 > HUD 专项（2026-09-09）：已实现并完成工程验证，待用户实机复验；三 Target、Combat 57/57、资产 7/7、双玩家 PIE 与 Dedicated 双客户端通过，见 [10-12](../10-Architecture/10-12-Bottom-HUD-Design.md) 与 ADR-047
 
@@ -243,7 +245,7 @@
 
 证据：`Saved/BottomHUD/Validation.md`、`EditorBuild.log`、`ServerBuildFinal.log`、`ClientBuild.log`、`AutomationFinal/index.json`（2026.09.09-10.16.49 UTC）、`AssetReport.json`、`PIE-Client.png`、`DedicatedSummary.txt`。HUD 网络专项服务端检查 2 个拥有者 / 2 个技能，两客户端各检查 1 个拥有者 / 1 个技能，其他可见单位快照均为空。64 Unit / 256 Modifier 容量样本 Budget=Pass，移动单位位移 316.617 cm，静止单位 0 cm。
 
-范围：等级 / 经验 / 物品 / 背包仍为视觉占位；Demo 当前只授予一个可切换 AutoCast 的被动技能，Q 显示霜冻之箭，W/E/R 为空。头像为可替换的原创示意美术，技能 / Buff 无配置纹理时使用名称首字。未执行 cook / 打包；源码 UE 5.8.0 验证 Server/Client 编译，安装版 UE 5.8.1 验证资产和同版本独立 `-server/-game` 联机，沿用既有工具插件初始化和动态 GE 定义日志边界。后台测试进程已退出，不影响原有 SAM 用户验收状态。
+范围（HUD-001–003 验收时）：等级 / 经验 / 物品 / 背包为视觉占位；等级与经验已由后续 PROG-001 接入服务器成长快照，物品与背包仍为占位。Demo 当前只授予一个可切换 AutoCast 的被动技能，Q 显示霜冻之箭，W/E/R 为空。头像为可替换的原创示意美术，技能 / Buff 无配置纹理时使用名称首字。未执行 cook / 打包；源码 UE 5.8.0 验证 Server/Client 编译，安装版 UE 5.8.1 验证资产和同版本独立 `-server/-game` 联机，沿用既有工具插件初始化和动态 GE 定义日志边界。后台测试进程已退出，不影响原有 SAM 用户验收状态。
 
 ## 12.4 Post-M8：卓尔游侠 Demo 流程
 
@@ -254,6 +256,18 @@
 | DEMO-901 | `Characters` → `Heros`、`Player` → `DrowRanger`，配置默认远程普攻并将授予技能替换为四级霜冻之箭 | 已验收 | 旧包与 redirector 清零；Editor/Server/Client 构建、Combat 59/59、资产定义 10/10、PIE 远程法球 smoke、Dedicated 双客户端 HUD/移动及 64/256 容量边界通过；用户于 2026-09-11 确认验收完成 |
 
 证据：`Saved/DrowRangerDemo/EditorBuild-Final3.log`、`ServerBuild-Final3.log`、`ClientBuild-Final3.log`、`Automation-Full-Final2.log`、`CombatAssetReport-Final2.json`、`PieSmoke.json`、`Dedicated-Final2.log`。PIE 实测等级 1 的 Mana 120→111、目标 500→468（20 基础 + 12 额外物理伤害）、Tracking Projectile、单层 1.5 秒减速及到期移除；Dedicated 的服务器与两个客户端 owner-only HUD 快照、移动和 64 Unit / 256 Modifier 预算均为 Pass。UE MCP 当前会话不可用，资产迁移、蓝图编译保存与冷回读由同版本 Unreal Python 命令行完成；未执行 cook / 打包。用户于 2026-09-11 明确确认 `DEMO-901` 验收完成，本次状态回写未新增工程验证。
+
+## 12.5 Post-M8：等级经验与技能升级
+
+| Task | 需求名称 | 状态 | 完成证据/备注 |
+| --- | --- | --- | --- |
+| PROG-001 | Dota 风格经验等级、技能点、技能升级与 HUD 加点按钮 | 已验收 | 全量 `Combat.` 63/63、相关 HUD/Progression 8/8、UE 5.8 Editor Development 构建和资产 10/10 通过；新增 `combat.Debug.AddExperience <Amount> [ActorUniqueId|Name]` 并由自动化直接执行注册命令，Standalone PIE 已验证等级/经验/技能点显示及 `+` 点击后技能点 1→0、Q 技能 1/4→2/4；用户已完成 review；Server/Client Target 受安装版引擎限制，Dedicated 与容量回归未执行，详见 [PROG-001 Spec](../Specs/PROG-001-progression-and-skill-upgrade.spec.md) 与 ADR-049 |
+
+## 12.6 Post-M8：开发流程 Gate 强化
+
+| Task | 需求名称 | 状态 | 完成证据/备注 |
+| --- | --- | --- | --- |
+| DOC-008 | 强制 Spec、Skill 路由、开工记录与交付验证证据 | 待验收 | 见 [DOC-008 Spec](../Specs/DOC-008-task-gate-enforcement.spec.md) |
 
 ## 13. 用户验收记录
 
@@ -340,6 +354,8 @@
 | 2026-09-10 | 启动 DEMO-901：整理 Demo 英雄目录和 DrowRanger 命名，配置默认远程普攻与四级霜冻之箭；完成现状冷回读、F0/F1 与测试/迁移方案 | post-M8 Demo / DEMO-901 |
 | 2026-09-10 | 完成 DEMO-901：迁移 DrowRanger/WoodenDummy 资产，接入四级霜冻之箭、625 cm Tracking 普攻、技能免疫边界及 Q 槽 AutoCast 原子切换；F2 修正 Dedicated 客户端断言与容量夹具后，三 Target、Combat 59/59、资产 10/10、PIE 与 Dedicated 双客户端全绿，转为待用户验收 | post-M8 Demo / DEMO-901 |
 | 2026-09-11 | 用户确认 DEMO-901 验收完成；同步任务状态、最终验收日期与 Spec，不新增工程验证结论 | post-M8 Demo / DEMO-901 |
+| 2026-09-11 | 完成 PROG-001：新增 Dota 风格累计经验、击杀经验奖励、等级技能点、服务器技能升级 RPC、HUD 等级/经验/技能点投影、技能槽上方 `+` 按钮和 `combat.Debug.AddExperience` 开发命令；Editor 构建、全量 `Combat.` 63/63 自动化通过；Server/Client Target 受安装版 UE 5.8 限制，转为待用户验收 | post-M8 成长 / PROG-001 / ADR-049 |
+| 2026-09-11 | 用户完成 PROG-001 review，确认成长、HUD 加点按钮与开发命令交付完成，任务状态更新为已验收 | post-M8 成长 / PROG-001 |
 
 ## 15. 更新规则
 

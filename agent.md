@@ -22,6 +22,14 @@
 8. 涉及蓝图、DataAsset、关卡或 PIE 时，优先通过 UE MCP 读取真实 Editor 状态；修改后回读、编译蓝图、保存资产并执行相应验证。MCP 不可用时记录降级方式。
 9. 修改底部 HUD、拥有者展示快照或技能槽视觉时，额外阅读 `Doc/CombatSystem/10-Architecture/10-12-Bottom-HUD-Design.md` 和 `00-04` 的 ADR-047。
 
+功能、Bug、资产、工具或流程变更必须在第一次代码/资产修改前留下可回读的开工记录。记录至少包含：已读取的 `agent.md`、DDD、任务路由 Skill 和主执行 Skill；用户请求与附件解释（附件是需求、参考还是工程约束）；Spec 路径；主 Skill、路由置信度和 F0 结论。完成记录后运行机器 Gate：
+
+```bash
+python3 -B Tools/task_gate.py --mode preflight --spec Doc/CombatSystem/Specs/<task-id>.spec.md --kind feature
+```
+
+Gate 未通过不得进入 BUILD；流程/工具变更将 `--kind` 设为 `process`，纯文档变更设为 `docs`。首次使用仓库 Skill 时，开工消息必须明确说明正在使用的 Skill 及其文件路径。
+
 项目级 Skill 只允许存放并读取于仓库 `Skills/`；不得复制到 `/Users/admin/.codex/skills` 或其他用户级目录。Skill 的创建和维护使用 `skill-creator` 规则，但产物仍保留在本仓库。
 
 ## 3. 不可破坏的架构约束
@@ -91,6 +99,7 @@
 | --- | --- |
 | 仅 Markdown 文档 | `python3 -B Tools/validate_docs.py`、过时状态与事实核对、`git diff --check` |
 | 文档校验脚本 | `python3 -B -m unittest discover -s Tools/Tests -p 'test_validate_docs.py' -v`、真实仓库文档校验、`git diff --check` |
+| 流程/校验工具 | `python3 -B Tools/task_gate.py --mode preflight ...`、对应工具单测、交付前 `--mode delivery ...`、`git diff --check` |
 | 普通 C++ 实现 | `ue_gasEditor` Development 构建 + 直接相关 `Combat.*` Automation |
 | Damage/Heal/Modifier/Ability/时序语义 | Editor 构建 + 相关专项测试；公共顺序或契约变化时运行完整 `Combat.*` |
 | DataAsset/蓝图/关卡 | Editor/蓝图编译与保存回读 + `CombatAssetValidation` + 相关 Automation/PIE |
@@ -127,6 +136,7 @@ AI 协作任务遵循 [00-05-AI-Native-Development-Workflow.md](Doc/CombatSystem
 ## 8. 完成与交付
 
 - 先检查差异范围，确认没有混入用户修改和生成文件。
+- 交付前运行 `python3 -B Tools/task_gate.py --mode delivery --spec Doc/CombatSystem/Specs/<task-id>.spec.md --kind <feature|docs|process>`，并把 F1、F2、Push-Ready、实际验证和未执行原因写回 Spec。
 - 执行与风险相称的构建、Automation、资产或 Dedicated 验证，并记录命令、结果和日志位置。
 - 实际任务状态变化才更新进度台账；没有证据时不得写“已通过”。
 - 检查文档、代码、DataAsset、GameplayTag、网络载荷和发布版本是否同步。

@@ -5,6 +5,7 @@
 #include "Combat/Attributes/CombatAttributeSet.h"
 #include "Combat/Core/CombatTags.h"
 #include "Combat/Data/CombatDefinitionData.h"
+#include "Combat/Unit/CombatProgressionComponent.h"
 #include "Combat/Unit/CombatUnitCharacter.h"
 #include "GameFramework/PlayerController.h"
 
@@ -14,7 +15,7 @@ bool FCombatHUDAbilityView::operator==(const FCombatHUDAbilityView& Other) const
 		&& MaxLevel == Other.MaxLevel && ManaCost == Other.ManaCost && CooldownEndTime == Other.CooldownEndTime
 		&& CooldownDuration == Other.CooldownDuration && bIgnoreSilence == Other.bIgnoreSilence
 		&& bUsesAutoCastToggleInput == Other.bUsesAutoCastToggleInput
-		&& bAutoCastEnabled == Other.bAutoCastEnabled;
+		&& bAutoCastEnabled == Other.bAutoCastEnabled && bCanUpgrade == Other.bCanUpgrade;
 }
 
 bool FCombatHUDOwnerView::operator==(const FCombatHUDOwnerView& Other) const
@@ -22,6 +23,9 @@ bool FCombatHUDOwnerView::operator==(const FCombatHUDOwnerView& Other) const
 	return UnitDefinitionId == Other.UnitDefinitionId && LifeGeneration == Other.LifeGeneration
 		&& AttackDamage == Other.AttackDamage && Armor == Other.Armor && MagicResist == Other.MagicResist
 		&& MoveSpeed == Other.MoveSpeed && HealthRegen == Other.HealthRegen && ManaRegen == Other.ManaRegen
+		&& Level == Other.Level && Experience == Other.Experience
+		&& ExperienceIntoLevel == Other.ExperienceIntoLevel && ExperienceToNextLevel == Other.ExperienceToNextLevel
+		&& ExperienceProgress == Other.ExperienceProgress && UnspentAbilityPoints == Other.UnspentAbilityPoints
 		&& Abilities == Other.Abilities;
 }
 
@@ -84,6 +88,15 @@ void UCombatUnitViewComponent::RefreshHUDOwnerView()
 		Next.MoveSpeed = Asc->GetNumericAttribute(UCombatAttributeSet::GetMoveSpeedAttribute());
 		Next.HealthRegen = Asc->GetNumericAttribute(UCombatAttributeSet::GetHealthRegenAttribute());
 		Next.ManaRegen = Asc->GetNumericAttribute(UCombatAttributeSet::GetManaRegenAttribute());
+		if (const UCombatProgressionComponent* Progression = Unit->GetCombatProgressionComponent())
+		{
+			Next.Level = Progression->GetLevel();
+			Next.Experience = Progression->GetExperience();
+			Next.ExperienceIntoLevel = Progression->GetExperienceIntoLevel();
+			Next.ExperienceToNextLevel = Progression->GetExperienceToNextLevel();
+			Next.ExperienceProgress = Progression->GetExperienceProgress();
+			Next.UnspentAbilityPoints = Progression->GetUnspentAbilityPoints();
+		}
 		for (const FGameplayAbilitySpec* Spec : CombatHUDView::GetSlots(*Asc))
 		{
 			const UCombatAbilityData* Data = Asc->GetCombatAbilityData(Spec->Handle);
@@ -97,6 +110,8 @@ void UCombatUnitViewComponent::RefreshHUDOwnerView()
 			Item.bIgnoreSilence = Data->BehaviorTags.HasTagExact(CombatTags::Ability_Behavior_IgnoreSilence);
 			Item.bUsesAutoCastToggleInput = Data->UsesAutoCastToggleInput();
 			Item.bAutoCastEnabled = Item.bUsesAutoCastToggleInput && Asc->IsAutoCastEnabled(Spec->Handle);
+			Item.bCanUpgrade = Next.UnspentAbilityPoints > 0 && Spec->Level < Data->MaxLevel
+				&& Spec->Level < Next.Level;
 			Asc->GetCombatAbilityCooldownWindow(Spec->Handle, Item.CooldownEndTime, Item.CooldownDuration);
 		}
 	}

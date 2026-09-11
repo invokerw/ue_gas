@@ -370,9 +370,10 @@ EDataValidationResult UCombatUnitData::IsDataValid(FDataValidationContext& Conte
 		Context.AddError(FText::FromString(Diagnostic));
 		Result = EDataValidationResult::Invalid;
 	}
-	if (!InitialTeamId.IsValid() || !FMath::IsFinite(CapsuleRadiusOverride) || CapsuleRadiusOverride < 0.0f)
+	if (!InitialTeamId.IsValid() || InitialLevel < 1 || InitialExperience < 0 || ExperienceReward < 0
+		|| !FMath::IsFinite(CapsuleRadiusOverride) || CapsuleRadiusOverride < 0.0f)
 	{
-		Context.AddError(FText::FromString(TEXT("Unit team or capsule radius is invalid")));
+		Context.AddError(FText::FromString(TEXT("Unit team, progression or capsule radius is invalid")));
 		Result = EDataValidationResult::Invalid;
 	}
 	if (!FMath::IsFinite(BaseAttackPoint) || BaseAttackPoint < 0.0f

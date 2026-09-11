@@ -12,6 +12,7 @@
 #include "Combat/Projectile/CombatProjectileSubsystem.h"
 #include "Combat/Scheduling/CombatSchedulerSubsystem.h"
 #include "Combat/Thinker/CombatThinkerSubsystem.h"
+#include "Combat/Unit/CombatProgressionComponent.h"
 #include "Combat/Unit/CombatUnitCharacter.h"
 #include "DrawDebugHelpers.h"
 #include "Engine/NetConnection.h"
@@ -63,6 +64,84 @@ namespace CombatDebugConsole
 			}
 			UE_LOG(LogCombat, Warning, TEXT("Combat unit not found: %s"), *Args[0]);
 		}));
+
+#if !UE_BUILD_SHIPPING
+	/** 查找开发命令的经验目标；未指定目标时使用当前 World 的首个玩家主控单位。 */
+	static ACombatUnitCharacter* ResolveExperienceTarget(UWorld& World, const FString* TargetSelector)
+	{
+		if (TargetSelector)
+		{
+			int32 RequestedId = INDEX_NONE;
+			LexTryParseString(RequestedId, **TargetSelector);
+			for (TActorIterator<ACombatUnitCharacter> It(&World); It; ++It)
+			{
+				if (It->GetUniqueID() == RequestedId || It->GetName().Equals(*TargetSelector, ESearchCase::IgnoreCase))
+				{
+					return *It;
+				}
+			}
+			return nullptr;
+		}
+
+		const APlayerController* FirstPlayerController = World.GetFirstPlayerController();
+		if (!FirstPlayerController)
+		{
+			return nullptr;
+		}
+		for (TActorIterator<ACombatUnitCharacter> It(&World); It; ++It)
+		{
+			if (It->GetCommandingPlayerController() == FirstPlayerController)
+			{
+				return *It;
+			}
+		}
+		return nullptr;
+	}
+
+	/** 仅用于开发环境快速验证经验、跨级和 HUD 快照，不绕过成长组件权限。 */
+	static FAutoConsoleCommandWithWorldAndArgs AddExperience(
+		TEXT("combat.Debug.AddExperience"),
+		TEXT("combat.Debug.AddExperience <Amount> [ActorUniqueId|Name]：给玩家主控单位增加经验（仅开发环境）。"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			int32 Amount = 0;
+			if (!World || Args.IsEmpty() || !LexTryParseString(Amount, *Args[0]) || Amount <= 0)
+			{
+				UE_LOG(LogCombat, Warning, TEXT("Usage: combat.Debug.AddExperience <Amount> [ActorUniqueId|Name]"));
+				return;
+			}
+
+			const FString* TargetSelector = Args.Num() > 1 ? &Args[1] : nullptr;
+			ACombatUnitCharacter* Target = ResolveExperienceTarget(*World, TargetSelector);
+			if (!Target)
+			{
+				UE_LOG(LogCombat, Warning, TEXT("Combat experience target not found%s"),
+					TargetSelector ? *FString::Printf(TEXT(": %s"), **TargetSelector) : TEXT(" for the first player-controlled unit"));
+				return;
+			}
+			if (!Target->HasAuthority())
+			{
+				UE_LOG(LogCombat, Warning, TEXT("Combat experience command requires a server or Standalone world: %s"), *Target->GetName());
+				return;
+			}
+
+			UCombatProgressionComponent* Progression = Target->GetCombatProgressionComponent();
+			if (!Progression || !Progression->AddExperience(Amount))
+			{
+				UE_LOG(LogCombat, Warning, TEXT("Combat experience was not applied: Target=%s Amount=%d Level=%d Experience=%lld AbilityPoints=%d"),
+					*Target->GetName(), Amount,
+					Progression ? Progression->GetLevel() : 0,
+					static_cast<long long>(Progression ? Progression->GetExperience() : 0),
+					Progression ? Progression->GetUnspentAbilityPoints() : 0);
+				return;
+			}
+
+			UE_LOG(LogCombat, Display, TEXT("CombatDebugAddExperience Target=%s Amount=%d Level=%d Experience=%lld AbilityPoints=%d"),
+				*Target->GetName(), Amount, Progression->GetLevel(),
+				static_cast<long long>(Progression->GetExperience()), Progression->GetUnspentAbilityPoints());
+		}),
+		ECVF_Cheat);
+#endif
 
 	/** 按根事件序号输出当前诊断窗口内的因果链。 */
 	static FAutoConsoleCommandWithWorldAndArgs Event(

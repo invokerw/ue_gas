@@ -15,6 +15,14 @@ description: "根据用户需求为 ue_gas Combat 选择合适的开发 Skill，
 - 前置条件：确认工作区包含 `ue_gas.uproject`，完整阅读 `agent.md`，检查已有 diff；先判断是否允许修改文件或外部系统。
 - 输出：路由结论、选择依据和置信度；被选 Skill 的完整交付结果；Spec 中的自评表、证据、Reflect 和调优结论。
 
+路由完成后，开工消息必须先公开列出已读取入口、用户请求与附件解释、主 Skill、置信度和 Spec 路径，再进入实现。若任务需要修改仓库，必须先运行机器 Gate：
+
+```bash
+python3 -B Tools/task_gate.py --mode preflight --spec Doc/CombatSystem/Specs/<task-id>.spec.md --kind <feature|docs|process>
+```
+
+Gate 失败表示上下文或 Spec 不完整，应先修正记录；不能把“已经知道怎么做”当作 F0/F1 通过。
+
 ## 主 Skill 路由
 
 按用户的**实际动作目标**判断，不按关键词单独判断。每次选择一个主执行 Skill，并把备选和排除理由写入 Spec；专项 Skill 可以在其内部复用通用流程。
@@ -40,6 +48,8 @@ description: "根据用户需求为 ue_gas Combat 选择合适的开发 Skill，
 3. 按上表选一个主 Skill，给出 `high / medium / low` 置信度和最多两个备选。
 4. 将“原始需求、路由结论、依据、非目标、需要用户决定的问题”写入任务 Spec；再加载主 Skill 执行。
 5. 主 Skill 完成后检查它的 Gate、测试和未执行项，再进行下方自评与 Reflect。
+
+交付前再次运行 `python3 -B Tools/task_gate.py --mode delivery --spec Doc/CombatSystem/Specs/<task-id>.spec.md --kind <feature|docs|process>`；只有机器 Gate 通过并且证据写回 Spec，才可给出 `READY_FOR_REVIEW`。
 
 ## 交付自评
 

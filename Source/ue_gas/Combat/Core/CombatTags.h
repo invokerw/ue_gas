@@ -84,6 +84,9 @@ namespace CombatTags
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Combat_AbilityInterrupted)
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Combat_AbilityEnded)
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Combat_AbilityActionFailed)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Combat_ExperienceGained)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Combat_LevelUp)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Combat_AbilityPointSpent)
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Combat_OrderStateChanged)
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Combat_AttackLaunched)
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Combat_AttackLanded)
@@ -138,6 +141,9 @@ namespace CombatTags
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Failure_Ability_CommitFailed)
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Failure_Ability_AlreadyActive)
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Failure_Ability_UnitStateBlocked)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Failure_Progression_NotInitialized)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Failure_Progression_NoAbilityPoints)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Failure_Progression_HeroLevelRequired)
 
 	/** Order 状态机专用失败标签。 */
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Order_Failure_Cancelled)

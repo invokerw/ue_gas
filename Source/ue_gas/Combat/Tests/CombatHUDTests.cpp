@@ -9,6 +9,7 @@
 #include "Components/CanvasPanelSlot.h"
 #include "Components/TextBlock.h"
 #include "Components/Image.h"
+#include "Components/Button.h"
 #include "Combat/Ability/CombatAbilitySystemComponent.h"
 #include "Combat/Attributes/CombatAttributeSet.h"
 #include "Combat/Combat/CombatEffectUtilities.h"
@@ -165,6 +166,19 @@ bool FCombatHUDBlueprintLifecycleTest::RunTest(const FString& Parameters)
 	const UProgressBar* Health = Cast<UProgressBar>(Widget->WidgetTree->FindWidget(TEXT("HealthBar")));
 	if (!TestNotNull(TEXT("Blueprint owns health bar"), Health)) return false;
 	TestEqual(TEXT("Resources initialized from real view"), Health->GetPercent(), 1.0f);
+	const UTextBlock* LevelText = Cast<UTextBlock>(Widget->WidgetTree->FindWidget(TEXT("LevelText")));
+	const UCombatRadialProgress* ExperienceRing = Cast<UCombatRadialProgress>(Widget->WidgetTree->FindWidget(TEXT("ExperienceRing")));
+	if (!TestNotNull(TEXT("Blueprint owns level text"), LevelText) || !TestNotNull(TEXT("Blueprint owns experience ring"), ExperienceRing)) return false;
+	TestEqual(TEXT("HUD level reads progression snapshot"), LevelText->GetText().ToString(), FString(TEXT("1")));
+	TestEqual(TEXT("HUD experience ring starts at zero"), ExperienceRing->Percent, 0.0f);
+	const UCombatHUDSlotWidget* MainSkillQ = Cast<UCombatHUDSlotWidget>(Widget->WidgetTree->FindWidget(TEXT("SkillQ")));
+	const UCanvasPanelSlot* MainSkillQSlot = MainSkillQ ? Cast<UCanvasPanelSlot>(MainSkillQ->Slot) : nullptr;
+	TestNotNull(TEXT("Skill Q is directly hosted by HUD panel"), MainSkillQSlot);
+	if (MainSkillQSlot)
+	{
+		TestEqual(TEXT("Skill Q keeps the established icon top"), static_cast<double>(MainSkillQSlot->GetPosition().Y + 26.0), 257.0);
+		TestEqual(TEXT("Skill Q reserves the upgrade hit area"), static_cast<double>(MainSkillQSlot->GetSize().Y), 104.0);
+	}
 	for (const TCHAR* Prefix : { TEXT("ItemSlot"), TEXT("BackpackSlot") })
 	{
 		const int32 Count = FString(Prefix) == TEXT("ItemSlot") ? 6 : 3;
@@ -235,11 +249,31 @@ bool FCombatHUDSlotStateTest::RunTest(const FString& Parameters)
 	Ability.ManaCost = 40.0f;
 	Ability.CooldownEndTime = 15.0;
 	Ability.CooldownDuration = 10.0f;
+	Ability.bCanUpgrade = true;
 	FCombatUnitView Unit;
 	Unit.LifeState = ECombatLifeState::Alive;
 	Unit.Mana = 100.0f;
 	const FText Name = FText::FromString(TEXT("测试技能")), Key = FText::FromString(TEXT("Q"));
 	Skill->ShowAbility(Ability, Unit, 10.0, Name, FText::GetEmpty(), nullptr, Key);
+	// 设计器已提供 UpgradeButton；旧版槽位仍由 C++ 动态补建 RuntimeUpgradeButton。
+	UButton* UpgradeButton = Cast<UButton>(Skill->WidgetTree->FindWidget(TEXT("UpgradeButton")));
+	if (!UpgradeButton) UpgradeButton = Cast<UButton>(Skill->WidgetTree->FindWidget(TEXT("RuntimeUpgradeButton")));
+	TestNotNull(TEXT("Skill upgrade button is available"), UpgradeButton);
+	if (UpgradeButton)
+	{
+		TestEqual(TEXT("Skill upgrade button is shown when a point is available"), UpgradeButton->GetVisibility(), ESlateVisibility::Visible);
+		const UCanvasPanelSlot* UpgradeSlot = Cast<UCanvasPanelSlot>(UpgradeButton->Slot);
+		TestNotNull(TEXT("Designer upgrade button has a Canvas slot"), UpgradeSlot);
+		if (UpgradeSlot)
+		{
+			TestTrue(TEXT("Upgrade button spans the skill width"), UpgradeSlot->GetSize().X >= 60.0f);
+			TestTrue(TEXT("Upgrade button is above the icon"), UpgradeSlot->GetPosition().Y <= 1.0f);
+		}
+		bool bUpgradeRequested = false;
+		Skill->OnUpgradeRequested.AddLambda([&bUpgradeRequested](UCombatHUDSlotWidget*) { bUpgradeRequested = true; });
+		UpgradeButton->OnClicked.Broadcast();
+		TestTrue(TEXT("Skill upgrade button emits request"), bUpgradeRequested);
+	}
 	TestEqual(TEXT("Cooldown uses server clock"), SkillCount->GetText().ToString(), FString(TEXT("5.0")));
 	TestEqual(TEXT("Cooldown shade uses frozen window"), Shade->GetRenderTransform().Scale.Y, 0.5);
 	Unit.Mana = 0.0f;

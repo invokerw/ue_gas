@@ -7,6 +7,22 @@
 > 关联进度台账：
 > 风险等级：`L0 / L1 / L2`
 
+## 0. Intake 与 Gate 记录
+
+- 用户请求：
+- 附件解释：`无附件 / 需求 / 参考 / 工程约束`（必须说明附件如何影响实现）
+- 已读取入口：`agent.md`、相关 DDD、任务路由 Skill、主执行 Skill
+- 主 Skill：
+- 备选 Skill 与排除理由：
+- 路由置信度：`high / medium / low`
+- F0 结论：`GO / DEFER / ESCALATE`
+- F0 依据：
+- F1 结论：`APPROVED / REVISE / ESCALATE`
+- F2 结论：`PASS / FINDINGS / ESCALATE`
+- Push-Ready 结论：`READY / BLOCKED / ESCALATE`
+- 验证：实际命令、结果和报告路径
+- 未执行：`N/A` 或未执行项、原因和后续命令
+
 ## 1. 目标与范围
 
 ### 目标

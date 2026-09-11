@@ -44,7 +44,7 @@ HUD 固定在游戏画面底部居中，采用参考图中的紧凑横向布局�
 - 冷却以遮罩与剩余秒数显示；法力不足、沉默、阵亡等状态使用明确的阻断表现。界面显示就绪不代表服务器一定接受施法。
 - 技能快捷键应与现有输入槽及映射一致。本次确认的是信息展示，不新增鼠标点击技能施法流程。
 - 可切换 AutoCast 的被动技能占用普通技能槽；按对应快捷键请求服务器原子翻转开关。鼠标点击槽位仍只固定详情，不施放或切换技能。
-- 等级、经验、六格物品和三个背包格先显示占位；它们对应的成长、库存与经济玩法后续接入。
+- 等级与经验已接入服务器权威成长快照；六格物品和三个背包格仍显示占位，库存与经济玩法后续接入。
 - 预览中的英雄、图标、等级、经验和技能数值均为示例，不写入正式战斗定义或当作平衡配置。
 - 物品与背包空槽始终保留；本阶段不设计拖放、使用物品、交换槽位、商店或购买交互。
 
@@ -71,14 +71,14 @@ Designer 中使用底边锚定的 ScaleBox，按 UE DPI 规则显示，狭窄区
 | --- | --- |
 | 主布局与头像 | `HUDPanel`、`HUDFrame`、`HeroPortrait`、`HeroSymbol`、`HeroNameText`、`StatsText` |
 | 资源 | `HealthBar`、`ManaBar`、`HealthText`、`ManaText`、`HealthRegenText`、`ManaRegenText` |
-| 等级占位 | `LevelText`、`ExperienceRing`；默认演示等级 9、经验比例 0.625 |
+| 等级与经验 | `LevelText`、`ExperienceRing`；可选 `ExperienceText`、`AbilityPointsText`，内容来自服务器成长快照 |
 | 技能与效果 | `SkillQ/W/E/R`、`BuffPanel`、`BuffOverflowText`、`ActivityText` |
 | 详情 | `DetailPanel`、`DetailText`、`CloseDetailButton` |
-| 技能 / Buff 子控件 | `IconImage`、`SymbolText`、`HotkeyText`、`CostText`、`CountText`、`StackText`、`RankText`、`CooldownShade`、`BlockedShade`、`DurationRing`；两种槽按需要提供其中部分 |
+| 技能 / Buff 子控件 | `IconImage`、`SymbolText`、`HotkeyText`、`CostText`、`CountText`、`StackText`、`RankText`、`CooldownShade`、`BlockedShade`、`DurationRing`；技能槽可选 `UpgradeButton`，缺失时 C++ 在 Panel 根节点动态创建；两种槽按需要提供其中部分 |
 
 ## 5. 数据与生命周期
 
-`UCombatUnitViewComponent` 的公共 View 继续提供生命、法力、生命代次、可见状态、施法阶段及 Modifier FastArray。`FCombatHUDOwnerView` 以 `COND_OwnerOnly` 复制攻击力、护甲、魔抗、移速、恢复速率，以及最多四个直接输入技能的 Spec 句柄、稳定定义 ID、等级、费用、已提交冷却结束时间、冻结时长、AutoCast 切换语义与服务器权威开关状态。纯被动技能隐藏，`Passive + AutoCast` 与主动技能按 AbilitySpec 授予顺序占槽。
+`UCombatUnitViewComponent` 的公共 View 继续提供生命、法力、生命代次、可见状态、施法阶段及 Modifier FastArray。`FCombatHUDOwnerView` 以 `COND_OwnerOnly` 复制英雄等级、累计经验、当前等级经验、升级所需经验、经验进度、未使用技能点，以及攻击力、护甲、魔抗、移速、恢复速率和最多四个直接输入技能的 Spec 句柄、稳定定义 ID、等级、费用、已提交冷却结束时间、冻结时长、AutoCast 切换语义与可升级标志。纯被动技能隐藏，`Passive + AutoCast` 与主动技能按 AbilitySpec 授予顺序占槽。
 
 服务器每 0.1 秒采样展示数据，仅在内容改变时更新快照；该 Tick 不执行 gameplay。客户端先核对单位定义与生命代次，再按本地输入使用的 Spec 顺序匹配技能，复制未齐时留空。冷却使用校准服务器时间推进本地遮罩，不重算旧冷却，也不因 UI 倒计时归零而移除 Buff。失去拥有权时公共读取入口屏蔽旧缓存。
 
@@ -90,7 +90,7 @@ Designer 中使用底边锚定的 ScaleBox，按 UE DPI 规则显示，狭窄区
 | --- | --- | --- | --- | --- |
 | 本地 `ACombatPlayerHUD` | 强持有主 Widget；Widget 弱观察 `CommandedUnit` / View，强持有效 Buff 子控件 | View 变化或本地显示刷新 | 换单位解绑；换生命清空详情与子控件；Widget Destruct / Unit EndPlay 取消加载并移除委托；HUD EndPlay 移除视口控件 | `BindingRevision + LifeGeneration`；专用服务器不创建 Widget |
 
-等级经验、物品、背包仅为展示占位；没有经验累计、升级、物品使用、拖放、库存或经济数据。核心 `combat_v1_rc1` 保持不变；展示 schema 4 要求服务器和客户端使用同版本。
+`UCombatProgressionComponent` 保存服务器权威等级、经验和技能点。累计经验阈值采用 `XP(n)=100*(n-1)*(n+2)/2`，默认上限 30 级；单位定义可配置初始等级、等级内经验和击杀经验奖励，致死伤害完成死亡转换后把奖励发给实际击杀者。技能加点通过 owning client 的可靠请求进入服务器，服务器检查技能点、英雄等级、技能上限和生命状态。物品、背包、库存与经济仍为展示占位；核心 `combat_v1_rc1` 保持不变，展示 schema 5 要求服务器和客户端使用同版本。
 
 ## 6. 确认与验证
 

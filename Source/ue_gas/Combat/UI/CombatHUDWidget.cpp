@@ -3,6 +3,7 @@
 #include "Combat/UI/CombatHUDSlotWidget.h"
 #include "Combat/UI/CombatRadialProgress.h"
 #include "Combat/View/CombatUnitViewComponent.h"
+#include "Combat/Unit/CombatProgressionComponent.h"
 #include "Combat/Unit/CombatUnitCharacter.h"
 #include "Combat/Data/CombatDefinitionData.h"
 #include "ue_gasPlayerController.h"
@@ -49,14 +50,18 @@ void UCombatHUDWidget::NativeConstruct()
 		if (!Entry) continue;
 		Entry->OnDetailRequested.RemoveAll(this);
 		Entry->OnDetailRequested.AddUObject(this, &UCombatHUDWidget::HandleDetail, Entry);
+		Entry->OnUpgradeRequested.RemoveAll(this);
+		Entry->OnUpgradeRequested.AddUObject(this, &UCombatHUDWidget::HandleUpgradeRequested);
 	}
-	CombatHUD::Text(LevelText, FString::FromInt(PlaceholderLevel));
+	CombatHUD::Text(LevelText, TEXT("—"));
+	CombatHUD::Text(ExperienceText, TEXT(""));
+	CombatHUD::Text(AbilityPointsText, TEXT(""));
 	if (ExperienceRing)
 	{
-		ExperienceRing->SetProgress(PlaceholderExperience);
-		ExperienceRing->SetToolTipText(NSLOCTEXT("CombatHUD", "GrowthPlaceholder", "等级与经验占位，成长系统尚未接入"));
+		ExperienceRing->SetProgress(0.0f);
+		ExperienceRing->SetToolTipText(NSLOCTEXT("CombatHUD", "GrowthSyncing", "等级与经验同步中"));
 	}
-	if (LevelText) LevelText->SetToolTipText(NSLOCTEXT("CombatHUD", "GrowthPlaceholder", "等级与经验占位，成长系统尚未接入"));
+	if (LevelText) LevelText->SetToolTipText(NSLOCTEXT("CombatHUD", "GrowthSyncing", "等级与经验同步中"));
 	CloseDetail();
 	ACombatUnitCharacter* PreviousUnit = BoundUnit.Get();
 	UnbindView();
@@ -128,7 +133,12 @@ void UCombatHUDWidget::NativeDestruct()
 	bConstructed = false;
 	UnbindView();
 	ResetPresentation();
-	for (UCombatHUDSlotWidget* Entry : GetSkillWidgets()) if (Entry) Entry->OnDetailRequested.RemoveAll(this);
+	for (UCombatHUDSlotWidget* Entry : GetSkillWidgets())
+	{
+		if (!Entry) continue;
+		Entry->OnDetailRequested.RemoveAll(this);
+		Entry->OnUpgradeRequested.RemoveAll(this);
+	}
 	if (CloseDetailButton) CloseDetailButton->OnClicked.RemoveDynamic(this, &UCombatHUDWidget::CloseDetail);
 	Super::NativeDestruct();
 }
@@ -205,6 +215,38 @@ void UCombatHUDWidget::RefreshDisplay()
 	const FCombatHUDOwnerView Candidate = BoundView->GetHUDOwnerView();
 	const bool bOwnerReady = Candidate.LifeGeneration == Unit.LifeGeneration && Candidate.UnitDefinitionId == Unit.UnitDefinitionId;
 	DisplaySnapshot = bOwnerReady ? Candidate : FCombatHUDOwnerView();
+	if (bOwnerReady)
+	{
+		CombatHUD::Text(LevelText, FString::Printf(TEXT("%d"), DisplaySnapshot.Level));
+		CombatHUD::Text(ExperienceText, DisplaySnapshot.ExperienceToNextLevel > 0
+			? FString::Printf(TEXT("%lld / %lld"), static_cast<long long>(DisplaySnapshot.ExperienceIntoLevel),
+				static_cast<long long>(DisplaySnapshot.ExperienceIntoLevel + DisplaySnapshot.ExperienceToNextLevel))
+			: TEXT("满级"));
+		CombatHUD::Text(AbilityPointsText, DisplaySnapshot.UnspentAbilityPoints > 0
+			? FString::Printf(TEXT("技能点 %d"), DisplaySnapshot.UnspentAbilityPoints) : TEXT(""));
+		if (ExperienceRing)
+		{
+			ExperienceRing->SetProgress(DisplaySnapshot.ExperienceProgress);
+			ExperienceRing->SetToolTipText(FText::FromString(DisplaySnapshot.ExperienceToNextLevel > 0
+				? FString::Printf(TEXT("经验 %lld / %lld · 距离升级还需 %lld"),
+					static_cast<long long>(DisplaySnapshot.ExperienceIntoLevel),
+					static_cast<long long>(DisplaySnapshot.ExperienceIntoLevel + DisplaySnapshot.ExperienceToNextLevel),
+					static_cast<long long>(DisplaySnapshot.ExperienceToNextLevel))
+				: TEXT("已达到最高等级")));
+		}
+	}
+	else
+	{
+		CombatHUD::Text(LevelText, TEXT("—"));
+		CombatHUD::Text(ExperienceText, TEXT(""));
+		CombatHUD::Text(AbilityPointsText, TEXT(""));
+		if (ExperienceRing)
+		{
+			ExperienceRing->SetProgress(0.0f);
+			ExperienceRing->SetToolTipText(NSLOCTEXT("CombatHUD", "GrowthSyncing", "等级与经验同步中"));
+		}
+		if (LevelText) LevelText->SetToolTipText(NSLOCTEXT("CombatHUD", "GrowthSyncing", "等级与经验同步中"));
+	}
 	TArray<FPrimaryAssetId> Ids = { Unit.UnitDefinitionId };
 	for (const FCombatHUDAbilityView& Ability : DisplaySnapshot.Abilities) if (Ability.DefinitionId.IsValid()) Ids.AddUnique(Ability.DefinitionId);
 	TArray<FCombatModifierView> Modifiers = BoundView->GetVisibleModifiers();
@@ -293,13 +335,32 @@ void UCombatHUDWidget::RefreshDisplay()
 		DetailText->SetText(DetailSource.IsValid() ? DetailSource->GetDetailText() : BuildHeroDetail());
 }
 
+void UCombatHUDWidget::HandleUpgradeRequested(UCombatHUDSlotWidget* Source)
+{
+	if (!Source || !BoundUnit.IsValid() || !DisplaySnapshot.LifeGeneration)
+	{
+		return;
+	}
+	const TArray<UCombatHUDSlotWidget*> Slots = GetSkillWidgets();
+	const int32 Index = Slots.IndexOfByKey(Source);
+	if (!DisplaySnapshot.Abilities.IsValidIndex(Index))
+	{
+		return;
+	}
+	if (UCombatProgressionComponent* Progression = BoundUnit->GetCombatProgressionComponent())
+	{
+		Progression->RequestAbilityUpgrade(DisplaySnapshot.Abilities[Index].SpecHandle);
+	}
+}
+
 FText UCombatHUDWidget::BuildHeroDetail() const
 {
 	if (!BoundView.IsValid()) return FText::GetEmpty();
 	const FString Name = ResolveName(BoundView->GetUnitView().UnitDefinitionId).ToString();
 	if (DisplaySnapshot.LifeGeneration == 0) return FText::FromString(Name + TEXT("\n属性同步中"));
-	return FText::FromString(FString::Printf(TEXT("%s\n攻击力 %.0f · 护甲 %.1f\n魔法抗性 %.0f%% · 移动速度 %.0f\n生命恢复 %.1f / 秒\n法力恢复 %.1f / 秒"),
-		*Name, DisplaySnapshot.AttackDamage, DisplaySnapshot.Armor, DisplaySnapshot.MagicResist * 100.0f,
+	return FText::FromString(FString::Printf(TEXT("%s\n等级 %d · 经验 %lld\n未使用技能点 %d\n攻击力 %.0f · 护甲 %.1f\n魔法抗性 %.0f%% · 移动速度 %.0f\n生命恢复 %.1f / 秒\n法力恢复 %.1f / 秒"),
+		*Name, DisplaySnapshot.Level, static_cast<long long>(DisplaySnapshot.Experience), DisplaySnapshot.UnspentAbilityPoints,
+		DisplaySnapshot.AttackDamage, DisplaySnapshot.Armor, DisplaySnapshot.MagicResist * 100.0f,
 		DisplaySnapshot.MoveSpeed, DisplaySnapshot.HealthRegen, DisplaySnapshot.ManaRegen));
 }
 

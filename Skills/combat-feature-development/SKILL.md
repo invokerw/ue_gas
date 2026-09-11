@@ -15,6 +15,14 @@ description: "在 ue_gas Combat 仓库中执行功能、Bug 修复、兼容新�
 - 前置条件：确认工作区根目录包含 `ue_gas.uproject`，完整阅读 `agent.md`，检查 `git status` 并保留已有修改。
 - 输出：可回读的 Spec、实现 diff、验证证据、Gate 结论和用户验收状态；没有执行的检查必须标为“未执行”。
 
+每次功能、Bug、工具、资产或流程变更都必须在**第一次代码/资产修改前**建立任务 Spec，并把用户请求、附件解释、已读取入口、主 Skill 和路由置信度写入 Spec。纯咨询不创建虚假 Spec。开工前运行：
+
+```bash
+python3 -B Tools/task_gate.py --mode preflight --spec Doc/CombatSystem/Specs/<task-id>.spec.md --kind feature
+```
+
+Gate 失败时先补齐 Spec 或路由记录，不能绕过检查进入 BUILD。流程/工具变更使用 `--kind process`，纯文档变更使用 `--kind docs`。
+
 ## 工具边界
 
 - 文档和代码定位使用 `rg`、直接阅读源码和现有测试；若存在 `.codegraph/`，优先使用它定位复杂调用链。
@@ -47,6 +55,8 @@ description: "在 ue_gas Combat 仓库中执行功能、Bug 修复、兼容新�
 
 从 `Doc/CombatSystem/Specs/_template.spec.md` 创建 `Doc/CombatSystem/Specs/<task-id>.spec.md`。补齐 AC、DoD、文件/资产定位、状态转换、正常/失败/取消/过期/死亡/EndPlay/重复请求路径、测试矩阵、迁移、回滚、可观测性和证据位置。小型文字修正可在台账记录范围与验证，但功能、Bug、资产迁移和契约变更必须保留 Spec。F1 结果写为 `APPROVED`、`REVISE` 或 `ESCALATE`。
 
+Spec 和 F1 通过后，才允许修改 `Source/`、`Content/` 或 `Tools/`。本条是可执行流程门，不以口头计划替代。
+
 ### 4. BUILD：按 TDD 实现
 
 对行为或可执行逻辑，先建立最小失败测试、fixture 或 Golden Case，记录实际 Red 原因；再做最小实现和 Green 验证。纯文档修正使用链接、格式和事实核对，不虚构未执行的 Red 阶段。遵守 `agent.md` 的服务器结算、Scheduler、生命周期、单 Runtime Module、中文注释和蓝图 ToolTip 约束。
@@ -70,6 +80,14 @@ description: "在 ue_gas Combat 仓库中执行功能、Bug 修复、兼容新�
 ### 7. DELIVER：本地交付门
 
 逐项判断 Push-Ready 六层：Tests、Types/Build、No Regression、Adversarial、DDD/Constraints、Decisions。适用项通过；不适用项标 `N/A` 并说明原因；受阻的必需项标“未执行”。将结果和证据写入 Spec 或 `Doc/CombatSystem/00-Project/_delivery-record-template.md`，不自动提交或推送。
+
+交付前运行与开工时相同任务的机器检查，并把输出写回 Spec：
+
+```bash
+python3 -B Tools/task_gate.py --mode delivery --spec Doc/CombatSystem/Specs/<task-id>.spec.md --kind feature
+```
+
+`delivery` 会检查 Spec 状态、F1/F2/Push-Ready 结论、验证与未执行记录，以及工作区行为变更是否同时带有测试和文档。没有通过就不能声称任务可交付。
 
 ### 8. REFLECT：回写知识
 

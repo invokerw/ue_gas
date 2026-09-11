@@ -10,9 +10,13 @@ class UTextBlock;
 class UImage;
 class UCombatRadialProgress;
 class UTexture2D;
+class UCombatHUDSlotWidget;
+class UButton;
 
 /** 槽位请求主 HUD 显示详情；空文本结束悬停，点击请求固定。 */
 DECLARE_MULTICAST_DELEGATE_TwoParams(FCombatHUDDetailRequested, const FText&, bool);
+/** 技能升级按钮请求主 HUD 向服务器提交一次技能加点。 */
+DECLARE_MULTICAST_DELEGATE_OneParam(FCombatHUDUpgradeRequested, UCombatHUDSlotWidget*);
 
 /** 技能与 Buff 蓝图的只读适配；所有控件和样式由 Designer 提供，空绑定安全跳过。 */
 UCLASS(Blueprintable, meta=(DisplayName="战斗 HUD 槽位", ToolTip="显示技能或 Buff 的只读内容，不提交战斗请求。"))
@@ -28,10 +32,12 @@ public:
 	/** 丢弃旧单位或旧生命的详情与内容，快捷键由下一次快照恢复。 */
 	void ClearEntry();
 	FCombatHUDDetailRequested OnDetailRequested;
+	FCombatHUDUpgradeRequested OnUpgradeRequested;
 	const FText& GetDetailText() const { return DetailText; }
 	/** 公共显示规则，供展示与自动化共用；剩余时间不会为负或 NaN。 */
 	static float Remaining(double EndTime, double ServerTime);
 protected:
+	virtual void NativeConstruct() override;
 	virtual void NativeOnMouseEnter(const FGeometry& Geometry, const FPointerEvent& Event) override;
 	virtual void NativeOnMouseLeave(const FPointerEvent& Event) override;
 	virtual FReply NativeOnMouseButtonDown(const FGeometry& Geometry, const FPointerEvent& Event) override;
@@ -46,13 +52,22 @@ protected:
 	UPROPERTY(meta=(BindWidgetOptional)) TObjectPtr<UTextBlock> CountText;
 	UPROPERTY(meta=(BindWidgetOptional)) TObjectPtr<UTextBlock> StackText;
 	UPROPERTY(meta=(BindWidgetOptional)) TObjectPtr<UTextBlock> RankText;
+	/** Designer 可选的加点按钮；缺失时会在技能槽根 CanvasPanel 上动态创建。 */
+	UPROPERTY(meta=(BindWidgetOptional, DisplayName="技能升级按钮", ToolTip="可选的技能加点按钮；点击只提交服务器技能升级请求。")) TObjectPtr<class UButton> UpgradeButton;
 	UPROPERTY(meta=(BindWidgetOptional)) TObjectPtr<UCombatRadialProgress> DurationRing;
 	UPROPERTY(EditDefaultsOnly, Category="Appearance", meta=(DisplayName="增益颜色", ToolTip="增益图标和持续时间环的颜色。"))
 	FLinearColor BuffColor = FLinearColor(0.42f, 0.65f, 0.29f);
 	UPROPERTY(EditDefaultsOnly, Category="Appearance", meta=(DisplayName="减益颜色", ToolTip="减益图标和持续时间环的颜色。"))
 	FLinearColor DebuffColor = FLinearColor(0.75f, 0.31f, 0.26f);
 private:
+	/** 为旧版技能槽蓝图补建位于技能图标上方的“+”按钮。 */
+	void CreateRuntimeUpgradeButton();
+	/** UButton 点击回调；只广播 UI 请求，不直接修改 ASC。 */
+	UFUNCTION() void HandleUpgradeClicked();
+	/** 返回 Designer 按钮或运行时兼容按钮。 */
+	UButton* GetEffectiveUpgradeButton() const;
 	/** 使用配置纹理；缺失美术时保留名称首字占位。 */
 	void SetIcon(UTexture2D* Texture, const FText& Name);
 	FText DetailText;
+	UPROPERTY(Transient) TObjectPtr<class UButton> RuntimeUpgradeButton;
 };

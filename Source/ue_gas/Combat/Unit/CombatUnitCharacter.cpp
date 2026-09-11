@@ -15,6 +15,7 @@
 #include "Combat/Order/CombatOrderComponent.h"
 #include "Combat/UI/CombatOverheadWidgetComponent.h"
 #include "Combat/Unit/CombatRegenerationComponent.h"
+#include "Combat/Unit/CombatProgressionComponent.h"
 #include "Combat/Unit/CombatCharacterMovementComponent.h"
 #include "Combat/Unit/CombatUnitAIController.h"
 #include "Combat/Unit/CombatUnitLifecycleComponent.h"
@@ -40,6 +41,7 @@ ACombatUnitCharacter::ACombatUnitCharacter(const FObjectInitializer& ObjectIniti
 	CombatAbilitySystemComponent->AddAttributeSetSubobject(CombatAttributeSet.Get());
 	CombatModifierComponent = CreateDefaultSubobject<UCombatModifierComponent>(TEXT("CombatModifiers"));
 	CombatLifecycleComponent = CreateDefaultSubobject<UCombatUnitLifecycleComponent>(TEXT("CombatLifecycle"));
+	CombatProgressionComponent = CreateDefaultSubobject<UCombatProgressionComponent>(TEXT("CombatProgression"));
 	CombatRegenerationComponent = CreateDefaultSubobject<UCombatRegenerationComponent>(TEXT("CombatRegeneration"));
 	CombatAttackComponent = CreateDefaultSubobject<UCombatAttackComponent>(TEXT("CombatAttack"));
 	CombatOrderComponent = CreateDefaultSubobject<UCombatOrderComponent>(TEXT("CombatOrders"));
@@ -291,6 +293,8 @@ bool ACombatUnitCharacter::InitializeFromUnitData(UCombatUnitData* InUnitData)
 	}
 	FString StatsDiagnostic;
 	if (!InUnitData->BaseStats.IsValid(&StatsDiagnostic) || !InUnitData->InitialTeamId.IsValid()
+		|| InUnitData->InitialLevel < 1 || InUnitData->InitialExperience < 0 || InUnitData->ExperienceReward < 0
+		|| !CombatProgressionComponent || InUnitData->InitialLevel > CombatProgressionComponent->GetMaxLevel()
 		|| !FMath::IsFinite(InUnitData->BaseAttackPoint) || InUnitData->BaseAttackPoint < 0.0f
 		|| !FMath::IsFinite(InUnitData->AttackFacingToleranceDegrees)
 		|| InUnitData->AttackFacingToleranceDegrees < 0.0f || InUnitData->AttackFacingToleranceDegrees > 180.0f
@@ -386,6 +390,11 @@ bool ACombatUnitCharacter::InitializeFromUnitData(UCombatUnitData* InUnitData)
 				return false;
 			}
 		}
+	}
+	if (!CombatProgressionComponent || !CombatProgressionComponent->InitializeProgression(
+		InUnitData->InitialLevel, InUnitData->InitialExperience))
+	{
+		return false;
 	}
 	InitializedUnitDefinitionId = RequestedId;
 	// 动态 Spawn 的最小 World 可能在 BeginPlay 后才具备最终 Authority/Owner；初始化结束再应用一次产品策略。

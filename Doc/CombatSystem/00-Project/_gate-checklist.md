@@ -7,6 +7,7 @@
 
 - [ ] 目标、用户价值、范围和 Non-Goals 已写清。
 - [ ] 已读取 `00-01-Progress-Tracker.md` 和相关 DDD。
+- [ ] 开工记录已明确已读取的 `agent.md`、任务路由 Skill、主执行 Skill、用户请求和附件解释。
 - [ ] 已判断是否触及服务器权威、公开契约、生命周期、网络或资产迁移。
 - [ ] 已给出 `GO`、`DEFER` 或 `ESCALATE`，并记录依据。
 
@@ -44,6 +45,7 @@
 - [ ] L6 Decisions：ADR/Gap、版本、迁移、延期和进度台账齐全。
 - [ ] 文档类变更已运行 `python3 -B Tools/validate_docs.py` 和 `git diff --check`，并核对过时状态与事实。
 - [ ] 修改文档校验脚本时，已运行 `python3 -B -m unittest discover -s Tools/Tests -p 'test_validate_docs.py' -v`。
+- [ ] 已运行 `python3 -B Tools/task_gate.py --mode delivery --spec Doc/CombatSystem/Specs/<task-id>.spec.md --kind <feature|docs|process>`，并保存通过结果。
 
 结论：`READY / BLOCKED / ESCALATED`
 证据：

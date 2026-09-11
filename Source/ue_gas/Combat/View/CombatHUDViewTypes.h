@@ -30,6 +30,8 @@ struct UE_GAS_API FCombatHUDAbilityView
 	bool bUsesAutoCastToggleInput = false;
 	UPROPERTY(BlueprintReadOnly, Category="Combat|HUD", meta=(DisplayName="自动施法已开启", ToolTip="服务器权威 AutoCast 状态；只用于拥有者显示，攻击时仍由服务器重新检查。"))
 	bool bAutoCastEnabled = false;
+	UPROPERTY(BlueprintReadOnly, Category="Combat|HUD", meta=(DisplayName="可以升级", ToolTip="当前拥有者是否有技能点且英雄等级允许提升该技能；点击仍需服务器重新校验。"))
+	bool bCanUpgrade = false;
 
 	/** 比较完整显示内容，避免未变化快照触发复制。 */
 	bool operator==(const FCombatHUDAbilityView& Other) const;
@@ -57,6 +59,19 @@ struct UE_GAS_API FCombatHUDOwnerView
 	float HealthRegen = 0.0f;
 	UPROPERTY(BlueprintReadOnly, Category="Combat|HUD", meta=(DisplayName="法力恢复速率", ToolTip="服务器 ASC 每秒法力恢复属性；死亡时界面显示暂停。"))
 	float ManaRegen = 0.0f;
+	/** 服务器权威成长快照；经验和技能点只向拥有者复制。 */
+	UPROPERTY(BlueprintReadOnly, Category="Combat|HUD", meta=(DisplayName="英雄等级", ToolTip="当前主控单位的服务器权威英雄等级。"))
+	int32 Level = 1;
+	UPROPERTY(BlueprintReadOnly, Category="Combat|HUD", meta=(DisplayName="累计经验", ToolTip="从 1 级起累计的服务器权威经验。"))
+	int64 Experience = 0;
+	UPROPERTY(BlueprintReadOnly, Category="Combat|HUD", meta=(DisplayName="当前等级经验", ToolTip="当前等级区间内已经积累的经验。"))
+	int64 ExperienceIntoLevel = 0;
+	UPROPERTY(BlueprintReadOnly, Category="Combat|HUD", meta=(DisplayName="升级所需经验", ToolTip="升到下一级还需要的经验；满级为 0。"))
+	int64 ExperienceToNextLevel = 0;
+	UPROPERTY(BlueprintReadOnly, Category="Combat|HUD", meta=(DisplayName="经验进度", ToolTip="当前等级经验环的 0 到 1 比例；满级为 1。"))
+	float ExperienceProgress = 0.0f;
+	UPROPERTY(BlueprintReadOnly, Category="Combat|HUD", meta=(DisplayName="未使用技能点", ToolTip="可用于提升技能等级的服务器权威技能点。"))
+	int32 UnspentAbilityPoints = 0;
 	UPROPERTY(BlueprintReadOnly, Category="Combat|HUD", meta=(DisplayName="技能槽", ToolTip="最多四个可直接输入的技能；包含主动技能及可切换 AutoCast 的被动技能，客户端按自身输入所用的 AbilitySpec 顺序匹配。"))
 	TArray<FCombatHUDAbilityView> Abilities;
 

@@ -6,6 +6,8 @@
 
 - 请求标题：
 - 提出人/日期：
+- 用户原始请求（保持原意）：
+- 附件解释：`无附件 / 需求 / 参考 / 工程约束`；说明附件是否改变范围或验收。
 - 触发背景：
 - 用户或项目价值：
 - 期望完成时间（如有）：
@@ -42,3 +44,5 @@
 - 备选 Skill 与排除理由：
 - 路由置信度：`high / medium / low`
 - 决策人和日期：
+
+F0 Spec 建立后运行 `python3 -B Tools/task_gate.py --mode preflight --spec Doc/CombatSystem/Specs/<task-id>.spec.md --kind <feature|docs|process>`；失败时先补齐输入，不进入实现。

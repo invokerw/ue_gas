@@ -7,6 +7,7 @@
 #include "Combat/Attributes/CombatAttributeSet.h"
 #include "Combat/Core/CombatTags.h"
 #include "Combat/Modifiers/CombatModifierComponent.h"
+#include "Combat/Unit/CombatProgressionComponent.h"
 #include "Combat/Unit/CombatUnitCharacter.h"
 
 bool FCombatModifierView::HasSamePayload(const FCombatModifierView& Other) const
@@ -240,6 +241,10 @@ void UCombatUnitViewComponent::BeginPlay()
 	{
 		Modifiers->OnModifierCollectionChanged().AddUObject(this, &UCombatUnitViewComponent::RefreshModifierViews);
 	}
+	if (UCombatProgressionComponent* Progression = Unit ? Unit->GetCombatProgressionComponent() : nullptr)
+	{
+		Progression->OnProgressionChanged().AddUObject(this, &UCombatUnitViewComponent::RefreshHUDOwnerView);
+	}
 	RefreshUnitView();
 	RefreshModifierViews();
 	RefreshHUDOwnerView();
@@ -274,6 +279,10 @@ void UCombatUnitViewComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 		if (UCombatModifierComponent* Modifiers = Unit->GetCombatModifierComponent())
 		{
 			Modifiers->OnModifierCollectionChanged().RemoveAll(this);
+		}
+		if (UCombatProgressionComponent* Progression = Unit->GetCombatProgressionComponent())
+		{
+			Progression->OnProgressionChanged().RemoveAll(this);
 		}
 	}
 	Super::EndPlay(EndPlayReason);

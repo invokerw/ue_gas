@@ -192,6 +192,18 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Unit", meta=(DisplayName="基础战斗属性", ToolTip="服务器初始化单位时写入 Combat AttributeSet 的基础属性集合；展开后可配置生命、攻击、移速等数值。"))
 	FCombatUnitBaseStats BaseStats;
 
+	/** 生成单位时使用的初始英雄等级；等级内经验由 InitialExperience 配置。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Progression", meta=(DisplayName="初始英雄等级", ToolTip="单位生成时的英雄等级，范围为 1 到成长组件等级上限；不会自动赠送技能点。", ClampMin="1", ClampMax="100"))
+	int32 InitialLevel = 1;
+
+	/** 生成单位时已经拥有的当前等级内经验；达到下一级阈值会在初始化时自动归一化。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Progression", meta=(DisplayName="初始等级内经验", ToolTip="单位生成时当前等级区间内已有的经验；单位为经验点，必须为非负数，跨过阈值时自动提升等级。", ClampMin="0"))
+	int32 InitialExperience = 0;
+
+	/** 单位死亡时由击杀者获得的经验奖励；0 表示该单位不提供击杀经验。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Progression", meta=(DisplayName="击杀经验奖励", ToolTip="单位被致死伤害击杀后，实际完成击杀的单位获得的经验点；必须为非负数。", ClampMin="0"))
+	int32 ExperienceReward = 100;
+
 	/** 单位生成时使用的队伍；0 为中立，1..254 为有效队伍，255 为无效保留值。 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Unit", meta=(DisplayName="初始队伍", ToolTip="单位生成时使用的战斗队伍；0 表示中立，1 到 254 表示有效队伍，255 表示无效。"))
 	FCombatTeamId InitialTeamId = FCombatTeamId(1);

@@ -60,6 +60,8 @@ protected:
 	UPROPERTY(meta=(BindWidgetOptional)) TObjectPtr<UTextBlock> HealthRegenText;
 	UPROPERTY(meta=(BindWidgetOptional)) TObjectPtr<UTextBlock> ManaRegenText;
 	UPROPERTY(meta=(BindWidgetOptional)) TObjectPtr<UTextBlock> LevelText;
+	UPROPERTY(meta=(BindWidgetOptional, DisplayName="经验文本", ToolTip="可选的等级内经验文本；显示当前等级区间经验与下一等级所需总经验。")) TObjectPtr<UTextBlock> ExperienceText;
+	UPROPERTY(meta=(BindWidgetOptional, DisplayName="技能点文本", ToolTip="可选的未使用技能点文本；有可用技能点时显示在英雄 HUD 上。")) TObjectPtr<UTextBlock> AbilityPointsText;
 	UPROPERTY(meta=(BindWidgetOptional)) TObjectPtr<UCombatRadialProgress> ExperienceRing;
 	UPROPERTY(meta=(BindWidgetOptional)) TObjectPtr<UTextBlock> ActivityText;
 	UPROPERTY(meta=(BindWidgetOptional)) TObjectPtr<UCombatHUDSlotWidget> SkillQ;
@@ -76,11 +78,6 @@ protected:
 	TSubclassOf<UCombatHUDSlotWidget> BuffWidgetClass;
 	UPROPERTY(EditDefaultsOnly, Category="Combat|HUD", meta=(DisplayName="定义图标", ToolTip="按稳定 Unit / Ability / Modifier ID 指定本地图标。缺失时用名称首字占位，不影响战斗。"))
 	TMap<FPrimaryAssetId, TObjectPtr<UTexture2D>> DefinitionIcons;
-	UPROPERTY(EditDefaultsOnly, Category="Combat|HUD|Placeholder", meta=(DisplayName="占位等级", ToolTip="成长系统接入前的演示等级，不是服务器等级。", ClampMin="1"))
-	int32 PlaceholderLevel = 9;
-	UPROPERTY(EditDefaultsOnly, Category="Combat|HUD|Placeholder", meta=(DisplayName="占位经验比例", ToolTip="成长系统接入前的演示经验比例，不计入玩法。", ClampMin="0", ClampMax="1"))
-	float PlaceholderExperience = 0.625f;
-
 private:
 	/** 刷新同一观察目标的数据；显示连续时间窗，不从倒计时移除 Buff。 */
 	UFUNCTION() void RefreshDisplay();
@@ -100,6 +97,8 @@ private:
 	UFUNCTION() void CloseDetail();
 	/** 返回 Designer 中有效的技能子控件，包括空位，维持四槽索引。 */
 	TArray<UCombatHUDSlotWidget*> GetSkillWidgets() const;
+	/** 将技能槽上方的加点按钮转换为一次服务器权威升级请求。 */
+	void HandleUpgradeRequested(UCombatHUDSlotWidget* Source);
 	/** 解析可选图标配置。 */
 	UTexture2D* FindIcon(const FPrimaryAssetId& Id) const;
 	/** 以本次 View 快照生成英雄属性详情，尚未复制的字段保持空白。 */

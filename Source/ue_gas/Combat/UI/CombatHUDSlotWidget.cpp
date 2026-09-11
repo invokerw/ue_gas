@@ -3,6 +3,11 @@
 #include "Combat/Core/CombatTags.h"
 #include "Components/TextBlock.h"
 #include "Components/Image.h"
+#include "Components/Button.h"
+#include "Components/PanelWidget.h"
+#include "Components/CanvasPanel.h"
+#include "Components/CanvasPanelSlot.h"
+#include "Blueprint/WidgetTree.h"
 #include "Input/Reply.h"
 #include "InputCoreTypes.h"
 
@@ -10,6 +15,73 @@ namespace CombatHUDSlot
 {
 	/** 集中处理可选文字控件，允许技能和 Buff 使用不同 Designer 树。 */
 	void Text(UTextBlock* Widget, const FString& Value) { if (Widget) Widget->SetText(FText::FromString(Value)); }
+}
+
+void UCombatHUDSlotWidget::NativeConstruct()
+{
+	Super::NativeConstruct();
+	CreateRuntimeUpgradeButton();
+	if (UButton* Button = GetEffectiveUpgradeButton())
+	{
+		Button->OnClicked.AddUniqueDynamic(this, &UCombatHUDSlotWidget::HandleUpgradeClicked);
+		Button->SetVisibility(ESlateVisibility::Collapsed);
+	}
+}
+
+UButton* UCombatHUDSlotWidget::GetEffectiveUpgradeButton() const
+{
+	return UpgradeButton ? UpgradeButton.Get() : RuntimeUpgradeButton.Get();
+}
+
+void UCombatHUDSlotWidget::CreateRuntimeUpgradeButton()
+{
+	if (UpgradeButton || RuntimeUpgradeButton || !WidgetTree)
+	{
+		return;
+	}
+	// 旧版槽位蓝图的根节点可能是 SizeBox/Overlay；优先向下查找 CanvasPanel，
+	// 这样升级按钮仍能稳定挂在图标上方，不要求重新打开并保存每个蓝图。
+	UPanelWidget* RootPanel = nullptr;
+	WidgetTree->ForEachWidget([&RootPanel](UWidget* Widget)
+	{
+		if (!RootPanel && Cast<UCanvasPanel>(Widget))
+		{
+			RootPanel = Cast<UCanvasPanel>(Widget);
+		}
+	});
+	if (!RootPanel) RootPanel = Cast<UPanelWidget>(GetRootWidget());
+	if (!RootPanel)
+	{
+		return;
+	}
+	UButton* Button = WidgetTree->ConstructWidget<UButton>(UButton::StaticClass(), TEXT("RuntimeUpgradeButton"));
+	UTextBlock* Label = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("RuntimeUpgradeLabel"));
+	if (!Button || !Label)
+	{
+		return;
+	}
+	Label->SetText(NSLOCTEXT("CombatHUD", "UpgradeAbility", "+"));
+	Label->SetJustification(ETextJustify::Center);
+	Button->AddChild(Label);
+	UPanelSlot* AddedSlot = RootPanel->AddChild(Button);
+	if (!AddedSlot)
+	{
+		return;
+	}
+	if (UCanvasPanelSlot* CanvasSlot = Cast<UCanvasPanelSlot>(AddedSlot))
+	{
+		CanvasSlot->SetAnchors(FAnchors(0.5f, 0.0f, 0.5f, 0.0f));
+		CanvasSlot->SetAlignment(FVector2D(0.5f, 1.0f));
+		CanvasSlot->SetPosition(FVector2D(0.0f, -2.0f));
+		CanvasSlot->SetSize(FVector2D(24.0f, 20.0f));
+	}
+	RuntimeUpgradeButton = Button;
+	Button->OnClicked.AddUniqueDynamic(this, &UCombatHUDSlotWidget::HandleUpgradeClicked);
+}
+
+void UCombatHUDSlotWidget::HandleUpgradeClicked()
+{
+	OnUpgradeRequested.Broadcast(this);
 }
 
 float UCombatHUDSlotWidget::Remaining(double EndTime, double ServerTime)
@@ -37,6 +109,14 @@ void UCombatHUDSlotWidget::ShowAbility(const FCombatHUDAbilityView& Ability, con
 {
 	using namespace CombatHUDSlot;
 	if (!Ability.DefinitionId.IsValid()) { ClearEntry(); if (HotkeyText) HotkeyText->SetText(Key); return; }
+	// 某些旧版蓝图在尚未加入视口时不会执行 NativeConstruct；首次显示时补建按钮。
+	CreateRuntimeUpgradeButton();
+	if (UButton* Button = GetEffectiveUpgradeButton())
+	{
+		Button->OnClicked.AddUniqueDynamic(this, &UCombatHUDSlotWidget::HandleUpgradeClicked);
+		Button->SetVisibility(Ability.bCanUpgrade ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+		Button->SetToolTipText(NSLOCTEXT("CombatHUD", "UpgradeAbilityTooltip", "消耗 1 点技能点提升技能等级"));
+	}
 	SetIcon(Texture, Name);
 	if (HotkeyText) HotkeyText->SetText(Key);
 	Text(CostText, FString::Printf(TEXT("%.0f"), Ability.ManaCost));
@@ -71,15 +151,18 @@ void UCombatHUDSlotWidget::ShowAbility(const FCombatHUDAbilityView& Ability, con
 	const FString AutoCastDetail = Ability.bUsesAutoCastToggleInput
 		? FString::Printf(TEXT("\n自动施法：%s（按 %s 切换）"), Ability.bAutoCastEnabled ? TEXT("开启") : TEXT("关闭"), *Key.ToString())
 		: FString();
+	const FString UpgradeDetail = Ability.bCanUpgrade ? TEXT("\n可用技能点：点击上方 + 升级") : TEXT("");
+	const FString OptionalDetail = AutoCastDetail + UpgradeDetail;
 	DetailText = FText::FromString(FString::Printf(TEXT("%s  [%s]\n等级 %d / %d\n%s\n法力消耗 %.0f%s%s"),
 		*Name.ToString(), *Key.ToString(), Ability.Level, Ability.MaxLevel, *Description.ToString(), Ability.ManaCost,
-		Seconds > 0 ? *FString::Printf(TEXT(" · 冷却 %.1f 秒"), Seconds) : TEXT(""), *AutoCastDetail));
+		Seconds > 0 ? *FString::Printf(TEXT(" · 冷却 %.1f 秒"), Seconds) : TEXT(""), *OptionalDetail));
 }
 
 void UCombatHUDSlotWidget::ShowModifier(const FCombatModifierView& Modifier, double ServerTime,
 	const FText& Name, UTexture2D* Texture)
 {
 	using namespace CombatHUDSlot;
+	if (UButton* Button = GetEffectiveUpgradeButton()) Button->SetVisibility(ESlateVisibility::Collapsed);
 	SetIcon(Texture, Name);
 	const bool bInfinite = Modifier.ServerEndTime <= 0.0;
 	const float Seconds = Remaining(Modifier.ServerEndTime, ServerTime);
@@ -109,6 +192,7 @@ void UCombatHUDSlotWidget::ClearEntry()
 	}
 	if (BlockedShade) BlockedShade->SetVisibility(ESlateVisibility::Collapsed);
 	if (CooldownShade) CooldownShade->SetVisibility(ESlateVisibility::Collapsed);
+	if (UButton* Button = GetEffectiveUpgradeButton()) Button->SetVisibility(ESlateVisibility::Collapsed);
 }
 
 void UCombatHUDSlotWidget::NativeOnMouseEnter(const FGeometry& Geometry, const FPointerEvent& Event)
@@ -127,6 +211,16 @@ FReply UCombatHUDSlotWidget::NativeOnMouseButtonDown(const FGeometry& Geometry, 
 {
 	if (Event.GetEffectingButton() == EKeys::LeftMouseButton)
 	{
+		// 升级按钮区域复用同一请求处理，避免父槽位先打开详情；键盘激活仍通过按钮的 OnClicked。
+		if (const UButton* Button = GetEffectiveUpgradeButton())
+		{
+			if (Button->GetVisibility() == ESlateVisibility::Visible
+				&& Button->GetCachedGeometry().IsUnderLocation(Event.GetScreenSpacePosition()))
+			{
+				HandleUpgradeClicked();
+				return FReply::Handled();
+			}
+		}
 		OnDetailRequested.Broadcast(DetailText, true);
 		return FReply::Handled();
 	}
@@ -137,6 +231,8 @@ FReply UCombatHUDSlotWidget::NativeOnMouseButtonDown(const FGeometry& Geometry, 
 
 void UCombatHUDSlotWidget::NativeDestruct()
 {
+	if (UButton* Button = GetEffectiveUpgradeButton()) Button->OnClicked.RemoveDynamic(this, &UCombatHUDSlotWidget::HandleUpgradeClicked);
 	OnDetailRequested.Clear();
+	OnUpgradeRequested.Clear();
 	Super::NativeDestruct();
 }

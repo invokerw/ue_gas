@@ -8,10 +8,12 @@
 #include "Combat/Combat/CombatTransactionSubsystem.h"
 #include "Combat/Core/CombatNumericPolicy.h"
 #include "Combat/Core/CombatTags.h"
+#include "Combat/Data/CombatDefinitionData.h"
 #include "Combat/Log/CombatEventSubsystem.h"
 #include "Combat/Modifiers/CombatModifierComponent.h"
 #include "Combat/Unit/CombatUnitCharacter.h"
 #include "Combat/Unit/CombatUnitLifecycleComponent.h"
+#include "Combat/Unit/CombatProgressionComponent.h"
 #include "Combat/UI/CombatOverheadWidgetComponent.h"
 
 FCombatDamageResult UCombatDamageSubsystem::DealDamage(const FCombatDamageRequest& Request)
@@ -175,7 +177,15 @@ FCombatDamageResult UCombatDamageSubsystem::DealDamage(const FCombatDamageReques
 	{
 		if (UCombatUnitLifecycleComponent* Lifecycle = Request.Target->GetCombatLifecycleComponent())
 		{
-			Lifecycle->RequestDeath(Result.Event.Context, Request.Source);
+			if (Lifecycle->RequestDeath(Result.Event.Context, Request.Source)
+				&& Request.Source != Request.Target && Request.Target->GetUnitData()
+				&& Request.Target->GetUnitData()->ExperienceReward > 0)
+			{
+				if (UCombatProgressionComponent* Progression = Request.Source->GetCombatProgressionComponent())
+				{
+					Progression->AddExperience(Request.Target->GetUnitData()->ExperienceReward);
+				}
+			}
 		}
 	}
 	return Result;

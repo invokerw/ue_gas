@@ -17,6 +17,7 @@ class UCombatMotionComponent;
 class UCombatOrderComponent;
 class UCombatOverheadWidgetComponent;
 class UCombatRegenerationComponent;
+class UCombatProgressionComponent;
 class UCombatUnitData;
 class UCombatUnitLifecycleComponent;
 class UCombatUnitViewComponent;
@@ -63,6 +64,8 @@ public:
 	UCombatUnitLifecycleComponent* GetCombatLifecycleComponent() const { return CombatLifecycleComponent; }
 	/** 返回 Scheduler 驱动的恢复组件。 */
 	UCombatRegenerationComponent* GetCombatRegenerationComponent() const { return CombatRegenerationComponent; }
+	/** 返回服务器权威等级、经验和技能点组件。 */
+	UCombatProgressionComponent* GetCombatProgressionComponent() const { return CombatProgressionComponent; }
 	/** 返回管理本单位普攻记录、前摇和攻击间隔的组件。 */
 	UCombatAttackComponent* GetCombatAttackComponent() const { return CombatAttackComponent; }
 	/** 返回按提交顺序执行移动、施法和普攻指令的组件。 */
@@ -196,6 +199,9 @@ protected:
 	/** Unit 的 Alive/Dying/Dead/Respawning 状态机组件。 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Combat|Components")
 	TObjectPtr<UCombatUnitLifecycleComponent> CombatLifecycleComponent;
+	/** 管理英雄等级、累计经验和未使用技能点；成长数据不写入 GAS 属性。 */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Combat|Components", meta=(DisplayName="战斗成长组件", ToolTip="服务器权威管理等级、经验和技能点；客户端只读取复制快照。"))
+	TObjectPtr<UCombatProgressionComponent> CombatProgressionComponent;
 	/** Unit 的 Health/Mana 恢复调度组件。 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Combat|Components")
 	TObjectPtr<UCombatRegenerationComponent> CombatRegenerationComponent;

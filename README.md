@@ -9,7 +9,7 @@ Combat 当前仍位于 `ue_gas` 单 Runtime Module 中，不是独立插件或�
 - 核心发布契约：`combat_v1_rc1`，Contract/Content/GameplayTag/Formula/RNG/Event schema 均为 v1。
 - 权威模型：服务器结算；客户端 TargetData 仅作为请求，目标、资源和结果由服务器复核。
 - M0-M8 共 82 个 Task 已完成并通过用户验收；最近一次发布 Gate 记录为 `Combat.*` 40/40、Editor/Server/Client 构建、资产校验和 Dedicated 双客户端容量场景通过。
-- M8 之后增加了卓尔游侠远程攻击 Demo、头顶资源/状态/施法条、伤害治疗跳字，以及底部居中的英雄、技能、Buff HUD。C++ 提供只读数据，Widget Blueprint 维护布局和视觉；等级经验、六格物品及三格背包先显示占位。
+- M8 之后增加了卓尔游侠远程攻击 Demo、头顶资源/状态/施法条、伤害治疗跳字，以及底部居中的英雄、技能、Buff HUD。C++ 提供只读数据，Widget Blueprint 维护布局和视觉；等级经验与技能加点已接入服务器权威成长组件，六格物品及三格背包仍显示占位。
 - 完整 gameplay 预测回滚、跨进程确定性 Replay、召唤物/幻象、物品与经济不属于当前 v1 范围。
 
 以上测试数字是已归档的最近验收证据，不自动代表任意工作区修改已经重新验证。实时任务状态以 [开发进度台账](Doc/CombatSystem/00-Project/00-01-Progress-Tracker.md) 为准。
@@ -32,7 +32,9 @@ Demo 操作：右键点敌方单位持续普攻，超出范围时自动追击；
 
 以上按键统一通过 `/Game/Combat/Demo/Input/IMC_Default` 映射到 Input Action；可在该资产中改键。普攻选敌、确认、取消和停止的 Action 引用配置在 `BP_CombatDemoPlayerController` 的 `Input|Combat` 默认属性中。
 
-底部 HUD 随本地玩家的指挥单位切换。悬停技能、Buff 或头像上的属性可查看详情，点击固定，关闭按钮或 Escape 取消固定；点击 HUD 不发出移动或施法请求。Q 槽显示“霜冻之箭”及服务器权威的“自动/关闭”状态，W/E/R 保留空位。界面配置入口见 [10-12 底部 HUD](Doc/CombatSystem/10-Architecture/10-12-Bottom-HUD-Design.md)。
+底部 HUD 随本地玩家的指挥单位切换。悬停技能、Buff 或头像上的属性可查看详情，点击固定，关闭按钮或 Escape 取消固定；点击 HUD 不发出移动或施法请求。英雄等级和经验环读取服务器成长快照；有技能点且满足英雄等级时，技能图标上方显示“+”按钮，点击请求服务器加点。Q 槽显示“霜冻之箭”及服务器权威的“自动/关闭”状态，W/E/R 保留空位。界面配置入口见 [10-12 底部 HUD](Doc/CombatSystem/10-Architecture/10-12-Bottom-HUD-Design.md)。
+
+开发调试时可在 Standalone 或服务器控制台执行 `combat.Debug.AddExperience 200`，给当前 World 的首个玩家主控单位增加 200 点经验；也可追加单位对象名或 `ActorUniqueId` 精确指定目标，例如 `combat.Debug.AddExperience 200 BP_DrowRanger_C_0`。命令仅在非 Shipping 构建注册，并复用服务器权威成长组件；客户端执行不会直接修改等级、经验或技能点。可先用 `combat.Debug.Unit <ActorUniqueId|Name>` 查询单位名称和 ID。
 
 ## 运行时主链路
 
@@ -108,6 +110,15 @@ Dedicated Server/Client Target 需要支持该 Target 的源码引擎。详细�
 python3 -B Tools/validate_docs.py
 git diff --check
 ```
+
+任务开工和交付使用可失败的流程 Gate；`<task-id>` 必须对应本次任务的 Spec。`feature` 覆盖功能/Bug/资产变更，`process` 覆盖工具和流程变更，`docs` 覆盖纯文档变更：
+
+```bash
+python3 -B Tools/task_gate.py --mode preflight --spec Doc/CombatSystem/Specs/<task-id>.spec.md --kind <feature|docs|process>
+python3 -B Tools/task_gate.py --mode delivery --spec Doc/CombatSystem/Specs/<task-id>.spec.md --kind <feature|docs|process>
+```
+
+Gate 会检查 Spec、Skill 路由、F0/F1/F2、Push-Ready、验证/未执行记录，以及行为变更是否配套测试和文档；失败结果必须先修复并回写 Spec。
 
 文档检查覆盖必需入口、目录迁移、Markdown 本地目标路径、尾随空格和 Spec 格式；页内锚点、外部链接和文档语义需要另行审查。当前采用本地开发与用户验收流程，交付或提交前运行上述命令。它们不能替代 UE 编译、Automation、PIE 或 Dedicated 验证。
 

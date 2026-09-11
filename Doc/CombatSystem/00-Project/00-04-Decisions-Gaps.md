@@ -85,6 +85,15 @@
 - 本决策仅覆盖键盘技能槽；鼠标点击槽位仍只固定详情，不新增点击施法或切换。它 supersede ADR-047 中“技能槽只提供信息、不新增请求”对键盘槽输入的限制，其余 HUD 边界不变。
 - 验证覆盖被动 AutoCast 槽位选择、连续 Q 翻转、无 Cast Order、副本投影更新、三 Target 和 Dedicated owner-only 回显。
 
+### ADR-049：经验等级与技能点成长兼容扩展（2026-09-11）
+
+- 状态：已定；由 `PROG-001` 落地，属于 post-v1 兼容扩展，不修改 `combat_v1_rc1` 的结算公式、网络发布契约或物品边界。
+- 选择：Unit 新增服务器权威 `UCombatProgressionComponent`，使用累计阈值 `XP(n)=100*(n-1)*(n+2)/2`，默认上限 30 级；每次跨级增加一个技能点，死亡和复活保留成长状态。
+- 奖励：致死伤害完成 Lifecycle `RequestDeath` 后，目标 `UCombatUnitData.ExperienceReward` 只发给实际致死来源；经验共享、助攻、范围衰减和天赋树留待后续决策。
+- 加点：技能升级请求由 owning client 通过可靠 RPC 提交，服务器检查存活、技能点、英雄等级和 `AbilityData.MaxLevel`，并复用 `UCombatAbilitySystemComponent::SetCombatAbilityLevel`；HUD 的 `+` 按钮只是请求入口。
+- 展示：`FCombatHUDOwnerView` 增加等级、累计经验、等级内经验、升级所需经验、经验进度、技能点和技能可升级标志，展示 schema 从 4 升至 5；旧 HUD 新增绑定均为可选，旧技能槽动态创建 `+` 按钮。
+- 迁移：旧 UnitData 使用初始 1 级、0 等级内经验、100 击杀奖励默认值；旧资产无需脚本迁移。Dedicated/真实 PIE 与最终按钮美术仍需后续验收。
+
 ## 3. 本轮查漏补缺摘要
 
 原单体文档对 Damage、Modifier、Scheduler、AttackRecord 和网络权威已有较强约束；本轮新增或显式登记了以下遗漏：
@@ -139,7 +148,7 @@
 | --- | --- | --- | --- | --- |
 | GAP-014 | 已关闭（ADR-036） | Aura 没有 owner/target 生命周期 | 每 World registry、Scheduler Coalesce、统一 Targeting 与普通 child Modifier reconcile；完整规则见 [90-11 §4](../90-History/90-11-M6-Content-Decision.md#4-aura关闭-gap-014-的基线) | 2026-08-26 / EXT-601 |
 | GAP-015 | 明确延期（ADR-041） | Summon/illusion 的 Owner、Team、ASC、Order 权限 | 不属于 v1；发布契约固定 `bSummonsAndIllusions=false`。引入前新增独立 ADR，冻结独立 Unit/ASC、CommandingController 与 gameplay owner、Team 继承和 teardown Gate | post-v1 / 引入召唤物前 |
-| GAP-017 | 明确延期（ADR-041） | 物品、背包、技能点、天赋、经验和经济 | 不属于 v1；发布契约固定 `bItemsAndEconomy=false`，只保留 AbilitySet/Modifier 公共 API 扩展口 | post-v1 |
+| GAP-017 | 明确延期（ADR-041；成长部分由 ADR-049 兼容扩展） | 物品、背包、技能点、天赋、经验和经济 | 物品、背包、天赋和经济仍不属于 v1；经验与技能点按 ADR-049 接入 post-v1 成长组件，发布契约仍固定 `bItemsAndEconomy=false` | post-v1 |
 | GAP-018 | 已关闭（ADR-040） | 目标容量/帧/带宽预算和池化触发阈值 | 预算、采样边界与优化触发规则见 [90-13 §7](../90-History/90-13-M7-Network-Observability-Decision.md#7-容量预算关闭-gap-018-的目标值)；64 Unit/256 Modifier 双客户端 soak 通过，验收证据见 [90-14](../90-History/90-14-M7-Acceptance.md) | 2026-08-27 / PERF-701 |
 | GAP-019 | 已关闭（ADR-039） | Combat Event schema 版本、存档/回放边界 | schema v1、环形诊断与明确不支持的 replay 边界见 [90-13 §6](../90-History/90-13-M7-Network-Observability-Decision.md#6-事件调试和回放边界关闭-gap-019-的目标值) | 2026-08-27 / OBS-701 |
 | GAP-021 | 已关闭（ADR-038） | RPC token bucket、批量命令上限和重复 request id 窗口 | ownership、20/s + 32 burst、8 Order/4096 bytes、128 RequestId 窗口及失败 Tag 见 [90-13 §3](../90-History/90-13-M7-Network-Observability-Decision.md#3-order-rpc-安全基线关闭-gap-021-的目标值) | 2026-08-27 / NET-002 |

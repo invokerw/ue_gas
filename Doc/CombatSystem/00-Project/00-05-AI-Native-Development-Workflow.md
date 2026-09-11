@@ -75,6 +75,20 @@ Spec 发生语义变化时先递增版本并写原因，再改代码。若只是
 EVALUATE → THINK → PLAN → BUILD → REVIEW → TEST → ADVERSARIAL → DELIVER → REFLECT
 ```
 
+每次需要修改仓库的任务，在第一次代码或资产修改前发送一条开工记录，明确：已读取的入口文件、用户请求、附件解释（需求/参考/工程约束）、主 Skill、备选 Skill、路由置信度、Spec 路径和 F0 结论。随后运行可失败的机器 Gate：
+
+```bash
+python3 -B Tools/task_gate.py --mode preflight --spec Doc/CombatSystem/Specs/<task-id>.spec.md --kind <feature|docs|process>
+```
+
+实现和验证完成后运行：
+
+```bash
+python3 -B Tools/task_gate.py --mode delivery --spec Doc/CombatSystem/Specs/<task-id>.spec.md --kind <feature|docs|process>
+```
+
+两个 Gate 都是只读检查（可选 `--report` 写 JSON），会验证 Spec 状态、路由和 F0、F1/F2、Push-Ready、实际验证/未执行记录，以及行为变更的测试和文档配套。失败时先修正 Spec、测试或证据，再继续；不能以口头说明代替失败结果。
+
 ### EVALUATE：F0，判断是否值得做
 
 读取用户需求、L1、当前状态和依赖，确认问题边界、Non-Goals、风险等级和是否需要先补领域知识。输出 `GO`、`DEFER` 或需要人决定的选项。未通过不进入编码；`DEFER` 必须说明缺口和最小澄清动作。
