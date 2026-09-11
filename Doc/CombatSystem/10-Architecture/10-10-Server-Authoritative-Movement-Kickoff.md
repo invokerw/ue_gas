@@ -331,7 +331,7 @@ SAM-000..009 已按下列依赖完成；兼容分支已删除，没有 Shipping 
 | `Source/ue_gas/ue_gasGameMode.*` | 初始 Unit 分配、控制权事务和断线清理 |
 | `Source/ue_gas/Combat/Tests/*` | 拓扑、Owner、Role、Order、碰撞和生命周期自动化 |
 | `Content/Combat/Demo/Framework/BP_CombatDemoGameMode.uasset` | 通过 UE MCP 重设父类为 `Aue_gasGameMode`，保留现有 DefaultPawnClass/PlayerControllerClass 配置并启用原生出生编排 |
-| `Content/Combat/Demo/Characters/WoodenDummy/BP_WoodenDummy.uasset` | 四个木桩装饰 StaticMesh 使用 `NoCollision`，只保留根 `CombatUnit` Capsule 作为 gameplay 碰撞体，避免装饰几何与 NavMesh/Crowd 产生分叉 |
+| `Content/Combat/Demo/Heros/WoodenDummy/BP_WoodenDummy.uasset` | 四个木桩装饰 StaticMesh 使用 `NoCollision`，只保留根 `CombatUnit` Capsule 作为 gameplay 碰撞体，避免装饰几何与 NavMesh/Crowd 产生分叉 |
 | `Content/__ExternalActors__/Combat/Demo/Maps/L_CombatDemo/6/SX/76CWUDVFOTB0MM0UBFCZU0.uasset` | 同步清理 Demo 关卡中 Wooden Dummy 已放置实例的旧组件碰撞覆盖，避免实例继续覆盖已修正的蓝图模板 |
 | `Config/DefaultEngine.ini` | 默认地图/GameMode 指向 Combat Demo；CrowdManager 容量设为 128；冻结 Profile 名称不变 |
 

@@ -31,7 +31,7 @@
 - `Source/ue_gas/ue_gas.Build.cs` 已接入 GameplayAbilities、GameplayTags、GameplayTasks、导航、网络、Niagara 和 UMG/Slate 等运行时依赖。
 - Combat 已在 `Source/ue_gas/Combat` 落地，包含 ASC、AttributeSet、Ability、Modifier、Damage/Heal、Order、Attack、Projectile、Thinker、Aura、Motion、网络 View、UI、调试、资产校验和 Automation。
 - 当前仍保持单 Runtime Module；`ue_gasEditor`、`ue_gasServer`、`ue_gasClient` Target 均存在。Server/Client Target 的源码引擎要求见 [90-02 M1 环境决策](../90-History/90-02-M1-Environment-Decision.md)。
-- `/Game/Combat/Demo/Maps/L_CombatDemo` 提供远程攻击可玩 Demo；`/Game/Combat/Tests/L_CombatTest` 用于 PIE、Dedicated 和容量验证。
+- `/Game/Combat/Demo/Maps/L_CombatDemo` 提供卓尔游侠霜冻之箭与默认追踪普攻 Demo；英雄和木桩位于 `/Game/Combat/Demo/Heros`，`/Game/Combat/Tests/L_CombatTest` 用于 PIE、Dedicated 和容量验证。
 - SAM 服务器权威移动已落地：`Aue_gasGameMode` 在默认出生阶段独立生成 Combat Unit 与 Command Pawn，Unit 由唯一服务器专用 AIController Possess，玩家只拥有无碰撞 Command Pawn；所有客户端的 Combat Unit 均为 SimulatedProxy。
 - `Variant_Strategy` 与 `Variant_TwinStick` 模板源码、资产和关卡已移除；可玩与验证入口统一位于 `/Game/Combat/Demo` 和 `/Game/Combat/Tests`。
 - `/Game/TopDown` 模板蓝图、示例关卡及 World Partition 外部数据已移除；Combat 仍使用的移动输入、点击光标和环境材质已归档到 `/Game/Combat/Demo` 与 `/Game/Combat/Shared`。

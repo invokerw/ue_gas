@@ -2,7 +2,7 @@
 
 > 当前状态：`combat_v1_rc1` 核心发布契约已冻结，M0-M8 共 82/82 Task、9/9 里程碑已通过用户验收。
 > 当前工程：UE 5.8；GameplayAbilities/GameplayTags/GameplayTasks 已接入，Combat 实现位于 `Source/ue_gas/Combat`。
-> 当前 Post-M8：SAM 服务器权威单位移动已完成技术 Gate，并已通过用户验收。
+> 当前 Post-M8：SAM 服务器权威单位移动与 DEMO-901 卓尔游侠 Demo 均已通过用户验收。
 > 底部 HUD：工程验证已完成，待用户实机复验；状态与远端验证记录见台账 §12.3。
 > 状态权威：[00-01 开发进度台账](00-Project/00-01-Progress-Tracker.md)。
 
@@ -56,7 +56,7 @@
 
 | 文档 | 解决的问题 | 推荐读者 |
 | --- | --- | --- |
-| [20-01 示例技能](20-Content/20-01-Example-Skills.md) | 七个纵向切片与可玩远程攻击 Demo 的落地方式 | 技能开发与验收 |
+| [20-01 示例技能](20-Content/20-01-Example-Skills.md) | 七个纵向切片与可玩卓尔游侠霜冻之箭 Demo 的落地方式 | 技能开发与验收 |
 | [20-02 M6 技能模板检查表](20-Content/20-02-M6-Skill-Template-Checklist.md) | 技能旁路、身份、时序、清理、中文说明和自动化检查 | 技能开发 |
 | [20-03 公共扩展与迁移指南](20-Content/20-03-M8-Public-Extension-Guide.md) | 新技能、DataAsset、蓝图事件和版本迁移入口 | 内容开发与维护者 |
 
@@ -82,6 +82,7 @@
 | [DOC-005 Combat 功能开发 Skill](Specs/DOC-005-combat-feature-development.spec.md) | 通用 Combat 功能的 F0/F1/F2、Spec、验证和交付流程 | 功能开发者、自动化 Agent |
 | [DOC-006 Combat 任务路由与复盘 Skill](Specs/DOC-006-combat-task-router.spec.md) | 主 Skill 选择、证据化自评和受控流程调优 | 需求提出者、开发者、自动化 Agent |
 | [DOC-007 远端 HUD 与文档体系合并](Specs/DOC-007-remote-hud-doc-merge.spec.md) | HUD 提交的集成、目录冲突处理与验证来源 | 维护者、审查者 |
+| [DEMO-901 卓尔游侠 Demo 流程](Specs/DEMO-901-drow-ranger-flow.spec.md) | 英雄资产迁移、远程普攻、霜冻之箭、AutoCast HUD 与完整验证 | 内容、技能、UI 与验收人员 |
 
 冻结与发布文档位于 `90-History`，只保存当时的决策和验收证据：
 

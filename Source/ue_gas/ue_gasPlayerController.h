@@ -137,6 +137,7 @@ private:
 #if WITH_DEV_AUTOMATION_TESTS
 	friend class FCombatPlayerAttackInputTest;
 	friend class FCombatPlayerAttackInputCancellationTest;
+	friend class FCombatPlayerAutoCastAbilityInputTest;
 #endif
 
 	/** 指针或代次任一复制到达时刷新 Command Pawn 跟随目标。 */

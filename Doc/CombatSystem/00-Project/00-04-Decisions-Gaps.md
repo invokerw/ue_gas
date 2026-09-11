@@ -76,6 +76,15 @@
 - 等级、经验及六格物品 / 三格背包为明确占位，不新增成长、库存或经济权威。技能槽只提供信息与详情，不新增施法请求。
 - 验证覆盖快照与属性来源、技能顺序及冻结冷却、初始复制 / 换单位 / 换生命 / teardown、蓝图绑定与几何、Editor / Server / Client 构建、资产校验和真实联机 HUD 投影。
 
+### ADR-048：可切换 AutoCast 被动进入技能槽（2026-09-10）
+
+- 状态：已定；为 DEMO-901 的霜冻之箭补齐可见和输入语义。核心 `combat_v1_rc1`、GameplayTag、内容与战斗事件 schema 保持不变；独立展示投影从 schema 3 升至 4，同版本服务器和客户端部署。
+- Q/W/E/R 最多选择四个“可直接输入技能”：普通非被动技能按原规则创建 Cast Order，`Passive + AutoCast` 技能占槽但快捷键只调用 ASC 的可靠 Toggle RPC；纯被动继续隐藏。
+- Toggle 请求不携带客户端推测的目标状态。服务器按当前 per-Spec AutoCast 值原子翻转，并复核网络所有权、Spec、行为标签和单位生命状态，避免连续按键依赖延迟到达的 HUD 数据。
+- `FCombatHUDAbilityView` owner-only 投影新增“使用 AutoCast 切换输入”和“AutoCast 已开启”字段；HUD 显示“自动/关闭”。展示快照仍只读，不参与服务器法球仲裁或伤害结算。
+- 本决策仅覆盖键盘技能槽；鼠标点击槽位仍只固定详情，不新增点击施法或切换。它 supersede ADR-047 中“技能槽只提供信息、不新增请求”对键盘槽输入的限制，其余 HUD 边界不变。
+- 验证覆盖被动 AutoCast 槽位选择、连续 Q 翻转、无 Cast Order、副本投影更新、三 Target 和 Dedicated owner-only 回显。
+
 ## 3. 本轮查漏补缺摘要
 
 原单体文档对 Damage、Modifier、Scheduler、AttackRecord 和网络权威已有较强约束；本轮新增或显式登记了以下遗漏：

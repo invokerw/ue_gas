@@ -9,7 +9,7 @@ Combat 当前仍位于 `ue_gas` 单 Runtime Module 中，不是独立插件或�
 - 核心发布契约：`combat_v1_rc1`，Contract/Content/GameplayTag/Formula/RNG/Event schema 均为 v1。
 - 权威模型：服务器结算；客户端 TargetData 仅作为请求，目标、资源和结果由服务器复核。
 - M0-M8 共 82 个 Task 已完成并通过用户验收；最近一次发布 Gate 记录为 `Combat.*` 40/40、Editor/Server/Client 构建、资产校验和 Dedicated 双客户端容量场景通过。
-- M8 之后增加了远程攻击 Demo、头顶资源/状态/施法条、伤害治疗跳字，以及底部居中的英雄、技能、Buff HUD。C++ 提供只读数据，Widget Blueprint 维护布局和视觉；等级经验、六格物品及三格背包先显示占位。
+- M8 之后增加了卓尔游侠远程攻击 Demo、头顶资源/状态/施法条、伤害治疗跳字，以及底部居中的英雄、技能、Buff HUD。C++ 提供只读数据，Widget Blueprint 维护布局和视觉；等级经验、六格物品及三格背包先显示占位。
 - 完整 gameplay 预测回滚、跨进程确定性 Replay、召唤物/幻象、物品与经济不属于当前 v1 范围。
 
 以上测试数字是已归档的最近验收证据，不自动代表任意工作区修改已经重新验证。实时任务状态以 [开发进度台账](Doc/CombatSystem/00-Project/00-01-Progress-Tracker.md) 为准。
@@ -28,11 +28,11 @@ Combat 当前仍位于 `ue_gas` 单 Runtime Module 中，不是独立插件或�
 
 项目 Skill 全部位于仓库内的 `Skills/`，按项目路径读取，不安装到用户级 Codex Skill 目录，也不影响其他项目。
 
-Demo 操作：右键点敌方单位持续普攻，超出范围时自动追击；右键点地面移动。按 **A** 进入选敌模式，再左键点敌人确认普攻；**S** 停止，**Escape** 取消选敌，Q/W/E/R 施放技能。A 模式点地面不会自动找敌或执行攻击移动（Attack Move）。
+Demo 操作：右键点敌方单位持续普攻，超出范围时自动追击；右键点地面移动。按 **A** 进入选敌模式，再左键点敌人确认普攻；**S** 停止，**Escape** 取消选敌。卓尔游侠的 **Q** 在“霜冻之箭”开启/关闭间切换，默认开启；W/E/R 当前为空。A 模式点地面不会自动找敌或执行攻击移动（Attack Move）。
 
 以上按键统一通过 `/Game/Combat/Demo/Input/IMC_Default` 映射到 Input Action；可在该资产中改键。普攻选敌、确认、取消和停止的 Action 引用配置在 `BP_CombatDemoPlayerController` 的 `Input|Combat` 默认属性中。
 
-底部 HUD 随本地玩家的指挥单位切换。悬停技能、Buff 或头像上的属性可查看详情，点击固定，关闭按钮或 Escape 取消固定；点击 HUD 不发出移动或施法请求。Demo 当前授予一个主动技能，其余三个技能槽保留空位。界面配置入口见 [10-12 底部 HUD](Doc/CombatSystem/10-Architecture/10-12-Bottom-HUD-Design.md)。
+底部 HUD 随本地玩家的指挥单位切换。悬停技能、Buff 或头像上的属性可查看详情，点击固定，关闭按钮或 Escape 取消固定；点击 HUD 不发出移动或施法请求。Q 槽显示“霜冻之箭”及服务器权威的“自动/关闭”状态，W/E/R 保留空位。界面配置入口见 [10-12 底部 HUD](Doc/CombatSystem/10-Architecture/10-12-Bottom-HUD-Design.md)。
 
 ## 运行时主链路
 
@@ -62,7 +62,7 @@ Demo 操作：右键点敌方单位持续普攻，超出范围时自动追击；
 | `Source/ue_gas/Combat/Data` | Unit/Ability/Modifier/Projectile/AbilitySet PrimaryDataAsset |
 | `Source/ue_gas/Combat/Network`、`View`、`UI` | RPC 防护、公共/拥有者 View、头顶表现与底部 HUD |
 | `Source/ue_gas/Combat/Tests` | `Combat.*` Automation 测试 |
-| `Content/Combat/Demo` | 可玩 Demo 地图、角色、远程攻击和输入资产 |
+| `Content/Combat/Demo` | 可玩 Demo 地图、`Heros/DrowRanger`、木桩、霜冻之箭、远程攻击和输入资产 |
 | `Content/Combat/Tests` | PIE、Dedicated 与容量测试地图 |
 | `Doc/CombatSystem/00-Project` | 当前状态、AI 开发流程、路线图、测试计划和决策入口 |
 | `Doc/CombatSystem/10-Architecture` | 当前运行时、联机、移动和 UI 架构契约 |

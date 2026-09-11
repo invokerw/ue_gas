@@ -375,6 +375,13 @@ void UCombatAbilitySystemComponent::ServerSetAutoCastEnabled_Implementation(
 	SetAutoCastEnabled(Handle, bEnabled, FailureTag);
 }
 
+void UCombatAbilitySystemComponent::ServerToggleAutoCastEnabled_Implementation(
+	const FGameplayAbilitySpecHandle Handle)
+{
+	FGameplayTag FailureTag;
+	SetAutoCastEnabled(Handle, !IsAutoCastEnabled(Handle), FailureTag);
+}
+
 bool UCombatAbilitySystemComponent::PeekPendingTargetData(
 	const FGameplayAbilitySpecHandle Handle,
 	FCombatAbilityTargetData& OutTargetData) const

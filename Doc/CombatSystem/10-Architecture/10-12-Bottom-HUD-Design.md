@@ -1,6 +1,6 @@
 # 10-12 底部居中 HUD：设计与实现
 
-> 2026-09-09：用户确认设计并明确要求开始实现。底部 HUD 已接入 Demo，验证状态以 [进度台账](../00-Project/00-01-Progress-Tracker.md) 为准；展示投影 schema 3，决策 ADR-047。
+> 2026-09-09：用户确认设计并明确要求开始实现。底部 HUD 已接入 Demo，验证状态以 [进度台账](../00-Project/00-01-Progress-Tracker.md) 为准；DEMO-901 将展示投影升级到 schema 4，决策 ADR-047、ADR-048。
 
 ## 1. 已确认的布局
 
@@ -43,6 +43,7 @@ HUD 固定在游戏画面底部居中，采用参考图中的紧凑横向布局�
 - 技能、Buff 和英雄属性提供悬停详情；点击可固定详情，关闭按钮或 Escape 取消固定。
 - 冷却以遮罩与剩余秒数显示；法力不足、沉默、阵亡等状态使用明确的阻断表现。界面显示就绪不代表服务器一定接受施法。
 - 技能快捷键应与现有输入槽及映射一致。本次确认的是信息展示，不新增鼠标点击技能施法流程。
+- 可切换 AutoCast 的被动技能占用普通技能槽；按对应快捷键请求服务器原子翻转开关。鼠标点击槽位仍只固定详情，不施放或切换技能。
 - 等级、经验、六格物品和三个背包格先显示占位；它们对应的成长、库存与经济玩法后续接入。
 - 预览中的英雄、图标、等级、经验和技能数值均为示例，不写入正式战斗定义或当作平衡配置。
 - 物品与背包空槽始终保留；本阶段不设计拖放、使用物品、交换槽位、商店或购买交互。
@@ -62,7 +63,7 @@ HUD 固定在游戏画面底部居中，采用参考图中的紧凑横向布局�
 
 Designer 中使用底边锚定的 ScaleBox，按 UE DPI 规则显示，狭窄区域仅缩小。物品格实际为 `67 × 44.5`，背包格 `67 × 28`；技能、物品上边以及法力、背包下边距外边缘均为 13（12 内边距 + 1 边框）。左侧头像为 `143 × 154`，等级环为 `36 × 36`。
 
-可直接在主蓝图的“定义图标”映射中按 `FPrimaryAssetId` 指定 Unit / Ability / Modifier 纹理；缺少纹理时用名称首字占位。当前只配置 `CombatUnit:ranged_combat_player` 的示意头像，技能与效果保留首字回退。Demo 当前只授予一个主动技能，Q 显示“远程攻击”，W/E/R 为空；界面不额外授予技能。快捷键文案对应当前默认 Q/W/E/R 映射，修改输入映射时需同步 HUD 的显示文案。
+可直接在主蓝图的“定义图标”映射中按 `FPrimaryAssetId` 指定 Unit / Ability / Modifier 纹理；缺少纹理时用名称首字占位。当前只配置 `CombatUnit:ranged_combat_player` 的示意头像，技能与效果保留首字回退。Demo 当前只授予一个可切换 AutoCast 的被动技能，Q 显示“霜冻之箭”及“自动/关闭”状态，W/E/R 为空；界面不额外授予技能。快捷键文案对应当前默认 Q/W/E/R 映射，修改输入映射时需同步 HUD 的显示文案。
 
 保留下列控件名即可使用原生绑定；省略可选控件不会报错，重命名后须同步 C++ 绑定名。
 
@@ -77,7 +78,7 @@ Designer 中使用底边锚定的 ScaleBox，按 UE DPI 规则显示，狭窄区
 
 ## 5. 数据与生命周期
 
-`UCombatUnitViewComponent` 的公共 View 继续提供生命、法力、生命代次、可见状态、施法阶段及 Modifier FastArray。新增 `FCombatHUDOwnerView` 以 `COND_OwnerOnly` 复制攻击力、护甲、魔抗、移速、恢复速率，以及最多四个非被动技能的 Spec 句柄、稳定定义 ID、等级、费用、已提交冷却结束时间和冻结时长。
+`UCombatUnitViewComponent` 的公共 View 继续提供生命、法力、生命代次、可见状态、施法阶段及 Modifier FastArray。`FCombatHUDOwnerView` 以 `COND_OwnerOnly` 复制攻击力、护甲、魔抗、移速、恢复速率，以及最多四个直接输入技能的 Spec 句柄、稳定定义 ID、等级、费用、已提交冷却结束时间、冻结时长、AutoCast 切换语义与服务器权威开关状态。纯被动技能隐藏，`Passive + AutoCast` 与主动技能按 AbilitySpec 授予顺序占槽。
 
 服务器每 0.1 秒采样展示数据，仅在内容改变时更新快照；该 Tick 不执行 gameplay。客户端先核对单位定义与生命代次，再按本地输入使用的 Spec 顺序匹配技能，复制未齐时留空。冷却使用校准服务器时间推进本地遮罩，不重算旧冷却，也不因 UI 倒计时归零而移除 Buff。失去拥有权时公共读取入口屏蔽旧缓存。
 
@@ -89,7 +90,7 @@ Designer 中使用底边锚定的 ScaleBox，按 UE DPI 规则显示，狭窄区
 | --- | --- | --- | --- | --- |
 | 本地 `ACombatPlayerHUD` | 强持有主 Widget；Widget 弱观察 `CommandedUnit` / View，强持有效 Buff 子控件 | View 变化或本地显示刷新 | 换单位解绑；换生命清空详情与子控件；Widget Destruct / Unit EndPlay 取消加载并移除委托；HUD EndPlay 移除视口控件 | `BindingRevision + LifeGeneration`；专用服务器不创建 Widget |
 
-等级经验、物品、背包仅为展示占位；没有经验累计、升级、物品使用、拖放、库存或经济数据。核心 `combat_v1_rc1` 保持不变；展示 schema 3 要求服务器和客户端使用同版本。
+等级经验、物品、背包仅为展示占位；没有经验累计、升级、物品使用、拖放、库存或经济数据。核心 `combat_v1_rc1` 保持不变；展示 schema 4 要求服务器和客户端使用同版本。
 
 ## 6. 确认与验证
 
@@ -98,3 +99,5 @@ Designer 中使用底边锚定的 ScaleBox，按 UE DPI 规则显示，狭窄区
 工程新增四项 `Combat.UI.HUD.*` 自动化，覆盖拥有者属性与冷却冻结、异常进度、真实 Widget Blueprint 接线及重建 / 换单位 / 致死伤害 / 重生 / EndPlay、缺蓝 / 沉默 / 无限与过期效果。完整 Combat 57/57、资产定义校验 7/7 已通过。
 
 实际双玩家 Demo PIE 检查了常规与小窗口布局、客户端真实资源、头像叠加信息、常驻物品 / 背包，以及英雄和技能详情的悬停、点击固定、移出后保留、关闭按钮和 Escape。截图为 `Saved/BottomHUD/PIE-Client.png`。三 Target、Dedicated 与最终资产回读结果统一记录在进度台账和 `Saved/BottomHUD/Validation.md`；不将 PIE 视觉检查当作 Dedicated 网络证据。
+
+2026-09-10 的 DEMO-901 回归将 Q 槽切换为霜冻之箭 AutoCast，并把展示投影升级到 schema 4。自动化覆盖槽位筛选、服务器原子翻转、无 `CastNoTarget`、权威开关投影和“自动/关闭”文案；最终 `Combat.*` 59/59。Dedicated 服务器与两个客户端分别验证 2/1/1 个 owner-only 技能快照，均为 Pass；容量夹具把英雄固有 Modifier 计入冻结总量后保持 64 Unit / 256 Modifier，预算为 Pass。证据见 `Saved/DrowRangerDemo/Automation-Full-Final2.log` 与 `Dedicated-Final2.log`。

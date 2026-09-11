@@ -438,7 +438,7 @@ void Aue_gasPlayerController::ActivateCombatAbilitySlot(const int32 SlotIndex)
 	{
 		const UCombatGameplayAbility* CombatAbility = Cast<UCombatGameplayAbility>(Spec.Ability);
 		const UCombatAbilityData* AbilityData = CombatAbility ? CombatAbility->GetAbilityData() : nullptr;
-		if (!AbilityData || AbilityData->BehaviorTags.HasTagExact(CombatTags::Ability_Behavior_Passive))
+		if (!AbilityData || !AbilityData->ShouldOccupyPlayerAbilitySlot())
 		{
 			continue;
 		}
@@ -454,6 +454,12 @@ void Aue_gasPlayerController::ActivateCombatAbilitySlot(const int32 SlotIndex)
 	const UCombatAbilityData* AbilityData = Asc->GetCombatAbilityData(Spec.Handle);
 	if (!AbilityData)
 	{
+		return;
+	}
+	if (AbilityData->UsesAutoCastToggleInput())
+	{
+		// Toggle 由服务器读取当前值后原子翻转；客户端不依赖可能滞后的 HUD 投影猜测下一状态。
+		Asc->ServerToggleAutoCastEnabled(Spec.Handle);
 		return;
 	}
 

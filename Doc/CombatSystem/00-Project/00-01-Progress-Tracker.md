@@ -1,7 +1,7 @@
 # 00-01 开发进度台账
 
-> 最后更新：2026-09-10
-> 当前阶段：M8 已验收；`combat_v1_rc1` 核心契约保持冻结；SAM 服务器权威单位移动已验收
+> 最后更新：2026-09-11
+> 当前阶段：M8、SAM 与 DEMO-901 卓尔游侠 Demo 均已通过用户验收
 > 历史 M0-M8：82/82 Task 完成，9/9 里程碑由用户验收
 > SAM 进度：10/10 Task 完成；修正 Gate 和用户验收均已通过
 > 最近工程验证（2026-09-08）：Demo 普攻输入已统一为 Enhanced Input Action；该轮常规 Editor 构建、蓝图编译保存回读、全量 Combat 53/53 和资产 7/7 通过。头顶 UI 蓝图拆分及此前三 Target/Dedicated 回归已完成；该轮未重跑联机矩阵
@@ -233,7 +233,7 @@
 
 ## 12.3 Post-M8：底部居中 HUD
 
-> 状态：工程实现与验证已完成，待用户实机复验（2026-09-09）。用户已验收布局设计并授权实现；维护入口见 [10-12](../10-Architecture/10-12-Bottom-HUD-Design.md)，接入决策见 ADR-047。核心 `combat_v1_rc1` 不变，展示投影 schema 3。
+> 状态：工程实现与验证已完成，待用户实机复验（2026-09-09）。用户已验收布局设计并授权实现；维护入口见 [10-12](../10-Architecture/10-12-Bottom-HUD-Design.md)，接入决策见 ADR-047。HUD 初版使用展示投影 schema 3；DEMO-901 增加 AutoCast 槽位后当前为 schema 4。
 
 | Task | 内容 | 状态 | 证据 |
 | --- | --- | --- | --- |
@@ -243,7 +243,17 @@
 
 证据：`Saved/BottomHUD/Validation.md`、`EditorBuild.log`、`ServerBuildFinal.log`、`ClientBuild.log`、`AutomationFinal/index.json`（2026.09.09-10.16.49 UTC）、`AssetReport.json`、`PIE-Client.png`、`DedicatedSummary.txt`。HUD 网络专项服务端检查 2 个拥有者 / 2 个技能，两客户端各检查 1 个拥有者 / 1 个技能，其他可见单位快照均为空。64 Unit / 256 Modifier 容量样本 Budget=Pass，移动单位位移 316.617 cm，静止单位 0 cm。
 
-范围：等级 / 经验 / 物品 / 背包仍为视觉占位；Demo 当前只有一个主动技能，其余三槽为空。头像为可替换的原创示意美术，技能 / Buff 无配置纹理时使用名称首字。未执行 cook / 打包；源码 UE 5.8.0 验证 Server/Client 编译，安装版 UE 5.8.1 验证资产和同版本独立 `-server/-game` 联机，沿用既有工具插件初始化和动态 GE 定义日志边界。后台测试进程已退出，不影响原有 SAM 用户验收状态。
+范围：等级 / 经验 / 物品 / 背包仍为视觉占位；Demo 当前只授予一个可切换 AutoCast 的被动技能，Q 显示霜冻之箭，W/E/R 为空。头像为可替换的原创示意美术，技能 / Buff 无配置纹理时使用名称首字。未执行 cook / 打包；源码 UE 5.8.0 验证 Server/Client 编译，安装版 UE 5.8.1 验证资产和同版本独立 `-server/-game` 联机，沿用既有工具插件初始化和动态 GE 定义日志边界。后台测试进程已退出，不影响原有 SAM 用户验收状态。
+
+## 12.4 Post-M8：卓尔游侠 Demo 流程
+
+> 状态：用户已验收（2026-09-11）。任务规格见 [DEMO-901](../Specs/DEMO-901-drow-ranger-flow.spec.md)；风险 L1，F0=`GO`、F1=`APPROVED`、F2=`PASS`。
+
+| Task | 内容 | 状态 | 证据 |
+| --- | --- | --- | --- |
+| DEMO-901 | `Characters` → `Heros`、`Player` → `DrowRanger`，配置默认远程普攻并将授予技能替换为四级霜冻之箭 | 已验收 | 旧包与 redirector 清零；Editor/Server/Client 构建、Combat 59/59、资产定义 10/10、PIE 远程法球 smoke、Dedicated 双客户端 HUD/移动及 64/256 容量边界通过；用户于 2026-09-11 确认验收完成 |
+
+证据：`Saved/DrowRangerDemo/EditorBuild-Final3.log`、`ServerBuild-Final3.log`、`ClientBuild-Final3.log`、`Automation-Full-Final2.log`、`CombatAssetReport-Final2.json`、`PieSmoke.json`、`Dedicated-Final2.log`。PIE 实测等级 1 的 Mana 120→111、目标 500→468（20 基础 + 12 额外物理伤害）、Tracking Projectile、单层 1.5 秒减速及到期移除；Dedicated 的服务器与两个客户端 owner-only HUD 快照、移动和 64 Unit / 256 Modifier 预算均为 Pass。UE MCP 当前会话不可用，资产迁移、蓝图编译保存与冷回读由同版本 Unreal Python 命令行完成；未执行 cook / 打包。用户于 2026-09-11 明确确认 `DEMO-901` 验收完成，本次状态回写未新增工程验证。
 
 ## 13. 用户验收记录
 
@@ -259,6 +269,7 @@
 | M7 | 2026-08-27 | 已验收 | 无 | 2026-08-27 | 已授权 M8（2026-08-27） |
 | M8 | 2026-08-27 | 已验收 | 无 | 2026-08-27 | 不适用（最终里程碑） |
 | SAM | 2026-09-02 | 已验收 | 用户反馈“启动 PIE，点击右键并不能移动”；默认出生拓扑已修复，并已补 AIController 唯一性与真实位移验证 | 2026-09-09 | 用户确认服务器权威单位移动验收通过 |
+| DEMO-901 | 2026-09-10 | 已验收 | 无 | 2026-09-11 | 不适用（独立 post-M8 任务） |
 
 ## 14. 更新日志
 
@@ -326,6 +337,9 @@
 | 2026-09-09 | 用户确认底部居中 HUD 设计；记录头像、等级经验环、技能 / 资源和六格物品 + 三格背包的定稿比例与对齐规则，工程实现未开始 | post-M8 HUD / HUD-001 |
 | 2026-09-09 | 用户授权后完成底部 HUD 接入；新增 owner-only 展示快照与 3 个 Widget Blueprint、HUD Actor / 头像配置；三 Target、Combat 57/57、资产 7/7、双玩家 PIE 和 Dedicated 双客户端通过 | post-M8 HUD / HUD-002..003 |
 | 2026-09-10 | 合并远端 `d844f0e` 的 HUD 代码、资产和文档；HUD 专题纳入 `10-12`，保留本地文档体系、项目 Skill、配置与 SAM 已验收状态。运行时文件与远端一致，7 个 LFS 实体 hash/size 通过；本机文档校验和工具测试 16/16 通过，未重跑 UE Gate；详见 [DOC-007](../Specs/DOC-007-remote-hud-doc-merge.spec.md) | 远端集成 / 文档合并 |
+| 2026-09-10 | 启动 DEMO-901：整理 Demo 英雄目录和 DrowRanger 命名，配置默认远程普攻与四级霜冻之箭；完成现状冷回读、F0/F1 与测试/迁移方案 | post-M8 Demo / DEMO-901 |
+| 2026-09-10 | 完成 DEMO-901：迁移 DrowRanger/WoodenDummy 资产，接入四级霜冻之箭、625 cm Tracking 普攻、技能免疫边界及 Q 槽 AutoCast 原子切换；F2 修正 Dedicated 客户端断言与容量夹具后，三 Target、Combat 59/59、资产 10/10、PIE 与 Dedicated 双客户端全绿，转为待用户验收 | post-M8 Demo / DEMO-901 |
+| 2026-09-11 | 用户确认 DEMO-901 验收完成；同步任务状态、最终验收日期与 Spec，不新增工程验证结论 | post-M8 Demo / DEMO-901 |
 
 ## 15. 更新规则
 

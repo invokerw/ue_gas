@@ -12,7 +12,9 @@ bool FCombatHUDAbilityView::operator==(const FCombatHUDAbilityView& Other) const
 {
 	return SpecHandle == Other.SpecHandle && DefinitionId == Other.DefinitionId && Level == Other.Level
 		&& MaxLevel == Other.MaxLevel && ManaCost == Other.ManaCost && CooldownEndTime == Other.CooldownEndTime
-		&& CooldownDuration == Other.CooldownDuration && bIgnoreSilence == Other.bIgnoreSilence;
+		&& CooldownDuration == Other.CooldownDuration && bIgnoreSilence == Other.bIgnoreSilence
+		&& bUsesAutoCastToggleInput == Other.bUsesAutoCastToggleInput
+		&& bAutoCastEnabled == Other.bAutoCastEnabled;
 }
 
 bool FCombatHUDOwnerView::operator==(const FCombatHUDOwnerView& Other) const
@@ -25,7 +27,7 @@ bool FCombatHUDOwnerView::operator==(const FCombatHUDOwnerView& Other) const
 
 namespace CombatHUDView
 {
-	/** 与 PlayerController 的 Q/W/E/R 过滤规则一致，保留 GAS 本地数组中的非被动技能顺序。 */
+	/** 与 PlayerController 的 Q/W/E/R 规则一致，保留主动技能和可切换 AutoCast 被动的授予顺序。 */
 	TArray<const FGameplayAbilitySpec*> GetSlots(const UCombatAbilitySystemComponent& Asc)
 	{
 		TArray<const FGameplayAbilitySpec*> Result;
@@ -33,7 +35,7 @@ namespace CombatHUDView
 		{
 			const UCombatGameplayAbility* Ability = Cast<UCombatGameplayAbility>(Spec.Ability);
 			const UCombatAbilityData* Data = Ability ? Ability->GetAbilityData() : nullptr;
-			if (!Data || Data->BehaviorTags.HasTagExact(CombatTags::Ability_Behavior_Passive)) continue;
+			if (!Data || !Data->ShouldOccupyPlayerAbilitySlot()) continue;
 			Result.Add(&Spec);
 			if (Result.Num() == 4) break;
 		}
@@ -93,6 +95,8 @@ void UCombatUnitViewComponent::RefreshHUDOwnerView()
 			Item.MaxLevel = Data->MaxLevel;
 			Item.ManaCost = Data->GetSpecialValue(TEXT("mana_cost"), Spec->Level);
 			Item.bIgnoreSilence = Data->BehaviorTags.HasTagExact(CombatTags::Ability_Behavior_IgnoreSilence);
+			Item.bUsesAutoCastToggleInput = Data->UsesAutoCastToggleInput();
+			Item.bAutoCastEnabled = Item.bUsesAutoCastToggleInput && Asc->IsAutoCastEnabled(Spec->Handle);
 			Asc->GetCombatAbilityCooldownWindow(Spec->Handle, Item.CooldownEndTime, Item.CooldownDuration);
 		}
 	}

@@ -57,17 +57,23 @@ void UCombatHUDSlotWidget::ShowAbility(const FCombatHUDAbilityView& Ability, con
 	const float Seconds = Remaining(Ability.CooldownEndTime, ServerTime);
 	const FString Countdown = Seconds <= 0.0f ? FString() : Seconds < 10.0f
 		? FString::Printf(TEXT("%.1f"), Seconds) : FString::Printf(TEXT("%.0f"), FMath::CeilToFloat(Seconds));
-	Text(CountText, !Blocked.IsEmpty() ? Blocked : Countdown);
-	if (BlockedShade) BlockedShade->SetVisibility(Blocked.IsEmpty() ? ESlateVisibility::Collapsed : ESlateVisibility::HitTestInvisible);
+	const bool bAutoCastOff = Ability.bUsesAutoCastToggleInput && !Ability.bAutoCastEnabled;
+	const FString AutoCastState = Ability.bUsesAutoCastToggleInput
+		? (Ability.bAutoCastEnabled ? TEXT("自动") : TEXT("关闭")) : FString();
+	Text(CountText, !Blocked.IsEmpty() ? Blocked : !Countdown.IsEmpty() ? Countdown : AutoCastState);
+	if (BlockedShade) BlockedShade->SetVisibility(Blocked.IsEmpty() && !bAutoCastOff ? ESlateVisibility::Collapsed : ESlateVisibility::HitTestInvisible);
 	if (CooldownShade)
 	{
-		CooldownShade->SetVisibility(Seconds > 0.0f && Blocked.IsEmpty() ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
+		CooldownShade->SetVisibility(Seconds > 0.0f && Blocked.IsEmpty() && !bAutoCastOff ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
 		const float Ratio = Ability.CooldownDuration > 0.0f ? FMath::Clamp(Seconds / Ability.CooldownDuration, 0.0f, 1.0f) : 0.0f;
 		CooldownShade->SetRenderScale(FVector2D(1.0f, Ratio));
 	}
-	DetailText = FText::FromString(FString::Printf(TEXT("%s  [%s]\n等级 %d / %d\n%s\n法力消耗 %.0f%s"),
+	const FString AutoCastDetail = Ability.bUsesAutoCastToggleInput
+		? FString::Printf(TEXT("\n自动施法：%s（按 %s 切换）"), Ability.bAutoCastEnabled ? TEXT("开启") : TEXT("关闭"), *Key.ToString())
+		: FString();
+	DetailText = FText::FromString(FString::Printf(TEXT("%s  [%s]\n等级 %d / %d\n%s\n法力消耗 %.0f%s%s"),
 		*Name.ToString(), *Key.ToString(), Ability.Level, Ability.MaxLevel, *Description.ToString(), Ability.ManaCost,
-		Seconds > 0 ? *FString::Printf(TEXT(" · 冷却 %.1f 秒"), Seconds) : TEXT("")));
+		Seconds > 0 ? *FString::Printf(TEXT(" · 冷却 %.1f 秒"), Seconds) : TEXT(""), *AutoCastDetail));
 }
 
 void UCombatHUDSlotWidget::ShowModifier(const FCombatModifierView& Modifier, double ServerTime,

@@ -501,13 +501,16 @@ void ACombatTestScenarioActor::LogHUDNetworkSnapshot()
 		for (const FGameplayAbilitySpec& Spec : Asc->GetActivatableAbilities())
 		{
 			const UCombatAbilityData* Data = Asc->GetCombatAbilityData(Spec.Handle);
-			if (!Data || Data->BehaviorTags.HasTagExact(CombatTags::Ability_Behavior_Passive)) continue;
+			if (!Data || !Data->ShouldOccupyPlayerAbilitySlot()) continue;
 			if (ExpectedIndex == 4) break;
 			if (Snapshot.Abilities.IsValidIndex(ExpectedIndex))
 			{
 				const FCombatHUDAbilityView& Ability = Snapshot.Abilities[ExpectedIndex];
+				const bool bUsesAutoCastToggle = Data->UsesAutoCastToggleInput();
 				bPassed &= Ability.SpecHandle == Spec.Handle && Ability.DefinitionId == Data->GetPrimaryAssetId()
-					&& Ability.Level == Spec.Level && FMath::IsNearlyEqual(Ability.ManaCost, Data->GetSpecialValue(TEXT("mana_cost"), Spec.Level));
+					&& Ability.Level == Spec.Level && FMath::IsNearlyEqual(Ability.ManaCost, Data->GetSpecialValue(TEXT("mana_cost"), Spec.Level))
+					&& Ability.bUsesAutoCastToggleInput == bUsesAutoCastToggle
+					&& Ability.bAutoCastEnabled == bUsesAutoCastToggle;
 				++CheckedSkills;
 			}
 			else bPassed = false;
@@ -551,7 +554,7 @@ bool ACombatTestScenarioActor::ExpandM7CapacityScenario()
 	ScenarioAuraChildData = nullptr;
 
 	constexpr int32 TargetUnits = 64;
-	constexpr int32 ModifiersPerUnit = 4;
+	constexpr int32 TargetModifiers = 256;
 	while (SpawnedUnits.Num() < TargetUnits)
 	{
 		const int32 Index = SpawnedUnits.Num();
@@ -568,28 +571,40 @@ bool ACombatTestScenarioActor::ExpandM7CapacityScenario()
 		SpawnedUnits.Add(Unit);
 	}
 
-	ScenarioCapacityModifierData.Reserve(TargetUnits * ModifiersPerUnit);
-	for (int32 UnitIndex = 0; UnitIndex < TargetUnits; ++UnitIndex)
+	int32 ExistingModifiers = 0;
+	for (const ACombatUnitCharacter* Unit : SpawnedUnits)
 	{
-		ACombatUnitCharacter* Unit = SpawnedUnits[UnitIndex];
-		for (int32 ModifierIndex = 0; ModifierIndex < ModifiersPerUnit; ++ModifierIndex)
+		ExistingModifiers += Unit && Unit->GetCombatModifierComponent()
+			? Unit->GetCombatModifierComponent()->GetActiveModifierCount() : 0;
+	}
+	if (ExistingModifiers > TargetModifiers)
+	{
+		UE_LOG(LogCombat, Error, TEXT("M7CapacityFixture ExistingModifiers=%d exceeds target=%d"), ExistingModifiers, TargetModifiers);
+		return false;
+	}
+
+	// Demo 英雄可自带固有 Modifier；容量夹具只补齐余量，避免把真实内容错误叠加到冻结的 256 总量之外。
+	const int32 SyntheticModifierCount = TargetModifiers - ExistingModifiers;
+	ScenarioCapacityModifierData.Reserve(SyntheticModifierCount);
+	for (int32 ModifierIndex = 0; ModifierIndex < SyntheticModifierCount; ++ModifierIndex)
+	{
+		ACombatUnitCharacter* Unit = SpawnedUnits[ModifierIndex % TargetUnits];
+		UCombatModifierData* Data = NewObject<UCombatModifierData>(this);
+		Data->DefinitionName = FName(*FString::Printf(TEXT("m7_capacity_soak_%03d"), ModifierIndex));
+		Data->Duration = 0.0f;
+		Data->bIsDebuff = false;
+		ScenarioCapacityModifierData.Add(Data);
+		FCombatModifierApplyRequest Request;
+		Request.Source = Unit;
+		Request.ModifierData = Data;
+		if (!Unit->GetCombatModifierComponent()->ApplyModifier(Request).bSuccess)
 		{
-			UCombatModifierData* Data = NewObject<UCombatModifierData>(this);
-			Data->DefinitionName = FName(*FString::Printf(TEXT("m7_capacity_soak_%02d_%d"), UnitIndex, ModifierIndex));
-			Data->Duration = 0.0f;
-			Data->bIsDebuff = false;
-			ScenarioCapacityModifierData.Add(Data);
-			FCombatModifierApplyRequest Request;
-			Request.Source = Unit;
-			Request.ModifierData = Data;
-			if (!Unit->GetCombatModifierComponent()->ApplyModifier(Request).bSuccess)
-			{
-				UE_LOG(LogCombat, Error, TEXT("M7CapacityFixture ModifierFailed Unit=%d Modifier=%d"), UnitIndex, ModifierIndex);
-				return false;
-			}
+			UE_LOG(LogCombat, Error, TEXT("M7CapacityFixture ModifierFailed Unit=%d Modifier=%d"), ModifierIndex % TargetUnits, ModifierIndex);
+			return false;
 		}
 	}
-	UE_LOG(LogCombat, Display, TEXT("M7CapacityFixtureReady Units=%d Modifiers=%d"), TargetUnits, TargetUnits * ModifiersPerUnit);
+	UE_LOG(LogCombat, Display, TEXT("M7CapacityFixtureReady Units=%d Modifiers=%d Existing=%d Synthetic=%d"),
+		TargetUnits, TargetModifiers, ExistingModifiers, SyntheticModifierCount);
 	return true;
 }
 
@@ -656,7 +671,7 @@ ACombatUnitCharacter* ACombatTestScenarioActor::SpawnUnit(const FVector& Relativ
 	// HUD 联机夹具用正式 Demo 英雄覆盖前两个拥有者，保证验证真实技能 DataAsset 与客户端 Spec 顺序。
 	if (FParse::Param(FCommandLine::Get(), TEXT("CombatHUDSmoke")) && SpawnedUnits.Num() < 2)
 	{
-		SpawnClass = LoadClass<ACombatUnitCharacter>(nullptr, TEXT("/Game/Combat/Demo/Characters/Player/BP_CombatDemoPlayer.BP_CombatDemoPlayer_C"));
+		SpawnClass = LoadClass<ACombatUnitCharacter>(nullptr, TEXT("/Game/Combat/Demo/Heros/DrowRanger/BP_DrowRanger.BP_DrowRanger_C"));
 		if (!SpawnClass) return nullptr;
 	}
 	ACombatUnitCharacter* Unit = GetWorld()->SpawnActor<ACombatUnitCharacter>(SpawnClass, SpawnLocation, GetActorRotation(), Parameters);

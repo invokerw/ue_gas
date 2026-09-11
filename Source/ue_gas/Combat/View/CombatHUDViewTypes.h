@@ -26,6 +26,10 @@ struct UE_GAS_API FCombatHUDAbilityView
 	float CooldownDuration = 0.0f;
 	UPROPERTY(BlueprintReadOnly, Category="Combat|HUD", meta=(DisplayName="忽略沉默", ToolTip="该技能的行为配置允许忽略沉默；仅用于阻断状态展示。"))
 	bool bIgnoreSilence = false;
+	UPROPERTY(BlueprintReadOnly, Category="Combat|HUD", meta=(DisplayName="技能槽切换自动施法", ToolTip="为 true 时，该槽快捷键只请求服务器切换 AutoCast，不创建施法命令。"))
+	bool bUsesAutoCastToggleInput = false;
+	UPROPERTY(BlueprintReadOnly, Category="Combat|HUD", meta=(DisplayName="自动施法已开启", ToolTip="服务器权威 AutoCast 状态；只用于拥有者显示，攻击时仍由服务器重新检查。"))
+	bool bAutoCastEnabled = false;
 
 	/** 比较完整显示内容，避免未变化快照触发复制。 */
 	bool operator==(const FCombatHUDAbilityView& Other) const;
@@ -53,7 +57,7 @@ struct UE_GAS_API FCombatHUDOwnerView
 	float HealthRegen = 0.0f;
 	UPROPERTY(BlueprintReadOnly, Category="Combat|HUD", meta=(DisplayName="法力恢复速率", ToolTip="服务器 ASC 每秒法力恢复属性；死亡时界面显示暂停。"))
 	float ManaRegen = 0.0f;
-	UPROPERTY(BlueprintReadOnly, Category="Combat|HUD", meta=(DisplayName="技能槽", ToolTip="最多四个非被动技能；客户端按自身输入所用的 AbilitySpec 顺序匹配。"))
+	UPROPERTY(BlueprintReadOnly, Category="Combat|HUD", meta=(DisplayName="技能槽", ToolTip="最多四个可直接输入的技能；包含主动技能及可切换 AutoCast 的被动技能，客户端按自身输入所用的 AbilitySpec 顺序匹配。"))
 	TArray<FCombatHUDAbilityView> Abilities;
 
 	/** 比较完整快照，不把本地倒计时写入复制数据。 */

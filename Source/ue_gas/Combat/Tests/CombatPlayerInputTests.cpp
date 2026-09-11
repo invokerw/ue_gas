@@ -12,6 +12,7 @@
 #include "Combat/Attributes/CombatAttributeSet.h"
 #include "Combat/Core/CombatTags.h"
 #include "Combat/Data/CombatDefinitionData.h"
+#include "Combat/Demo/CombatDemoAbilities.h"
 #include "Combat/Order/CombatOrderComponent.h"
 #include "Combat/Scheduling/CombatSchedulerSubsystem.h"
 #include "Combat/Tests/CombatAutomationWorldFixture.h"
@@ -218,6 +219,52 @@ bool FCombatPlayerAttackInputCancellationTest::RunTest(const FString& Parameters
 	FCombatEventContext DeathEvent;
 	Enemy->GetCombatLifecycleComponent()->RequestDeath(DeathEvent, Unit);
 	TestFalse(TEXT("Dead target cannot be attacked"), PC->IssueCombatAttackOrder(Enemy));
+	return true;
+}
+
+/** AutoCast 被动占用技能槽时，快捷键只切换法球状态，不生成无目标施法命令。 */
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FCombatPlayerAutoCastAbilityInputTest,
+	"Combat.Input.Ability.PassiveAutoCastToggle",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FCombatPlayerAutoCastAbilityInputTest::RunTest(const FString& Parameters)
+{
+	using namespace CombatPlayerInputTests;
+	(void)Parameters;
+	FCombatAutomationWorldFixture Fixture;
+	if (!Fixture.IsValid()) { return false; }
+	UWorld& World = *Fixture.GetWorld();
+	Aue_gasPlayerController* PC = World.SpawnActor<Aue_gasPlayerController>();
+	ACombatUnitCharacter* Unit = SpawnUnit(World, FVector::ZeroVector, 1);
+	if (!PC || !Unit || !TestTrue(TEXT("Player owns commanded unit"), PC->SetCommandedUnitAuthority(Unit)))
+	{
+		return false;
+	}
+
+	UCombatAbilityData* Data = NewObject<UCombatAbilityData>(Unit);
+	Data->DefinitionName = TEXT("input_autocast");
+	Data->BehaviorTags.AddTag(CombatTags::Ability_Behavior_NoTarget);
+	Data->BehaviorTags.AddTag(CombatTags::Ability_Behavior_Passive);
+	Data->BehaviorTags.AddTag(CombatTags::Ability_Behavior_AutoCast);
+	Data->TargetingRules.TargetTeamTag = CombatTags::TargetTeam_None;
+	TGuardValue<TObjectPtr<UCombatAbilityData>> RestoreData(
+		GetMutableDefault<UCombatFrostArrowsAbility>()->AbilityData, Data);
+	UCombatAbilitySystemComponent* Asc = Unit->GetCombatAbilitySystemComponent();
+	FGameplayAbilitySpecHandle Handle;
+	FGameplayTag Failure;
+	if (!TestTrue(TEXT("Grant passive AutoCast"), Asc->GrantCombatAbility(
+		UCombatFrostArrowsAbility::StaticClass(), 1, true, Handle, Failure)))
+	{
+		return false;
+	}
+
+	const int32 RequestIdBeforeToggle = PC->NextCombatOrderRequestId;
+	PC->OnAbilitySlotQ();
+	TestFalse(TEXT("First Q press disables AutoCast"), Asc->IsAutoCastEnabled(Handle));
+	TestEqual(TEXT("AutoCast toggle sends no Cast Order"), PC->NextCombatOrderRequestId, RequestIdBeforeToggle);
+	PC->OnAbilitySlotQ();
+	TestTrue(TEXT("Second Q press enables AutoCast"), Asc->IsAutoCastEnabled(Handle));
+	TestEqual(TEXT("Repeated AutoCast toggle still sends no Cast Order"), PC->NextCombatOrderRequestId, RequestIdBeforeToggle);
 	return true;
 }
 

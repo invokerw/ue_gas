@@ -87,7 +87,7 @@ public:
 protected:
 	/** Frost Arrows 与其他主法球共享 Orb.Primary。 */
 	virtual FName GetAttackOrbExclusiveGroup_Implementation() const override;
-	/** 只读检查自动施放开关、沉默、破坏状态、当前技能等级数值和可用法力；候选阶段不扣费。 */
+	/** 只读检查目标技能免疫、自动施放开关、沉默、破坏状态、当前技能等级数值和可用法力；候选阶段不扣费。 */
 	virtual bool CanClaimAttack_Implementation(const FCombatAttackCandidateContext& Context) const override;
 	/** 原子提交 Mana，并冻结 bonus、slow 参数、Modifier 与 ProjectileData。 */
 	virtual bool OnAttackClaimed_Implementation(

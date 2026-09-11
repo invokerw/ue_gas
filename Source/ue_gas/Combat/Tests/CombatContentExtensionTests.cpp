@@ -165,6 +165,22 @@ bool FCombatFrostArrowsSnapshotTest::RunTest(const FString& Parameters)
 	const FGameplayAbilitySpecHandle AbilityHandle = CombatContentExtensionTests::GrantAbility<UCombatFrostArrowsAbility>(
 		*Asc, *AbilityData, 1, true);
 	TestTrue(TEXT("Frost Arrows grants with intrinsic/autocast"), AbilityHandle.IsValid());
+	UCombatAbilitySystemComponent* TargetAsc = Target->GetCombatAbilitySystemComponent();
+	TargetAsc->AddLooseGameplayTag(CombatTags::State_MagicImmune);
+	const FCombatAttackResult ImmuneStarted = Attacker->GetCombatAttackComponent()->StartMeleeAttack(
+		Target, FCombatOrderHandle());
+	TestTrue(TEXT("A normal attack still starts against a magic-immune target"), ImmuneStarted.bSuccess);
+	FCombatAttackRecord ImmuneSnapshot;
+	TestTrue(TEXT("Magic-immune attack snapshot remains queryable"),
+		Attacker->GetCombatAttackComponent()->GetAttackRecordSnapshot(ImmuneStarted.Handle, ImmuneSnapshot));
+	TestTrue(TEXT("Frost Arrows does not add damage against magic immunity"), FMath::IsNearlyZero(ImmuneSnapshot.BonusDamage));
+	TestTrue(TEXT("Frost Arrows does not add a slow against magic immunity"), ImmuneSnapshot.OnHitActions.IsEmpty());
+	TestTrue(TEXT("Frost Arrows does not spend mana against magic immunity"), FMath::IsNearlyEqual(
+		Asc->GetNumericAttribute(UCombatAttributeSet::GetManaAttribute()), 100.0f));
+	TestTrue(TEXT("The immune-target windup can be cancelled for the next assertion"),
+		Attacker->GetCombatAttackComponent()->CancelWindupForOrder(
+			FCombatOrderHandle(), CombatTags::Order_Failure_Cancelled.GetTag()));
+	TargetAsc->RemoveLooseGameplayTag(CombatTags::State_MagicImmune);
 	const FCombatAttackResult Started = Attacker->GetCombatAttackComponent()->StartMeleeAttack(
 		Target, FCombatOrderHandle());
 	TestTrue(TEXT("Frost Arrow attack starts"), Started.bSuccess);

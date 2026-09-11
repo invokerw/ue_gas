@@ -111,13 +111,14 @@ Modifier：
 
 数据：
 
-- Passive、Attack、AutoCast。
-- Intrinsic Modifier `modifier_frost_arrows`。
-- special：bonus_damage、slow_duration、slow_pct、mana_cost。
+- `CombatAbility:frost_arrows`，NoTarget、Passive、Attack、AutoCast，初始等级 1 且 AutoCast 默认开启。
+- Intrinsic Modifier `CombatModifier:frost_arrows_intrinsic`；命中减速 `CombatModifier:frost_arrow_slow`。
+- special：`mana_cost=[9,10,11,12]`、`bonus_damage=[12,18,24,30]`、`slow_duration=[1.5]`、`slow_pct=[0.15,0.25,0.35,0.45]`、`cooldown=[0]`。
+- Q 槽显示该技能并只切换服务器 AutoCast；不会生成 `CastNoTarget`，W/E/R 当前为空。
 
 流程：
 
-1. `UCombatFrostArrowsRuntime::CanClaimAttack` 从 `AbilityOwnerHandle` 查找当前 Spec，检查 AutoCast、Silenced、Broken、等级 special、Mana 和 `Orb.Primary`，只声明候选。
+1. `UCombatFrostArrowsRuntime::CanClaimAttack` 从 `AbilityOwnerHandle` 查找当前 Spec，检查目标 MagicImmune、AutoCast、Silenced、Broken、等级 special、Mana 和 `Orb.Primary`，只声明候选；不合法时退化为普通远程攻击。
 2. winner 的 `OnAttackClaimed` 原子提交 Mana，并把 bonus、ProjectileData、slow Modifier/duration/`slow_pct` 参数覆盖快照写入 Record。
 3. 远程 Projectile 只持 AttackHandle。
 4. Landed 后使用 Record 的 runtime parameter override 施加 slow，不重新读 Ability 当前等级或 DataAsset 当前值。
@@ -127,6 +128,8 @@ Modifier：
 - 未胜出候选不扣资源；winner 提交失败可尝试下一候选。
 - 发射后升级/移除 Ability 不改变本 Record 的 slow/damage。
 - Miss/target fizzle 不执行 landed-only slow，并完整销毁 Record。
+- 技能免疫目标不扣 Frost Arrows Mana，不增加伤害或施加减速；默认普通攻击仍可命中。
+- 单层减速持续 1.5 秒，可被基础驱散；重复命中刷新持续时间而不叠层。
 
 ## 8. Earthshaker Fissure
 
@@ -163,8 +166,8 @@ Modifier：
 M8 后增加并整理了 `/Game/Combat/Demo`：
 
 - 地图：`/Game/Combat/Demo/Maps/L_CombatDemo`。
-- 玩家与木桩：`/Game/Combat/Demo/Characters/Player`、`/Game/Combat/Demo/Characters/WoodenDummy`。
-- 远程攻击：`/Game/Combat/Demo/Abilities/RangedAttack`，通过 AbilityData、Tracking Projectile 和公共 Damage 管线完成。
+- 卓尔游侠与木桩：`/Game/Combat/Demo/Heros/DrowRanger`、`/Game/Combat/Demo/Heros/WoodenDummy`。
+- 霜冻之箭：`/Game/Combat/Demo/Abilities/FrostArrows`；默认普攻复用 `/Game/Combat/Demo/Abilities/RangedAttack` 的 Tracking Projectile，并通过 AttackRecord、公共 Damage 与 Modifier 管线完成。
 - 框架与输入：`/Game/Combat/Demo/Framework`、`/Game/Combat/Demo/Input`。
 - 玩家与木桩通过 `CombatOverheadUI.WidgetClass` 配置 `/Game/Combat/Demo/UI/WBP_CombatOverhead`；该蓝图消费 C++ 展示事件，显示生命/法力、控制状态与施法阶段，使用 `WBP_CombatFloatingText` 播放服务器真实 Applied Damage/Healing 跳字。纯 C++ 单位默认不指定视觉类，扩展方式见 [10-11](../10-Architecture/10-11-Overhead-Blueprint-UI.md)。
 

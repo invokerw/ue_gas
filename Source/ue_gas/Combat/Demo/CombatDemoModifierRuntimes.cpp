@@ -158,11 +158,14 @@ bool UCombatFrostArrowsRuntime::CanClaimAttack_Implementation(
 {
 	const ACombatUnitCharacter* Source = GetTargetUnit();
 	const UCombatAbilitySystemComponent* Asc = Source ? Source->GetCombatAbilitySystemComponent() : nullptr;
+	const UCombatAbilitySystemComponent* TargetAsc = Context.Target
+		? Context.Target->GetCombatAbilitySystemComponent() : nullptr;
 	const FGameplayAbilitySpecHandle AbilityHandle = GetAbilityOwnerHandle();
 	const FGameplayAbilitySpec* Spec = Asc && AbilityHandle.IsValid()
 		? Asc->FindAbilitySpecFromHandle(AbilityHandle) : nullptr;
 	const UCombatAbilityData* AbilityData = Asc ? Asc->GetCombatAbilityData(AbilityHandle) : nullptr;
-	if (Context.Attacker != Source || !Asc || !Spec || !AbilityData
+	if (Context.Attacker != Source || !Asc || !TargetAsc || !Spec || !AbilityData
+		|| TargetAsc->HasMatchingGameplayTag(CombatTags::State_MagicImmune)
 		|| !Asc->IsAutoCastEnabled(AbilityHandle)
 		|| Asc->HasMatchingGameplayTag(CombatTags::State_Silenced)
 		|| Asc->HasMatchingGameplayTag(CombatTags::State_Broken))

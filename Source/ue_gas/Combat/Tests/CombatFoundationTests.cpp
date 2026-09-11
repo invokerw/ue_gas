@@ -22,12 +22,15 @@
 #include "UObject/Package.h"
 
 #include "Combat/Ability/CombatAbilitySystemComponent.h"
+#include "Combat/Ability/CombatGameplayAbility.h"
 #include "Combat/Ability/CombatGameplayEffectContext.h"
 #include "Combat/Core/CombatDeferredOperationQueue.h"
 #include "Combat/Core/CombatNumericPolicy.h"
 #include "Combat/Core/CombatRngSubsystem.h"
 #include "Combat/Core/CombatTags.h"
 #include "Combat/Data/CombatDefinitionData.h"
+#include "Combat/Demo/CombatDemoAbilities.h"
+#include "Combat/Demo/CombatDemoModifierRuntimes.h"
 #include "Combat/Log/CombatEventSubsystem.h"
 #include "Combat/Scheduling/CombatSchedulerSubsystem.h"
 #include "Combat/Targeting/CombatTeamSubsystem.h"
@@ -332,11 +335,11 @@ bool FCombatContentDiscoveryTest::RunTest(const FString& Parameters)
 
 	const UBlueprint* WoodenDummyBlueprint = LoadObject<UBlueprint>(
 		nullptr,
-		TEXT("/Game/Combat/Demo/Characters/WoodenDummy/BP_WoodenDummy.BP_WoodenDummy"));
+		TEXT("/Game/Combat/Demo/Heros/WoodenDummy/BP_WoodenDummy.BP_WoodenDummy"));
 	TestNotNull(TEXT("Wooden Dummy Blueprint loads"), WoodenDummyBlueprint);
 	UClass* WoodenDummyClass = LoadClass<ACombatUnitCharacter>(
 		nullptr,
-		TEXT("/Game/Combat/Demo/Characters/WoodenDummy/BP_WoodenDummy.BP_WoodenDummy_C"));
+		TEXT("/Game/Combat/Demo/Heros/WoodenDummy/BP_WoodenDummy.BP_WoodenDummy_C"));
 	const ACombatUnitCharacter* WoodenDummy = WoodenDummyClass
 		? Cast<ACombatUnitCharacter>(WoodenDummyClass->GetDefaultObject()) : nullptr;
 	TestNotNull(TEXT("Wooden Dummy class loads"), WoodenDummy);
@@ -365,6 +368,159 @@ bool FCombatContentDiscoveryTest::RunTest(const FString& Parameters)
 			FName(TEXT("NoCollision")));
 	}
 	TestEqual(TEXT("Wooden Dummy has the expected four decorative meshes"), WoodenDecorationMeshCount, 4);
+	return true;
+}
+
+/** 验证 Demo 使用明确的卓尔游侠资产、默认远程普攻和完整四级霜冻之箭配置。 */
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FCombatDrowRangerDemoContentTest,
+	"Combat.Foundation.Content.DrowRangerDemo",
+	CombatFoundationTests::Flags)
+
+/** 冷加载真实 Demo 资产并固定路径、稳定 ID、角色装配和用户给定的技能数值。 */
+bool FCombatDrowRangerDemoContentTest::RunTest(const FString& Parameters)
+{
+	(void)Parameters;
+	const FString DrowBlueprintPath = TEXT("/Game/Combat/Demo/Heros/DrowRanger/BP_DrowRanger.BP_DrowRanger_C");
+	const UCombatUnitData* DrowData = LoadObject<UCombatUnitData>(
+		nullptr, TEXT("/Game/Combat/Demo/Heros/DrowRanger/DA_DrowRangerUnit.DA_DrowRangerUnit"));
+	const UCombatAbilitySet* DrowAbilitySet = LoadObject<UCombatAbilitySet>(
+		nullptr, TEXT("/Game/Combat/Demo/Heros/DrowRanger/DA_DrowRangerAbilitySet.DA_DrowRangerAbilitySet"));
+	const UCombatAbilityData* FrostArrows = LoadObject<UCombatAbilityData>(
+		nullptr, TEXT("/Game/Combat/Demo/Abilities/FrostArrows/DA_FrostArrows.DA_FrostArrows"));
+	const UCombatModifierData* Intrinsic = LoadObject<UCombatModifierData>(
+		nullptr, TEXT("/Game/Combat/Demo/Abilities/FrostArrows/DA_ModifierFrostArrowsIntrinsic.DA_ModifierFrostArrowsIntrinsic"));
+	const UCombatModifierData* Slow = LoadObject<UCombatModifierData>(
+		nullptr, TEXT("/Game/Combat/Demo/Abilities/FrostArrows/DA_ModifierFrostArrowSlow.DA_ModifierFrostArrowSlow"));
+	const UCombatProjectileData* Projectile = LoadObject<UCombatProjectileData>(
+		nullptr, TEXT("/Game/Combat/Demo/Abilities/RangedAttack/DA_RangedAttackProjectile.DA_RangedAttackProjectile"));
+	UClass* DrowClass = LoadClass<ACombatUnitCharacter>(nullptr, *DrowBlueprintPath);
+	UClass* FrostArrowsClass = LoadClass<UCombatFrostArrowsAbility>(
+		nullptr, TEXT("/Game/Combat/Demo/Abilities/FrostArrows/BP_FrostArrowsAbility.BP_FrostArrowsAbility_C"));
+
+	TestNotNull(TEXT("Drow Ranger UnitData loads from Heros"), DrowData);
+	TestNotNull(TEXT("Drow Ranger AbilitySet loads from Heros"), DrowAbilitySet);
+	TestNotNull(TEXT("Drow Ranger Blueprint loads from Heros"), DrowClass);
+	TestNotNull(TEXT("Frost Arrows AbilityData loads"), FrostArrows);
+	TestNotNull(TEXT("Frost Arrows Blueprint loads"), FrostArrowsClass);
+	TestNotNull(TEXT("Frost Arrows intrinsic Modifier loads"), Intrinsic);
+	TestNotNull(TEXT("Frost Arrow slow Modifier loads"), Slow);
+	TestNotNull(TEXT("Shared ranged attack Projectile loads"), Projectile);
+	if (!DrowData || !DrowAbilitySet || !DrowClass || !FrostArrows || !FrostArrowsClass
+		|| !Intrinsic || !Slow || !Projectile)
+	{
+		return false;
+	}
+
+	TestFalse(TEXT("Legacy Player package was removed"),
+		FPackageName::DoesPackageExist(TEXT("/Game/Combat/Demo/Characters/Player/DA_CombatDemoPlayerUnit")));
+	TestFalse(TEXT("Legacy Characters WoodenDummy package was removed"),
+		FPackageName::DoesPackageExist(TEXT("/Game/Combat/Demo/Characters/WoodenDummy/BP_WoodenDummy")));
+	TestTrue(TEXT("Drow Ranger keeps its published Unit DefinitionId"),
+		DrowData->GetPrimaryAssetId() == FPrimaryAssetId(TEXT("CombatUnit"), TEXT("ranged_combat_player")));
+	TestEqual(TEXT("Drow Ranger uses its hero display name"), DrowData->DisplayNameText.ToString(), FString(TEXT("卓尔游侠")));
+	TestTrue(TEXT("Drow Ranger has a playable 625 cm attack range"),
+		FMath::IsNearlyEqual(DrowData->BaseStats.AttackRange, 625.0f));
+	TestTrue(TEXT("Drow Ranger default attacks use the shared tracking projectile"),
+		DrowData->AttackProjectileData == Projectile);
+	TestEqual(TEXT("Drow Ranger has one AbilitySet"), DrowData->AbilitySets.Num(), 1);
+	if (!DrowData->AbilitySets.IsEmpty())
+	{
+		TestTrue(TEXT("Drow Ranger references its renamed AbilitySet"),
+			DrowData->AbilitySets[0].LoadSynchronous() == DrowAbilitySet);
+	}
+	const ACombatUnitCharacter* DrowCdo = Cast<ACombatUnitCharacter>(DrowClass->GetDefaultObject());
+	TestTrue(TEXT("Drow Ranger Blueprint points at the renamed UnitData"), DrowCdo && DrowCdo->GetUnitData() == DrowData);
+
+	UClass* DemoGameModeClass = LoadClass<AGameModeBase>(
+		nullptr, TEXT("/Game/Combat/Demo/Framework/BP_CombatDemoGameMode.BP_CombatDemoGameMode_C"));
+	const AGameModeBase* DemoGameMode = DemoGameModeClass
+		? Cast<AGameModeBase>(DemoGameModeClass->GetDefaultObject()) : nullptr;
+	TestTrue(TEXT("Demo GameMode defaults to BP_DrowRanger"), DemoGameMode && DemoGameMode->DefaultPawnClass == DrowClass);
+
+	TestTrue(TEXT("Drow Ranger AbilitySet keeps its published DefinitionId"),
+		DrowAbilitySet->GetPrimaryAssetId() == FPrimaryAssetId(TEXT("CombatAbilitySet"), TEXT("ranged_player_ability_set")));
+	TestEqual(TEXT("Drow Ranger AbilitySet grants one skill"), DrowAbilitySet->Abilities.Num(), 1);
+	if (!DrowAbilitySet->Abilities.IsEmpty())
+	{
+		const FCombatAbilitySetEntry& Entry = DrowAbilitySet->Abilities[0];
+		TestTrue(TEXT("Drow Ranger is granted Frost Arrows"), Entry.AbilityClass.Get() == FrostArrowsClass);
+		TestEqual(TEXT("Frost Arrows starts at level one"), Entry.InitialLevel, 1);
+		TestTrue(TEXT("Frost Arrows AutoCast starts enabled"), Entry.bAutoCastEnabled);
+	}
+	const UCombatGameplayAbility* FrostArrowsCdo = Cast<UCombatGameplayAbility>(FrostArrowsClass->GetDefaultObject());
+	TestTrue(TEXT("Frost Arrows Blueprint points at its AbilityData"),
+		FrostArrowsCdo && FrostArrowsCdo->GetAbilityData() == FrostArrows);
+
+	TestTrue(TEXT("Frost Arrows uses its stable DefinitionId"),
+		FrostArrows->GetPrimaryAssetId() == FPrimaryAssetId(TEXT("CombatAbility"), TEXT("frost_arrows")));
+	TestEqual(TEXT("Frost Arrows has four levels"), FrostArrows->MaxLevel, 4);
+	TestTrue(TEXT("Frost Arrows is an attack AutoCast passive"),
+		FrostArrows->BehaviorTags.HasTagExact(CombatTags::Ability_Behavior_NoTarget)
+		&& FrostArrows->BehaviorTags.HasTagExact(CombatTags::Ability_Behavior_Passive)
+		&& FrostArrows->BehaviorTags.HasTagExact(CombatTags::Ability_Behavior_Attack)
+		&& FrostArrows->BehaviorTags.HasTagExact(CombatTags::Ability_Behavior_AutoCast)
+		&& FrostArrows->BehaviorTags.Num() == 4);
+	TestTrue(TEXT("Frost Arrows occupies a player skill slot"), FrostArrows->ShouldOccupyPlayerAbilitySlot());
+	TestTrue(TEXT("Frost Arrows slot input toggles AutoCast"), FrostArrows->UsesAutoCastToggleInput());
+	TestFalse(TEXT("Frost Arrows does not opt into magic-immune targets"), FrostArrows->TargetingRules.bAllowMagicImmune);
+	TestTrue(TEXT("Frost Arrows owns the expected intrinsic Modifier"), FrostArrows->IntrinsicModifier == Intrinsic);
+	TestTrue(TEXT("Frost Arrows reuses the ranged projectile"), FrostArrows->AttackOrbProjectileData == Projectile);
+	TestTrue(TEXT("Frost Arrows owns the expected on-hit slow"), FrostArrows->AttackOrbOnHitModifierData == Slow);
+	TestTrue(TEXT("Frost Arrows has no active spell actions"), FrostArrows->Actions.IsEmpty());
+
+	struct FExpectedSpecial
+	{
+		FName Key;
+		TArray<float> Values;
+	};
+	const TArray<FExpectedSpecial> ExpectedSpecials = {
+		{ TEXT("mana_cost"), { 9.0f, 10.0f, 11.0f, 12.0f } },
+		{ TEXT("bonus_damage"), { 12.0f, 18.0f, 24.0f, 30.0f } },
+		{ TEXT("slow_duration"), { 1.5f } },
+		{ TEXT("slow_pct"), { 0.15f, 0.25f, 0.35f, 0.45f } },
+		{ TEXT("cooldown"), { 0.0f } }
+	};
+	TestEqual(TEXT("Frost Arrows only carries the five required parameters"), FrostArrows->SpecialValues.Num(), ExpectedSpecials.Num());
+	for (const FExpectedSpecial& Expected : ExpectedSpecials)
+	{
+		const FCombatSpecialValue* Actual = FrostArrows->SpecialValues.Find(Expected.Key);
+		TestNotNull(*FString::Printf(TEXT("Frost Arrows special %s exists"), *Expected.Key.ToString()), Actual);
+		if (!Actual)
+		{
+			continue;
+		}
+		TestEqual(*FString::Printf(TEXT("Frost Arrows special %s has the expected level count"), *Expected.Key.ToString()),
+			Actual->Values.Num(), Expected.Values.Num());
+		for (int32 Index = 0; Index < FMath::Min(Actual->Values.Num(), Expected.Values.Num()); ++Index)
+		{
+			TestTrue(*FString::Printf(TEXT("Frost Arrows special %s level %d matches"), *Expected.Key.ToString(), Index + 1),
+				FMath::IsNearlyEqual(Actual->Values[Index], Expected.Values[Index]));
+		}
+	}
+
+	TestTrue(TEXT("Frost Arrows intrinsic uses its stable DefinitionId"),
+		Intrinsic->GetPrimaryAssetId() == FPrimaryAssetId(TEXT("CombatModifier"), TEXT("frost_arrows_intrinsic")));
+	TestTrue(TEXT("Frost Arrows intrinsic uses the native orb runtime"),
+		Intrinsic->RuntimeClass.Get() == UCombatFrostArrowsRuntime::StaticClass());
+	TestFalse(TEXT("Frost Arrows intrinsic survives death for Ability reconciliation"), Intrinsic->bRemoveOnDeath);
+	TestTrue(TEXT("Break disables the Frost Arrows intrinsic"), Intrinsic->bDisabledByBreak);
+
+	TestTrue(TEXT("Frost Arrow slow uses its stable DefinitionId"),
+		Slow->GetPrimaryAssetId() == FPrimaryAssetId(TEXT("CombatModifier"), TEXT("frost_arrow_slow")));
+	TestTrue(TEXT("Frost Arrow slow is a debuff"), Slow->bIsDebuff);
+	TestEqual(TEXT("Frost Arrow slow is basic-dispellable"), Slow->DispelRule, ECombatModifierDispelRule::Basic);
+	TestEqual(TEXT("Frost Arrow slow cannot stack"), Slow->MaxStacks, 1);
+	TestTrue(TEXT("Frost Arrow slow lasts 1.5 seconds"), FMath::IsNearlyEqual(Slow->Duration, 1.5f));
+	TestEqual(TEXT("Frost Arrow slow changes only movement speed"), Slow->AttributeChanges.Num(), 1);
+	if (!Slow->AttributeChanges.IsEmpty())
+	{
+		const FCombatModifierAttributeChange& Change = Slow->AttributeChanges[0];
+		TestTrue(TEXT("Frost Arrow slow modifies MoveSpeed"), Change.Attribute == UCombatAttributeSet::GetMoveSpeedAttribute());
+		TestEqual(TEXT("Frost Arrow slow is multiplicative"), Change.ModifierOp, TEnumAsByte<EGameplayModOp::Type>(EGameplayModOp::Multiplicitive));
+		TestTrue(TEXT("Frost Arrow slow default multiplier is neutral"), FMath::IsNearlyEqual(Change.Magnitude, 1.0f));
+		TestEqual(TEXT("Frost Arrow slow reads the frozen slow_pct multiplier"), Change.MagnitudeParameterKey, FName(TEXT("slow_pct")));
+	}
 	return true;
 }
 

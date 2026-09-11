@@ -316,6 +316,10 @@ public:
 
 	/** 按名称和从 1 开始的等级读取数值；键不存在时返回 DefaultValue，已有键的数组为空或等级小于 1 时返回 0，高于数组长度时取末值。 */
 	float GetSpecialValue(FName Key, int32 Level, float DefaultValue = 0.0f) const;
+	/** 返回技能是否应占用玩家 Q/W/E/R 槽：主动技能始终显示，可切换 AutoCast 的被动技能也显示，纯被动隐藏。 */
+	bool ShouldOccupyPlayerAbilitySlot() const;
+	/** 返回该技能的槽位输入是否只切换 AutoCast；目前仅 Passive + AutoCast 组合使用该语义。 */
+	bool UsesAutoCastToggleInput() const;
 	/** 在运行时和自动化中执行与 Editor validator 相同的 Ability schema 校验。 */
 	bool ValidateRuntime(FString& OutDiagnostic) const;
 

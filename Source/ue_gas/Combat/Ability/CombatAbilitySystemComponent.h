@@ -71,6 +71,9 @@ public:
 	/** 客户端请求切换本单位技能的自动施法开关；RPC 先验证网络所有权，服务器再验证技能和单位状态。 */
 	UFUNCTION(Server, Reliable)
 	void ServerSetAutoCastEnabled(FGameplayAbilitySpecHandle Handle, bool bEnabled);
+	/** 客户端请求原子翻转本单位技能的自动施法开关；服务器读取当前状态，避免连续输入依赖延迟到达的展示快照。 */
+	UFUNCTION(Server, Reliable)
+	void ServerToggleAutoCastEnabled(FGameplayAbilitySpecHandle Handle);
 
 	/** 读取当前待激活技能的目标请求供条件检查；保留该请求，找不到时返回 false。 */
 	bool PeekPendingTargetData(FGameplayAbilitySpecHandle Handle, FCombatAbilityTargetData& OutTargetData) const;

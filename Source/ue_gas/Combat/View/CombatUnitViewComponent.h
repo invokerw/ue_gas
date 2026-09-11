@@ -21,8 +21,8 @@ class UE_GAS_API UCombatUnitViewComponent : public UActorComponent
 	GENERATED_BODY()
 
 public:
-	/** v3 增加拥有者 HUD 快照；原公共 View 和核心 Combat Event schema 保持兼容。 */
-	static constexpr int32 PresentationSchemaVersion = 3;
+	/** v4 在拥有者技能槽增加 AutoCast 切换语义与权威状态；原公共 View 和核心 Combat Event schema 保持兼容。 */
+	static constexpr int32 PresentationSchemaVersion = 4;
 	UCombatUnitViewComponent();
 
 	/** 返回当前客户端或服务器的单位 View。 */

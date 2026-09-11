@@ -81,13 +81,27 @@ bool FCombatHUDOwnerProjectionTest::RunTest(const FString& Parameters)
 	FGameplayAbilitySpecHandle Handle;
 	FGameplayTag Failure;
 	if (!TestTrue(TEXT("Grant through public API"), Asc->GrantCombatAbility(UCombatSelfHealAbility::StaticClass(), 1, false, Handle, Failure))) return false;
+	UCombatAbilityData* AutoCastData = NewObject<UCombatAbilityData>(Unit);
+	AutoCastData->DefinitionName = TEXT("hud_autocast");
+	AutoCastData->BehaviorTags.AddTag(CombatTags::Ability_Behavior_NoTarget);
+	AutoCastData->BehaviorTags.AddTag(CombatTags::Ability_Behavior_Passive);
+	AutoCastData->BehaviorTags.AddTag(CombatTags::Ability_Behavior_AutoCast);
+	AutoCastData->TargetingRules.TargetTeamTag = CombatTags::TargetTeam_None;
+	TGuardValue<TObjectPtr<UCombatAbilityData>> RestoreAutoCastData(
+		GetMutableDefault<UCombatFrostArrowsAbility>()->AbilityData, AutoCastData);
+	FGameplayAbilitySpecHandle AutoCastHandle;
+	if (!TestTrue(TEXT("Grant passive AutoCast through public API"), Asc->GrantCombatAbility(
+		UCombatFrostArrowsAbility::StaticClass(), 1, true, AutoCastHandle, Failure))) return false;
 	bool CostCommitted = false, CooldownCommitted = false;
 	TestTrue(TEXT("Commit through public API"), Asc->CommitCombatAbilityStage(Handle, *Data, 1,
 		ECombatAbilityCommitStage::SpellStarted, CostCommitted, CooldownCommitted, Failure));
 	View->RefreshHUDOwnerView();
 	FCombatHUDOwnerView Snapshot = View->GetHUDOwnerView();
-	if (!TestEqual(TEXT("One visible skill"), Snapshot.Abilities.Num(), 1)) return false;
+	if (!TestEqual(TEXT("Active and passive AutoCast skills are visible"), Snapshot.Abilities.Num(), 2)) return false;
 	TestEqual(TEXT("Identity uses actual Spec"), Snapshot.Abilities[0].SpecHandle, Handle);
+	TestEqual(TEXT("AutoCast keeps its AbilitySpec slot"), Snapshot.Abilities[1].SpecHandle, AutoCastHandle);
+	TestTrue(TEXT("AutoCast slot exposes toggle input semantics"), Snapshot.Abilities[1].bUsesAutoCastToggleInput);
+	TestTrue(TEXT("AutoCast slot exposes initial authoritative state"), Snapshot.Abilities[1].bAutoCastEnabled);
 	TestEqual(TEXT("Real mana cost"), Snapshot.Abilities[0].ManaCost, 40.0f);
 	TestEqual(TEXT("Frozen duration"), Snapshot.Abilities[0].CooldownDuration, 10.0f);
 	const double FrozenEnd = Snapshot.Abilities[0].CooldownEndTime;
@@ -95,7 +109,12 @@ bool FCombatHUDOwnerProjectionTest::RunTest(const FString& Parameters)
 	View->RefreshHUDOwnerView();
 	TestEqual(TEXT("CDR change preserves end"), View->GetHUDOwnerView().Abilities[0].CooldownEndTime, FrozenEnd);
 	TestEqual(TEXT("CDR change preserves duration"), View->GetHUDOwnerView().Abilities[0].CooldownDuration, 10.0f);
+	TestTrue(TEXT("Disable AutoCast through public API"), Asc->SetAutoCastEnabled(AutoCastHandle, false, Failure));
+	View->RefreshHUDOwnerView();
+	TestFalse(TEXT("HUD projection follows authoritative AutoCast state"),
+		View->GetHUDOwnerView().Abilities[1].bAutoCastEnabled);
 	TestTrue(TEXT("Remove through public API"), Asc->RemoveCombatAbility(Handle, Failure));
+	TestTrue(TEXT("Remove AutoCast through public API"), Asc->RemoveCombatAbility(AutoCastHandle, Failure));
 	View->RefreshHUDOwnerView();
 	TestTrue(TEXT("Removed skill no longer appears"), View->GetHUDOwnerView().Abilities.IsEmpty());
 	Player->SetCommandedUnitAuthority(nullptr);
@@ -233,6 +252,13 @@ bool FCombatHUDSlotStateTest::RunTest(const FString& Parameters)
 	Ability.bIgnoreSilence = true;
 	Skill->ShowAbility(Ability, Unit, 20.0, Name, FText::GetEmpty(), nullptr, Key);
 	TestTrue(TEXT("Ignore silence follows definition"), SkillCount->GetText().IsEmpty());
+	Ability.bUsesAutoCastToggleInput = true;
+	Ability.bAutoCastEnabled = true;
+	Skill->ShowAbility(Ability, Unit, 20.0, Name, FText::GetEmpty(), nullptr, Key);
+	TestEqual(TEXT("Enabled AutoCast is visible"), SkillCount->GetText().ToString(), FString(TEXT("自动")));
+	Ability.bAutoCastEnabled = false;
+	Skill->ShowAbility(Ability, Unit, 20.0, Name, FText::GetEmpty(), nullptr, Key);
+	TestEqual(TEXT("Disabled AutoCast is visible"), SkillCount->GetText().ToString(), FString(TEXT("关闭")));
 	FCombatModifierView Modifier;
 	Modifier.ServerStartTime = 10.0;
 	Modifier.ServerEndTime = 20.0;

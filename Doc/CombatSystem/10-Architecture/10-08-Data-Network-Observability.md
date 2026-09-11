@@ -111,9 +111,9 @@ Modifier View 当前使用 FastArray 增量复制，在 `PostReplicatedReceive` 
 
 `UCombatOverheadWidgetComponent` 负责创建、挂载和转发服务器结果，专用服务器跳过 Widget 创建。`UCombatOverheadWidget` 绑定 View，整理安全展示数据与校准服务器时间进度，通过事件交给 `WBP_CombatOverhead`；控件树、样式、血条缓降和跳字动画由 Widget 蓝图实现。
 
-伤害/治疗跳字只读取服务器 Result，通过携带 `LifeGeneration` 的不可靠多播发送给相关客户端；旧生命载荷直接丢弃。当前独立展示 / View 投影版本为 3（ADR-047），需要服务器/客户端同版本部署；头顶 UI 的事件签名、冻结的核心事件与发布契约保持不变。名称使用本地定义上的 `DisplayNameText`，空值回退稳定 ID。关系颜色通过本地指挥单位的 View 和 TeamSubsystem 计算。具体接线与边界见 [10-11 头顶 UI](10-11-Overhead-Blueprint-UI.md)；View 和 Widget 不可反向成为服务器战斗判定来源。
+伤害/治疗跳字只读取服务器 Result，通过携带 `LifeGeneration` 的不可靠多播发送给相关客户端；旧生命载荷直接丢弃。当前独立展示 / View 投影版本为 4（ADR-048），需要服务器/客户端同版本部署；头顶 UI 的事件签名、冻结的核心事件与发布契约保持不变。名称使用本地定义上的 `DisplayNameText`，空值回退稳定 ID。关系颜色通过本地指挥单位的 View 和 TeamSubsystem 计算。具体接线与边界见 [10-11 头顶 UI](10-11-Overhead-Blueprint-UI.md)；View 和 Widget 不可反向成为服务器战斗判定来源。
 
-底部 HUD 增加 `FCombatHUDOwnerView`，在同一 Unit View 组件上以 `COND_OwnerOnly` 复制。服务器每 0.1 秒采样 ASC 的攻击、护甲、魔抗、移速、恢复属性和最多四个非被动技能，仅在内容改变时更新快照。该 Tick 只产生展示数据，不推进技能或伤害。冷却保存已提交的结束时间与冻结时长，后续 CDR 变化不重算旧时间窗；客户端按校准服务器时间绘制遮罩和倒计时。
+底部 HUD 使用 `FCombatHUDOwnerView`，在同一 Unit View 组件上以 `COND_OwnerOnly` 复制。服务器每 0.1 秒采样 ASC 的攻击、护甲、魔抗、移速、恢复属性和最多四个直接输入技能（主动技能或可切换 AutoCast 的被动技能），同时投影 AutoCast 开关状态，仅在内容改变时更新快照。该 Tick 只产生展示数据，不推进技能或伤害。冷却保存已提交的结束时间与冻结时长，后续 CDR 变化不重算旧时间窗；客户端按校准服务器时间绘制遮罩和倒计时。客户端请求切换 AutoCast 时由服务器读取当前状态并原子翻转，展示快照不作为 gameplay 输入。
 
 HUD 观察显式 `CommandedUnit`，以单位定义及 `LifeGeneration` 匹配公共 View 与拥有者快照，再按本地 AbilitySpec 句柄匹配 Q/W/E/R 顺序。初始复制未齐时留空，失去拥有权后展示入口屏蔽旧快照；Buff 继续使用公共 FastArray。`ACombatPlayerHUD` 只在本地客户端创建 `WBP_CombatHUD`，专用服务器不创建 UMG。配置与生命周期见 [10-12](10-12-Bottom-HUD-Design.md)。
 

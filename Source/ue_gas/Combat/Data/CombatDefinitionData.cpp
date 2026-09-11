@@ -200,6 +200,17 @@ float UCombatAbilityData::GetSpecialValue(const FName Key, const int32 Level, co
 	return DefaultValue;
 }
 
+bool UCombatAbilityData::ShouldOccupyPlayerAbilitySlot() const
+{
+	return !BehaviorTags.HasTagExact(CombatTags::Ability_Behavior_Passive) || UsesAutoCastToggleInput();
+}
+
+bool UCombatAbilityData::UsesAutoCastToggleInput() const
+{
+	return BehaviorTags.HasTagExact(CombatTags::Ability_Behavior_Passive)
+		&& BehaviorTags.HasTagExact(CombatTags::Ability_Behavior_AutoCast);
+}
+
 bool UCombatAbilityData::ValidateRuntime(FString& OutDiagnostic) const
 {
 	OutDiagnostic.Reset();
