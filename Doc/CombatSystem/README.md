@@ -1,7 +1,7 @@
 # UE GAS Dota-Like Combat 文档索引
 
 > 当前状态：`combat_v1_rc1` 核心发布契约已冻结，M0-M8 共 82/82 Task、9/9 里程碑已通过用户验收。
-> 当前工程：UE 5.8；GameplayAbilities/GameplayTags/GameplayTasks 已接入，Combat 实现位于 `Source/ue_gas/Combat`。
+> 当前工程：UE 5.8；GameplayAbilities/GameplayTags/GameplayTasks 已接入，Combat 实现位于 `Source/Combat/Combat`。
 > 当前 Post-M8：SAM 服务器权威单位移动与 DEMO-901 卓尔游侠 Demo 均已通过用户验收。
 > 底部 HUD：工程验证已完成，待用户实机复验；状态与远端验证记录见台账 §12.3。
 > 状态权威：[00-01 开发进度台账](00-Project/00-01-Progress-Tracker.md)。

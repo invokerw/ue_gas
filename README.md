@@ -2,7 +2,7 @@
 
 这是一个面向 Unreal Engine 5.8 的 Dota-like 战斗框架。项目以 Gameplay Ability System（GAS）承载 Attribute、GameplayTag、GameplayEffect 和 GameplayAbility，并用自定义运行时补齐 Order、AttackRecord、Modifier Hook、Combat Scheduler、Projectile、Thinker、Aura、Motion、统一伤害/治疗事务和多人可观测性。
 
-Combat 当前仍位于 `ue_gas` 单 Runtime Module 中，不是独立插件或独立 Module。
+Combat 当前位于 `Combat` 单 Runtime Module 中，不是独立插件或独立 Module；项目文件和 Target 名称仍保留 `ue_gas`。
 
 ## 当前基线
 
@@ -19,7 +19,7 @@ Combat 当前仍位于 `ue_gas` 单 Runtime Module 中，不是独立插件或�
 1. 安装 UE 5.8，并确保 Git LFS 已拉取 `.uasset`、`.umap` 等二进制资产。
 2. 打开 `ue_gas.uproject`。可玩 Demo 地图位于 `/Game/Combat/Demo/Maps/L_CombatDemo`。
 3. 自动化测试地图位于 `/Game/Combat/Tests/L_CombatTest`。
-4. Combat C++ 入口位于 `Source/ue_gas/Combat`；新增技能先阅读 [公共技能扩展与迁移指南](Doc/CombatSystem/20-Content/20-03-M8-Public-Extension-Guide.md)。
+4. Combat C++ 入口位于 `Source/Combat/Combat`；新增技能先阅读 [公共技能扩展与迁移指南](Doc/CombatSystem/20-Content/20-03-M8-Public-Extension-Guide.md)。
 5. AI 协作开发先阅读 [AI-Native 开发流程与文档体系](Doc/CombatSystem/00-Project/00-05-AI-Native-Development-Workflow.md)，新需求或修复使用 [Spec 模板](Doc/CombatSystem/Specs/_template.spec.md)。
 6. 任务开始用 [Intake](Doc/CombatSystem/00-Project/_intake-template.md) 整理边界，交付前按 [Gate 检查表](Doc/CombatSystem/00-Project/_gate-checklist.md) 记录验证结果；这些内容可以合并到任务 Spec，独立记录时使用 [交付记录模板](Doc/CombatSystem/00-Project/_delivery-record-template.md)。
 7. 让 Agent 判断应该调用哪个 Skill 时使用 [Combat 任务路由 Skill](Skills/combat-task-router/SKILL.md)，它会在交付后按证据自评并执行受控调优。
@@ -56,14 +56,14 @@ Demo 操作：右键点敌方单位持续普攻，超出范围时自动追击；
 
 | 路径 | 内容 |
 | --- | --- |
-| `Source/ue_gas/Combat/Ability` | ASC、GameplayAbility 基类、AbilityTask 与 EffectContext |
-| `Source/ue_gas/Combat/Combat` | Damage、Heal、Transaction 和 Effect 工具 |
-| `Source/ue_gas/Combat/Modifiers` | ActiveGE/Runtime 映射、Hook、叠层、周期和驱散 |
-| `Source/ue_gas/Combat/Order`、`Attack` | 指令状态机、追击、AttackRecord、法球和普攻时序 |
-| `Source/ue_gas/Combat/Projectile`、`Thinker`、`Aura`、`Motion` | 异步空间实体与强制位移 |
-| `Source/ue_gas/Combat/Data` | Unit/Ability/Modifier/Projectile/AbilitySet PrimaryDataAsset |
-| `Source/ue_gas/Combat/Network`、`View`、`UI` | RPC 防护、公共/拥有者 View、头顶表现与底部 HUD |
-| `Source/ue_gas/Combat/Tests` | `Combat.*` Automation 测试 |
+| `Source/Combat/Combat/Ability` | ASC、GameplayAbility 基类、AbilityTask 与 EffectContext |
+| `Source/Combat/Combat/Combat` | Damage、Heal、Transaction 和 Effect 工具 |
+| `Source/Combat/Combat/Modifiers` | ActiveGE/Runtime 映射、Hook、叠层、周期和驱散 |
+| `Source/Combat/Combat/Order`、`Attack` | 指令状态机、追击、AttackRecord、法球和普攻时序 |
+| `Source/Combat/Combat/Projectile`、`Thinker`、`Aura`、`Motion` | 异步空间实体与强制位移 |
+| `Source/Combat/Combat/Data` | Unit/Ability/Modifier/Projectile/AbilitySet PrimaryDataAsset |
+| `Source/Combat/Combat/Network`、`View`、`UI` | RPC 防护、公共/拥有者 View、头顶表现与底部 HUD |
+| `Source/Combat/Combat/Tests` | `Combat.*` Automation 测试 |
 | `Content/Combat/Demo` | 可玩 Demo 地图、`Heros/DrowRanger`、木桩、霜冻之箭、远程攻击和输入资产 |
 | `Content/Combat/Tests` | PIE、Dedicated 与容量测试地图 |
 | `Doc/CombatSystem/00-Project` | 当前状态、AI 开发流程、路线图、测试计划和决策入口 |
@@ -128,4 +128,4 @@ Gate 会检查 Spec、Skill 路由、F0/F1/F2、Push-Ready、验证/未执行记
 python3 -B -m unittest discover -s Tools/Tests -p 'test_validate_docs.py' -v
 ```
 
-若 IDE 构建报 `Unable to delete hot-reload file`，先检查日志中的 DLL 是否仍被同工程的 UE 进程占用；后台没有可见窗口的进程也可能持有模块。保存资产并完全退出占用进程后，运行上面的常规 Editor 构建，让 UBT 清理热重载记录并恢复 `UnrealEditor-ue_gas.dll`。使用 `-ModuleWithSuffix` 做临时验证后，交付前应完成这一步，并退出仅用于启动验证的 Editor 实例，避免影响下一次 IDE 构建。
+若 IDE 构建报 `Unable to delete hot-reload file`，先检查日志中的 DLL 是否仍被同工程的 UE 进程占用；后台没有可见窗口的进程也可能持有模块。保存资产并完全退出占用进程后，运行上面的常规 Editor 构建，让 UBT 清理热重载记录并恢复 `UnrealEditor-Combat.dll`。使用 `-ModuleWithSuffix` 做临时验证后，交付前应完成这一步，并退出仅用于启动验证的 Editor 实例，避免影响下一次 IDE 构建。

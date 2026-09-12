@@ -50,7 +50,7 @@ HUD 固定在游戏画面底部居中，采用参考图中的紧凑横向布局�
 
 ## 4. 当前工程入口
 
-沿用 [头顶 UI 的分工](10-11-Overhead-Blueprint-UI.md)：C++ 负责只读数据适配与生命周期，Widget Blueprint 负责布局和视觉。HUD 观察 `Aue_gasPlayerController::GetCommandedUnit()` 指定的单位；被占有的 Command Pawn 是相机载体，不能据此推断英雄。HUD 使用可选 `BindWidget` 接线，与头顶 UI 的事件接口并存。
+沿用 [头顶 UI 的分工](10-11-Overhead-Blueprint-UI.md)：C++ 负责只读数据适配与生命周期，Widget Blueprint 负责布局和视觉。HUD 观察 `ACombatPlayerController::GetCommandedUnit()` 指定的单位；被占有的 Command Pawn 是相机载体，不能据此推断英雄。HUD 使用可选 `BindWidget` 接线，与头顶 UI 的事件接口并存。
 
 | 资产 | 作用 |
 | --- | --- |

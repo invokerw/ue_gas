@@ -24,13 +24,13 @@ M4 已形成服务器权威的 Order、NavMesh 追击和近战普攻纵向闭环
 
 | 范围 | 主要源码 |
 | --- | --- |
-| Order 数据与状态机 | `Source/ue_gas/Combat/Order/CombatOrderTypes.h`、`CombatOrderComponent.*` |
-| Attack Record 与时序 | `Source/ue_gas/Combat/Attack/CombatAttackTypes.h`、`CombatAttackTimingPolicy.*`、`CombatAttackComponent.*` |
-| Ability Order 释放 | `Source/ue_gas/Combat/Ability/CombatAbilitySystemComponent.*`、`CombatGameplayAbility.*` |
-| 法球协议 | `Source/ue_gas/Combat/Modifiers/CombatModifierRuntime.*`、`CombatModifierComponent.*` |
-| Demo 法球 | `Source/ue_gas/Combat/Demo/CombatDemoModifierRuntimes.*` |
-| Unit 与测试场景 | `Source/ue_gas/Combat/Unit/CombatUnitCharacter.*`、`Combat/Tests/CombatTestScenarioActor.*` |
-| 自动化 | `Source/ue_gas/Combat/Tests/CombatOrderAttackTests.cpp` |
+| Order 数据与状态机 | `Source/Combat/Combat/Order/CombatOrderTypes.h`、`CombatOrderComponent.*` |
+| Attack Record 与时序 | `Source/Combat/Combat/Attack/CombatAttackTypes.h`、`CombatAttackTimingPolicy.*`、`CombatAttackComponent.*` |
+| Ability Order 释放 | `Source/Combat/Combat/Ability/CombatAbilitySystemComponent.*`、`CombatGameplayAbility.*` |
+| 法球协议 | `Source/Combat/Combat/Modifiers/CombatModifierRuntime.*`、`CombatModifierComponent.*` |
+| Demo 法球 | `Source/Combat/Combat/Demo/CombatDemoModifierRuntimes.*` |
+| Unit 与测试场景 | `Source/Combat/Combat/Unit/CombatUnitCharacter.*`、`Combat/Tests/CombatTestScenarioActor.*` |
+| 自动化 | `Source/Combat/Combat/Tests/CombatOrderAttackTests.cpp` |
 
 所有本次新建或实质修改的项目自有类、结构、枚举、函数、关键字段和非显然逻辑均补充中文注释。
 

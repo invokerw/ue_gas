@@ -96,7 +96,7 @@ Projectile 选择沿用服务器 AttackRecord 快照和 `UCombatProjectileSubsys
 | `Content/Combat/Demo/Abilities/FrostArrows/DA_FrostArrowsProjectile.uasset` | 新建（复制默认定义） | Frost 法球需要独立 ActorClass 与稳定定义 | Frost 法球快照 |
 | `Content/Combat/Demo/Abilities/FrostArrows/BP_FrostArrowsProjectileActor.uasset` | 新建（复制默认 Actor） | 区分 Frost 开启时的表现 | Frost 弹体表现 |
 | `Content/Combat/Demo/Abilities/FrostArrows/MI_FrostArrowsProjectile.uasset` | 新建（复制默认材质） | 使用 Frost 专用颜色 | Frost Actor 材质 |
-| `Source/ue_gas/Combat/Tests/CombatFoundationTests.cpp` | 更新路径并增加双 Projectile/Actor 断言 | 防止迁移遗漏和表现资源混用 | Demo 内容回归 |
+| `Source/Combat/Combat/Tests/CombatFoundationTests.cpp` | 更新路径并增加双 Projectile/Actor 断言 | 防止迁移遗漏和表现资源混用 | Demo 内容回归 |
 | `Doc/CombatSystem/20-Content/20-01-Example-Skills.md` | 更新默认/Frost Projectile 目录事实 | 保持公开文档与资产一致 | 文档导航 |
 
 ## 5. 验收标准（AC）

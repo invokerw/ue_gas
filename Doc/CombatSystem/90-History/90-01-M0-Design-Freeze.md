@@ -15,7 +15,7 @@
 - `/Game` 中没有 Combat DataAsset、GameplayEffect 或战斗蓝图；只有 TopDown、Strategy、TwinStick 和公共模板资产。
 - `DefaultEngine.ini` 没有自定义 Combat Object/Trace Channel 或 Collision Profile。
 - AssetManager 只配置 Map、PrimaryAssetLabel 和 GameFeatureData，没有 Combat PrimaryAsset 类型。
-- GAS 插件和模块依赖尚未启用，`Source/ue_gas/Combat` 不存在。
+- GAS 插件和模块依赖尚未启用，`Source/Combat/Combat` 不存在。
 
 因此 M0 没有既有 Combat 内容迁移；本文件中的 redirect、schema/version 和兼容规则从 v1 起生效。模板碰撞、Tag 和资产名不获得 Combat 语义，后续只能通过明确适配接入。
 

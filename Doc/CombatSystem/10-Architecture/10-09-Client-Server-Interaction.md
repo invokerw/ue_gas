@@ -19,7 +19,7 @@ Combat 使用 RTS/MOBA 风格的服务器权威命令模型。客户端负责选
   -> Movement、ASC、UnitView、Projectile 和表现 RPC 复制到客户端
 ```
 
-服务器只保留一种 Combat Unit 控制器拓扑：`ACombatUnitAIController` Possess Unit 并持有 `UCrowdFollowingComponent`；`Aue_gasGameMode` 在默认出生阶段独立生成 Unit 与 `Aue_gasCharacter` Command Pawn，先建立 Unit 的 AI/Owner 绑定，再只把 Command Pawn 交给 `PlayerController` Possess。PlayerController 通过 owner-only `CommandedUnit` 和 `CommandBindingGeneration` 表达主控关系，并通过 `Unit.Owner` 建立 RPC/ASC owning connection。网络控制权、AI Possession、移动网络角色和战斗队伍是四个独立概念。
+服务器只保留一种 Combat Unit 控制器拓扑：`ACombatUnitAIController` Possess Unit 并持有 `UCrowdFollowingComponent`；`ACombatGameMode` 在默认出生阶段独立生成 Unit 与 `ACombatCharacter` Command Pawn，先建立 Unit 的 AI/Owner 绑定，再只把 Command Pawn 交给 `PlayerController` Possess。PlayerController 通过 owner-only `CommandedUnit` 和 `CommandBindingGeneration` 表达主控关系，并通过 `Unit.Owner` 建立 RPC/ASC owning connection。网络控制权、AI Possession、移动网络角色和战斗队伍是四个独立概念。
 
 ## 2. 统一命令入口
 
@@ -58,7 +58,7 @@ owning client 调用 `ACombatUnitCharacter::ServerIssueOrderBatch`。服务器�
 
 这个回执只说明请求已被接收或拒绝，不承诺异步行为已经完成。移动到达、技能生效和弹体命中分别有自己的服务器生命周期。
 
-当前 Demo 的 `Aue_gasPlayerController` 提供以下输入：
+当前 Demo 的 `ACombatPlayerController` 提供以下输入：
 
 - 鼠标右键（`IMC_Default` 当前映射）直接点中可选敌方单位时，提交一次替换型 `AttackTarget`；由服务器追击、转身、前摇并持续普攻。按住及松开这次右键不会再提交移动或重置攻击周期。
 - 按 A 显示选敌准星，再左键点中可选敌人确认 `AttackTarget`。点地面、友军、自身或不可选目标时保留选敌模式，不自动选择附近敌人，也不执行 Attack Move。
@@ -274,20 +274,20 @@ Order 只等到 `OrderReleased`。Cooldown、backswing、长期 Modifier、Think
 
 | 源码 | 职责 |
 | --- | --- |
-| [`CombatNetworkTypes.h`](../../../Source/ue_gas/Combat/Network/CombatNetworkTypes.h) | Order 批次请求、回执和安全统计结构 |
-| [`CombatNetworkSecuritySubsystem.cpp`](../../../Source/ue_gas/Combat/Network/CombatNetworkSecuritySubsystem.cpp) | 所有权、载荷、限频和重放防护 |
-| [`CombatUnitCharacter.cpp`](../../../Source/ue_gas/Combat/Unit/CombatUnitCharacter.cpp) | owning RPC、Actor/ASC 复制策略、AI/Owner/Role/Crowd 拓扑诊断与生命周期锚点 |
-| [`CombatUnitAIController.cpp`](../../../Source/ue_gas/Combat/Unit/CombatUnitAIController.cpp) | 服务器 PathFollowing、Detour Crowd 参数与状态投影 |
-| [`CombatOrderComponent.cpp`](../../../Source/ue_gas/Combat/Order/CombatOrderComponent.cpp) | Order 状态机、服务器 AIController PathFollowing、追击、Ability 派发和异步失效 |
-| [`ue_gasGameMode.cpp`](../../../Source/ue_gas/ue_gasGameMode.cpp) | 默认出生时独立生成 Unit/Command Pawn，并在 PlayerController Possess 前建立 AI/Owner 绑定 |
-| [`ue_gasPlayerController.cpp`](../../../Source/ue_gas/ue_gasPlayerController.cpp) | CommandedUnit 绑定、控制转移、点击/技能 Order 提交，以及直接 Unit Possess 的错误兜底 |
-| [`ue_gasCharacter.cpp`](../../../Source/ue_gas/ue_gasCharacter.cpp) | 无碰撞 Command Pawn 与本地相机跟随，不写 Unit transform |
-| [`CombatAbilitySystemComponent.cpp`](../../../Source/ue_gas/Combat/Ability/CombatAbilitySystemComponent.cpp) | Ability 服务器预检、TargetData 暂存和 GAS 激活 |
-| [`CombatGameplayAbility.cpp`](../../../Source/ue_gas/Combat/Ability/CombatGameplayAbility.cpp) | 前摇、commit、Action、Channel、OrderReleased 和清理 |
-| [`CombatProjectileSubsystem.cpp`](../../../Source/ue_gas/Combat/Projectile/CombatProjectileSubsystem.cpp) | 权威弹体推进、命中 Action 和 exactly-once Finish |
-| [`CombatProjectileActor.cpp`](../../../Source/ue_gas/Combat/Projectile/CombatProjectileActor.cpp) | 弹体身份、移动复制和客户端表现 reconcile |
-| [`CombatDamageSubsystem.cpp`](../../../Source/ue_gas/Combat/Combat/CombatDamageSubsystem.cpp) | 权威伤害事务和致死入口 |
-| [`CombatUnitViewComponent.cpp`](../../../Source/ue_gas/Combat/View/CombatUnitViewComponent.cpp) | UI 安全 Unit/Modifier/Ability View 复制 |
-| [`CombatOverheadWidgetComponent.cpp`](../../../Source/ue_gas/Combat/UI/CombatOverheadWidgetComponent.cpp) | 头顶 UI 和不可靠伤害/治疗跳字 |
+| [`CombatNetworkTypes.h`](../../../Source/Combat/Combat/Network/CombatNetworkTypes.h) | Order 批次请求、回执和安全统计结构 |
+| [`CombatNetworkSecuritySubsystem.cpp`](../../../Source/Combat/Combat/Network/CombatNetworkSecuritySubsystem.cpp) | 所有权、载荷、限频和重放防护 |
+| [`CombatUnitCharacter.cpp`](../../../Source/Combat/Combat/Unit/CombatUnitCharacter.cpp) | owning RPC、Actor/ASC 复制策略、AI/Owner/Role/Crowd 拓扑诊断与生命周期锚点 |
+| [`CombatUnitAIController.cpp`](../../../Source/Combat/Combat/Unit/CombatUnitAIController.cpp) | 服务器 PathFollowing、Detour Crowd 参数与状态投影 |
+| [`CombatOrderComponent.cpp`](../../../Source/Combat/Combat/Order/CombatOrderComponent.cpp) | Order 状态机、服务器 AIController PathFollowing、追击、Ability 派发和异步失效 |
+| [`CombatGameMode.cpp`](../../../Source/Combat/CombatGameMode.cpp) | 默认出生时独立生成 Unit/Command Pawn，并在 PlayerController Possess 前建立 AI/Owner 绑定 |
+| [`CombatPlayerController.cpp`](../../../Source/Combat/CombatPlayerController.cpp) | CommandedUnit 绑定、控制转移、点击/技能 Order 提交，以及直接 Unit Possess 的错误兜底 |
+| [`CombatCharacter.cpp`](../../../Source/Combat/CombatCharacter.cpp) | 无碰撞 Command Pawn 与本地相机跟随，不写 Unit transform |
+| [`CombatAbilitySystemComponent.cpp`](../../../Source/Combat/Combat/Ability/CombatAbilitySystemComponent.cpp) | Ability 服务器预检、TargetData 暂存和 GAS 激活 |
+| [`CombatGameplayAbility.cpp`](../../../Source/Combat/Combat/Ability/CombatGameplayAbility.cpp) | 前摇、commit、Action、Channel、OrderReleased 和清理 |
+| [`CombatProjectileSubsystem.cpp`](../../../Source/Combat/Combat/Projectile/CombatProjectileSubsystem.cpp) | 权威弹体推进、命中 Action 和 exactly-once Finish |
+| [`CombatProjectileActor.cpp`](../../../Source/Combat/Combat/Projectile/CombatProjectileActor.cpp) | 弹体身份、移动复制和客户端表现 reconcile |
+| [`CombatDamageSubsystem.cpp`](../../../Source/Combat/Combat/Combat/CombatDamageSubsystem.cpp) | 权威伤害事务和致死入口 |
+| [`CombatUnitViewComponent.cpp`](../../../Source/Combat/Combat/View/CombatUnitViewComponent.cpp) | UI 安全 Unit/Modifier/Ability View 复制 |
+| [`CombatOverheadWidgetComponent.cpp`](../../../Source/Combat/Combat/UI/CombatOverheadWidgetComponent.cpp) | 头顶 UI 和不可靠伤害/治疗跳字 |
 
 相关专题契约见 [10-03 Ability、目标与蓝图接口](10-03-Ability-Targeting-Blueprint.md)、[10-05 Damage 与 Heal 管线](10-05-Damage-Heal.md)、[10-06 普攻、法球、Projectile 与 Thinker](10-06-Attack-Projectile-Thinker.md)、[10-07 Order 与 NavMesh 移动](10-07-Order-Movement.md) 和 [10-08 数据、网络、UI 与可观测性](10-08-Data-Network-Observability.md)。

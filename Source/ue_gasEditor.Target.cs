@@ -10,6 +10,6 @@ public class ue_gasEditorTarget : TargetRules
 		Type = TargetType.Editor;
 		DefaultBuildSettings = BuildSettingsVersion.V7;
 		IncludeOrderVersion = EngineIncludeOrderVersion.Unreal5_8;
-		ExtraModuleNames.Add("ue_gas");
+		ExtraModuleNames.Add("Combat");
 	}
 }

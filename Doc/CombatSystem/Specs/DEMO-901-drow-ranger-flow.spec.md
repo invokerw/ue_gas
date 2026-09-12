@@ -90,7 +90,7 @@
 | `Content/Combat/Demo/Abilities/FrostArrows/*` | 新建 Ability、Intrinsic、Slow 和 Blueprint | 落地四级数据与法球装配 | AbilitySet、HUD 技能快照、资产扫描 |
 | `DA_DrowRangerUnit` / `DA_DrowRangerAbilitySet` | 配置默认 Projectile、625 攻击距离和 Frost Arrows | 默认远程普攻与英雄技能 | 玩家出生与攻击表现 |
 | `CombatDemoModifierRuntimes.*` | 技能免疫目标不声明 Frost Arrows 法球 | 实现“不无视技能免疫” | 仅 Frost Arrows 法球候选 |
-| `CombatDefinitionData.*` / `CombatAbilitySystemComponent.*` / `ue_gasPlayerController.*` | 统一技能槽规则并增加服务器原子 Toggle RPC | 让 AutoCast 被动可直接输入且不误发 Cast Order | 玩家技能输入与 ASC AutoCast 状态 |
+| `CombatDefinitionData.*` / `CombatAbilitySystemComponent.*` / `CombatPlayerController.*` | 统一技能槽规则并增加服务器原子 Toggle RPC | 让 AutoCast 被动可直接输入且不误发 Cast Order | 玩家技能输入与 ASC AutoCast 状态 |
 | `CombatHUDView*` / `CombatHUDSlotWidget.cpp` | owner-only 投影 AutoCast 输入语义与权威状态，显示“自动/关闭” | Q 槽与服务器状态一致 | 展示 schema 4，同版本联机 |
 | `CombatFoundationTests.cpp` / `CombatContentExtensionTests.cpp` / `CombatHUDTests.cpp` / `CombatPlayerInputTests.cpp` | 增加真实资产、免疫、HUD 与输入断言 | 防止路径、数值、权限或槽位语义回退 | Editor Automation |
 | `CombatTestScenarioActor.cpp` | Dedicated 使用真实 DrowRanger，核对 owner-only AutoCast 字段，并让容量夹具按既有固有 Modifier 补足 256 总量 | 验证真实联机投影且保持冻结容量边界 | Dedicated smoke 测试基础设施 |

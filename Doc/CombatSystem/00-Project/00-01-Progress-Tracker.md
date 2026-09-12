@@ -66,7 +66,7 @@
 
 | Task | 需求名称 | 状态 | 完成证据/备注 |
 | --- | --- | --- | --- |
-| FND-001 | 启用 GAS 与 Combat 碰撞 | 已完成 | `ue_gas.uproject`、`ue_gas.Build.cs`、`DefaultEngine.ini`；Editor Target 构建成功；`TagsAndCollision` 通过 |
+| FND-001 | 启用 GAS 与 Combat 碰撞 | 已完成 | `ue_gas.uproject`、`Source/Combat/Combat.Build.cs`、`DefaultEngine.ini`；Editor Target 构建成功；`TagsAndCollision` 通过 |
 | FND-002 | Native Gameplay Tags | 已完成 | `CombatTags.h/.cpp`；自动化查询通过；MCP `ListTags(Combat)` 回读成功 |
 | FND-003 | PrimaryAsset 基类 | 已完成 | `CombatDefinitionData.*`、AssetManager scan、redirect/唯一性校验；`CombatUnit:team_one/team_two` 冷启动发现通过 |
 | FND-004 | 公共 Handle/Result/Numeric/RNG | 已完成 | `CombatTypes.*`、`CombatNumericPolicy.*`、`CombatRngSubsystem.*`；冻结向量与边界测试通过 |
@@ -186,11 +186,11 @@
 | SAM-000 | 开工设计冻结 | 已完成 | ADR-043 与 [10-10](../10-Architecture/10-10-Server-Authoritative-Movement-Kickoff.md) 冻结拓扑、迁移、删除清单和 Gate |
 | SAM-001 | 拓扑不变量与诊断 | 已完成 | Unit dump/一次性日志覆盖 Controller、Owner、Role、BindingGeneration、PathFollowing、Crowd、Collision 与 LifeGeneration；非法拓扑拒绝普通移动 |
 | SAM-002 | 服务器 AI 导航器 | 已完成 | 新增 `ACombatUnitAIController` + `UCrowdFollowingComponent`；Order 只走服务器 `AAIController::MoveTo/StopMovement`，Move/Stop/追击回归全绿 |
-| SAM-003 | Command Pawn 与控制绑定 | 已完成 | `Aue_gasGameMode` 在默认出生时独立生成 Combat Unit 与 Command Pawn，先完成 AI Possess/Owner 绑定，再只把 Command Pawn 返回给 PlayerController；Demo GameMode 已改为继承原生 GameMode，单玩家 PIE 保持 2 Unit/2 AIController，玩家 Unit 右键移动约 420 cm |
-| SAM-004 | 输入与网络角色迁移 | 已完成 | 点击与 Q/W/E/R 全部改读 CommandedUnit；Dedicated 两端 RPC 成功，UnitLocalRole=1，Player Pawn 为 `ue_gasCharacter` |
+| SAM-003 | Command Pawn 与控制绑定 | 已完成 | `ACombatGameMode` 在默认出生时独立生成 Combat Unit 与 Command Pawn，先完成 AI Possess/Owner 绑定，再只把 Command Pawn 返回给 PlayerController；Demo GameMode 已改为继承原生 GameMode，单玩家 PIE 保持 2 Unit/2 AIController，玩家 Unit 右键移动约 420 cm |
+| SAM-004 | 输入与网络角色迁移 | 已完成 | 点击与 Q/W/E/R 全部改读 CommandedUnit；Dedicated 两端 RPC 成功，UnitLocalRole=1，Player Pawn 为 `CombatCharacter` |
 | SAM-005 | 删除客户端路径分支 | 已完成 | 已删除 PC PathFollowing、`ClientFollowCombatOrderPath`、`ClientStopCombatOrderNavigation`、非 AI Move 分支与 `SetAutonomousProxy`；生产代码无遗留引用 |
 | SAM-006 | 服务器碰撞与 Crowd | 已完成 | Capsule 硬阻挡、SimProxy `MaxDepenetrationWithPawnAsProxy=0`、CMC RVO 关闭、单一 Detour Crowd 及 NoCollision/Root/Motion/Dead/Respawn/UnPossess 状态测试通过；`BP_WoodenDummy` 四个装饰网格已关闭碰撞，只保留根 Capsule 参与 gameplay collision |
-| SAM-007 | Demo 资产迁移 | 已完成 | 默认地图/GameMode 与 Crowd 配置已更新；`BP_CombatDemoGameMode` 已通过 UE MCP 改为继承 `Aue_gasGameMode`、编译并保存；全项目 Blueprint 编译 0 Error/0 Warning，资产 7/7、0 Error/0 Warning，Dedicated 回读真实 Demo GameMode/PC/Pawn |
+| SAM-007 | Demo 资产迁移 | 已完成 | 默认地图/GameMode 与 Crowd 配置已更新；`BP_CombatDemoGameMode` 已通过 UE MCP 改为继承 `ACombatGameMode`、编译并保存；全项目 Blueprint 编译 0 Error/0 Warning，资产 7/7、0 Error/0 Warning，Dedicated 回读真实 Demo GameMode/PC/Pawn |
 | SAM-008 | Automation 与 Dedicated Gate | 已完成 | 默认出生链路新增 GameMode/蓝图父类、AIController 唯一性与孤立计数断言；Editor/Server/Client Target 构建通过，`Combat.*` 44/44、资产 7/7 通过；单/双玩家 PIE 真实位移通过，同版本 Dedicated 双客户端移动 324.508 cm、静止单位 0 cm |
 | SAM-009 | 当前行为文档切换 | 已完成 | 10-01/10-07/10-09 已切换到服务器 AIController + Command Pawn + SimulatedProxy 当前语义；90-16 生命周期与本文证据同步更新 |
 
@@ -227,7 +227,7 @@
 
 > 状态：已完成（2026-09-07）。兼容新增玩家输入：右键点敌人和 A 后左键确认提交已有 `AttackTarget`，S 提交 `Stop`；共用原 Order RPC、服务器追击与攻击生命周期，不改变结算契约或网络载荷。
 
-- `Aue_gasPlayerController` 增加实际命中选敌、A/左键/Escape/S 绑定及统一单条批次提交；普攻手势的按住/松开不发送移动，技能/停止/控制绑定刷新清除旧拖动状态。A 模式点地面不自动找敌，也不执行 Attack Move。
+- `ACombatPlayerController` 增加实际命中选敌、A/左键/Escape/S 绑定及统一单条批次提交；普攻手势的按住/松开不发送移动，技能/停止/控制绑定刷新清除旧拖动状态。A 模式点地面不自动找敌，也不执行 Attack Move。
 - 新增 `Combat.Input.Attack.RightClickAndContinuousOrder`、`TargetSelectionAndCancellation` 两项，通过正式 RPC/Order/Attack 验证持续扣血、超距追击、选敌、取消与 Unit EndPlay；输入、OrderAttack、SAM、Network 合计 18/18 成功，0 测试警告。
 - UE 5.8 Editor Development 模块后缀 `9076` 最终构建成功。完整 `Combat.*` 报告为 52 成功、1 失败、0 未运行：唯一失败 `Combat.UI.Overhead.BlueprintBindingLifecycle` 属于工作区既有 UI 改造，缺少 `/Game/Combat/Demo/UI/WBP_CombatOverhead`；没有删改该用例或资产，也不把全量 Gate 标成通过。
 - UE MCP 回读 `IMC_Default` 右键/触摸/QWER 映射及玩家 DataAsset：AttackDamage=20、AttackRange=150 cm、BaseAttackTime=1.7 s、BaseAttackPoint=0.25 s、AttackProjectileData=None（当前 Demo 普攻为近战）。本次无二进制资产修改。
@@ -356,6 +356,8 @@
 | 2026-09-11 | 用户确认 DEMO-901 验收完成；同步任务状态、最终验收日期与 Spec，不新增工程验证结论 | post-M8 Demo / DEMO-901 |
 | 2026-09-11 | 完成 PROG-001：新增 Dota 风格累计经验、击杀经验奖励、等级技能点、服务器技能升级 RPC、HUD 等级/经验/技能点投影、技能槽上方 `+` 按钮和 `combat.Debug.AddExperience` 开发命令；Editor 构建、全量 `Combat.` 63/63 自动化通过；Server/Client Target 受安装版 UE 5.8 限制，转为待用户验收 | post-M8 成长 / PROG-001 / ADR-049 |
 | 2026-09-11 | 用户完成 PROG-001 review，确认成长、HUD 加点按钮与开发命令交付完成，任务状态更新为已验收 | post-M8 成长 / PROG-001 |
+| 2026-09-12 | 完成 REF-001：将 4 组模板 C++ h/cpp 文件及其反射类统一为 Combat 前缀，补充旧类名 CoreRedirect，并同步当前文档与默认配置段；Editor 构建、`Combat.*` 63/63、资产 10/10（0 error/0 warning）和文档校验通过 | post-M8 工程命名迁移 / REF-001 |
+| 2026-09-12 | 完成 REF-002：Runtime Module 迁移为 `Combat`，保留 `ue_gas.uproject` 与 `ue_gasEditor/Server/Client` Target 名称；补充 `/Script/ue_gas` PackageRedirect 与旧 Asset Registry 类路径兼容。Editor 构建、`Combat.*` 63/63、资产 10/10（0 error/0 warning）和文档校验通过；Server/Client 受安装版 UE 限制未构建 | post-M8 工程命名迁移 / REF-002 |
 
 ## 15. 更新规则
 

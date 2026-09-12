@@ -6,7 +6,7 @@
 
 ## 1. 背景与问题
 
-改造前的 Combat Demo 由 `Aue_gasPlayerController` 直接 Possess `ACombatUnitCharacter`。服务器接收 Move Order、计算 NavMesh 路径并保存 Order 状态，但远端玩家控制的 Character 实际由 owning client 的 PathFollowing 驱动，再通过 UE CharacterMovement `ServerMove` 交给服务器验证。
+改造前的 Combat Demo 由 `ACombatPlayerController` 直接 Possess `ACombatUnitCharacter`。服务器接收 Move Order、计算 NavMesh 路径并保存 Order 状态，但远端玩家控制的 Character 实际由 owning client 的 PathFollowing 驱动，再通过 UE CharacterMovement `ServerMove` 交给服务器验证。
 
 这个旧兼容分支解决了“远端 PlayerController 的 Pawn 不会被服务器 PathFollowing 直接驱动”的问题，但引入了两个移动事实来源：
 
@@ -64,7 +64,7 @@ sequenceDiagram
 
 | 关系 | 当前值 | 职责 |
 | --- | --- | --- |
-| `PlayerController->GetPawn()` | `Aue_gasCharacter`（Command Pawn） | 接收玩家输入并提供摄像机，不参与 Combat 碰撞或结算 |
+| `PlayerController->GetPawn()` | `ACombatCharacter`（Command Pawn） | 接收玩家输入并提供摄像机，不参与 Combat 碰撞或结算 |
 | `CombatUnit->GetController()` | `ACombatUnitAIController` | 仅服务器存在，拥有 PathFollowing 并执行移动 |
 | `CombatUnit->GetOwner()` | 指挥该单位的 `PlayerController` 或空 | 建立 Order RPC owning connection 和 ASC Mixed replication |
 | `PlayerController->CommandedUnit` | 当前主控 `CombatUnit` | 输入、技能栏、镜头和 UI 的显式目标 |
@@ -75,7 +75,7 @@ sequenceDiagram
 flowchart LR
     Input[本地输入] --> PC[PlayerController]
     PC -->|拥有连接 / 提交 Order| Unit[CombatUnit]
-    PC -->|Possess| CameraPawn[Aue_gasCharacter<br/>Command Pawn]
+    PC -->|Possess| CameraPawn[ACombatCharacter<br/>Command Pawn]
     AI[CombatUnitAIController<br/>仅服务器] -->|Possess / PathFollowing| Unit
     Unit -->|ReplicatedMovement| OwnerClient[Owning Client<br/>SimulatedProxy]
     Unit -->|ReplicatedMovement| OtherClient[Other Clients<br/>SimulatedProxy]
@@ -107,9 +107,9 @@ flowchart LR
 
 当前使用 `UCrowdFollowingComponent`（Detour Crowd）替换默认 PathFollowingComponent。它仍继承 PathFollowing 公共协议，`UCombatOrderComponent` 继续绑定 `OnRequestFinished`、保存 `FAIRequestID` 并执行旧回调失效检查。Dedicated 64 Unit 容量与状态切换 Gate 已通过，未启用第二套 RVO。
 
-### 4.2 `Aue_gasCharacter` Command Pawn
+### 4.2 `ACombatCharacter` Command Pawn
 
-`Aue_gasCharacter` 已收敛为轻量命令 Pawn，作为 PlayerController 唯一 Possess 对象：
+`ACombatCharacter` 已收敛为轻量命令 Pawn，作为 PlayerController 唯一 Possess 对象：
 
 - 包含顶视角 Camera/SpringArm，或把视角交给 PlayerCameraManager。
 - 不持有 ASC、Attribute、Order、Attack、Motion 等 Combat 组件。
@@ -117,9 +117,9 @@ flowchart LR
 - 镜头跟随属于客户端表现，可以平滑跟随 `CommandedUnit`，但不能回写 Unit transform。
 - Command Pawn 丢失或重生不改变 Combat Unit 的生命代次、Order 或 Team。
 
-原模板顶视角 `Aue_gasCharacter` 已从 `ACharacter` 改为无碰撞 `APawn`，只保留 SceneRoot、SpringArm、Camera 与本地跟随；项目没有保留第二个摄像机 Pawn 入口。
+原模板顶视角 `ACombatCharacter` 已从 `ACharacter` 改为无碰撞 `APawn`，只保留 SceneRoot、SpringArm、Camera 与本地跟随；项目没有保留第二个摄像机 Pawn 入口。
 
-### 4.3 `Aue_gasPlayerController`
+### 4.3 `ACombatPlayerController`
 
 PlayerController 已增加显式的主控绑定：
 
@@ -166,16 +166,16 @@ Order 状态机、Handle、generation、LifeGeneration 和重试语义保持不�
 
 ### 5.1 初始绑定顺序
 
-服务器必须由 `Aue_gasGameMode::SpawnDefaultPawnAtTransform` 按以下顺序建立玩家控制，避免嵌套 Possession 破坏 AI/Crowd 状态：
+服务器必须由 `ACombatGameMode::SpawnDefaultPawnAtTransform` 按以下顺序建立玩家控制，避免嵌套 Possession 破坏 AI/Crowd 状态：
 
 1. 将 GameMode 的 `DefaultPawnClass` 解释为玩家 Combat Unit 模板，生成或复用 Combat Unit。
 2. 确保 Unit 已由唯一 `ACombatUnitAIController` Possess；必要时调用 `SpawnDefaultController`。
-3. 单独生成 `Aue_gasCharacter` Command Pawn，但此时不嵌套调用 `PlayerController::OnPossess`。
+3. 单独生成 `ACombatCharacter` Command Pawn，但此时不嵌套调用 `PlayerController::OnPossess`。
 4. 调用 `SetCommandedUnitAuthority`，设置 Unit 网络 Owner、PlayerController 的 `CommandedUnit` 并提升 `CommandBindingGeneration`。
 5. GameMode 只把 Command Pawn 返回给引擎，随后由标准 `RestartPlayer -> Possess` 流程完成玩家占有。
 6. `ForceNetUpdate`，客户端 `OnRep_CommandedUnit` 在 Owner 与 Unit 均可用后启用输入和镜头。
 
-`BP_CombatDemoGameMode` 必须继承 `Aue_gasGameMode`。不得让通用 `GameModeBase` 先返回 Combat Unit，再尝试在 `PlayerController::OnPossess` 中切换成 Command Pawn；引擎进入该回调前已经解除 Unit 的旧 AIController，这会留下孤立 Crowd controller 并破坏实际移动执行。
+`BP_CombatDemoGameMode` 必须继承 `ACombatGameMode`。不得让通用 `GameModeBase` 先返回 Combat Unit，再尝试在 `PlayerController::OnPossess` 中切换成 Command Pawn；引擎进入该回调前已经解除 Unit 的旧 AIController，这会留下孤立 Crowd controller 并破坏实际移动执行。
 
 客户端不能假定不同 Actor 的复制到达顺序。`OnRep_CommandedUnit` 必须允许 Unit 尚未完成 Owner/ASC 初始化，并在后续复制到达时幂等刷新。
 
@@ -284,7 +284,7 @@ Fissure 等 `CombatBlocker` 继续采用“物理阻挡立即正确 + 主动取�
 
 ### 8.2 最终删除
 
-- `Aue_gasPlayerController::PathFollowingComponent`。
+- `ACombatPlayerController::PathFollowingComponent`。
 - `ClientFollowCombatOrderPath` 与 `ClientStopCombatOrderNavigation` RPC。
 - `UCombatOrderComponent::StartNavigationMove` 的非 AIController 分支。
 - `SetCommandingPlayerController` 中把 Unit 设置为 AutonomousProxy 的逻辑。
@@ -323,14 +323,14 @@ SAM-000..009 已按下列依赖完成；兼容分支已删除，没有 Shipping 
 
 | 路径 | 已完成变更 |
 | --- | --- |
-| `Source/ue_gas/Combat/Unit/CombatUnitAIController.*` | 新增服务器单位 AIController 与 CrowdFollowing 配置 |
-| `Source/ue_gas/Combat/Unit/CombatUnitCharacter.*` | AIControllerClass、Owner/Role 分离、代理解穿透和不变量检查 |
-| `Source/ue_gas/Combat/Order/CombatOrderComponent.*` | 收敛为 AIController 服务器 MoveTo，删除客户端路径分支 |
-| `Source/ue_gas/ue_gasPlayerController.*` | CommandedUnit 绑定、输入迁移、删除 PathFollowing/RPC |
-| `Source/ue_gas/ue_gasCharacter.*` 或新 Command Pawn | 摄像机 Pawn，无 Combat collision/gameplay |
-| `Source/ue_gas/ue_gasGameMode.*` | 初始 Unit 分配、控制权事务和断线清理 |
-| `Source/ue_gas/Combat/Tests/*` | 拓扑、Owner、Role、Order、碰撞和生命周期自动化 |
-| `Content/Combat/Demo/Framework/BP_CombatDemoGameMode.uasset` | 通过 UE MCP 重设父类为 `Aue_gasGameMode`，保留现有 DefaultPawnClass/PlayerControllerClass 配置并启用原生出生编排 |
+| `Source/Combat/Combat/Unit/CombatUnitAIController.*` | 新增服务器单位 AIController 与 CrowdFollowing 配置 |
+| `Source/Combat/Combat/Unit/CombatUnitCharacter.*` | AIControllerClass、Owner/Role 分离、代理解穿透和不变量检查 |
+| `Source/Combat/Combat/Order/CombatOrderComponent.*` | 收敛为 AIController 服务器 MoveTo，删除客户端路径分支 |
+| `Source/Combat/CombatPlayerController.*` | CommandedUnit 绑定、输入迁移、删除 PathFollowing/RPC |
+| `Source/Combat/CombatCharacter.*` 或新 Command Pawn | 摄像机 Pawn，无 Combat collision/gameplay |
+| `Source/Combat/CombatGameMode.*` | 初始 Unit 分配、控制权事务和断线清理 |
+| `Source/Combat/Combat/Tests/*` | 拓扑、Owner、Role、Order、碰撞和生命周期自动化 |
+| `Content/Combat/Demo/Framework/BP_CombatDemoGameMode.uasset` | 通过 UE MCP 重设父类为 `ACombatGameMode`，保留现有 DefaultPawnClass/PlayerControllerClass 配置并启用原生出生编排 |
 | `Content/Combat/Demo/Heros/WoodenDummy/BP_WoodenDummy.uasset` | 四个木桩装饰 StaticMesh 使用 `NoCollision`，只保留根 `CombatUnit` Capsule 作为 gameplay 碰撞体，避免装饰几何与 NavMesh/Crowd 产生分叉 |
 | `Content/__ExternalActors__/Combat/Demo/Maps/L_CombatDemo/6/SX/76CWUDVFOTB0MM0UBFCZU0.uasset` | 同步清理 Demo 关卡中 Wooden Dummy 已放置实例的旧组件碰撞覆盖，避免实例继续覆盖已修正的蓝图模板 |
 | `Config/DefaultEngine.ini` | 默认地图/GameMode 指向 Combat Demo；CrowdManager 容量设为 128；冻结 Profile 名称不变 |
@@ -400,7 +400,7 @@ SAM-000..009 已按下列依赖完成；兼容分支已删除，没有 Shipping 
 | 约 150 ms RTT + 2% loss | 通过 | Server/双 Client 均确认 `PktLag=75`、`PktLoss=2`；两端 RPC 成功且 UnitLocalRole=1；静止 Unit 水平净位移 0.000 cm |
 | 生命周期清零 | 通过 | Automation 显式覆盖 Unit Destroy→EndPlay 清空 CommandedUnit/提升 generation，以及 Controller UnPossess 禁用 Crowd agent；原 M8 World teardown 回归继续全绿 |
 
-Dedicated 日志保存在 `Saved/Logs/SAM_Server_Base_20260902.log`、`SAM_Client1_Base_20260902.log`、`SAM_Client2_Base_20260902.log`，以及对应的 `RTT80`、`RTT150_Loss2` 三端文件。运行时日志还证明两个 Client 实际 Possess `ue_gasCharacter` Command Pawn，指挥 Unit 为 SimulatedProxy，服务器 `PathFollowingClass=CrowdFollowingComponent` 且拓扑 `Valid=Yes`。
+Dedicated 日志保存在 `Saved/Logs/SAM_Server_Base_20260902.log`、`SAM_Client1_Base_20260902.log`、`SAM_Client2_Base_20260902.log`，以及对应的 `RTT80`、`RTT150_Loss2` 三端文件。运行时日志还证明两个 Client 实际 Possess `CombatCharacter` Command Pawn，指挥 Unit 为 SimulatedProxy，服务器 `PathFollowingClass=CrowdFollowingComponent` 且拓扑 `Valid=Yes`。
 
 初始实现会话没有可调用的 UE MCP 工具，因此按 [30-01](../30-Tooling/30-01-UE-MCP-Workflow.md) 的安全降级规则完成了当时的资产扫描和运行时回读；验收反馈修正会话已使用 UE MCP 重设、编译、保存并回读 `BP_CombatDemoGameMode` 父类，没有使用文本工具改写二进制资产。
 
@@ -410,8 +410,8 @@ Dedicated 日志保存在 `Saved/Logs/SAM_Server_Base_20260902.log`、`SAM_Clien
 
 修正后：
 
-- `Aue_gasGameMode` 在标准默认出生阶段独立生成 Unit 与 Command Pawn，先绑定唯一 AIController/Owner，只返回 Command Pawn；PlayerController 不再负责嵌套拓扑迁移。
-- `BP_CombatDemoGameMode` 已通过 UE MCP 重设父类为 `Aue_gasGameMode`，编译、保存和父类回读成功。
+- `ACombatGameMode` 在标准默认出生阶段独立生成 Unit 与 Command Pawn，先绑定唯一 AIController/Owner，只返回 Command Pawn；PlayerController 不再负责嵌套拓扑迁移。
+- `BP_CombatDemoGameMode` 已通过 UE MCP 重设父类为 `ACombatGameMode`，编译、保存和父类回读成功。
 - `Combat.SAM.CommandBindingLifecycle` 改走真实 GameMode 出生入口，并断言 Combat AIController 数量为 1、孤立数量为 0；`Combat.Foundation.Content.AssetManagerAndTestMap` 增加 Demo GameMode 父类与默认类配置断言。
 - 单人 PIE 为 2 Unit/2 Combat AIController；右键后玩家 Unit 从 `(1200, 1069)` 移至约 `(1039, 1458)`，水平位移约 420 cm，服务器记录 `Movement destination reached`。
 - 双人 PIE 为 3 Unit/3 Combat AIController；没有新增 `SAMDirectCombatUnitPossessRejected`，本地右键移动实际推进约 324 cm。

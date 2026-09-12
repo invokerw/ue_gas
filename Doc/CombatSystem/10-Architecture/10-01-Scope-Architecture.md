@@ -28,11 +28,11 @@
 截至 2026-09-02，仓库基线为：
 
 - `ue_gas.uproject` 关联 UE 5.8，并启用 GameplayAbilities、StateTree 以及 Editor/MCP 辅助插件；StateTree 仅保留为可选引擎能力，不再被项目源码依赖。
-- `Source/ue_gas/ue_gas.Build.cs` 已接入 GameplayAbilities、GameplayTags、GameplayTasks、导航、网络、Niagara 和 UMG/Slate 等运行时依赖。
-- Combat 已在 `Source/ue_gas/Combat` 落地，包含 ASC、AttributeSet、Ability、Modifier、Damage/Heal、Order、Attack、Projectile、Thinker、Aura、Motion、网络 View、UI、调试、资产校验和 Automation。
+- `Source/Combat/Combat.Build.cs` 已接入 GameplayAbilities、GameplayTags、GameplayTasks、导航、网络、Niagara 和 UMG/Slate 等运行时依赖。
+- Combat 已在 `Source/Combat/Combat` 落地，包含 ASC、AttributeSet、Ability、Modifier、Damage/Heal、Order、Attack、Projectile、Thinker、Aura、Motion、网络 View、UI、调试、资产校验和 Automation。
 - 当前仍保持单 Runtime Module；`ue_gasEditor`、`ue_gasServer`、`ue_gasClient` Target 均存在。Server/Client Target 的源码引擎要求见 [90-02 M1 环境决策](../90-History/90-02-M1-Environment-Decision.md)。
 - `/Game/Combat/Demo/Maps/L_CombatDemo` 提供卓尔游侠霜冻之箭与默认追踪普攻 Demo；英雄和木桩位于 `/Game/Combat/Demo/Heros`，`/Game/Combat/Tests/L_CombatTest` 用于 PIE、Dedicated 和容量验证。
-- SAM 服务器权威移动已落地：`Aue_gasGameMode` 在默认出生阶段独立生成 Combat Unit 与 Command Pawn，Unit 由唯一服务器专用 AIController Possess，玩家只拥有无碰撞 Command Pawn；所有客户端的 Combat Unit 均为 SimulatedProxy。
+- SAM 服务器权威移动已落地：`ACombatGameMode` 在默认出生阶段独立生成 Combat Unit 与 Command Pawn，Unit 由唯一服务器专用 AIController Possess，玩家只拥有无碰撞 Command Pawn；所有客户端的 Combat Unit 均为 SimulatedProxy。
 - `Variant_Strategy` 与 `Variant_TwinStick` 模板源码、资产和关卡已移除；可玩与验证入口统一位于 `/Game/Combat/Demo` 和 `/Game/Combat/Tests`。
 - `/Game/TopDown` 模板蓝图、示例关卡及 World Partition 外部数据已移除；Combat 仍使用的移动输入、点击光标和环境材质已归档到 `/Game/Combat/Demo` 与 `/Game/Combat/Shared`。
 - `.codex/config.toml` 配置本地 `unreal-mcp` endpoint，Editor/Content/PIE 操作遵循“读取—修改—回读—测试”闭环。
@@ -68,7 +68,7 @@ UE MCP 是效率与准确性工具，不是新的权威数据源：
 ## 4. 当前目录和模块依赖
 
 ```text
-Source/ue_gas/Combat
+Source/Combat/Combat
   Ability/
   Attack/
   Attributes/
@@ -96,7 +96,7 @@ Source/ue_gas/Combat
   View/
 ```
 
-`ue_gas.Build.cs` 已包含 GAS 的三项基础依赖：
+`Combat.Build.cs` 已包含 GAS 的三项基础依赖：
 
 ```csharp
 "GameplayAbilities",
@@ -114,8 +114,8 @@ Source/ue_gas/Combat
 | --- | --- | --- |
 | 战斗单位 | `ACombatUnitCharacter` | `IAbilitySystemInterface`、ASC、属性、队伍、攻击和指令组件 |
 | 单位导航控制器 | `ACombatUnitAIController` | 仅服务器 Possess Combat Unit，持有 PathFollowing 与唯一 Detour Crowd steering |
-| 玩家指挥控制器 | `Aue_gasPlayerController` | Possess Command Pawn，维护 owner-only CommandedUnit/BindingGeneration 并提交 Order |
-| 命令 Pawn | `Aue_gasCharacter` | 无 Combat 组件和碰撞的连接/相机载体，只在本地跟随 CommandedUnit |
+| 玩家指挥控制器 | `ACombatPlayerController` | Possess Command Pawn，维护 owner-only CommandedUnit/BindingGeneration 并提交 Order |
+| 命令 Pawn | `ACombatCharacter` | 无 Combat 组件和碰撞的连接/相机载体，只在本地跟随 CommandedUnit |
 | ASC | `UCombatAbilitySystemComponent` | GAS 激活、标签查询、冷却/消耗查询和 ActorInfo 初始化 |
 | 属性集 | `UCombatAttributeSet` | Health/Mana、战斗属性和 IncomingDamage/Healing Meta Attribute |
 | 指令队列 | `UCombatOrderComponent` | Move/Attack/Cast/Stop 的当前项、FIFO 和 generation |

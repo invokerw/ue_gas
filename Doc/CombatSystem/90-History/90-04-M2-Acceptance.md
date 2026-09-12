@@ -23,12 +23,12 @@ M2 规则冻结见 [90-03 M2 战斗内核实现决策](90-03-M2-Combat-Core-Deci
 
 | 范围 | 主要源码 |
 | --- | --- |
-| Attribute 与恢复 | `Source/ue_gas/Combat/Attributes/CombatAttributeSet.*`、`Source/ue_gas/Combat/Unit/CombatRegenerationComponent.*` |
-| 初始化与生命周期 | `Source/ue_gas/Combat/Unit/CombatUnitCharacter.*`、`CombatUnitLifecycleComponent.*` |
-| Damage/Heal 与结果槽 | `Source/ue_gas/Combat/Combat/CombatTransaction*`、`CombatDamage*`、`CombatHealSubsystem.*`、`CombatEffectUtilities.*` |
-| Modifier | `Source/ue_gas/Combat/Modifiers/CombatModifierRuntime.*`、`CombatModifierComponent.*` |
-| 示例 Runtime | `Source/ue_gas/Combat/Demo/CombatDemoModifierRuntimes.*` |
-| 自动化 | `Source/ue_gas/Combat/Tests/CombatCoreTests.cpp` |
+| Attribute 与恢复 | `Source/Combat/Combat/Attributes/CombatAttributeSet.*`、`Source/Combat/Combat/Unit/CombatRegenerationComponent.*` |
+| 初始化与生命周期 | `Source/Combat/Combat/Unit/CombatUnitCharacter.*`、`CombatUnitLifecycleComponent.*` |
+| Damage/Heal 与结果槽 | `Source/Combat/Combat/Combat/CombatTransaction*`、`CombatDamage*`、`CombatHealSubsystem.*`、`CombatEffectUtilities.*` |
+| Modifier | `Source/Combat/Combat/Modifiers/CombatModifierRuntime.*`、`CombatModifierComponent.*` |
+| 示例 Runtime | `Source/Combat/Combat/Demo/CombatDemoModifierRuntimes.*` |
+| 自动化 | `Source/Combat/Combat/Tests/CombatCoreTests.cpp` |
 
 所有本次新建或实质修改的项目自有类、结构、枚举、函数、关键字段和非显然逻辑均补充中文注释。
 

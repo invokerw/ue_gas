@@ -42,7 +42,7 @@ UnrealEditor.exe ue_gas.uproject -unattended -nop4 -nosplash -NullRHI -NoSound -
 源码扫描范围为项目自有生产技能目录，排除 `Combat/Tests` 和 validator 自身的模式字面量：
 
 ```text
-rg -n "SetHealth\s*\(|SetActorLocation\s*\(|GetTimerManager\s*\(|SetTimer\s*\(|ProjectileImpact\s*\(" Source/ue_gas/Combat/Demo Source/ue_gas/Combat/Aura
+rg -n "SetHealth\s*\(|SetActorLocation\s*\(|GetTimerManager\s*\(|SetTimer\s*\(|ProjectileImpact\s*\(" Source/Combat/Combat/Demo Source/Combat/Combat/Aura
 ```
 
 - [ ] `Combat.ContentExtension.*` 全部通过。

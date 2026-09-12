@@ -49,7 +49,7 @@
 - 相关 DDD：`10-03` Ability 授予与 DefinitionId、`10-06` Projectile 复用与生命周期、`20-03` 资产引用与迁移约束。
 - UE MCP AssetTools 回读：删除前 `DA_RangedAttackAbility` 的唯一引用者是 `BP_RangedAttackAbility`；`BP_RangedAttackAbility` 无引用；`DA_RangedAttackProjectile` 被 `DA_FrostArrows`、`DA_DrowRangerUnit`、`DA_RangedAttackAbility` 引用；`BP_RangedAttackProjectileActor` 被 `DA_RangedAttackProjectile` 引用。删除后旧 Ability 两项均不存在，`DA_RangedAttackProjectile` 的现存引用者仅为 `DA_FrostArrows` 和 `DA_DrowRangerUnit`。
 - UE MCP 对象回读：`DA_DrowRangerAbilitySet.abilities` 只有 `BP_FrostArrowsAbility`；`DA_FrostArrows.attackOrbProjectileData` 与 `DA_DrowRangerUnit.attackProjectileData` 均指向 `DA_RangedAttackProjectile`。
-- 代码事实：`Source/ue_gas/Combat/Tests/CombatFoundationTests.cpp` 当前只加载并验证共享 Projectile；没有加载 `BP_RangedAttackAbility` 或 `DA_RangedAttackAbility`。
+- 代码事实：`Source/Combat/Combat/Tests/CombatFoundationTests.cpp` 当前只加载并验证共享 Projectile；没有加载 `BP_RangedAttackAbility` 或 `DA_RangedAttackAbility`。
 - 已知限制：二进制资产删除需通过 UE AssetTools；若 Editor/资产注册表状态不可用，改用同版本 Unreal Python 命令行并在交付证据中记录降级原因。
 
 ## 3. 行为与契约
@@ -88,7 +88,7 @@
 | --- | --- | --- | --- |
 | `Content/Combat/Demo/Abilities/RangedAttack/BP_RangedAttackAbility.uasset` | 删除 | 无外部引用且不在 AbilitySet 中授予 | 仅旧 Ability Class 内容 |
 | `Content/Combat/Demo/Abilities/RangedAttack/DA_RangedAttackAbility.uasset` | 删除 | 唯一引用者是待删 Ability Class | 仅旧 AbilityData/DefinitionId |
-| `Source/ue_gas/Combat/Tests/CombatFoundationTests.cpp` | 增加两个包不存在断言 | 防止旧技能资产回流 | Demo 内容回归测试 |
+| `Source/Combat/Combat/Tests/CombatFoundationTests.cpp` | 增加两个包不存在断言 | 防止旧技能资产回流 | Demo 内容回归测试 |
 | `Doc/CombatSystem/Specs/DEMO-902-remove-unused-ranged-attack.spec.md` | 记录路由、范围、证据和交付状态 | 可回读的任务契约 | 无运行时影响 |
 
 ## 5. 验收标准（AC）

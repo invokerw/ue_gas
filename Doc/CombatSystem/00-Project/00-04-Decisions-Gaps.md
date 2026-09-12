@@ -94,6 +94,21 @@
 - 展示：`FCombatHUDOwnerView` 增加等级、累计经验、等级内经验、升级所需经验、经验进度、技能点和技能可升级标志，展示 schema 从 4 升至 5；旧 HUD 新增绑定均为可选，旧技能槽动态创建 `+` 按钮。
 - 迁移：旧 UnitData 使用初始 1 级、0 等级内经验、100 击杀奖励默认值；旧资产无需脚本迁移。Dedicated/真实 PIE 与最终按钮美术仍需后续验收。
 
+### ADR-050：模板 C++ 文件与原生类统一 Combat 前缀（2026-09-12；模块部分由 ADR-051 取代）
+
+- 状态：已定；用户要求将 ue_gas 开头的 h/cpp 改为 Combat，实施与验证见 [REF-001](../Specs/REF-001-combat-source-prefix.spec.md)。
+- 选择：4 组文件改为 `Combat`、`CombatCharacter`、`CombatGameMode`、`CombatPlayerController`；反射类采用 `ACombatCharacter`、`ACombatGameMode`、`ACombatPlayerController`。保留 `ue_gas` Module/Target、`UE_GAS_API` 和 `/Script/ue_gas` 包身份。
+- 迁移 v1：`DefaultEngine.ini` 的 Core ClassRedirects 将三个旧 `/Script/ue_gas.ue_gas*` 类名分别映射到新类；原 TopDown 模板重定向直接指向新类，旧蓝图通过加载时重定向兼容。源码调用方同步更新 include 和类型；无需批量重存二进制资产。
+- 日志：基础日志改为 `LogCombatGame`，避免与战斗事件已有的 `LogCombat` 重复定义。gameplay、公开函数参数、复制策略和事件 schema 不变，核心 `combat_v1_rc1` 及相关数据版本保持原值。
+- 验证与回滚：Editor 构建、现有 Combat Automation 和资产校验检查引用与蓝图父类。回滚时成组恢复源码命名及配置，资产保持原存储格式。
+
+### ADR-051：Runtime Module 迁移为 Combat（2026-09-12）
+
+- 状态：已定；用户授权将 Runtime Module 从 `ue_gas` 改为 `Combat`，实施与验证见 [REF-002](../Specs/REF-002-combat-runtime-module.spec.md)。
+- 选择：Module、Build.cs、源码根目录、`COMBAT_API`、`/Script/Combat` 和 Target 的 `ExtraModuleNames` 使用 Combat；`ue_gas.uproject` 文件名、四个 `ue_gas*Target.cs` 文件/类名以及 `ue_gasEditor`、`ue_gasServer`、`ue_gasClient` 构建命令保持不变。
+- 迁移：`DefaultEngine.ini` 的 `[CoreRedirects]` 增加 `/Script/ue_gas` 到 `/Script/Combat` 的精确 `PackageRedirects`，三个既有原生类重定向直接指向新模块；配置类段、AssetManager 和 AbilitySystemGlobals 使用新包路径。资产校验同时识别新旧模块类路径，避免旧 Asset Registry 元数据使扫描静默变为 0；无需批量重存二进制资产。
+- 影响：模块 DLL、UHT 生成包和 API 导出宏改变；Gameplay、网络、DefinitionId、GameplayTag、事件 schema 与 `combat_v1_rc1` 不变。Dedicated/Server/Client Target 若被安装版 SDK 阻塞，必须记录未执行原因。
+
 ## 3. 本轮查漏补缺摘要
 
 原单体文档对 Damage、Modifier、Scheduler、AttackRecord 和网络权威已有较强约束；本轮新增或显式登记了以下遗漏：

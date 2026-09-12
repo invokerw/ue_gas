@@ -135,9 +135,9 @@ Queued
 
 ### 5.1 当前 Demo 点击移动与普攻
 
-`Aue_gasPlayerController` 的输入处理不再直接调用 `AddMovementInput` 或 `SimpleMoveToLocation`：
+`ACombatPlayerController` 的输入处理不再直接调用 `AddMovementInput` 或 `SimpleMoveToLocation`：
 
-- `BP_CombatDemoGameMode` 继承 `Aue_gasGameMode`；默认出生由原生 GameMode 独立生成 Unit 与 Command Pawn，先完成 Unit 的 AIController/Owner 绑定，再只把 Command Pawn 交给 PlayerController Possess。禁止在 `PlayerController::OnPossess` 中嵌套迁移 Unit。
+- `BP_CombatDemoGameMode` 继承 `ACombatGameMode`；默认出生由原生 GameMode 独立生成 Unit 与 Command Pawn，先完成 Unit 的 AIController/Owner 绑定，再只把 Command Pawn 交给 PlayerController Possess。禁止在 `PlayerController::OnPossess` 中嵌套迁移 Unit。
 
 - 鼠标右键（当前 `IMC_Default` 映射）/触摸按下命中地面后，立即构造替换型 `MoveToPoint` 批次并调用 `ServerIssueOrderBatch`。
 - 右键直接点中可选敌方单位时提交 `AttackTarget`，由服务器完成追击与持续普攻；这次手势的拖动及松开不再产生移动命令。A 后左键点敌人同样提交普攻，S 提交 `Stop`；Escape 取消本地选敌。A 模式点地面保持选敌，不实现 Attack Move。

@@ -83,7 +83,7 @@
 
 | 文件/资产 | 变更 | 原因 | blast radius |
 | --- | --- | --- | --- |
-| `Source/ue_gas/Combat/Unit/CombatProgressionComponent.*` | 新增成长状态、曲线、技能点、RPC 与日志 | 建立单一服务器权威成长入口 | 所有 Combat Unit 的组件组合 |
+| `Source/Combat/Combat/Unit/CombatProgressionComponent.*` | 新增成长状态、曲线、技能点、RPC 与日志 | 建立单一服务器权威成长入口 | 所有 Combat Unit 的组件组合 |
 | `CombatUnitCharacter.*`、`CombatDefinitionData.*` | 挂载组件并配置初始成长/击杀奖励 | 让单位初始化与奖励来源可配置 | UnitData 校验和初始化 |
 | `CombatDamageSubsystem.cpp` | 死亡转换成功后发放击杀经验 | 保证 exactly-once 奖励 | 致死伤害结果 |
 | `CombatHUDViewTypes.*`、`CombatUnitViewComponent.*` | 复制成长字段和技能可升级标志 | HUD 只消费 owner-only 快照 | 展示 schema 5 |

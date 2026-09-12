@@ -6,7 +6,7 @@
 
 本流程适用于 Combat 的 C++、DataAsset、蓝图、关卡、网络、测试和文档变更。当前工程基线如下：
 
-- Unreal Engine 5.8，Combat 保持在 `ue_gas` 单 Runtime Module。
+- Unreal Engine 5.8，Combat 保持在 `Combat` 单 Runtime Module；项目文件和 Target 名称仍保留 `ue_gas`。
 - 核心契约为 `combat_v1_rc1`；服务器负责战斗结算，客户端请求必须由服务器复核。
 - M0–M8 已完成并通过用户验收；Post-M8 的 SAM（服务器权威单位移动）已完成用户验收。
 - 最新完成度、测试数量和证据只读取 [00-01 开发进度台账](00-01-Progress-Tracker.md)，历史验收文档不用于推断当前状态。

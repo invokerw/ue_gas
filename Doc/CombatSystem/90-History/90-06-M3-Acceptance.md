@@ -24,12 +24,12 @@ M3 规则冻结见 [90-05 M3 Ability 与目标实现决策](90-05-M3-Ability-Dec
 
 | 范围 | 主要源码 |
 | --- | --- |
-| 目标规则 | `Source/ue_gas/Combat/Targeting/CombatTargetingTypes.h`、`CombatTargetingSubsystem.*` |
-| Ability 数据与动作结构 | `Source/ue_gas/Combat/Data/CombatDefinitionData.*`、`Combat/Ability/CombatAbilityTypes.h` |
-| Ability 生命周期与 ASC | `Source/ue_gas/Combat/Ability/CombatGameplayAbility.*`、`CombatAbilitySystemComponent.*` |
-| Channel Task | `Source/ue_gas/Combat/Ability/AbilityTask_WaitCombatInterval.*` |
-| Demo Ability | `Source/ue_gas/Combat/Demo/CombatDemoAbilities.*` |
-| 自动化 | `Source/ue_gas/Combat/Tests/CombatAbilityTests.cpp` |
+| 目标规则 | `Source/Combat/Combat/Targeting/CombatTargetingTypes.h`、`CombatTargetingSubsystem.*` |
+| Ability 数据与动作结构 | `Source/Combat/Combat/Data/CombatDefinitionData.*`、`Combat/Ability/CombatAbilityTypes.h` |
+| Ability 生命周期与 ASC | `Source/Combat/Combat/Ability/CombatGameplayAbility.*`、`CombatAbilitySystemComponent.*` |
+| Channel Task | `Source/Combat/Combat/Ability/AbilityTask_WaitCombatInterval.*` |
+| Demo Ability | `Source/Combat/Combat/Demo/CombatDemoAbilities.*` |
+| 自动化 | `Source/Combat/Combat/Tests/CombatAbilityTests.cpp` |
 
 所有本次新建或实质修改的项目自有类、结构、枚举、函数、关键字段和非显然逻辑均补充中文注释。
 
