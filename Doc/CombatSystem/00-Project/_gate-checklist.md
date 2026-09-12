@@ -25,6 +25,16 @@
 结论：`APPROVED / REVISE / ESCALATE`
 证据：
 
+Build 解锁前置：
+
+- [ ] 已运行 `task_gate.py --mode plan`；已记录工作区原有差异，本任务在 F1 通过前没有修改代码、测试、脚本、蓝图或资产。
+- [ ] F1=`APPROVED` 已记录审查人、审查版本和证据，覆盖冻结范围、AC、依赖、测试和回滚。
+- [ ] 已将状态设为 `BUILDING` 并运行 `task_gate.py --mode build`。
+- [ ] F1 审查版本与 Spec 版本一致；范围发生实质变化时已递增版本，将 F1 设为 `REVISE`、任务状态退回 `PLAN_REVIEW`，没有沿用旧批准。
+
+结论：`未解锁 / 已解锁`
+证据：
+
 ## F2 Adversarial
 
 - [ ] 审查者使用独立上下文，只读取 Spec、diff、仓库事实和测试证据。

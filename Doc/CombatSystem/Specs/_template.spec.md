@@ -9,6 +9,8 @@
 
 ## 0. Intake 与 Gate 记录
 
+填写时各结论字段只保留一个当前枚举值；说明写入证据字段，不保留候选列表或重复结论。F1 实际审查通过前不得预填 `APPROVED`。
+
 - 用户请求：
 - 附件解释：`无附件 / 需求 / 参考 / 工程约束`（必须说明附件如何影响实现）
 - 已读取入口：`agent.md`、相关 DDD、任务路由 Skill、主执行 Skill
@@ -18,6 +20,11 @@
 - F0 结论：`GO / DEFER / ESCALATE`
 - F0 依据：
 - F1 结论：`APPROVED / REVISE / ESCALATE`
+- F1 审查人：
+- F1 审查版本：批准所覆盖的 Spec 版本，必须与当前 Spec 版本一致
+- F1 计划审查证据：审查上下文、冻结范围、AC、依赖、测试、回滚和结论
+- Build 解锁：`未解锁 / 已解锁`；Build Gate 命令与结果
+- F1 重审条件：范围、架构、权限、迁移、测试矩阵或回滚方案发生实质变化时先递增 Spec 版本，F1 回到 `REVISE`、任务状态回到 `PLAN_REVIEW`；重审通过前不得继续对应代码修改
 - F2 结论：`PASS / FINDINGS / ESCALATE`
 - Push-Ready 结论：`READY / BLOCKED / ESCALATE`
 - 验证：实际命令、结果和报告路径

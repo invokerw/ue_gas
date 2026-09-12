@@ -13,7 +13,9 @@ from typing import Iterable
 
 
 SPEC_ROOT = Path("Doc/CombatSystem/Specs")
-PRE_BUILD_STATUSES = {"PLANNED", "APPROVED", "BUILDING", "IN_PROGRESS", "READY_FOR_REVIEW"}
+PRE_BUILD_STATUSES = {"PLANNED", "PLAN_REVIEW", "APPROVED", "BUILDING", "IN_PROGRESS", "READY_FOR_REVIEW"}
+PLAN_STATUSES = {"PLANNED", "PLAN_REVIEW", "REVISE", "APPROVED"}
+BUILD_STATUSES = {"APPROVED", "BUILDING", "VERIFYING", "READY_FOR_REVIEW"}
 DELIVERY_STATUSES = {"READY", "READY_FOR_REVIEW", "COMPLETED", "PASS", "待验收", "已完成", "已验收"}
 RISK_LEVELS = {"L0", "L1", "L2"}
 REQUIRED_SECTIONS = (
@@ -24,6 +26,7 @@ REQUIRED_SECTIONS = (
     ("交付证据", "交付与后续"),
 )
 BEHAVIOR_ROOTS = ("Source/", "Content/", "Tools/")
+PLAN_SECTIONS = (("行为与契约",), ("实施计划",), ("Definition of Done",), ("风险、回滚与升级",))
 
 
 def relative(root: Path, path: Path) -> str:
@@ -49,7 +52,7 @@ def has_marker(text: str, *markers: str) -> bool:
 def labeled_value(text: str, label: str) -> str:
     """读取流程记录中的字段值，避免只有字段名而没有实际结论。"""
     match = re.search(
-        r"(?im)^[ \t>*-]*" + re.escape(label) + r"\s*[：:]\s*([^\n]+)", text
+        r"(?im)^[ \t>*-]*" + re.escape(label) + r"[ \t]*[：:][ \t]*([^\n]*)", text
     )
     if not match:
         return ""
@@ -62,9 +65,11 @@ def labeled_value(text: str, label: str) -> str:
 
 
 def conclusion(text: str, gate: str, expected: str) -> bool:
-    """检查 F0/F1/F2/Push-Ready 是否写入明确结论。"""
-    pattern = rf"(?is)\b{re.escape(gate)}(?:\s+结论)?\s*[：:]?\s*`?{re.escape(expected)}\b"
-    return re.search(pattern, text) is not None
+    """只接受唯一当前字段的精确值，拒绝模板候选列表、重复结论和历史批准。"""
+    values = re.findall(
+        r"(?m)^[ \t>*-]*" + re.escape(gate + " 结论") + r"[ \t]*[：:][ \t]*([^\n]*)", text
+    )
+    return len(values) == 1 and values[0].strip().strip("`") == expected
 
 
 def issue(code: str, path: str, message: str, line: int = 0) -> dict:
@@ -136,6 +141,11 @@ def evaluate(root: Path, spec_arg: str, mode: str, kind: str = "feature",
     root = root.resolve()
     spec_path, text, errors = read_spec(root, spec_arg)
     spec_relative = relative(root, spec_path) if spec_path and spec_path.exists() else spec_arg.replace("\\", "/")
+    changed_files = list(changed) if changed is not None else []
+    git_errors: list[dict] = []
+    if mode == "delivery" and changed is None:
+        changed_files, git_errors = collect_changed_files(root)
+        errors.extend(git_errors)
 
     if text:
         status = field(text, "状态")
@@ -160,6 +170,26 @@ def evaluate(root: Path, spec_arg: str, mode: str, kind: str = "feature",
             errors.append(issue("missing_request_attachment_split", spec_relative, "必须区分用户请求与附件解释"))
         if mode == "preflight" and status not in PRE_BUILD_STATUSES:
             errors.append(issue("invalid_preflight_status", spec_relative, f"状态 {status or '<empty>'} 不允许进入开工 Gate"))
+        if mode in {"plan", "build", "delivery"} and not conclusion(text, "F0", "GO"):
+            errors.append(issue("f0_not_go", spec_relative, "计划审查、实现和交付必须以 F0 GO 为前提"))
+        if mode in {"plan", "build"}:
+            for aliases in PLAN_SECTIONS:
+                if not has_section(text, aliases):
+                    errors.append(issue("missing_plan_section", spec_relative, f"计划缺少章节：{aliases[0]}"))
+        if mode == "plan":
+            if status not in PLAN_STATUSES:
+                errors.append(issue("invalid_plan_status", spec_relative, f"状态 {status or '<empty>'} 不允许进入计划审查 Gate"))
+        if mode in {"build", "delivery"}:
+            reviewed_version = labeled_value(text, "F1 审查版本")
+            if reviewed_version != field(text, "Spec 版本"):
+                errors.append(issue("stale_plan_approval", spec_relative, "F1 审查版本必须与当前 Spec 版本一致；计划变更后需重新审查"))
+            if not labeled_value(text, "F1 审查人") or not labeled_value(text, "F1 计划审查证据"):
+                errors.append(issue("missing_plan_review", spec_relative, "必须记录 F1 审查人和计划审查证据；填写 APPROVED 不等于完成审查"))
+        if mode == "build":
+            if status not in BUILD_STATUSES:
+                errors.append(issue("invalid_build_status", spec_relative, f"状态 {status or '<empty>'} 不允许进入 BUILD Gate"))
+            if not conclusion(text, "F1", "APPROVED"):
+                errors.append(issue("missing_f1_for_build", spec_relative, "进入 BUILD 前必须记录 F1 APPROVED"))
         if mode == "delivery":
             if status not in DELIVERY_STATUSES:
                 errors.append(issue("invalid_delivery_status", spec_relative, "交付状态必须是 READY/READY_FOR_REVIEW/COMPLETED 或项目中文状态"))
@@ -174,11 +204,6 @@ def evaluate(root: Path, spec_arg: str, mode: str, kind: str = "feature",
             if not has_marker(text, "验证"):
                 errors.append(issue("missing_verification_record", spec_relative, "必须记录实际验证命令和结果"))
 
-    changed_files = list(changed) if changed is not None else []
-    git_errors: list[dict] = []
-    if mode == "delivery" and changed is None:
-        changed_files, git_errors = collect_changed_files(root)
-        errors.extend(git_errors)
     if mode == "delivery" and spec_relative not in changed_files:
         errors.append(issue("spec_not_changed", spec_relative, "交付时必须让本次任务 Spec 与实现/验证证据一起进入 diff"))
     behavior = behavior_files(changed_files)
@@ -207,8 +232,8 @@ def evaluate(root: Path, spec_arg: str, mode: str, kind: str = "feature",
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--mode", choices=("preflight", "delivery"), required=True,
-                        help="preflight 在实现前运行；delivery 在交付前运行")
+    parser.add_argument("--mode", choices=("preflight", "plan", "build", "delivery"), required=True,
+                        help="preflight 检查入口；plan 检查计划审查前置条件；build 检查 F1 解锁；delivery 检查交付")
     parser.add_argument("--spec", required=True, help="仓库内任务 Spec 路径")
     parser.add_argument("--kind", choices=("feature", "docs", "process"), default="feature",
                         help="任务类型；docs 只允许文档变更，process 用于流程/工具变更")

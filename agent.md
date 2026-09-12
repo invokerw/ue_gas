@@ -28,7 +28,7 @@
 python3 -B Tools/task_gate.py --mode preflight --spec Doc/CombatSystem/Specs/<task-id>.spec.md --kind feature
 ```
 
-Gate 未通过不得进入 BUILD；流程/工具变更将 `--kind` 设为 `process`，纯文档变更设为 `docs`。首次使用仓库 Skill 时，开工消息必须明确说明正在使用的 Skill 及其文件路径。
+preflight 只检查任务入口。随后完成 PLAN、运行 `--mode plan`，记录 F1=`APPROVED`、审查人、审查版本和证据；第一次代码/测试/资产修改前运行 `--mode build`。F1 未通过或 Build Gate 失败时不得进入 BUILD；流程/工具变更将 `--kind` 设为 `process`，纯文档变更设为 `docs`。首次使用仓库 Skill 时，开工消息必须明确说明正在使用的 Skill 及其文件路径。
 
 项目级 Skill 只允许存放并读取于仓库 `Skills/`；不得复制到 `/Users/admin/.codex/skills` 或其他用户级目录。Skill 的创建和维护使用 `skill-creator` 规则，但产物仍保留在本仓库。
 
@@ -66,9 +66,10 @@ Gate 未通过不得进入 BUILD；流程/工具变更将 `--kind` 设为 `proce
 ## 4. 变更流程
 
 1. 先界定变更属于 Bug 修复、兼容新增还是契约变更，并列出受影响的权威入口、生命周期和测试。
-2. 修改公式、GameplayTag 语义、DefinitionId、事件 schema、发布契约或公开蓝图 API 前，先更新 ADR/迁移方案和相应版本号。
-3. 只在公共系统无法表达需求时扩展内核 registry；不得为单个技能增加专用结算旁路。
-4. 项目 C++ 注释使用中文，重点说明“做什么、为什么、有什么约束”，避免逐行翻译代码：
+2. 在 PLAN 计划审查通过并记录 F1=`APPROVED`、Build Gate 通过之前，不得修改代码、测试、工具脚本、蓝图或资产；可以读取、运行已有检查、维护 Spec 和计划记录。范围、架构、权限、迁移、测试矩阵或回滚实质变化时先递增 Spec 版本，F1 回到 `REVISE`、任务状态回到 `PLAN_REVIEW` 并重新审查。批准只覆盖审查版本，不得用补写批准追认未经审查的代码修改；保留用户原有差异。具体命令与审查权限见 `00-05` §4。
+3. 修改公式、GameplayTag 语义、DefinitionId、事件 schema、发布契约或公开蓝图 API 前，先更新 ADR/迁移方案和相应版本号。
+4. 只在公共系统无法表达需求时扩展内核 registry；不得为单个技能增加专用结算旁路。
+5. 项目 C++ 注释使用中文，重点说明“做什么、为什么、有什么约束”，避免逐行翻译代码：
    - 类、结构和枚举应有简介。简单类型可用一句话说明；核心类应进一步说明主要职责、职责边界、生命周期、网络权限及关键协作对象。
    - 项目自定义函数应至少简要说明用途。存在前置条件、副作用、失败情形、特殊返回语义、权限或时序要求时，必须一并说明。
    - 关键字段应说明其业务含义；单位、所有权、复制策略、生命周期或有效条件不直观时，需要明确标注。语义清晰的局部变量无需注释。
@@ -79,11 +80,11 @@ Gate 未通过不得进入 BUILD；流程/工具变更将 `--kind` 设为 `proce
    - 实现内部的注释应解释特殊分支、稳定排序、权限判断、兼容处理和清理顺序背后的原因，不要描述代码表面行为。
    - API 契约写在头文件声明处，实现原因写在 `.cpp` 对应逻辑附近，避免在声明和实现中重复同一段说明。
    - 修改行为时同步更新注释；失效、误导或与代码重复的注释应直接删除。
-5. 蓝图可见的类、函数、字段和参数提供中文 `DisplayName`、`ToolTip` 或 `UPARAM(DisplayName=...)`。
+6. 蓝图可见的类、函数、字段和参数提供中文 `DisplayName`、`ToolTip` 或 `UPARAM(DisplayName=...)`。
    - 可在 UE Details 面板中编辑或查看的 DataAsset 字段，以及它们展开后的项目自有 `USTRUCT` 字段，必须显式同时提供中文 `DisplayName` 与 `ToolTip`，不能只依赖 C++ 注释。
    - `ToolTip` 应使用配置者可直接理解的语言说明选择后果；来源、单位、有效范围、空值、`0`、负数或保留值存在特殊语义时一并写明。适用时使用 `Units`、`ClampMin/ClampMax`、`EditCondition`、`TitleProperty` 等元数据降低误配风险。
-6. 行为变化与代码同一次修改中更新文档；不要把已实现行为继续写成“建议实现”，也不要改写历史验收结果。
-7. 除非编译依赖或测试隔离已有证据表明确实受阻，否则保持单 Runtime Module。
+7. 行为变化与代码同一次修改中更新文档；不要把已实现行为继续写成“建议实现”，也不要改写历史验收结果。
+8. 除非编译依赖或测试隔离已有证据表明确实受阻，否则保持单 Runtime Module。
 
 ## 5. 资产规则
 
@@ -99,7 +100,7 @@ Gate 未通过不得进入 BUILD；流程/工具变更将 `--kind` 设为 `proce
 | --- | --- |
 | 仅 Markdown 文档 | `python3 -B Tools/validate_docs.py`、过时状态与事实核对、`git diff --check` |
 | 文档校验脚本 | `python3 -B -m unittest discover -s Tools/Tests -p 'test_validate_docs.py' -v`、真实仓库文档校验、`git diff --check` |
-| 流程/校验工具 | `python3 -B Tools/task_gate.py --mode preflight ...`、对应工具单测、交付前 `--mode delivery ...`、`git diff --check` |
+| 流程/校验工具 | `python3 -B Tools/task_gate.py --mode preflight ...`、`--mode plan ...`、F1 后 `--mode build ...`、对应工具单测、交付前 `--mode delivery ...`、`git diff --check` |
 | 普通 C++ 实现 | `ue_gasEditor` Development 构建 + 直接相关 `Combat.*` Automation |
 | Damage/Heal/Modifier/Ability/时序语义 | Editor 构建 + 相关专项测试；公共顺序或契约变化时运行完整 `Combat.*` |
 | DataAsset/蓝图/关卡 | Editor/蓝图编译与保存回读 + `CombatAssetValidation` + 相关 Automation/PIE |

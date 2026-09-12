@@ -7,7 +7,7 @@ description: "在 ue_gas Combat 中落地一个可验收的 GAS 技能，处理 
 
 当用户请求新增、迁移或修改一个 Combat/GAS 技能时使用本 Skill。它负责实际实现和验收，不只输出技能设计建议；纯规则咨询、只读代码解释或非 Combat 功能不使用它。
 
-本 Skill 是 [combat-feature-development](../combat-feature-development/SKILL.md) 的领域专用执行层。先遵守通用功能流程的 F0/F1/F2、Spec、权限和交付规则，再执行以下技能步骤。
+本 Skill 是 [combat-feature-development](../combat-feature-development/SKILL.md) 的领域专用执行层。先遵守通用功能流程的 F0/F1/F2、Spec、权限和交付规则；F1 计划审查通过并运行 Build Gate 前，不得修改 Ability、DataAsset、Modifier、Projectile、蓝图、测试或其他行为文件。
 
 本 Skill 只在当前仓库内生效，唯一来源为 `Skills/combat-skill-development/`；不要复制或安装到用户级 Codex Skill 目录。
 
@@ -58,6 +58,8 @@ description: "在 ue_gas Combat 中落地一个可验收的 GAS 技能，处理 
 4. **Projectile/Thinker/Aura/Motion**：使用现有 Subsystem/Component 和稳定 Handle；不为单个技能增加 registry、Actor Timer 或 Transform 旁路。
 
 若公共入口无法表达需求，记录具体缺口、替代方案、blast radius、迁移和版本影响；按通用功能流程判断是否需要用户决定，已授权的兼容扩展可继续执行。
+
+上述两步属于 PLAN，只读取现有代码和资产、维护 Spec。方案完整后按通用 Skill 运行 `plan` Gate 并完成 F1 计划审查，记录审查人、当前 Spec 版本和证据；F1=`APPROVED` 且 `build` Gate 通过后，才允许进入第 3 步编写测试。范围、权限、迁移或测试矩阵实质变化时先递增 Spec 版本、将 F1 改为 `REVISE`、任务状态改为 `PLAN_REVIEW`，重审后再继续。
 
 ### 3. 先建立失败证据
 

@@ -75,11 +75,31 @@ Spec 发生语义变化时先递增版本并写原因，再改代码。若只是
 EVALUATE → THINK → PLAN → BUILD → REVIEW → TEST → ADVERSARIAL → DELIVER → REFLECT
 ```
 
-每次需要修改仓库的任务，在第一次代码或资产修改前发送一条开工记录，明确：已读取的入口文件、用户请求、附件解释（需求/参考/工程约束）、主 Skill、备选 Skill、路由置信度、Spec 路径和 F0 结论。随后运行可失败的机器 Gate：
+每次需要修改仓库的任务，在第一次行为文件修改前发送一条开工记录，明确：已读取的入口文件、用户请求、附件解释（需求/参考/工程约束）、主 Skill、备选 Skill、路由置信度、Spec 路径和 F0 结论。行为文件包括 `Source/`、`Content/`、`Tools/` 以及会改变运行结果的其他代码、脚本、蓝图和资产。随后运行可失败的机器 Gate：
 
 ```bash
 python3 -B Tools/task_gate.py --mode preflight --spec Doc/CombatSystem/Specs/<task-id>.spec.md --kind <feature|docs|process>
 ```
+
+进入计划审查时运行：
+
+```bash
+python3 -B Tools/task_gate.py --mode plan --spec Doc/CombatSystem/Specs/<task-id>.spec.md --kind <feature|docs|process>
+```
+
+`plan` 检查 F0、Spec 状态和计划章节；通过只表示可以开展计划审查。审查人逐项确认范围、AC、依赖、测试、回滚和风险后，在 Spec 中记录 F1 结论、审查人、审查版本和计划审查证据。只有结论为 `APPROVED` 才将状态切换为 `BUILDING`。在此之前可读取代码、运行已有检查、维护 Spec 和计划记录，不得修改代码、测试、工具脚本、蓝图、DataAsset、关卡或其他行为文件。
+
+每个 `F0/F1/F2/Push-Ready 结论` 字段只写一个当前枚举值，原因放入独立证据字段；模板候选列表、重复字段和历史正文不能代替当前结论。继续旧任务时补齐当前审查人、版本和证据，不批量重写历史验收记录。
+
+F1 通过后、第一次行为文件修改前运行：
+
+```bash
+python3 -B Tools/task_gate.py --mode build --spec Doc/CombatSystem/Specs/<task-id>.spec.md --kind <feature|docs|process>
+```
+
+`build` 必须看到 F0=`GO`、F1=`APPROVED`、可构建状态和实际审查记录，且 F1 审查版本必须等于当前 Spec 版本。范围、架构、权限、迁移、测试矩阵或回滚方案发生实质变化时，先递增 Spec 版本，将 F1 改为 `REVISE`、任务状态改为 `PLAN_REVIEW`，完成重审后才能继续对应实现。不得补写批准来追认未审查的代码变更。
+
+这些检查核对当前记录，不能追溯证明修改先后，也不能自动判断 Spec 语义变化。开工时应记录已有差异，保留用户修改；已有差异和重审前已授权的实现不等于本任务违反计划顺序。F1 是计划审查结论，L0/L1 可由 Agent 在既有授权内审查并记录；用户明确要求人审或涉及 L2 时必须等待对应决定。
 
 实现和验证完成后运行：
 
@@ -87,7 +107,7 @@ python3 -B Tools/task_gate.py --mode preflight --spec Doc/CombatSystem/Specs/<ta
 python3 -B Tools/task_gate.py --mode delivery --spec Doc/CombatSystem/Specs/<task-id>.spec.md --kind <feature|docs|process>
 ```
 
-两个 Gate 都是只读检查（可选 `--report` 写 JSON），会验证 Spec 状态、路由和 F0、F1/F2、Push-Ready、实际验证/未执行记录，以及行为变更的测试和文档配套。失败时先修正 Spec、测试或证据，再继续；不能以口头说明代替失败结果。
+这些 Gate 都是只读检查（可选 `--report` 写 JSON），会验证 Spec 状态、路由和 F0、F1/F2、Push-Ready、实际验证/未执行记录，以及行为变更的测试和文档配套。失败时先修正 Spec、测试或证据，再继续；不能以口头说明代替失败结果。
 
 ### EVALUATE：F0，判断是否值得做
 
@@ -99,7 +119,9 @@ python3 -B Tools/task_gate.py --mode delivery --spec Doc/CombatSystem/Specs/<tas
 
 ### PLAN：F1，冻结可执行 Spec
 
-补齐 Spec、AC、DoD、文件定位、依赖图、测试矩阵和证据位置。计划审查要回答：结构问题是否被误当成局部补丁、blast radius 是否可控、旧资产/旧回调如何失效、失败后如何恢复。F1 结果为 `APPROVED`、`REVISE` 或 `ESCALATE`。
+补齐 Spec、AC、DoD、文件定位、依赖图、测试矩阵、回滚和证据位置。计划审查要回答：结构问题是否被误当成局部补丁、blast radius 是否可控、旧资产/旧回调如何失效、失败后如何恢复。F1 结果为 `APPROVED`、`REVISE` 或 `ESCALATE`。F1=`APPROVED` 是 BUILD 的硬解锁；没有该结论，任何代码、工具脚本、资产、蓝图或行为配置都不能修改。
+
+计划批准只覆盖 Spec 中冻结的范围。若实现前发现范围、架构、权限、迁移、测试矩阵或回滚方案发生实质变化，先将 F1 改为 `REVISE`、任务状态改为 `PLAN_REVIEW`，更新 Spec 并重新审查。
 
 ### BUILD：TDD Red → Green → Verify
 
@@ -142,7 +164,7 @@ Review 检查 diff、约束、注释、资产引用和旁路模式。Test 按风
 
 ## 5. 状态、权限与升级
 
-流水线状态建议使用 `DEFERRED → PLANNED → BUILDING → VERIFYING → READY`，并允许 `BLOCKED`、`ESCALATED`。状态变化都要引用 Spec、测试或日志证据；项目里程碑仍遵循 `00-01` 的“待验收/已验收”规则。
+流水线状态建议使用 `DEFERRED → PLANNED → PLAN_REVIEW → APPROVED → BUILDING → VERIFYING → READY`，并允许 `REVISE`、`BLOCKED`、`ESCALATED`。状态变化都要引用 Spec、测试或日志证据；项目里程碑仍遵循 `00-01` 的“待验收/已验收”规则。
 
 按风险分配自主程度：
 

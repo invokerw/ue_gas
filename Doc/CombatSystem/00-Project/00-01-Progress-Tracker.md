@@ -5,7 +5,7 @@
 > 历史 M0-M8：82/82 Task 完成，9/9 里程碑由用户验收
 > SAM 进度：10/10 Task 完成；修正 Gate 和用户验收均已通过
 > 成长专项（2026-09-11）：PROG-001 已完成，待用户验收；全量 `Combat.` 62/62 与 Editor 构建通过，Server/Client Target 受安装版 UE 5.8 限制
-> 流程专项（2026-09-12）：DOC-008 已完成，待用户验收；TOOL-001 已完成，待用户验收；Spec、Skill 路由和验证证据已纳入可失败 Gate，UE 路径配置与 Dedicated 准入已纳入本地工具
+> 流程专项（2026-09-12）：DOC-009 已通过用户验收；DOC-008 与 TOOL-001 已完成，待用户验收；PLAN 审查和 BUILD 准入、Spec 当前批准版本、Skill 路由与交付证据已纳入可失败 Gate，UE 路径配置与 Dedicated 准入已纳入本地工具
 > 最近工程验证（2026-09-08）：Demo 普攻输入已统一为 Enhanced Input Action；该轮常规 Editor 构建、蓝图编译保存回读、全量 Combat 53/53 和资产 7/7 通过。头顶 UI 蓝图拆分及此前三 Target/Dedicated 回归已完成；该轮未重跑联机矩阵
 > HUD 专项（2026-09-09）：已实现并完成工程验证，待用户实机复验；三 Target、Combat 57/57、资产 7/7、双玩家 PIE 与 Dedicated 双客户端通过，见 [10-12](../10-Architecture/10-12-Bottom-HUD-Design.md) 与 ADR-047
 
@@ -268,6 +268,7 @@
 | Task | 需求名称 | 状态 | 完成证据/备注 |
 | --- | --- | --- | --- |
 | DOC-008 | 强制 Spec、Skill 路由、开工记录与交付验证证据 | 待验收 | 见 [DOC-008 Spec](../Specs/DOC-008-task-gate-enforcement.spec.md) |
+| DOC-009 | PLAN 计划审查通过前禁止修改代码、测试和资产 | 已验收 | 2026-09-12 用户确认验收完成并授权提交；三个 Skill、流程和模板统一 F1/BUILD 边界；21 项 Gate 单测、13 个独立审查场景、Skill 格式、文档与 delivery 检查通过；见 [DOC-009 Spec](../Specs/DOC-009-plan-review-lock.spec.md) |
 
 ## 12.7 Post-M8：UE 环境配置与 Dedicated 准入
 
@@ -290,6 +291,7 @@
 | M8 | 2026-08-27 | 已验收 | 无 | 2026-08-27 | 不适用（最终里程碑） |
 | SAM | 2026-09-02 | 已验收 | 用户反馈“启动 PIE，点击右键并不能移动”；默认出生拓扑已修复，并已补 AIController 唯一性与真实位移验证 | 2026-09-09 | 用户确认服务器权威单位移动验收通过 |
 | DEMO-901 | 2026-09-10 | 已验收 | 无 | 2026-09-11 | 不适用（独立 post-M8 任务） |
+| DOC-009 | 2026-09-12 | 已验收 | 无 | 2026-09-12 | 用户确认“验收完成，提交吧”，授权本地提交 |
 
 ## 14. 更新日志
 
@@ -365,6 +367,8 @@
 | 2026-09-12 | 完成 REF-001：将 4 组模板 C++ h/cpp 文件及其反射类统一为 Combat 前缀，补充旧类名 CoreRedirect，并同步当前文档与默认配置段；Editor 构建、`Combat.*` 63/63、资产 10/10（0 error/0 warning）和文档校验通过 | post-M8 工程命名迁移 / REF-001 |
 | 2026-09-12 | 完成 REF-002：Runtime Module 迁移为 `Combat`，保留 `ue_gas.uproject` 与 `ue_gasEditor/Server/Client` Target 名称；补充 `/Script/ue_gas` PackageRedirect 与旧 Asset Registry 类路径兼容。Editor 构建、`Combat.*` 63/63、资产 10/10（0 error/0 warning）和文档校验通过；Server/Client 受安装版 UE 限制未构建 | post-M8 工程命名迁移 / REF-002 |
 | 2026-09-12 | 完成 TOOL-001：新增 `.env.example`、UE 环境解析/校验工具和配置驱动的 Dedicated Server + 两客户端入口；工具单测 32/32、文档校验 62 Markdown/325 本地链接、PowerShell 解析和空白检查通过；本机未配置 `.env`，Dedicated smoke 按预期拒绝启动并记为未执行 | post-M8 工具流程 / TOOL-001 |
+| 2026-09-12 | 完成 DOC-009：三个项目 Skill、流程、模板和根入口统一 PLAN 审查先于代码/测试/资产修改；新增 plan/build Gate，BUILD 与交付校验当前 F1 批准、审查证据及版本，拒绝候选列表/历史批准。21 项单测、13 个独立场景、Skill 格式、文档、差异和 delivery 检查通过；不涉及 Runtime/资产，待用户验收 | post-M8 流程约束 / DOC-009 |
+| 2026-09-12 | 用户确认 DOC-009 验收完成并授权本地提交；同步 Spec、当前状态和验收记录，不改变流程语义或其他任务验收状态 | DOC-009 / 用户验收 |
 
 ## 15. 更新规则
 

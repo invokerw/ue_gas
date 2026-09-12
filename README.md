@@ -21,6 +21,7 @@ Combat 当前位于 `Combat` 单 Runtime Module 中，不是独立插件或独�
 3. 自动化测试地图位于 `/Game/Combat/Tests/L_CombatTest`。
 4. Combat C++ 入口位于 `Source/Combat/Combat`；新增技能先阅读 [公共技能扩展与迁移指南](Doc/CombatSystem/20-Content/20-03-M8-Public-Extension-Guide.md)。
 5. AI 协作开发先阅读 [AI-Native 开发流程与文档体系](Doc/CombatSystem/00-Project/00-05-AI-Native-Development-Workflow.md)，新需求或修复使用 [Spec 模板](Doc/CombatSystem/Specs/_template.spec.md)。
+   进入 BUILD 前必须先完成 PLAN 计划审查并记录 F1=`APPROVED`；按顺序运行 `task_gate.py --mode preflight`、`--mode plan`、`--mode build`。F1 通过前不得修改代码、工具脚本、蓝图或资产。
 6. 任务开始用 [Intake](Doc/CombatSystem/00-Project/_intake-template.md) 整理边界，交付前按 [Gate 检查表](Doc/CombatSystem/00-Project/_gate-checklist.md) 记录验证结果；这些内容可以合并到任务 Spec，独立记录时使用 [交付记录模板](Doc/CombatSystem/00-Project/_delivery-record-template.md)。
 7. 让 Agent 判断应该调用哪个 Skill 时使用 [Combat 任务路由 Skill](Skills/combat-task-router/SKILL.md)，它会在交付后按证据自评并执行受控调优。
 8. 开发功能任务时使用 [Combat 功能开发 Skill](Skills/combat-feature-development/SKILL.md)，它会按 AI-Native 流程推进 Spec、Gate、验证和 Reflect。
@@ -141,10 +142,17 @@ git diff --check
 
 ```bash
 python3 -B Tools/task_gate.py --mode preflight --spec Doc/CombatSystem/Specs/<task-id>.spec.md --kind <feature|docs|process>
+python3 -B Tools/task_gate.py --mode plan --spec Doc/CombatSystem/Specs/<task-id>.spec.md --kind <feature|docs|process>
+```
+
+完成计划审查，在 Spec 写入 F1=`APPROVED`、审查版本和证据后，再进入实现与交付：
+
+```bash
+python3 -B Tools/task_gate.py --mode build --spec Doc/CombatSystem/Specs/<task-id>.spec.md --kind <feature|docs|process>
 python3 -B Tools/task_gate.py --mode delivery --spec Doc/CombatSystem/Specs/<task-id>.spec.md --kind <feature|docs|process>
 ```
 
-Gate 会检查 Spec、Skill 路由、F0/F1/F2、Push-Ready、验证/未执行记录，以及行为变更是否配套测试和文档；失败结果必须先修复并回写 Spec。
+Gate 会检查 Spec、Skill 路由、F0/F1/F2、计划审查版本和证据、Push-Ready、验证/未执行记录，以及行为变更是否配套测试和文档；失败结果必须先修复并回写 Spec。Spec 实质变更后先升级版本并重新审查，旧批准不能用于新范围；检查工具不追溯证明修改先后。
 
 文档检查覆盖必需入口、目录迁移、Markdown 本地目标路径、尾随空格和 Spec 格式；页内锚点、外部链接和文档语义需要另行审查。当前采用本地开发与用户验收流程，交付或提交前运行上述命令。它们不能替代 UE 编译、Automation、PIE 或 Dedicated 验证。
 

@@ -45,4 +45,4 @@
 - 路由置信度：`high / medium / low`
 - 决策人和日期：
 
-F0 Spec 建立后运行 `python3 -B Tools/task_gate.py --mode preflight --spec Doc/CombatSystem/Specs/<task-id>.spec.md --kind <feature|docs|process>`；失败时先补齐输入，不进入实现。
+F0 Spec 建立后运行 `python3 -B Tools/task_gate.py --mode preflight --spec Doc/CombatSystem/Specs/<task-id>.spec.md --kind <feature|docs|process>`；失败时先补齐输入，不进入实现。完成 PLAN 后运行 `--mode plan`；F1=`APPROVED` 且状态为 `BUILDING` 后运行 `--mode build`。在 build Gate 通过前不得修改 `Source/`、`Content/`、`Tools/` 或其他行为文件。
