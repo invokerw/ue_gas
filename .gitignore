@@ -25,6 +25,13 @@ Makefile
 .gradle/
 *.log
 *.pdb
+__pycache__/
+*.pyc
+
+# Per-machine UE tool locations
+.env
+.env.*
+!.env.example
 
 # Operating system files
 .DS_Store

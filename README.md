@@ -87,22 +87,48 @@ Demo 操作：右键点敌方单位持续普攻，超出范围时自动追击；
 
 ## 验证命令模板
 
-先根据本机 UE 安装确定 `<UE_ROOT>`；不要把历史验收机器的绝对路径写入新脚本。
+不同机器的 UE 安装路径不相同，先复制环境模板并填写本机路径。`.env` 只保存在本地并已加入 Git 忽略；不要把真实机器路径提交到仓库。
 
 ```powershell
-& "<UE_ROOT>\Engine\Build\BatchFiles\Build.bat" ue_gasEditor Win64 Development "<REPO>\ue_gas.uproject" -WaitMutex
+Copy-Item .env.example .env
+notepad .env
+```
 
-& "<UE_ROOT>\Engine\Binaries\Win64\UnrealEditor-Cmd.exe" "<REPO>\ue_gas.uproject" `
+配置两个编辑器入口：
+
+- `UE_INSTALLED_EDITOR`：Launcher/下载版 `UnrealEditor.exe`，用于普通 Editor、Automation 和资产校验。
+- `UE_SOURCE_EDITOR`：从源码编译的 `UnrealEditor.exe`，用于 Server/Client Target 和 Dedicated smoke。工具会从该路径上溯找到源码引擎根目录，并检查 `Engine/Build/BatchFiles/Build.bat`。
+
+检查配置状态：
+
+```powershell
+python Tools/ue_environment.py check
+python Tools/ue_environment.py check --require editor
+python Tools/ue_environment.py check --require dedicated --json
+```
+
+`--require dedicated` 返回 0 表示 Dedicated 可以运行，返回 2 表示配置缺失或路径无效；后者应把 Dedicated 记为“未执行”，不能记为通过。满足检查后运行 Dedicated Server + 两客户端 smoke：
+
+```powershell
+& .\Tools\RunDedicated.ps1
+```
+
+日志和进程摘要写入 `Saved/UEEnvironment/Dedicated/`。脚本只清理本次启动的 UE 进程。
+
+```powershell
+& "<UE_SOURCE_ROOT>\Engine\Build\BatchFiles\Build.bat" ue_gasEditor Win64 Development "<REPO>\ue_gas.uproject" -WaitMutex
+
+& "<UE_INSTALLED_ROOT>\Engine\Binaries\Win64\UnrealEditor-Cmd.exe" "<REPO>\ue_gas.uproject" `
   -unattended -nop4 -nosplash -NullRHI -NoSound `
   -ExecCmds="Automation RunTests Combat.;Quit" `
   -TestExit="Automation Test Queue Empty"
 
-& "<UE_ROOT>\Engine\Binaries\Win64\UnrealEditor-Cmd.exe" "<REPO>\ue_gas.uproject" `
+& "<UE_INSTALLED_ROOT>\Engine\Binaries\Win64\UnrealEditor-Cmd.exe" "<REPO>\ue_gas.uproject" `
   -run=CombatAssetValidation -Unattended -NoP4 `
   -Report="<REPO>\Saved\CombatValidation\CombatAssetReport.json"
 ```
 
-Dedicated Server/Client Target 需要支持该 Target 的源码引擎。详细环境边界见 [M1 环境决策](Doc/CombatSystem/90-History/90-02-M1-Environment-Decision.md)，完整测试分层见 [测试计划](Doc/CombatSystem/00-Project/00-03-Test-Plan.md)。
+上面的 `<UE_SOURCE_ROOT>` 和 `<UE_INSTALLED_ROOT>` 只是命令中的说明占位符；实际路径以 `.env` 中的两个编辑器文件位置为准。Dedicated Server/Client Target 需要支持该 Target 的源码引擎。详细环境边界见 [M1 环境决策](Doc/CombatSystem/90-History/90-02-M1-Environment-Decision.md)，完整测试分层见 [测试计划](Doc/CombatSystem/00-Project/00-03-Test-Plan.md)。
 
 文档体系校验可在仓库根目录运行：
 

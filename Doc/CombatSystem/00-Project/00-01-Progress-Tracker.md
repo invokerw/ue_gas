@@ -1,11 +1,11 @@
 # 00-01 开发进度台账
 
-> 最后更新：2026-09-11
+> 最后更新：2026-09-12
 > 当前阶段：M8、SAM 与 DEMO-901 卓尔游侠 Demo 均已通过用户验收
 > 历史 M0-M8：82/82 Task 完成，9/9 里程碑由用户验收
 > SAM 进度：10/10 Task 完成；修正 Gate 和用户验收均已通过
 > 成长专项（2026-09-11）：PROG-001 已完成，待用户验收；全量 `Combat.` 62/62 与 Editor 构建通过，Server/Client Target 受安装版 UE 5.8 限制
-> 流程专项（2026-09-11）：DOC-008 已完成，待用户验收；Spec、Skill 路由和验证证据已纳入可失败 Gate
+> 流程专项（2026-09-12）：DOC-008 已完成，待用户验收；TOOL-001 已完成，待用户验收；Spec、Skill 路由和验证证据已纳入可失败 Gate，UE 路径配置与 Dedicated 准入已纳入本地工具
 > 最近工程验证（2026-09-08）：Demo 普攻输入已统一为 Enhanced Input Action；该轮常规 Editor 构建、蓝图编译保存回读、全量 Combat 53/53 和资产 7/7 通过。头顶 UI 蓝图拆分及此前三 Target/Dedicated 回归已完成；该轮未重跑联机矩阵
 > HUD 专项（2026-09-09）：已实现并完成工程验证，待用户实机复验；三 Target、Combat 57/57、资产 7/7、双玩家 PIE 与 Dedicated 双客户端通过，见 [10-12](../10-Architecture/10-12-Bottom-HUD-Design.md) 与 ADR-047
 
@@ -269,6 +269,12 @@
 | --- | --- | --- | --- |
 | DOC-008 | 强制 Spec、Skill 路由、开工记录与交付验证证据 | 待验收 | 见 [DOC-008 Spec](../Specs/DOC-008-task-gate-enforcement.spec.md) |
 
+## 12.7 Post-M8：UE 环境配置与 Dedicated 准入
+
+| Task | 需求名称 | 状态 | 完成证据/备注 |
+| --- | --- | --- | --- |
+| TOOL-001 | 不同机器的 UE 编辑器路径配置与 Dedicated 测试准入 | 待验收 | `.env.example`、`Tools/ue_environment.py`、`Tools/RunDedicated.ps1` 和工具单测；Dedicated 入口在缺少 `UE_SOURCE_EDITOR` 或源码 `Build.bat` 时明确拒绝，不启动 UE；见 [TOOL-001 Spec](../Specs/TOOL-001-ue-environment-config.spec.md) |
+
 ## 13. 用户验收记录
 
 | 里程碑 | 提交验收日期 | 用户结论 | 修正要求 | 最终验收日期 | 下一阶段授权 |
@@ -358,6 +364,7 @@
 | 2026-09-11 | 用户完成 PROG-001 review，确认成长、HUD 加点按钮与开发命令交付完成，任务状态更新为已验收 | post-M8 成长 / PROG-001 |
 | 2026-09-12 | 完成 REF-001：将 4 组模板 C++ h/cpp 文件及其反射类统一为 Combat 前缀，补充旧类名 CoreRedirect，并同步当前文档与默认配置段；Editor 构建、`Combat.*` 63/63、资产 10/10（0 error/0 warning）和文档校验通过 | post-M8 工程命名迁移 / REF-001 |
 | 2026-09-12 | 完成 REF-002：Runtime Module 迁移为 `Combat`，保留 `ue_gas.uproject` 与 `ue_gasEditor/Server/Client` Target 名称；补充 `/Script/ue_gas` PackageRedirect 与旧 Asset Registry 类路径兼容。Editor 构建、`Combat.*` 63/63、资产 10/10（0 error/0 warning）和文档校验通过；Server/Client 受安装版 UE 限制未构建 | post-M8 工程命名迁移 / REF-002 |
+| 2026-09-12 | 完成 TOOL-001：新增 `.env.example`、UE 环境解析/校验工具和配置驱动的 Dedicated Server + 两客户端入口；工具单测 32/32、文档校验 62 Markdown/325 本地链接、PowerShell 解析和空白检查通过；本机未配置 `.env`，Dedicated smoke 按预期拒绝启动并记为未执行 | post-M8 工具流程 / TOOL-001 |
 
 ## 15. 更新规则
 
