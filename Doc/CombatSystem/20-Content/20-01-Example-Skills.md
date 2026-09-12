@@ -167,7 +167,7 @@ M8 后增加并整理了 `/Game/Combat/Demo`：
 
 - 地图：`/Game/Combat/Demo/Maps/L_CombatDemo`。
 - 卓尔游侠与木桩：`/Game/Combat/Demo/Heros/DrowRanger`、`/Game/Combat/Demo/Heros/WoodenDummy`。
-- 霜冻之箭：`/Game/Combat/Demo/Abilities/FrostArrows`；默认普攻复用 `/Game/Combat/Demo/Abilities/RangedAttack` 的 Tracking Projectile，并通过 AttackRecord、公共 Damage 与 Modifier 管线完成。
+- 霜冻之箭：`/Game/Combat/Demo/Abilities/FrostArrows`；默认普攻使用英雄目录 `/Game/Combat/Demo/Heros/DrowRanger/DA_RangedAttackProjectile` 的 Tracking Projectile，法球胜出时使用 `/Game/Combat/Demo/Abilities/FrostArrows/DA_FrostArrowsProjectile` 及其 `BP_FrostArrowsProjectileActor`，关闭或失效时回退英雄默认弹体，并通过 AttackRecord、公共 Damage 与 Modifier 管线完成。
 - 框架与输入：`/Game/Combat/Demo/Framework`、`/Game/Combat/Demo/Input`。
 - 玩家与木桩通过 `CombatOverheadUI.WidgetClass` 配置 `/Game/Combat/Demo/UI/WBP_CombatOverhead`；该蓝图消费 C++ 展示事件，显示生命/法力、控制状态与施法阶段，使用 `WBP_CombatFloatingText` 播放服务器真实 Applied Damage/Healing 跳字。纯 C++ 单位默认不指定视觉类，扩展方式见 [10-11](../10-Architecture/10-11-Overhead-Blueprint-UI.md)。
 

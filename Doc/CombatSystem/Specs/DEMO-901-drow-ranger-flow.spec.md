@@ -28,7 +28,7 @@
 
 - 不增加叠层、爆炸、生命回复降低或独立主动弹道；用户给出的这些数值均为 0。
 - 不修改 `combat_v1_rc1` 的伤害、攻击、Projectile、Modifier、GameplayTag、内容或事件 schema；独立 HUD 展示投影按 ADR-048 从 schema 3 兼容升级到 4。
-- 不删除旧 `CombatAbility:ranged_attack_bolt` 定义；它保留为未授予的兼容示例，避免本任务引入 DefinitionId 删除迁移。
+- DEMO-901 当时不删除旧 `CombatAbility:ranged_attack_bolt` 定义；它在该任务完成时作为未授予的兼容示例保留，后续已由 DEMO-902 清理，未影响仍在使用的 `CombatProjectile:ranged_attack_projectile`。
 - 不重做卓尔游侠模型、动画、技能图标或冰箭专属弹体美术。
 - 不增加技能槽鼠标施法或点击切换；点击仍只固定详情。
 
@@ -79,7 +79,7 @@
 ### 兼容、版本与迁移
 
 - Unit、AbilitySet 和 Projectile 的稳定 DefinitionId 不随资产路径/文件名改变；地图、GameMode、HUD 与测试引用通过 UE AssetTools 迁移并修复 redirector。
-- Frost Arrows 使用新 DefinitionId；旧 `ranged_attack_bolt` 资产保留但不再由 DrowRanger AbilitySet 授予，因此无需内容版本升级或 DefinitionId redirect。
+- Frost Arrows 使用新 DefinitionId；在 DEMO-901 完成时旧 `ranged_attack_bolt` 资产已不再由 DrowRanger AbilitySet 授予，随后由 DEMO-902 删除 Ability Class/DataAsset；共享 Projectile 资产继续保留，因此无需修改已使用的 Projectile DefinitionId。
 - `FCombatHUDAbilityView` 兼容新增两个布尔字段，展示 schema 从 3 升至 4；核心 `combat_v1_rc1` 及事件/内容 schema 不变，同版本客户端与服务器部署。
 
 ## 4. 实施计划
@@ -130,7 +130,7 @@
 
 - 已关闭风险：F2 首轮发现 Dedicated 客户端夹具直接比较未复制的 ASC AutoCast 内部状态，已改为核对 owner-only HUD 投影；容量夹具原先在英雄既有固有 Modifier 之外再创建 256 个合成 Modifier，已改为补足到总计 256。最终三 Target、全量 Automation 与 Dedicated 复验均通过。
 - 剩余风险：Frost Arrows 继续复用普通远程弹体美术，尚无冰箭专属视觉；本轮未执行 cook / 打包，因此不把编辑器、PIE 与独立进程证据外推为发行包验证。用户已接受当前 625 cm 射程、HUD 交互和整体 Demo 流程。
-- 回滚方式：按本任务差异整体恢复 DrowRanger/FrostArrows 资产、GameMode/地图引用和对应源码；稳定 Unit、AbilitySet、Projectile DefinitionId 未变，旧 `CombatAbility:ranged_attack_bolt` 定义仍保留，可恢复旧授予关系而无需 ID 迁移。
+- 回滚方式：按本任务差异整体恢复 DrowRanger/FrostArrows 资产、GameMode/地图引用和对应源码；稳定 Unit、AbilitySet、Projectile DefinitionId 未变。DEMO-901 原先关于保留 `CombatAbility:ranged_attack_bolt` 的兼容边界已由 DEMO-902 superseded；如需恢复旧授予关系，还需一并恢复 DEMO-902 删除的两个 Ability 资产。
 - 触发升级的条件：用户验收发现射程或交互契约需改变、后续 cook 暴露资产引用缺口、同版本联机之外需要兼容旧 schema 3 客户端，或同一高风险问题三轮仍不收敛。
 - 需要人决定的问题：无；用户已于 2026-09-11 确认验收完成。
 
@@ -164,6 +164,7 @@
 | 0.1 | 2026-09-10 | 初稿，冻结路径、数值、免疫与兼容边界 | 用户要求整理 Demo 并替换为卓尔游侠霜冻之箭 |
 | 0.2 | 2026-09-10 | 完成资产迁移、霜冻之箭、AutoCast HUD/Input、分层验证、F2 修正与 Push-Ready 证据 | 工程 Gate 完成，转入用户验收 |
 | 0.3 | 2026-09-11 | 回写用户验收结论，并关闭待确认的手感与整体流程验收项 | 用户明确确认 `DEMO-901` 验收完成 |
+| 0.4 | 2026-09-11 | 记录 DEMO-902 对未授予 RangeAttack Ability Class/DataAsset 的后续清理；共享 Projectile 保留 | 保持当前资产事实与历史兼容说明一致 |
 
 ## 11. 路由、自评与 Reflect
 

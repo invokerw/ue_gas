@@ -36,6 +36,7 @@
 #include "Combat/Targeting/CombatTeamSubsystem.h"
 #include "Combat/Tests/CombatAutomationWorldFixture.h"
 #include "Combat/Unit/CombatUnitCharacter.h"
+#include "Combat/Projectile/CombatProjectileActor.h"
 #include "ue_gasGameMode.h"
 #include "ue_gasPlayerController.h"
 
@@ -392,8 +393,10 @@ bool FCombatDrowRangerDemoContentTest::RunTest(const FString& Parameters)
 		nullptr, TEXT("/Game/Combat/Demo/Abilities/FrostArrows/DA_ModifierFrostArrowsIntrinsic.DA_ModifierFrostArrowsIntrinsic"));
 	const UCombatModifierData* Slow = LoadObject<UCombatModifierData>(
 		nullptr, TEXT("/Game/Combat/Demo/Abilities/FrostArrows/DA_ModifierFrostArrowSlow.DA_ModifierFrostArrowSlow"));
-	const UCombatProjectileData* Projectile = LoadObject<UCombatProjectileData>(
-		nullptr, TEXT("/Game/Combat/Demo/Abilities/RangedAttack/DA_RangedAttackProjectile.DA_RangedAttackProjectile"));
+	const UCombatProjectileData* DefaultProjectile = LoadObject<UCombatProjectileData>(
+		nullptr, TEXT("/Game/Combat/Demo/Heros/DrowRanger/DA_RangedAttackProjectile.DA_RangedAttackProjectile"));
+	const UCombatProjectileData* FrostProjectile = LoadObject<UCombatProjectileData>(
+		nullptr, TEXT("/Game/Combat/Demo/Abilities/FrostArrows/DA_FrostArrowsProjectile.DA_FrostArrowsProjectile"));
 	UClass* DrowClass = LoadClass<ACombatUnitCharacter>(nullptr, *DrowBlueprintPath);
 	UClass* FrostArrowsClass = LoadClass<UCombatFrostArrowsAbility>(
 		nullptr, TEXT("/Game/Combat/Demo/Abilities/FrostArrows/BP_FrostArrowsAbility.BP_FrostArrowsAbility_C"));
@@ -405,9 +408,10 @@ bool FCombatDrowRangerDemoContentTest::RunTest(const FString& Parameters)
 	TestNotNull(TEXT("Frost Arrows Blueprint loads"), FrostArrowsClass);
 	TestNotNull(TEXT("Frost Arrows intrinsic Modifier loads"), Intrinsic);
 	TestNotNull(TEXT("Frost Arrow slow Modifier loads"), Slow);
-	TestNotNull(TEXT("Shared ranged attack Projectile loads"), Projectile);
+	TestNotNull(TEXT("Drow Ranger default Projectile loads from Heros"), DefaultProjectile);
+	TestNotNull(TEXT("Frost Arrows Projectile loads"), FrostProjectile);
 	if (!DrowData || !DrowAbilitySet || !DrowClass || !FrostArrows || !FrostArrowsClass
-		|| !Intrinsic || !Slow || !Projectile)
+		|| !Intrinsic || !Slow || !DefaultProjectile || !FrostProjectile)
 	{
 		return false;
 	}
@@ -416,13 +420,19 @@ bool FCombatDrowRangerDemoContentTest::RunTest(const FString& Parameters)
 		FPackageName::DoesPackageExist(TEXT("/Game/Combat/Demo/Characters/Player/DA_CombatDemoPlayerUnit")));
 	TestFalse(TEXT("Legacy Characters WoodenDummy package was removed"),
 		FPackageName::DoesPackageExist(TEXT("/Game/Combat/Demo/Characters/WoodenDummy/BP_WoodenDummy")));
+	TestFalse(TEXT("Unused ranged attack AbilityData package was removed"),
+		FPackageName::DoesPackageExist(TEXT("/Game/Combat/Demo/Abilities/RangedAttack/DA_RangedAttackAbility")));
+	TestFalse(TEXT("Unused ranged attack Ability class package was removed"),
+		FPackageName::DoesPackageExist(TEXT("/Game/Combat/Demo/Abilities/RangedAttack/BP_RangedAttackAbility")));
 	TestTrue(TEXT("Drow Ranger keeps its published Unit DefinitionId"),
 		DrowData->GetPrimaryAssetId() == FPrimaryAssetId(TEXT("CombatUnit"), TEXT("ranged_combat_player")));
 	TestEqual(TEXT("Drow Ranger uses its hero display name"), DrowData->DisplayNameText.ToString(), FString(TEXT("卓尔游侠")));
 	TestTrue(TEXT("Drow Ranger has a playable 625 cm attack range"),
 		FMath::IsNearlyEqual(DrowData->BaseStats.AttackRange, 625.0f));
-	TestTrue(TEXT("Drow Ranger default attacks use the shared tracking projectile"),
-		DrowData->AttackProjectileData == Projectile);
+	TestTrue(TEXT("Drow Ranger default attacks use the hero default tracking projectile"),
+		DrowData->AttackProjectileData == DefaultProjectile);
+	TestTrue(TEXT("Drow Ranger default Projectile keeps its stable DefinitionId"),
+		DefaultProjectile->GetPrimaryAssetId() == FPrimaryAssetId(TEXT("CombatProjectile"), TEXT("ranged_attack_projectile")));
 	TestEqual(TEXT("Drow Ranger has one AbilitySet"), DrowData->AbilitySets.Num(), 1);
 	if (!DrowData->AbilitySets.IsEmpty())
 	{
@@ -465,7 +475,11 @@ bool FCombatDrowRangerDemoContentTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("Frost Arrows slot input toggles AutoCast"), FrostArrows->UsesAutoCastToggleInput());
 	TestFalse(TEXT("Frost Arrows does not opt into magic-immune targets"), FrostArrows->TargetingRules.bAllowMagicImmune);
 	TestTrue(TEXT("Frost Arrows owns the expected intrinsic Modifier"), FrostArrows->IntrinsicModifier == Intrinsic);
-	TestTrue(TEXT("Frost Arrows reuses the ranged projectile"), FrostArrows->AttackOrbProjectileData == Projectile);
+	TestTrue(TEXT("Frost Arrows uses its dedicated Projectile"), FrostArrows->AttackOrbProjectileData == FrostProjectile);
+	TestTrue(TEXT("Frost Arrows Projectile has its stable DefinitionId"),
+		FrostProjectile->GetPrimaryAssetId() == FPrimaryAssetId(TEXT("CombatProjectile"), TEXT("frost_arrows_projectile")));
+	TestTrue(TEXT("Frost Arrows uses a distinct Projectile Actor"),
+		FrostProjectile->ProjectileActorClass != DefaultProjectile->ProjectileActorClass);
 	TestTrue(TEXT("Frost Arrows owns the expected on-hit slow"), FrostArrows->AttackOrbOnHitModifierData == Slow);
 	TestTrue(TEXT("Frost Arrows has no active spell actions"), FrostArrows->Actions.IsEmpty());
 
