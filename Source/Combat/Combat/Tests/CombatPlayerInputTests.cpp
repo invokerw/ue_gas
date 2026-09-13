@@ -3,6 +3,7 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "Components/CapsuleComponent.h"
+#include "Components/BoxComponent.h"
 #include "EnhancedInputComponent.h"
 #include "Engine/World.h"
 #include "InputMappingContext.h"
@@ -16,8 +17,10 @@
 #include "Combat/Order/CombatOrderComponent.h"
 #include "Combat/Scheduling/CombatSchedulerSubsystem.h"
 #include "Combat/Tests/CombatAutomationWorldFixture.h"
+#include "Combat/UI/CombatAbilityIndicatorGround.h"
 #include "Combat/Unit/CombatUnitCharacter.h"
 #include "Combat/Unit/CombatUnitLifecycleComponent.h"
+#include "Combat/View/CombatUnitViewComponent.h"
 #include "CombatPlayerController.h"
 
 namespace CombatPlayerInputTests
@@ -265,6 +268,196 @@ bool FCombatPlayerAutoCastAbilityInputTest::RunTest(const FString& Parameters)
 	PC->OnAbilitySlotQ();
 	TestTrue(TEXT("Second Q press enables AutoCast"), Asc->IsAutoCastEnabled(Handle));
 	TestEqual(TEXT("Repeated AutoCast toggle still sends no Cast Order"), PC->NextCombatOrderRequestId, RequestIdBeforeToggle);
+	return true;
+}
+
+/** 标准施法先进入本地瞄准；右键仅取消本次瞄准，不产生移动请求。 */
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FCombatAbilityAimInputTest,
+	"Combat.Input.AbilityAim.StandardAndCancel",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FCombatAbilityAimInputTest::RunTest(const FString& Parameters)
+{
+	using namespace CombatPlayerInputTests;
+	FCombatAutomationWorldFixture Fixture;
+	if (!Fixture.IsValid()) { return false; }
+	UWorld& World = *Fixture.GetWorld();
+	ACombatPlayerController* PC = World.SpawnActor<ACombatPlayerController>();
+	ACombatUnitCharacter* Unit = SpawnUnit(World, FVector::ZeroVector, 1);
+	if (!PC || !Unit || !PC->SetCommandedUnitAuthority(Unit)) { return false; }
+	// 临时 PIE World 没有 GameMode/LocalPlayer，由测试明确标记拥有本地输入的 Controller。
+	PC->SetAsLocalPlayerController();
+	UCombatAbilityData* Data = NewObject<UCombatAbilityData>(Unit);
+	Data->DefinitionName = TEXT("aim_point");
+	Data->BehaviorTags.AddTag(CombatTags::Ability_Behavior_PointTarget);
+	Data->TargetingRules.TargetTeamTag = CombatTags::TargetTeam_None;
+	Data->TargetingRules.CastRange = 500.0f;
+	TGuardValue<TObjectPtr<UCombatAbilityData>> RestoreData(GetMutableDefault<UCombatPointAoeAbility>()->AbilityData, Data);
+	FGameplayAbilitySpecHandle Handle;
+	FGameplayTag Failure;
+	if (!TestTrue(TEXT("Grant point skill"), Unit->GetCombatAbilitySystemComponent()->GrantCombatAbility(
+		UCombatPointAoeAbility::StaticClass(), 1, false, Handle, Failure))) { return false; }
+	const int32 Before = PC->NextCombatOrderRequestId;
+	PC->OnAbilitySlotQ();
+	TestEqual(TEXT("Standard input enters aiming crosshair"), PC->CurrentMouseCursor.GetValue(), EMouseCursor::Crosshairs);
+	TestEqual(TEXT("Press does not submit targeted Cast"), PC->NextCombatOrderRequestId, Before);
+	PC->BeginDestinationInput(HitGround(FVector(800, 0, 0)));
+	PC->OnSetDestinationTriggered();
+	PC->OnSetDestinationReleased();
+	TestEqual(TEXT("Right gesture only cancels aim"), PC->NextCombatOrderRequestId, Before);
+	TestEqual(TEXT("Cancel restores cursor"), PC->CurrentMouseCursor.GetValue(), EMouseCursor::Default);
+	UCombatAbilityAimComponent* Aim = PC->GetAbilityAimComponent();
+	UCombatAbilitySystemComponent* Asc = Unit->GetCombatAbilitySystemComponent();
+	UCombatUnitViewComponent* View = Unit->GetCombatUnitViewComponent();
+	Asc->SetNumericAttributeBase(UCombatAttributeSet::GetCastRangeBonusAttribute(), 75.0f);
+	View->RefreshUnitView();
+	View->RefreshHUDOwnerView();
+	PC->OnAbilitySlotQ();
+	const uint64 FirstSerial = Aim->GetSessionSerial();
+	// 点目标命中现在必须携带真实地面组件，不能用任意坐标伪造有效落点。
+	AActor* Floor = World.SpawnActor<AActor>();
+	UBoxComponent* Surface = NewObject<UBoxComponent>(Floor);
+	Floor->SetRootComponent(Surface);
+	Surface->SetBoxExtent(FVector(100, 100, 10));
+	Surface->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+	Surface->SetCollisionResponseToAllChannels(ECR_Ignore);
+	Surface->SetCollisionResponseToChannel(CombatAbilityIndicatorGround::TraceChannel, ECR_Block);
+	Surface->SetRenderCustomDepth(true);
+	Surface->SetCustomDepthStencilValue(CombatAbilityIndicatorGround::StencilBit);
+	Surface->RegisterComponent();
+	Floor->SetActorLocation(FVector(1700, 25, -10));
+	FHitResult FarPoint;
+	TestTrue(TEXT("Trace real marked floor"), World.LineTraceSingleByChannel(FarPoint,
+		FVector(1700, 25, 100), FVector(1700, 25, -100), CombatAbilityIndicatorGround::TraceChannel));
+	Aim->UpdatePreview(FarPoint, true);
+	TestEqual(TEXT("Far point is amber, still requestable"), Aim->GetPreview().Status, ECombatAbilityAimStatus::OutOfRange);
+	TestEqual(TEXT("Cast circle includes owner bonus and source capsule"), Aim->GetPreview().CastRadius,
+		575.0f + Unit->GetCapsuleComponent()->GetScaledCapsuleRadius());
+	FCombatOrderRequest PreviewOrder;
+	TestFalse(TEXT("Hero body cannot become a point target"), Aim->BuildConfirmedOrder(FirstSerial, HitUnit(Unit), true, PreviewOrder));
+	TestFalse(TEXT("Rejected hero hit clears the old ground preview"), Aim->GetPreview().bHasTarget);
+	FHitResult SteepHit = FarPoint;
+	SteepHit.ImpactNormal = FVector::ForwardVector;
+	TestFalse(TEXT("Platform side cannot become ground"), Aim->BuildConfirmedOrder(FirstSerial, SteepHit, true, PreviewOrder));
+	Surface->SetRenderCustomDepth(false);
+	TestFalse(TEXT("Unmarked surface cannot confirm"), Aim->BuildConfirmedOrder(FirstSerial, FarPoint, true, PreviewOrder));
+	Surface->SetRenderCustomDepth(true);
+	TestFalse(TEXT("UI confirmation cannot reuse ground underneath"), Aim->BuildConfirmedOrder(FirstSerial, FarPoint, false, PreviewOrder));
+	TestFalse(TEXT("Missing hit cannot reuse old point"), Aim->BuildConfirmedOrder(FirstSerial, FHitResult(), true, PreviewOrder));
+	TestTrue(TEXT("Out of range confirmation preserves original request"), Aim->BuildConfirmedOrder(FirstSerial, FarPoint, true, PreviewOrder));
+	TestTrue(TEXT("Point is not clamped"), PreviewOrder.TargetLocation.Equals(FarPoint.Location));
+	PC->ConfirmAbilityTarget(FarPoint, FirstSerial);
+	TestEqual(TEXT("Exactly one request"), PC->NextCombatOrderRequestId, Before + 1);
+	TestEqual(TEXT("Server enters chase for original point"), Unit->GetCombatOrderComponent()->GetCurrentState(), ECombatOrderState::Chasing);
+	TestFalse(TEXT("Submission ends local aim"), Aim->IsAiming());
+	PC->ConfirmAbilityTarget(FarPoint, FirstSerial);
+	TestEqual(TEXT("Repeated confirmation never resends"), PC->NextCombatOrderRequestId, Before + 1);
+	TestEqual(TEXT("Accepted receipt does not claim spell success"), Aim->GetStatusText().ToString(), FString(TEXT("指令已接收")));
+	PC->OnAbilitySlotQ();
+	const uint64 SecondSerial = Aim->GetSessionSerial();
+	TestFalse(TEXT("Old session cannot confirm new selection"), Aim->BuildConfirmedOrder(FirstSerial, FarPoint, true, PreviewOrder));
+	Asc->AddLooseGameplayTag(CombatTags::State_Silenced);
+	View->RefreshUnitView();
+	Aim->UpdatePreview(FarPoint, true);
+	TestEqual(TEXT("Silence blocks even an out of range target"), Aim->GetPreview().Status, ECombatAbilityAimStatus::Blocked);
+	TestFalse(TEXT("Silence submits no request"), Aim->BuildConfirmedOrder(SecondSerial, FarPoint, true, PreviewOrder));
+	Asc->RemoveLooseGameplayTag(CombatTags::State_Silenced);
+	View->RefreshUnitView();
+	PC->AbilityCastMode = ECombatAbilityCastMode::QuickRelease;
+	PC->OnAbilitySlotQ();
+	PC->OnAbilityInputCanceled(0);
+	PC->OnAbilitySlotReleased(0);
+	TestFalse(TEXT("Canceled input cannot become a release cast"), Aim->IsAiming());
+	TestEqual(TEXT("Canceled release sent nothing"), PC->NextCombatOrderRequestId, Before + 1);
+	PC->OnAbilitySlotQ();
+	PC->OnAbilitySlotW();
+	PC->OnAbilitySlotReleased(0);
+	TestFalse(TEXT("Empty slot cancels previous aim and stale release"), Aim->IsAiming());
+	PC->OnAbilitySlotQ();
+	PC->OnAttackTargetingStarted();
+	TestFalse(TEXT("Attack selection replaces skill aim"), Aim->IsAiming());
+	PC->AbilityCastMode = ECombatAbilityCastMode::Standard;
+	PC->OnAbilitySlotQ();
+	Aim->ResetLocalState();
+	TestFalse(TEXT("Focus reset cleans up local aim"), Aim->IsAiming());
+	PC->OnAbilitySlotQ();
+	TestTrue(TEXT("Remove currently aimed skill"), Asc->RemoveCombatAbility(Handle, Failure));
+	Aim->UpdatePreview(FarPoint, true);
+	TestFalse(TEXT("Revoked skill discards its aim"), Aim->IsAiming());
+	TestTrue(TEXT("Regrant skill"), Asc->GrantCombatAbility(UCombatPointAoeAbility::StaticClass(), 1, false, Handle, Failure));
+	View->RefreshHUDOwnerView();
+	PC->OnAbilitySlotQ();
+	FCombatEventContext Death;
+	Unit->GetCombatLifecycleComponent()->RequestDeath(Death, nullptr);
+	Aim->UpdatePreview(FarPoint, true);
+	TestFalse(TEXT("Death invalidates aim"), Aim->IsAiming());
+	TestTrue(TEXT("No stale shape after death"), !Aim->GetPreview().bVisible);
+	return true;
+}
+
+/** 单位施法只认命中 Actor，资源与冷却预检不提交，旧 Owner/EndPlay 不能保留本地会话。 */
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FCombatAbilityUnitAimTest,
+	"Combat.Input.AbilityAim.UnitResourcesAndOwnership",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FCombatAbilityUnitAimTest::RunTest(const FString& Parameters)
+{
+	using namespace CombatPlayerInputTests;
+	FCombatAutomationWorldFixture Fixture;
+	if (!Fixture.IsValid()) return false;
+	UWorld& World = *Fixture.GetWorld();
+	ACombatPlayerController* PC = World.SpawnActor<ACombatPlayerController>();
+	ACombatUnitCharacter* Unit = SpawnUnit(World, FVector::ZeroVector, 1);
+	ACombatUnitCharacter* Enemy = SpawnUnit(World, FVector(150, 0, 0), 2);
+	ACombatUnitCharacter* Friendly = SpawnUnit(World, FVector(180, 0, 0), 1);
+	if (!PC || !Unit || !Enemy || !Friendly || !PC->SetCommandedUnitAuthority(Unit)) return false;
+	PC->SetAsLocalPlayerController();
+	UCombatAbilityData* Data = NewObject<UCombatAbilityData>(Unit);
+	Data->DefinitionName = TEXT("aim_unit");
+	Data->BehaviorTags.AddTag(CombatTags::Ability_Behavior_UnitTarget);
+	Data->TargetingRules.TargetTeamTag = CombatTags::TargetTeam_Enemy;
+	Data->TargetingRules.CastRange = 500.0f;
+	Data->SpecialValues.FindOrAdd(TEXT("mana_cost")).Values = { 30.0f };
+	Data->SpecialValues.FindOrAdd(TEXT("cooldown")).Values = { 5.0f };
+	TGuardValue<TObjectPtr<UCombatAbilityData>> RestoreData(GetMutableDefault<UCombatUnitDamageAbility>()->AbilityData, Data);
+	UCombatAbilitySystemComponent* Asc = Unit->GetCombatAbilitySystemComponent();
+	FGameplayAbilitySpecHandle Handle;
+	FGameplayTag Failure;
+	if (!Asc->GrantCombatAbility(UCombatUnitDamageAbility::StaticClass(), 1, false, Handle, Failure)) return false;
+	Asc->SetNumericAttributeBase(UCombatAttributeSet::GetMaxManaAttribute(), 100.0f);
+	Asc->SetNumericAttributeBase(UCombatAttributeSet::GetManaAttribute(), 100.0f);
+	Unit->GetCombatUnitViewComponent()->RefreshUnitView();
+	Unit->GetCombatUnitViewComponent()->RefreshHUDOwnerView();
+	PC->OnAbilitySlotQ();
+	UCombatAbilityAimComponent* Aim = PC->GetAbilityAimComponent();
+	FCombatOrderRequest Order;
+	const uint64 Serial = Aim->GetSessionSerial();
+	TestFalse(TEXT("Ground near enemy never selects nearest unit"), Aim->BuildConfirmedOrder(Serial, HitGround(Enemy->GetActorLocation()), true, Order));
+	TestFalse(TEXT("Friendly target rejected"), Aim->BuildConfirmedOrder(Serial, HitUnit(Friendly), true, Order));
+	TestTrue(TEXT("Direct enemy hit accepted for request"), Aim->BuildConfirmedOrder(Serial, HitUnit(Enemy), true, Order));
+	TestEqual(TEXT("Request contains only actual hit unit"), Order.TargetUnit.Get(), Enemy);
+	Asc->SetNumericAttributeBase(UCombatAttributeSet::GetManaAttribute(), 0.0f);
+	Unit->GetCombatUnitViewComponent()->RefreshUnitView();
+	TestFalse(TEXT("No mana blocks confirm"), Aim->BuildConfirmedOrder(Serial, HitUnit(Enemy), true, Order));
+	TestEqual(TEXT("Mana reason visible"), Aim->GetStatusText().ToString(), FString(TEXT("法力不足")));
+	Asc->SetNumericAttributeBase(UCombatAttributeSet::GetManaAttribute(), 100.0f);
+	bool CostCommitted = false, CooldownCommitted = false;
+	TestTrue(TEXT("Commit real cooldown through public ASC"), Asc->CommitCombatAbilityStage(Handle, *Data, 1,
+		ECombatAbilityCommitStage::SpellStarted, CostCommitted, CooldownCommitted, Failure));
+	Unit->GetCombatUnitViewComponent()->RefreshUnitView();
+	Unit->GetCombatUnitViewComponent()->RefreshHUDOwnerView();
+	TestFalse(TEXT("Active cooldown blocks confirm"), Aim->BuildConfirmedOrder(Serial, HitUnit(Enemy), true, Order));
+	TestEqual(TEXT("Cooldown reason visible"), Aim->GetStatusText().ToString(), FString(TEXT("技能冷却中")));
+	TestEqual(TEXT("Local prechecks never submitted orders"), PC->NextCombatOrderRequestId, 1);
+	TestTrue(TEXT("Transfer owner through production binding"), PC->SetCommandedUnitAuthority(Friendly));
+	TestFalse(TEXT("Transfer cleans local aim"), Aim->IsAiming());
+	TestFalse(TEXT("Old owner confirmation fails"), Aim->BuildConfirmedOrder(Serial, HitUnit(Enemy), true, Order));
+	TestTrue(TEXT("Restore binding"), PC->SetCommandedUnitAuthority(Unit));
+	PC->OnAbilitySlotQ();
+	if (!Unit->HasActorBegunPlay()) Unit->DispatchBeginPlay();
+	TestTrue(TEXT("Destroy actual owner"), World.DestroyActor(Unit, true));
+	TestFalse(TEXT("Owner EndPlay immediately clears aim"), Aim->IsAiming());
+	TestNull(TEXT("Owner EndPlay clears commanded pointer"), PC->GetCommandedUnit());
 	return true;
 }
 

@@ -22,7 +22,7 @@ class COMBAT_API UCombatUnitViewComponent : public UActorComponent
 
 public:
 	/** v5 在拥有者快照增加成长字段和技能可升级标志；原公共 View 和核心 Combat Event schema 保持兼容。 */
-	static constexpr int32 PresentationSchemaVersion = 5;
+	static constexpr int32 PresentationSchemaVersion = 6;
 	UCombatUnitViewComponent();
 
 	/** 返回当前客户端或服务器的单位 View。 */

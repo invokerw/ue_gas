@@ -1,4 +1,5 @@
 #include "Combat/UI/CombatLogWidget.h"
+#include "CombatPlayerController.h"
 #include "Combat/Log/CombatLogComponent.h"
 #include "Combat/Data/CombatDefinitionData.h"
 #include "Blueprint/WidgetTree.h"
@@ -167,8 +168,23 @@ void UCombatLogWidget::CloseLog()
 
 FReply UCombatLogWidget::NativeOnPreviewKeyDown(const FGeometry& Geometry, const FKeyEvent& Event)
 {
-	if (bLogOpen && Event.GetKey() == EKeys::Escape) { CloseLog(); return FReply::Handled(); }
+	if (Event.GetKey() == EKeys::Escape)
+	{
+		if (ACombatPlayerController* PC = Cast<ACombatPlayerController>(GetOwningPlayer())) PC->CancelCombatTargeting();
+		if (bLogOpen) CloseLog();
+		return FReply::Handled();
+	}
 	return Super::NativeOnPreviewKeyDown(Geometry, Event);
+}
+
+FReply UCombatLogWidget::NativeOnPreviewMouseButtonDown(const FGeometry& Geometry, const FPointerEvent& Event)
+{
+	if (Event.GetEffectingButton() == EKeys::RightMouseButton && IsScreenPositionOverUI(Event.GetScreenSpacePosition()))
+	{
+		if (ACombatPlayerController* PC = Cast<ACombatPlayerController>(GetOwningPlayer())) PC->CancelCombatTargeting();
+		return FReply::Handled();
+	}
+	return Super::NativeOnPreviewMouseButtonDown(Geometry, Event);
 }
 
 FReply UCombatLogWidget::NativeOnMouseButtonDown(const FGeometry& Geometry, const FPointerEvent& Event)
@@ -189,6 +205,13 @@ FReply UCombatLogWidget::NativeOnMouseButtonDown(const FGeometry& Geometry, cons
 	if (LogEntryButton && LogEntryButton->GetCachedGeometry().IsUnderLocation(Event.GetScreenSpacePosition())) return FReply::Handled();
 	if (bLogOpen && LogPanel && LogPanel->GetCachedGeometry().IsUnderLocation(Event.GetScreenSpacePosition())) return FReply::Handled();
 	return Super::NativeOnMouseButtonDown(Geometry, Event);
+}
+
+bool UCombatLogWidget::IsScreenPositionOverUI(const FVector2D Position) const
+{
+	return IsVisible() && (bDraggingWindow
+		|| (LogEntryButton && LogEntryButton->IsVisible() && LogEntryButton->GetCachedGeometry().IsUnderLocation(Position))
+		|| (bLogOpen && LogPanel && LogPanel->IsVisible() && LogPanel->GetCachedGeometry().IsUnderLocation(Position)));
 }
 
 bool UCombatLogWidget::IsTitleDragLocation(const FVector2D& ScreenPosition) const

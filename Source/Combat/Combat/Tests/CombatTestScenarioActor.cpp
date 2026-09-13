@@ -27,6 +27,7 @@
 #include "Combat/Unit/CombatUnitCharacter.h"
 #include "Combat/Unit/CombatUnitLifecycleComponent.h"
 #include "Combat/View/CombatUnitViewComponent.h"
+#include "Combat/UI/CombatAbilityIndicatorActor.h"
 #include "Combat/Validation/CombatAssetValidationCommandlet.h"
 #include "Combat/Validation/CombatSkillTemplateValidator.h"
 #include "Engine/World.h"
@@ -495,6 +496,15 @@ void ACombatTestScenarioActor::LogHUDNetworkSnapshot()
 	if (!GetWorld()) return;
 	const ACombatPlayerController* LocalPlayer = Cast<ACombatPlayerController>(GetWorld()->GetFirstPlayerController());
 	const ACombatUnitCharacter* LocalUnit = LocalPlayer ? LocalPlayer->GetCommandedUnit() : nullptr;
+	if (!HasAuthority() && !bHUDIndicatorWarmup && LocalPlayer && LocalUnit)
+	{
+		bHUDIndicatorWarmup = true;
+		LocalPlayer->GetAbilityAimComponent()->SetHoveredSlot(0);
+		// 只在显式 smoke 中编排一次本地瞄准；无目标/AutoCast 不提交任何 gameplay。
+		LocalPlayer->GetAbilityAimComponent()->BeginAim(0);
+		GetWorldTimerManager().SetTimer(HUDNetworkSnapshotTimer, this, &ACombatTestScenarioActor::LogHUDNetworkSnapshot, 2.0f, false);
+		return;
+	}
 	int32 CheckedOwners = 0, CheckedForeign = 0, CheckedSkills = 0;
 	bool bPassed = true;
 	for (TActorIterator<ACombatUnitCharacter> It(GetWorld()); It; ++It)
@@ -515,6 +525,8 @@ void ACombatTestScenarioActor::LogHUDNetworkSnapshot()
 			&& Snapshot.UnitDefinitionId == View->GetUnitView().UnitDefinitionId
 			&& FMath::IsNearlyEqual(Snapshot.AttackDamage, Asc->GetNumericAttribute(UCombatAttributeSet::GetAttackDamageAttribute()))
 			&& FMath::IsNearlyEqual(Snapshot.Armor, Asc->GetNumericAttribute(UCombatAttributeSet::GetArmorAttribute()))
+			&& FMath::IsNearlyEqual(Snapshot.CastRangeBonus, Asc->GetNumericAttribute(UCombatAttributeSet::GetCastRangeBonusAttribute()))
+			&& FMath::IsNearlyEqual(Snapshot.AttackRange, Asc->GetNumericAttribute(UCombatAttributeSet::GetAttackRangeAttribute()))
 			&& FMath::IsNearlyEqual(Snapshot.MoveSpeed, Asc->GetNumericAttribute(UCombatAttributeSet::GetMoveSpeedAttribute()));
 		int32 ExpectedIndex = 0;
 		for (const FGameplayAbilitySpec& Spec : Asc->GetActivatableAbilities())
@@ -538,9 +550,17 @@ void ACombatTestScenarioActor::LogHUDNetworkSnapshot()
 		bPassed &= Snapshot.Abilities.Num() == ExpectedIndex;
 	}
 	bPassed &= CheckedOwners == (HasAuthority() ? 2 : 1) && CheckedForeign > 0 && CheckedSkills > 0;
-	UE_LOG(LogCombat, Display, TEXT("HUDNetworkSnapshot Role=%s Owners=%d Foreign=%d Skills=%d Result=%s"),
+	int32 Visuals = 0;
+	for (TActorIterator<ACombatAbilityIndicatorActor> It(GetWorld()); It; ++It)
+	{
+		++Visuals;
+		bPassed &= !It->GetIsReplicated() && !It->GetActorEnableCollision() && It->GetOwner() == LocalPlayer;
+	}
+	bPassed &= HasAuthority() ? Visuals == 0 : Visuals == 1;
+	UE_LOG(LogCombat, Display, TEXT("HUDNetworkSnapshot Schema=6 RangeFields=Checked Role=%s Owners=%d Foreign=%d Skills=%d Visuals=%d Result=%s"),
 		HasAuthority() ? TEXT("Server") : TEXT("Client"), CheckedOwners, CheckedForeign, CheckedSkills,
-		bPassed ? TEXT("Pass") : TEXT("Fail"));
+		Visuals, bPassed ? TEXT("Pass") : TEXT("Fail"));
+	if (!HasAuthority() && LocalPlayer) LocalPlayer->GetAbilityAimComponent()->ResetLocalState();
 	if (FParse::Param(FCommandLine::Get(), TEXT("CombatLogSmoke")))
 	{
 		int32 Connections = 0;

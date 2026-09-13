@@ -17,6 +17,9 @@
 #include "Components/Button.h"
 #include "Input/Reply.h"
 #include "InputCoreTypes.h"
+#include "Framework/Application/SlateApplication.h"
+#include "Combat/UI/CombatPlayerHUD.h"
+#include "Combat/UI/CombatLogWidget.h"
 
 namespace CombatHUD
 {
@@ -130,6 +133,7 @@ void UCombatHUDWidget::HandleUnitEndPlay(AActor* Actor, EEndPlayReason::Type Rea
 
 void UCombatHUDWidget::NativeDestruct()
 {
+	if (const ACombatPlayerController* PC = Cast<ACombatPlayerController>(GetOwningPlayer())) PC->GetAbilityAimComponent()->SetHoveredSlot(INDEX_NONE);
 	bConstructed = false;
 	UnbindView();
 	ResetPresentation();
@@ -148,6 +152,13 @@ void UCombatHUDWidget::NativeTick(const FGeometry& Geometry, float DeltaTime)
 	Super::NativeTick(Geometry, DeltaTime);
 	const ACombatPlayerController* Controller = Cast<ACombatPlayerController>(GetOwningPlayer());
 	if (Controller && Controller->IsLocalController()) InitializeForUnit(Controller->GetCommandedUnit());
+	if (Controller && FSlateApplication::IsInitialized())
+	{
+		const FVector2D PointerPosition = FSlateApplication::Get().GetCursorPos();
+		const ACombatPlayerHUD* HUD = Cast<ACombatPlayerHUD>(Controller->GetHUD());
+		const bool bOverLog = HUD && HUD->GetLogWidget() && HUD->GetLogWidget()->IsScreenPositionOverUI(PointerPosition);
+		Controller->GetAbilityAimComponent()->SetHoveredSlot(bOverLog ? INDEX_NONE : GetHoveredAbilitySlot(PointerPosition));
+	}
 	RefreshAccumulator += DeltaTime;
 	if (RefreshAccumulator >= 0.05f)
 	{
@@ -323,6 +334,7 @@ void UCombatHUDWidget::RefreshDisplay()
 		BuffOverflowText->SetToolTipText(FText::FromString(Overflow));
 	}
 	FString Activity;
+	if (const ACombatPlayerController* PC = Cast<ACombatPlayerController>(GetOwningPlayer())) Activity = PC->GetAbilityAimComponent()->GetStatusText().ToString();
 	if (!bAlive) Activity = TEXT("已阵亡");
 	else if (Unit.AbilityPhase != ECombatAbilityViewPhase::None && Unit.ActiveAbilityDefinitionId.IsValid())
 	{
@@ -385,8 +397,23 @@ void UCombatHUDWidget::CloseDetail()
 
 FReply UCombatHUDWidget::NativeOnKeyDown(const FGeometry& Geometry, const FKeyEvent& Event)
 {
-	if (Event.GetKey() == EKeys::Escape && bDetailPinned) { CloseDetail(); return FReply::Handled(); }
+	if (Event.GetKey() == EKeys::Escape)
+	{
+		if (ACombatPlayerController* PC = Cast<ACombatPlayerController>(GetOwningPlayer())) PC->CancelCombatTargeting();
+		if (bDetailPinned) CloseDetail();
+		return FReply::Handled();
+	}
 	return Super::NativeOnKeyDown(Geometry, Event);
+}
+
+FReply UCombatHUDWidget::NativeOnPreviewMouseButtonDown(const FGeometry& Geometry, const FPointerEvent& Event)
+{
+	if (Event.GetEffectingButton() == EKeys::RightMouseButton && IsScreenPositionOverUI(Event.GetScreenSpacePosition()))
+	{
+		if (ACombatPlayerController* PC = Cast<ACombatPlayerController>(GetOwningPlayer())) PC->CancelCombatTargeting();
+		return FReply::Handled();
+	}
+	return Super::NativeOnPreviewMouseButtonDown(Geometry, Event);
 }
 
 FReply UCombatHUDWidget::NativeOnMouseButtonDown(const FGeometry& Geometry, const FPointerEvent& Event)
@@ -396,8 +423,34 @@ FReply UCombatHUDWidget::NativeOnMouseButtonDown(const FGeometry& Geometry, cons
 		HandleDetail(BuildHeroDetail(), true, nullptr);
 		return FReply::Handled();
 	}
-	if (HUDFrame && HUDFrame->GetCachedGeometry().IsUnderLocation(Event.GetScreenSpacePosition())) return FReply::Handled();
+	if (IsScreenPositionOverUI(Event.GetScreenSpacePosition())) return FReply::Handled();
 	return Super::NativeOnMouseButtonDown(Geometry, Event);
+}
+
+bool UCombatHUDWidget::IsScreenPositionOverUI(const FVector2D Position) const
+{
+	if (!IsVisible() || (HUDPanel && !HUDPanel->IsVisible())) return false;
+	if (HUDFrame && HUDFrame->IsVisible() && HUDFrame->GetCachedGeometry().IsUnderLocation(Position)) return true;
+	if (DetailPanel && DetailPanel->IsVisible() && DetailPanel->GetCachedGeometry().IsUnderLocation(Position)) return true;
+	for (UCombatHUDSlotWidget* Entry : GetSkillWidgets())
+	{
+		if (!Entry || !Entry->IsVisible()) continue;
+		if (Entry->GetCachedGeometry().IsUnderLocation(Position)) return true;
+		const UButton* Upgrade = Entry->GetEffectiveUpgradeButton();
+		if (Upgrade && Upgrade->IsVisible() && Upgrade->GetCachedGeometry().IsUnderLocation(Position)) return true;
+	}
+	return false;
+}
+
+int32 UCombatHUDWidget::GetHoveredAbilitySlot(const FVector2D Position) const
+{
+	if (!IsVisible() || (HUDPanel && !HUDPanel->IsVisible())) return INDEX_NONE;
+	const TArray<UCombatHUDSlotWidget*> Slots = GetSkillWidgets();
+	for (int32 Index = 0; Index < Slots.Num(); ++Index)
+	{
+		if (Slots[Index] && Slots[Index]->IsVisible() && Slots[Index]->GetCachedGeometry().IsUnderLocation(Position)) return Index;
+	}
+	return INDEX_NONE;
 }
 
 FReply UCombatHUDWidget::NativeOnMouseMove(const FGeometry& Geometry, const FPointerEvent& Event)

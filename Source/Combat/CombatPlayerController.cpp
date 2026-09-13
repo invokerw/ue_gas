@@ -4,7 +4,7 @@
 
 #include "Engine/LocalPlayer.h"
 #include "Engine/World.h"
-#include "EngineUtils.h"
+#include "Framework/Application/SlateApplication.h"
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
 #include "InputActionValue.h"
@@ -21,6 +21,9 @@
 #include "Combat/Network/CombatNetworkTypes.h"
 #include "Combat/Order/CombatOrderComponent.h"
 #include "Combat/Targeting/CombatTargetingSubsystem.h"
+#include "Combat/UI/CombatPlayerHUD.h"
+#include "Combat/UI/CombatHUDWidget.h"
+#include "Combat/UI/CombatLogWidget.h"
 #include "Combat/Unit/CombatUnitAIController.h"
 #include "Combat/Unit/CombatUnitCharacter.h"
 #include "Combat.h"
@@ -33,6 +36,7 @@ ACombatPlayerController::ACombatPlayerController()
 	DefaultMouseCursor = EMouseCursor::Default;
 	CommandPawnClass = ACombatCharacter::StaticClass();
 	CombatLogComponent = CreateDefaultSubobject<UCombatLogComponent>(TEXT("CombatLog"));
+	AbilityAimComponent = CreateDefaultSubobject<UCombatAbilityAimComponent>(TEXT("AbilityAim"));
 }
 
 void ACombatPlayerController::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -148,6 +152,7 @@ void ACombatPlayerController::OnPossess(APawn* InPawn)
 
 void ACombatPlayerController::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+	CancelCombatTargeting();
 	CancelAttackTargeting();
 	ResetDestinationInput();
 	if (HasAuthority())
@@ -169,6 +174,7 @@ void ACombatPlayerController::OnRep_CommandBindingGeneration()
 
 void ACombatPlayerController::RefreshCommandBinding()
 {
+	if (AbilityAimComponent) AbilityAimComponent->ResetLocalState();
 	CancelAttackTargeting();
 	ResetDestinationInput();
 	if (ACombatCharacter* CommandPawn = Cast<ACombatCharacter>(GetPawn()))
@@ -215,15 +221,22 @@ void ACombatPlayerController::SetupInputComponent()
 	EnhancedInputComponent->BindAction(SetDestinationClickAction, ETriggerEvent::Started, this, &ACombatPlayerController::OnInputStarted);
 	EnhancedInputComponent->BindAction(SetDestinationClickAction, ETriggerEvent::Triggered, this, &ACombatPlayerController::OnSetDestinationTriggered);
 	EnhancedInputComponent->BindAction(SetDestinationClickAction, ETriggerEvent::Completed, this, &ACombatPlayerController::OnSetDestinationReleased);
-	EnhancedInputComponent->BindAction(SetDestinationClickAction, ETriggerEvent::Canceled, this, &ACombatPlayerController::OnSetDestinationReleased);
+	EnhancedInputComponent->BindAction(SetDestinationClickAction, ETriggerEvent::Canceled, this, &ACombatPlayerController::ResetDestinationInput);
 	EnhancedInputComponent->BindAction(SetDestinationTouchAction, ETriggerEvent::Started, this, &ACombatPlayerController::OnTouchStarted);
 	EnhancedInputComponent->BindAction(SetDestinationTouchAction, ETriggerEvent::Triggered, this, &ACombatPlayerController::OnTouchTriggered);
 	EnhancedInputComponent->BindAction(SetDestinationTouchAction, ETriggerEvent::Completed, this, &ACombatPlayerController::OnTouchReleased);
-	EnhancedInputComponent->BindAction(SetDestinationTouchAction, ETriggerEvent::Canceled, this, &ACombatPlayerController::OnTouchReleased);
+	EnhancedInputComponent->BindAction(SetDestinationTouchAction, ETriggerEvent::Canceled, this, &ACombatPlayerController::ResetDestinationInput);
 	if (AbilitySlotQAction) EnhancedInputComponent->BindAction(AbilitySlotQAction, ETriggerEvent::Started, this, &ACombatPlayerController::OnAbilitySlotQ);
 	if (AbilitySlotWAction) EnhancedInputComponent->BindAction(AbilitySlotWAction, ETriggerEvent::Started, this, &ACombatPlayerController::OnAbilitySlotW);
 	if (AbilitySlotEAction) EnhancedInputComponent->BindAction(AbilitySlotEAction, ETriggerEvent::Started, this, &ACombatPlayerController::OnAbilitySlotE);
 	if (AbilitySlotRAction) EnhancedInputComponent->BindAction(AbilitySlotRAction, ETriggerEvent::Started, this, &ACombatPlayerController::OnAbilitySlotR);
+	const UInputAction* SlotActions[] = { AbilitySlotQAction, AbilitySlotWAction, AbilitySlotEAction, AbilitySlotRAction };
+	for (int32 Slot = 0; Slot < 4; ++Slot)
+	{
+		if (!SlotActions[Slot]) continue;
+		EnhancedInputComponent->BindAction(SlotActions[Slot], ETriggerEvent::Completed, this, &ACombatPlayerController::OnAbilitySlotReleased, Slot);
+		EnhancedInputComponent->BindAction(SlotActions[Slot], ETriggerEvent::Canceled, this, &ACombatPlayerController::OnAbilityInputCanceled, Slot);
+	}
 	BindCombatCommandActions(*EnhancedInputComponent);
 }
 
@@ -231,7 +244,7 @@ void ACombatPlayerController::BindCombatCommandActions(UEnhancedInputComponent& 
 {
 	if (AttackTargetAction) EnhancedInputComponent.BindAction(AttackTargetAction, ETriggerEvent::Started, this, &ACombatPlayerController::OnAttackTargetingStarted);
 	if (ConfirmAttackTargetAction) EnhancedInputComponent.BindAction(ConfirmAttackTargetAction, ETriggerEvent::Started, this, &ACombatPlayerController::OnAttackTargetConfirmed);
-	if (CancelAttackTargetAction) EnhancedInputComponent.BindAction(CancelAttackTargetAction, ETriggerEvent::Started, this, &ACombatPlayerController::CancelAttackTargeting);
+	if (CancelAttackTargetAction) EnhancedInputComponent.BindAction(CancelAttackTargetAction, ETriggerEvent::Started, this, &ACombatPlayerController::CancelCombatTargeting);
 	if (StopCommandAction) EnhancedInputComponent.BindAction(StopCommandAction, ETriggerEvent::Started, this, &ACombatPlayerController::OnStopCommand);
 }
 
@@ -251,8 +264,12 @@ void ACombatPlayerController::OnInputStarted()
 
 void ACombatPlayerController::BeginDestinationInput(const FHitResult& Hit)
 {
+	const bool bWasAbilityAiming = AbilityAimComponent && AbilityAimComponent->IsAiming();
+	if (bWasAbilityAiming) AbilityAimComponent->ResetLocalState();
 	CancelAttackTargeting();
 	ResetDestinationInput();
+	// 右键取消消费整个手势，后续 Triggered/Completed 没有可恢复的移动目标。
+	if (bWasAbilityAiming || IsPointerOverCombatUI()) return;
 	if (!Hit.bBlockingHit || Hit.Location.ContainsNaN())
 	{
 		return;
@@ -278,6 +295,7 @@ void ACombatPlayerController::ResetDestinationInput()
 
 void ACombatPlayerController::OnSetDestinationTriggered()
 {
+	if (IsPointerOverCombatUI()) { ResetDestinationInput(); return; }
 	if (!bDestinationInputActive)
 	{
 		return;
@@ -299,6 +317,7 @@ void ACombatPlayerController::OnSetDestinationTriggered()
 
 void ACombatPlayerController::OnSetDestinationReleased()
 {
+	if (IsPointerOverCombatUI()) { ResetDestinationInput(); return; }
 	if (!bDestinationInputActive)
 	{
 		return;
@@ -340,6 +359,7 @@ void ACombatPlayerController::OnTouchReleased()
 
 void ACombatPlayerController::OnAttackTargetingStarted()
 {
+	if (AbilityAimComponent) AbilityAimComponent->ResetLocalState();
 	ResetDestinationInput();
 	bAttackTargeting = GetReadyCommandedUnit() != nullptr;
 	CurrentMouseCursor = bAttackTargeting ? EMouseCursor::Crosshairs : DefaultMouseCursor.GetValue();
@@ -347,6 +367,14 @@ void ACombatPlayerController::OnAttackTargetingStarted()
 
 void ACombatPlayerController::OnAttackTargetConfirmed()
 {
+	if (AbilityAimComponent && AbilityAimComponent->IsAiming())
+	{
+		FHitResult Hit;
+		AbilityAimComponent->TraceAimHit(Hit);
+		ConfirmAbilityTarget(Hit, AbilityAimComponent->GetSessionSerial());
+		return;
+	}
+	if (IsPointerOverCombatUI()) return;
 	if (!bAttackTargeting)
 	{
 		return;
@@ -373,6 +401,7 @@ void ACombatPlayerController::CancelAttackTargeting()
 
 void ACombatPlayerController::OnStopCommand()
 {
+	if (AbilityAimComponent) AbilityAimComponent->ResetLocalState();
 	CancelAttackTargeting();
 	ResetDestinationInput();
 	FCombatOrderRequest Order;
@@ -427,6 +456,7 @@ void ACombatPlayerController::ActivateCombatAbilitySlot(const int32 SlotIndex)
 {
 	CancelAttackTargeting();
 	ResetDestinationInput();
+	AbilityAimComponent->CancelAim();
 	ACombatUnitCharacter* Unit = GetReadyCommandedUnit();
 	UCombatAbilitySystemComponent* Asc = Unit ? Unit->GetCombatAbilitySystemComponent() : nullptr;
 	if (!Unit || !Asc)
@@ -435,25 +465,14 @@ void ACombatPlayerController::ActivateCombatAbilitySlot(const int32 SlotIndex)
 		return;
 	}
 
-	TArray<const FGameplayAbilitySpec*> SlottedAbilities;
-	for (const FGameplayAbilitySpec& Spec : Asc->GetActivatableAbilities())
-	{
-		const UCombatGameplayAbility* CombatAbility = Cast<UCombatGameplayAbility>(Spec.Ability);
-		const UCombatAbilityData* AbilityData = CombatAbility ? CombatAbility->GetAbilityData() : nullptr;
-		if (!AbilityData || !AbilityData->ShouldOccupyPlayerAbilitySlot())
-		{
-			continue;
-		}
-		SlottedAbilities.Add(&Spec);
-	}
-	if (!SlottedAbilities.IsValidIndex(SlotIndex))
+	const FGameplayAbilitySpec* Spec = UCombatAbilityAimComponent::ResolveSlot(Unit, SlotIndex);
+	if (!Spec)
 	{
 		UE_LOG(LogCombatGame, Display, TEXT("Combat ability slot %d is empty"), SlotIndex + 1);
 		return;
 	}
 
-	const FGameplayAbilitySpec& Spec = *SlottedAbilities[SlotIndex];
-	const UCombatAbilityData* AbilityData = Asc->GetCombatAbilityData(Spec.Handle);
+	const UCombatAbilityData* AbilityData = Asc->GetCombatAbilityData(Spec->Handle);
 	if (!AbilityData)
 	{
 		return;
@@ -461,39 +480,81 @@ void ACombatPlayerController::ActivateCombatAbilitySlot(const int32 SlotIndex)
 	if (AbilityData->UsesAutoCastToggleInput())
 	{
 		// Toggle 由服务器读取当前值后原子翻转；客户端不依赖可能滞后的 HUD 投影猜测下一状态。
-		Asc->ServerToggleAutoCastEnabled(Spec.Handle);
+		Asc->ServerToggleAutoCastEnabled(Spec->Handle);
 		return;
 	}
 
-	FHitResult CursorHit;
-	const bool bHasCursorHit = GetHitResultUnderCursor(ECC_Visibility, true, CursorHit);
-	FCombatOrderRequest Order;
-	Order.AbilitySpecHandle = Spec.Handle;
-	if (AbilityData->BehaviorTags.HasTagExact(CombatTags::Ability_Behavior_UnitTarget))
+	if (AbilityData->BehaviorTags.HasTagExact(CombatTags::Ability_Behavior_NoTarget))
 	{
-		Order.Type = ECombatOrderType::CastTarget;
-		Order.TargetUnit = bHasCursorHit ? FindCombatUnitUnderCursor(CursorHit.Location) : nullptr;
-		if (!Order.TargetUnit)
-		{
-			return;
-		}
-	}
-	else if (AbilityData->BehaviorTags.HasTagExact(CombatTags::Ability_Behavior_PointTarget))
-	{
-		if (!bHasCursorHit)
-		{
-			return;
-		}
-		Order.Type = ECombatOrderType::CastPoint;
-		Order.TargetLocation = CursorHit.Location;
-		Order.bHasTargetLocation = true;
-	}
-	else
-	{
+		FCombatOrderRequest Order;
+		Order.AbilitySpecHandle = Spec->Handle;
 		Order.Type = ECombatOrderType::CastNoTarget;
+		SubmitCombatOrder(Order);
+		return;
 	}
+	if (!AbilityAimComponent->BeginAim(SlotIndex)) return;
+	AbilityPressSerials[SlotIndex] = AbilityAimComponent->GetSessionSerial();
+	FHitResult Hit;
+	AbilityAimComponent->TraceAimHit(Hit);
+	AbilityAimComponent->UpdatePreview(Hit, !IsPointerOverCombatUI());
+	if (AbilityCastMode == ECombatAbilityCastMode::QuickPress)
+	{
+		ConfirmAbilityTarget(Hit, AbilityPressSerials[SlotIndex]);
+		if (AbilityAimComponent->IsAiming()) AbilityAimComponent->FinishQuickCastAttempt();
+	}
+}
 
+void ACombatPlayerController::OnAbilitySlotReleased(const int32 SlotIndex)
+{
+	if (SlotIndex < 0 || SlotIndex >= 4) return;
+	const uint64 Serial = AbilityPressSerials[SlotIndex];
+	AbilityPressSerials[SlotIndex] = 0;
+	if (AbilityCastMode != ECombatAbilityCastMode::QuickRelease || !Serial
+		|| !AbilityAimComponent->IsAiming() || AbilityAimComponent->GetActiveSlot() != SlotIndex
+		|| AbilityAimComponent->GetSessionSerial() != Serial) return;
+	FHitResult Hit;
+	AbilityAimComponent->TraceAimHit(Hit);
+	ConfirmAbilityTarget(Hit, Serial);
+	if (AbilityAimComponent->IsAiming()) AbilityAimComponent->FinishQuickCastAttempt();
+}
+
+void ACombatPlayerController::OnAbilityInputCanceled(const int32 SlotIndex)
+{
+	if (SlotIndex < 0 || SlotIndex >= 4) return;
+	if (AbilityAimComponent->IsAiming() && AbilityAimComponent->GetActiveSlot() == SlotIndex
+		&& AbilityAimComponent->GetSessionSerial() == AbilityPressSerials[SlotIndex]) AbilityAimComponent->CancelAim();
+	AbilityPressSerials[SlotIndex] = 0;
+}
+
+void ACombatPlayerController::ConfirmAbilityTarget(const FHitResult& Hit, const uint64 Serial)
+{
+	FCombatOrderRequest Order;
+	if (!GetReadyCommandedUnit() || !AbilityAimComponent->BuildConfirmedOrder(Serial, Hit, !IsPointerOverCombatUI(), Order)) return;
+	AbilityAimComponent->MarkSubmitted(NextCombatOrderRequestId);
 	SubmitCombatOrder(Order);
+}
+
+void ACombatPlayerController::CancelCombatTargeting()
+{
+	CancelAttackTargeting();
+	ResetDestinationInput();
+	if (AbilityAimComponent) AbilityAimComponent->ResetLocalState();
+	for (uint64& Serial : AbilityPressSerials) Serial = 0;
+}
+
+void ACombatPlayerController::FlushPressedKeys()
+{
+	CancelCombatTargeting();
+	Super::FlushPressedKeys();
+}
+
+bool ACombatPlayerController::IsPointerOverCombatUI() const
+{
+	const ACombatPlayerHUD* HUD = Cast<ACombatPlayerHUD>(GetHUD());
+	if (!HUD || !FSlateApplication::IsInitialized()) return false;
+	const FVector2D Cursor = FSlateApplication::Get().GetCursorPos();
+	return (HUD->GetCombatWidget() && HUD->GetCombatWidget()->IsScreenPositionOverUI(Cursor))
+		|| (HUD->GetLogWidget() && HUD->GetLogWidget()->IsScreenPositionOverUI(Cursor));
 }
 
 bool ACombatPlayerController::IssueCombatMoveOrder()
@@ -515,47 +576,6 @@ bool ACombatPlayerController::IssueCombatMoveOrder()
 	MoveOrderRefreshElapsed = 0.0f;
 	bHasIssuedMoveOrder = true;
 	return true;
-}
-
-ACombatUnitCharacter* ACombatPlayerController::FindCombatUnitUnderCursor(const FVector& CursorWorldLocation) const
-{
-	FHitResult CursorHit;
-	if (GetHitResultUnderCursor(ECC_Visibility, true, CursorHit))
-	{
-		if (ACombatUnitCharacter* DirectTarget = Cast<ACombatUnitCharacter>(CursorHit.GetActor()))
-		{
-			return DirectTarget;
-		}
-	}
-	const ACombatUnitCharacter* SourceUnit = CommandedUnit;
-	ACombatUnitCharacter* BestTarget = nullptr;
-	float BestDistanceSquared = FMath::Square(175.0f);
-	ACombatUnitCharacter* NearestTarget = nullptr;
-	float NearestDistanceSquared = FMath::Square(1000.0f);
-	for (TActorIterator<ACombatUnitCharacter> It(GetWorld()); It; ++It)
-	{
-		ACombatUnitCharacter* Candidate = *It;
-		if (!Candidate || Candidate == SourceUnit)
-		{
-			continue;
-		}
-		const float DistanceSquared = FVector::DistSquared2D(CursorWorldLocation, Candidate->GetActorLocation());
-		if (DistanceSquared < BestDistanceSquared)
-		{
-			BestDistanceSquared = DistanceSquared;
-			BestTarget = Candidate;
-		}
-		if (SourceUnit)
-		{
-			const float SourceDistanceSquared = FVector::DistSquared2D(SourceUnit->GetActorLocation(), Candidate->GetActorLocation());
-			if (SourceDistanceSquared < NearestDistanceSquared)
-			{
-				NearestDistanceSquared = SourceDistanceSquared;
-				NearestTarget = Candidate;
-			}
-		}
-	}
-	return BestTarget ? BestTarget : NearestTarget;
 }
 
 bool ACombatPlayerController::UpdateCachedDestination()

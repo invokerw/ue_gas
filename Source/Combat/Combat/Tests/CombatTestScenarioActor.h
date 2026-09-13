@@ -106,6 +106,8 @@ private:
 	FTimerHandle SamClientPositionTimer;
 	/** 仅 -CombatHUDSmoke 测试启动，等待真实网络初始复制完成。 */
 	FTimerHandle HUDNetworkSnapshotTimer;
+	/** 客户端预留两秒给真实悬停预览生成，随后采样本地视觉所有权。 */
+	bool bHUDIndicatorWarmup = false;
 	/** SAM 对撞开始时静止 B 的服务器权威位置。 */
 	FVector SamStationaryUnitStart = FVector::ZeroVector;
 	/** SAM 对撞开始时移动 A 的服务器权威位置，用于防止“只验证静止目标”的假阳性。 */

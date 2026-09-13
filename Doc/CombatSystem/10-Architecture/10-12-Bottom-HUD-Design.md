@@ -1,5 +1,7 @@
 # 10-12 底部居中 HUD：设计与实现
 
+技能指示器接入见 [10-13](10-13-Skill-Indicators.md)：悬停显示可靠范围，点击仍固定详情；加点、详情和日志的实际几何阻止世界输入。HUD 活动行显示瞄准原因，服务器施法/引导优先。拥有者范围快照采用展示 schema 6（ADR-053）。
+
 > 2026-09-09：用户确认设计并明确要求开始实现。底部 HUD 已接入 Demo，验证状态以 [进度台账](../00-Project/00-01-Progress-Tracker.md) 为准；DEMO-901 将展示投影升级到 schema 4，决策 ADR-047、ADR-048。
 
 ## 1. 已确认的布局
@@ -90,7 +92,7 @@ Designer 中使用底边锚定的 ScaleBox，按 UE DPI 规则显示，狭窄区
 | --- | --- | --- | --- | --- |
 | 本地 `ACombatPlayerHUD` | 强持有主 Widget；Widget 弱观察 `CommandedUnit` / View，强持有效 Buff 子控件 | View 变化或本地显示刷新 | 换单位解绑；换生命清空详情与子控件；Widget Destruct / Unit EndPlay 取消加载并移除委托；HUD EndPlay 移除视口控件 | `BindingRevision + LifeGeneration`；专用服务器不创建 Widget |
 
-`UCombatProgressionComponent` 保存服务器权威等级、经验和技能点。累计经验阈值采用 `XP(n)=100*(n-1)*(n+2)/2`，默认上限 30 级；单位定义可配置初始等级、等级内经验和击杀经验奖励，致死伤害完成死亡转换后把奖励发给实际击杀者。技能加点通过 owning client 的可靠请求进入服务器，服务器检查技能点、英雄等级、技能上限和生命状态。物品、背包、库存与经济仍为展示占位；核心 `combat_v1_rc1` 保持不变，展示 schema 5 要求服务器和客户端使用同版本。
+`UCombatProgressionComponent` 保存服务器权威等级、经验和技能点。累计经验阈值采用 `XP(n)=100*(n-1)*(n+2)/2`，默认上限 30 级；单位定义可配置初始等级、等级内经验和击杀经验奖励，致死伤害完成死亡转换后把奖励发给实际击杀者。技能加点通过 owning client 的可靠请求进入服务器，服务器检查技能点、英雄等级、技能上限和生命状态。物品、背包、库存与经济仍为展示占位；核心 `combat_v1_rc1` 保持不变。成长字段在 schema 5 引入，当前指示器范围扩展为 schema 6，要求服务器和客户端使用同版本。
 
 ## 6. 确认与验证
 

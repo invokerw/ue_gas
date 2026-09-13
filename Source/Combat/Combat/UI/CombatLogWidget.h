@@ -40,6 +40,8 @@ public:
 	void SetLogOpen(bool bOpen);
 	bool IsLogOpen() const { return bLogOpen; }
 	int32 GetVisibleEntryCount() const { return VisibleSequences.Num(); }
+	/** 入口、展开窗口及拖动捕获阻止世界输入；关闭窗口的空白全屏区域不阻挡。 */
+	bool IsScreenPositionOverUI(FVector2D Position) const;
 
 protected:
 	virtual void NativeConstruct() override;
@@ -47,6 +49,7 @@ protected:
 	virtual void NativeTick(const FGeometry& Geometry, float DeltaTime) override;
 	virtual FReply NativeOnPreviewKeyDown(const FGeometry& Geometry, const FKeyEvent& Event) override;
 	virtual FReply NativeOnMouseButtonDown(const FGeometry& Geometry, const FPointerEvent& Event) override;
+	virtual FReply NativeOnPreviewMouseButtonDown(const FGeometry& Geometry, const FPointerEvent& Event) override;
 	virtual FReply NativeOnMouseButtonUp(const FGeometry& Geometry, const FPointerEvent& Event) override;
 	virtual FReply NativeOnMouseMove(const FGeometry& Geometry, const FPointerEvent& Event) override;
 	virtual void NativeOnMouseCaptureLost(const FCaptureLostEvent& Event) override;

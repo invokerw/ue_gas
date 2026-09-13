@@ -1,6 +1,8 @@
 # 00-01 开发进度台账
 
 > 最后更新：2026-09-13
+> 指示器修正（2026-09-13）：[AIM-002](../Specs/AIM-002-ground-only-indicators.spec.md) 已通过用户实机验收并获准本地提交；地面接收过滤与点目标地面查询已修复，保留 Hero 其他贴花。Editor、Combat.Input. 7/7、资产 17/17、三地图 114 个地面组件独立重载与原生 PIE 41/41（含 Hero 遮挡、坡道/高台 GPU 像素对照）通过；本轮不改变 RPC/复制/服务器结算，未重跑 Dedicated。
+> 技能指示器（2026-09-13）：AIM-001 连同 AIM-002 修正已通过用户验收；本地瞄准、范围预览与独立训练场已落地，首版 Editor/Server/Client 及最终增量构建、Combat 70/70、资产 17/17、PIE 22 项（含悬停和真实追近）与 Dedicated 双客户端通过，见 [Spec](../Specs/AIM-001-skill-indicators.spec.md)。
 > 当前阶段：M8、SAM 与 DEMO-901 卓尔游侠 Demo 均已通过用户验收
 > 历史 M0-M8：82/82 Task 完成，9/9 里程碑由用户验收
 > SAM 进度：10/10 Task 完成；修正 Gate 和用户验收均已通过

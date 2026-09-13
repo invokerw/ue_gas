@@ -118,6 +118,23 @@
 - 当前英雄判别仅指事件发生时有玩家指挥的单位。“非英雄”关闭时排除双方均非玩家单位的记录；物品选项置灰，仍不扩展物品/经济玩法。
 - 新客户端和服务器同时更新，无存档迁移；回滚成组撤销日志组件、展示上下文、Widget 及 HUD 引用。验证覆盖真实事务、容量、分类过滤、重建/teardown、蓝图和 Dedicated 投影。
 
+### ADR-053：技能瞄准会话与只读范围预览（2026-09-13）
+
+- 状态：accepted；用户已确认设计并授权首版实现，范围和验证见 [AIM-001 Spec](../Specs/AIM-001-skill-indicators.spec.md)。
+- 选择：本地 Controller 持有 AimComponent，通过现有 Enhanced Input 和唯一 Order 请求入口确认；纯视觉贴花只消费预览。标准施法默认，按下/松开快施可选。单位目标只取直接命中；超距保留原目标并允许服务器追击。
+- 数据/API：AbilityData 兼容新增主预览 Action 索引，默认 -1 不推测作用形状；形状参数读取该 Action 的 SpecialValue 与 ProjectileData 回退。owner-only HUD 增加 CastRangeBonus 和 AttackRange 只读聚合值，PresentationSchemaVersion 由 5 升至 6；核心 combat_v1_rc1 和核心 schema 不变。
+- 兼容与迁移：客户端/服务器同版本部署；旧 DataAsset 无需修改即可显示已知施法距离。原卓尔 Q AutoCast、空 WER、HUD 点击详情及 InputAction 引用保留。训练场使用独立资产，材质与样例由 UE 创建保存。未选用复制客户端命中或新目标协议，因为当前 Order/Targeting 已可表达 P0。
+- 生命周期：SessionSerial、控制绑定与 LifeGeneration 隔离旧输入；取消、Owner 变更、死亡、撤销、失焦和 EndPlay 统一清理，初始 Accepted 不表示技能完成。
+- 测试：真实 ASC/Order fixture 的 Red/Green、范围与 Action 一致性、取消/旧释放、HUD 不穿透、三 Target、全量 Automation、资产/PIE 和 Dedicated 双客户端；证据写入 Spec 后才交付。
+
+### ADR-054：技能指示器地面接收与点目标采样（2026-09-13）
+
+- 状态：已定；用户授权修复 Hero 接收地面指示器的问题，见 [AIM-002](../Specs/AIM-002-ground-only-indicators.spec.md)。
+- GameTraceChannel5 为只读 `CombatIndicatorGround` 查询，默认 Ignore；地面、坡道和平台显式 Block。单位技能和普通移动保留 Visibility，服务器继续原 Targeting/Order 校验，网络与核心 schema 不变。
+- CustomStencil 最高位 `128` 保留给指示器地面接收者，低七位可供其他表现；项目开启 CustomDepth with Stencil。只有地面组件写该位，角色与道具不写。
+- 指示器材质同时检查 stencil、CustomDepth/SceneDepth 一致和向上法线（Z >= 0.5），防止地面标记透过角色染到其身体，或沿平台侧壁拉伸。其他材质和角色 ReceivesDecals 不改。
+- 点目标的预览与三种确认方式共用地面查询，命中未配置组件/陡面/无地面时不提交、不重用旧点。Demo、训练与测试地图地面通过 Unreal API 迁移；配置步骤和验证边界见 [10-13](../10-Architecture/10-13-Skill-Indicators.md)。
+
 ## 3. 本轮查漏补缺摘要
 
 原单体文档对 Damage、Modifier、Scheduler、AttackRecord 和网络权威已有较强约束；本轮新增或显式登记了以下遗漏：

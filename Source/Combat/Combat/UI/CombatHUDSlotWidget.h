@@ -36,6 +36,8 @@ public:
 	const FText& GetDetailText() const { return DetailText; }
 	/** 公共显示规则，供展示与自动化共用；剩余时间不会为负或 NaN。 */
 	static float Remaining(double EndTime, double ServerTime);
+	/** 返回 Designer 按钮或运行时兼容按钮，供父 HUD 阻止加点区域点击穿透。 */
+	UButton* GetEffectiveUpgradeButton() const;
 protected:
 	virtual void NativeConstruct() override;
 	virtual void NativeOnMouseEnter(const FGeometry& Geometry, const FPointerEvent& Event) override;
@@ -64,8 +66,6 @@ private:
 	void CreateRuntimeUpgradeButton();
 	/** UButton 点击回调；只广播 UI 请求，不直接修改 ASC。 */
 	UFUNCTION() void HandleUpgradeClicked();
-	/** 返回 Designer 按钮或运行时兼容按钮。 */
-	UButton* GetEffectiveUpgradeButton() const;
 	/** 使用配置纹理；缺失美术时保留名称首字占位。 */
 	void SetIcon(UTexture2D* Texture, const FText& Name);
 	FText DetailText;

@@ -17,6 +17,7 @@ class UCombatAbilitySet;
 class UCombatGameplayAbility;
 class UCombatModifierRuntime;
 class UCombatProjectileData;
+struct FCombatAbilityIndicatorGeometry;
 class ACombatProjectileActor;
 
 /**
@@ -314,6 +315,10 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Ability", meta=(DisplayName="公共动作序列", ToolTip="SpellStarted 时由服务器按数组顺序执行的 DataDriven Action。", TitleProperty="Type"))
 	TArray<FCombatAbilityAction> Actions;
 
+	/** 显式选取主作用形状；不自动挑选第一个动作，避免多段技能给出错误范围。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Ability|Indicator", meta=(ClampMin="-1", DisplayName="主预览动作索引", ToolTip="-1 不显示作用形状；非负值引用公共动作序列中从 0 开始的圆形范围、区域 Thinker 或直线弹体。半径和长度按当前等级读取该动作参数，不另设平衡数值。"))
+	int32 IndicatorActionIndex = INDEX_NONE;
+
 	/** 技能授予期间应维护的被动或法球效果；重复同步保留已有有效实例，缺失时在单位存活后补建，移除技能时清理。 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Ability", meta=(DisplayName="固有 Modifier", ToolTip="技能授予期间应维护的被动或法球效果；重复同步保留已有有效实例，缺失时在单位存活后补建，移除技能时清理。"))
 	TObjectPtr<UCombatModifierData> IntrinsicModifier = nullptr;
@@ -332,6 +337,8 @@ public:
 	bool ShouldOccupyPlayerAbilitySlot() const;
 	/** 返回该技能的槽位输入是否只切换 AutoCast；目前仅 Passive + AutoCast 组合使用该语义。 */
 	bool UsesAutoCastToggleInput() const;
+	/** 解析显式主动作。未配置返回成功且形状为 None；配置损坏、等级无效或不支持则返回 false，不猜测半径。 */
+	bool ResolveIndicatorGeometry(int32 Level, FCombatAbilityIndicatorGeometry& OutGeometry) const;
 	/** 在运行时和自动化中执行与 Editor validator 相同的 Ability schema 校验。 */
 	bool ValidateRuntime(FString& OutDiagnostic) const;
 

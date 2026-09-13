@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/PlayerController.h"
+#include "Combat/UI/CombatAbilityAimComponent.h"
 #include "CombatPlayerController.generated.h"
 
 class ACombatUnitCharacter;
@@ -30,6 +31,8 @@ public:
 	ACombatPlayerController();
 
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+	/** 引擎因视口失焦冲刷按键时废弃旧瞄准与手势，防止恢复焦点后误确认。 */
+	virtual void FlushPressedKeys() override;
 
 	/** 返回当前显式主控 Combat Unit；输入不得从 GetPawn 推断该对象。 */
 	UFUNCTION(BlueprintPure, Category="Combat|Command", meta=(DisplayName="获取主控战斗单位", ToolTip="返回由服务器绑定并仅复制给拥有者的主控 Combat Unit。"))
@@ -51,6 +54,13 @@ public:
 
 	/** Unit EndPlay 时清空弱生命周期边界，避免 Controller 保留已销毁 Actor。 */
 	void HandleCommandedUnitEndPlay(ACombatUnitCharacter* EndingUnit);
+
+	UCombatAbilityAimComponent* GetAbilityAimComponent() const { return AbilityAimComponent; }
+	ECombatAbilityCastMode GetAbilityCastMode() const { return AbilityCastMode; }
+	/** 使用实际 Slate 几何检测本玩家 HUD/日志区域，不把全屏根控件当成 UI 阻挡。 */
+	bool IsPointerOverCombatUI() const;
+	/** HUD 消费 Escape 或应用失焦时也能取消本地意图，不发送 Stop。 */
+	void CancelCombatTargeting();
 
 protected:
 	/**
@@ -113,17 +123,21 @@ protected:
 	UPROPERTY(EditAnywhere, Category="Input|Combat", meta=(DisplayName="普攻选敌输入", ToolTip="开始选择普通攻击目标；在输入映射中配置按键，Demo 默认 A。为空时禁用此输入。"))
 	TObjectPtr<UInputAction> AttackTargetAction;
 
-	/** 确认光标下普攻目标的输入；只在选敌模式中生效，默认鼠标左键。 */
-	UPROPERTY(EditAnywhere, Category="Input|Combat", meta=(DisplayName="确认普攻目标输入", ToolTip="在选敌模式中确认光标命中的敌方单位，Demo 默认鼠标左键。为空时禁用此输入。"))
+	/** 共享普攻选敌与标准技能瞄准的确认输入，默认鼠标左键。 */
+	UPROPERTY(EditAnywhere, Category="Input|Combat", meta=(DisplayName="确认战斗目标输入", ToolTip="在普攻选敌或技能瞄准模式中确认实际命中，Demo 默认鼠标左键；UI 上不提交。为空时禁用。"))
 	TObjectPtr<UInputAction> ConfirmAttackTargetAction;
 
 	/** 取消本地选敌模式的输入，不停止正在执行的服务器命令，默认 Escape。 */
-	UPROPERTY(EditAnywhere, Category="Input|Combat", meta=(DisplayName="取消普攻选敌输入", ToolTip="退出本地普攻选敌模式，不停止单位当前命令，Demo 默认 Escape。为空时禁用此输入。"))
+	UPROPERTY(EditAnywhere, Category="Input|Combat", meta=(DisplayName="取消战斗选敌输入", ToolTip="退出本地普攻选敌或技能瞄准，不停止单位当前命令，Demo 默认 Escape。为空时禁用此输入。"))
 	TObjectPtr<UInputAction> CancelAttackTargetAction;
 
 	/** 提交服务器停止命令的输入，默认 S。 */
 	UPROPERTY(EditAnywhere, Category="Input|Combat", meta=(DisplayName="停止命令输入", ToolTip="取消本地选敌和拖动，并向主控单位提交停止命令，Demo 默认 S。为空时禁用此输入。"))
 	TObjectPtr<UInputAction> StopCommandAction;
+
+	/** 全部目标技能共用的本地确认方式；无目标与 AutoCast 仍按下立即处理。 */
+	UPROPERTY(EditAnywhere, Category="Input|Abilities", meta=(DisplayName="技能施法方式", ToolTip="标准：按下瞄准、左键确认；按下快施：按下确认；松开快施：松开同一技能键确认。取消不会停止服务器命令。"))
+	ECombatAbilityCastMode AbilityCastMode = ECombatAbilityCastMode::Standard;
 
 	/** Q 技能槽输入。 */
 	UPROPERTY(EditAnywhere, Category="Input|Abilities") TObjectPtr<UInputAction> AbilitySlotQAction;
@@ -135,6 +149,10 @@ protected:
 	UPROPERTY(EditAnywhere, Category="Input|Abilities") TObjectPtr<UInputAction> AbilitySlotRAction;
 
 private:
+	friend class ACombatAbilityAimScenarioActor;
+	/** 本地意图适配默认子对象，Dedicated 禁用 Tick 且不生成视觉 Actor。 */
+	UPROPERTY(VisibleAnywhere, Category="Combat|Indicator", meta=(DisplayName="技能瞄准", ToolTip="只在本地玩家上更新的技能指示器会话。"))
+	TObjectPtr<UCombatAbilityAimComponent> AbilityAimComponent;
 	/** 默认子对象记录本连接可见事件；生命周期跟随 Controller，HUD 关闭不停止记录。 */
 	UPROPERTY(VisibleAnywhere, Category="Combat|Log", meta=(DisplayName="战斗记录组件", ToolTip="服务器生成并仅向本连接复制的只读战斗历史。"))
 	TObjectPtr<UCombatLogComponent> CombatLogComponent;
@@ -142,6 +160,8 @@ private:
 	friend class FCombatPlayerAttackInputTest;
 	friend class FCombatPlayerAttackInputCancellationTest;
 	friend class FCombatPlayerAutoCastAbilityInputTest;
+	friend class FCombatAbilityAimInputTest;
+	friend class FCombatAbilityUnitAimTest;
 #endif
 
 	/** 指针或代次任一复制到达时刷新 Command Pawn 跟随目标。 */
@@ -192,10 +212,14 @@ private:
 	void OnAbilitySlotE();
 	/** 激活第四个技能槽。 */
 	void OnAbilitySlotR();
-	/** 把指定槽位转换为 Cast Order。 */
+	/** 开始本地技能瞄准或处理无目标/AutoCast 的立即输入。 */
 	void ActivateCombatAbilitySlot(int32 SlotIndex);
-	/** 查询光标命中或最近的合法 Combat Unit。 */
-	ACombatUnitCharacter* FindCombatUnitUnderCursor(const FVector& CursorWorldLocation) const;
+	/** 同一技能的 Completed 才能完成松开快施；旧会话释放无效。 */
+	void OnAbilitySlotReleased(int32 SlotIndex);
+	/** Enhanced Input 的 Canceled 只取消，永远不按 Completed 提交。 */
+	void OnAbilityInputCanceled(int32 SlotIndex);
+	/** 用当前实际命中和会话号尝试确认一次；保持唯一 SubmitCombatOrder 入口。 */
+	void ConfirmAbilityTarget(const FHitResult& Hit, uint64 Serial);
 	/** 向 CommandedUnit 提交替换型 MoveToPoint 批次。 */
 	bool IssueCombatMoveOrder();
 	/** 查询鼠标或触摸命中的有限世界位置。 */
@@ -219,4 +243,6 @@ private:
 	bool bAttackTargeting = false;
 	/** PlayerController 连接维度单调递增的非零 RPC replay id。 */
 	int32 NextCombatOrderRequestId = 1;
+	/** 每个物理按住手势记录开始时的会话号，取消/换技能后不能复活旧目标。 */
+	uint64 AbilityPressSerials[4] = {};
 };

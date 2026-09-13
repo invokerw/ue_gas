@@ -37,6 +37,10 @@ public:
 	/** 最近一次有效拥有者快照，用于蓝图扩展与验证。 */
 	UFUNCTION(BlueprintPure, Category="Combat|HUD", meta=(DisplayName="获取 HUD 显示快照", ToolTip="返回本地最近一次匹配生命代次的只读快照。"))
 	const FCombatHUDOwnerView& GetDisplaySnapshot() const { return DisplaySnapshot; }
+	/** 实际可见面板、技能/加点和详情的屏幕几何命中，用于阻止世界点击穿透。 */
+	bool IsScreenPositionOverUI(FVector2D Position) const;
+	/** 返回当前屏幕位置的技能槽；范围悬停不依赖详情是否固定。 */
+	int32 GetHoveredAbilitySlot(FVector2D Position) const;
 
 protected:
 	virtual void NativeConstruct() override;
@@ -44,6 +48,7 @@ protected:
 	virtual void NativeTick(const FGeometry& Geometry, float DeltaTime) override;
 	virtual FReply NativeOnKeyDown(const FGeometry& Geometry, const FKeyEvent& Event) override;
 	virtual FReply NativeOnMouseButtonDown(const FGeometry& Geometry, const FPointerEvent& Event) override;
+	virtual FReply NativeOnPreviewMouseButtonDown(const FGeometry& Geometry, const FPointerEvent& Event) override;
 	virtual FReply NativeOnMouseMove(const FGeometry& Geometry, const FPointerEvent& Event) override;
 	virtual void NativeOnMouseLeave(const FPointerEvent& Event) override;
 

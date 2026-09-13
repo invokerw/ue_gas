@@ -51,6 +51,7 @@
 | [10-10 服务器权威单位移动改造与验收](10-Architecture/10-10-Server-Authoritative-Movement-Kickoff.md) | PlayerController 指挥、AIController 服务器移动、Command Pawn、Crowd 与 Dedicated Gate 的当前实现和证据 | 单位控制、网络、AI、测试与维护者 |
 | [10-11 头顶 UI：C++ 与蓝图边界](10-Architecture/10-11-Overhead-Blueprint-UI.md) | 展示快照、生命周期、UMG 蓝图维护入口与迁移 | UI、美术、战斗与网络开发 |
 | [10-12 底部居中 HUD：设计与实现](10-Architecture/10-12-Bottom-HUD-Design.md) | 定稿布局、拥有者快照、Widget Blueprint 与占位边界 | UI、美术、网络开发与验收 |
+| [10-13 技能瞄准与范围指示器](10-Architecture/10-13-Skill-Indicators.md) | 输入会话、三层贴花、Action 参数与训练场 | 输入、技能、UI 与验收 |
 
 ### 20-Content：技能与扩展
 

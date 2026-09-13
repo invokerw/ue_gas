@@ -1,4 +1,5 @@
 #include "Combat/Data/CombatDefinitionData.h"
+#include "Combat/Ability/CombatAbilityIndicatorGeometry.h"
 
 #include "Algo/AllOf.h"
 #include "Misc/DataValidation.h"
@@ -211,6 +212,43 @@ bool UCombatAbilityData::UsesAutoCastToggleInput() const
 		&& BehaviorTags.HasTagExact(CombatTags::Ability_Behavior_AutoCast);
 }
 
+bool UCombatAbilityData::ResolveIndicatorGeometry(const int32 Level, FCombatAbilityIndicatorGeometry& OutGeometry) const
+{
+	OutGeometry = {};
+	if (Level < 1 || Level > MaxLevel) return false;
+	if (IndicatorActionIndex == INDEX_NONE) return true;
+	if (!Actions.IsValidIndex(IndicatorActionIndex)) return false;
+	const FCombatAbilityAction& Action = Actions[IndicatorActionIndex];
+	FCombatAbilityIndicatorGeometry Next;
+	if (Action.Type == ECombatAbilityActionType::SpawnLinearProjectile && Action.ProjectileData)
+	{
+		// 与 ProjectileSubsystem 相同：负覆盖值回退定义，0 为显式覆盖。
+		const float RadiusOverride = Action.RadiusKey.IsNone() ? -1.0f : GetSpecialValue(Action.RadiusKey, Level);
+		const float RangeOverride = Action.ProjectileRangeKey.IsNone() ? -1.0f : GetSpecialValue(Action.ProjectileRangeKey, Level);
+		if (!FMath::IsFinite(RadiusOverride) || !FMath::IsFinite(RangeOverride)) return false;
+		Next.Shape = ECombatIndicatorShape::Line;
+		Next.Radius = RadiusOverride >= 0.0f ? RadiusOverride : Action.ProjectileData->Radius;
+		Next.Length = RangeOverride >= 0.0f ? RangeOverride : Action.ProjectileData->MaxDistance;
+		Next.bCenterOnCaster = true;
+		if (!FMath::IsFinite(Next.Length) || Next.Length <= 0.0f) return false;
+	}
+	else if (Action.Type == ECombatAbilityActionType::CreateThinker
+		|| (Action.Type != ECombatAbilityActionType::SpawnTrackingProjectile
+			&& Action.Type != ECombatAbilityActionType::SpawnLinearProjectile
+			&& Action.Target == ECombatAbilityActionTarget::UnitsInRadius))
+	{
+		if (Action.RadiusKey.IsNone() || !SpecialValues.Contains(Action.RadiusKey)) return false;
+		Next.Shape = ECombatIndicatorShape::Circle;
+		Next.Radius = GetSpecialValue(Action.RadiusKey, Level);
+		Next.bCenterOnCaster = Action.Target == ECombatAbilityActionTarget::Caster
+			|| BehaviorTags.HasTagExact(CombatTags::Ability_Behavior_NoTarget);
+	}
+	else return false;
+	if (!FMath::IsFinite(Next.Radius) || Next.Radius < 0.0f) return false;
+	OutGeometry = Next;
+	return true;
+}
+
 bool UCombatAbilityData::ValidateRuntime(FString& OutDiagnostic) const
 {
 	OutDiagnostic.Reset();
@@ -354,6 +392,15 @@ bool UCombatAbilityData::ValidateRuntime(FString& OutDiagnostic) const
 			&& (Action.RadiusKey.IsNone() || !SpecialValues.Contains(Action.RadiusKey)))
 		{
 			OutDiagnostic = TEXT("UnitsInRadius action requires a radius special key");
+			return false;
+		}
+	}
+	for (int32 Level = 1; Level <= MaxLevel; ++Level)
+	{
+		FCombatAbilityIndicatorGeometry Geometry;
+		if (!ResolveIndicatorGeometry(Level, Geometry))
+		{
+			OutDiagnostic = TEXT("Indicator action index, shape or resolved radius/range is invalid");
 			return false;
 		}
 	}

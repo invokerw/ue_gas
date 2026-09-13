@@ -59,6 +59,10 @@ struct COMBAT_API FCombatHUDOwnerView
 	float HealthRegen = 0.0f;
 	UPROPERTY(BlueprintReadOnly, Category="Combat|HUD", meta=(DisplayName="法力恢复速率", ToolTip="服务器 ASC 每秒法力恢复属性；死亡时界面显示暂停。"))
 	float ManaRegen = 0.0f;
+	UPROPERTY(BlueprintReadOnly, Category="Combat|HUD", meta=(DisplayName="施法距离加成", ToolTip="服务器 ASC 当前施法边缘距离加成；允许负值，只用于本地范围预览。", Units="cm"))
+	float CastRangeBonus = 0.0f;
+	UPROPERTY(BlueprintReadOnly, Category="Combat|HUD", meta=(DisplayName="攻击距离", ToolTip="服务器 ASC 当前普通攻击边缘距离；用于 AutoCast 悬停预览，实际攻击仍由服务器裁决。", Units="cm"))
+	float AttackRange = 0.0f;
 	/** 服务器权威成长快照；经验和技能点只向拥有者复制。 */
 	UPROPERTY(BlueprintReadOnly, Category="Combat|HUD", meta=(DisplayName="英雄等级", ToolTip="当前主控单位的服务器权威英雄等级。"))
 	int32 Level = 1;

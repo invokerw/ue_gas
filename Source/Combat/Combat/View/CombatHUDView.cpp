@@ -23,6 +23,7 @@ bool FCombatHUDOwnerView::operator==(const FCombatHUDOwnerView& Other) const
 	return UnitDefinitionId == Other.UnitDefinitionId && LifeGeneration == Other.LifeGeneration
 		&& AttackDamage == Other.AttackDamage && Armor == Other.Armor && MagicResist == Other.MagicResist
 		&& MoveSpeed == Other.MoveSpeed && HealthRegen == Other.HealthRegen && ManaRegen == Other.ManaRegen
+		&& CastRangeBonus == Other.CastRangeBonus && AttackRange == Other.AttackRange
 		&& Level == Other.Level && Experience == Other.Experience
 		&& ExperienceIntoLevel == Other.ExperienceIntoLevel && ExperienceToNextLevel == Other.ExperienceToNextLevel
 		&& ExperienceProgress == Other.ExperienceProgress && UnspentAbilityPoints == Other.UnspentAbilityPoints
@@ -88,6 +89,8 @@ void UCombatUnitViewComponent::RefreshHUDOwnerView()
 		Next.MoveSpeed = Asc->GetNumericAttribute(UCombatAttributeSet::GetMoveSpeedAttribute());
 		Next.HealthRegen = Asc->GetNumericAttribute(UCombatAttributeSet::GetHealthRegenAttribute());
 		Next.ManaRegen = Asc->GetNumericAttribute(UCombatAttributeSet::GetManaRegenAttribute());
+		Next.CastRangeBonus = Asc->GetNumericAttribute(UCombatAttributeSet::GetCastRangeBonusAttribute());
+		Next.AttackRange = Asc->GetNumericAttribute(UCombatAttributeSet::GetAttackRangeAttribute());
 		if (const UCombatProgressionComponent* Progression = Unit->GetCombatProgressionComponent())
 		{
 			Next.Level = Progression->GetLevel();
