@@ -15,7 +15,7 @@ description: "在 ue_gas Combat 仓库中执行功能、Bug 修复、兼容新�
 - 前置条件：确认工作区根目录包含 `ue_gas.uproject`，完整阅读 `agent.md`，检查 `git status` 并保留已有修改。
 - 输出：可回读的 Spec、实现 diff、验证证据、Gate 结论和用户验收状态；没有执行的检查必须标为“未执行”。
 
-每次功能、Bug、工具、资产或流程变更都必须在**第一次代码/资产修改前**建立任务 Spec，并把用户请求、附件解释、已读取入口、主 Skill 和路由置信度写入 Spec。纯咨询不创建虚假 Spec。开工前运行：
+每次功能、Bug、工具、资产或流程变更都必须在**第一次行为文件修改前**建立任务 Spec，并把用户请求、附件解释、已读取入口、主 Skill 和路由置信度写入 Spec。纯咨询不创建虚假 Spec。行为文件包括 `Source/`、`Content/`、`Tools/` 及其他会改变运行结果的代码、脚本、蓝图和资产。开工前运行：
 
 ```bash
 python3 -B Tools/task_gate.py --mode preflight --spec Doc/CombatSystem/Specs/<task-id>.spec.md --kind feature
@@ -55,7 +55,9 @@ Gate 失败时先补齐 Spec 或路由记录，不能绕过检查进入 BUILD。
 
 从 `Doc/CombatSystem/Specs/_template.spec.md` 创建 `Doc/CombatSystem/Specs/<task-id>.spec.md`。补齐 AC、DoD、文件/资产定位、状态转换、正常/失败/取消/过期/死亡/EndPlay/重复请求路径、测试矩阵、迁移、回滚、可观测性和证据位置。小型文字修正可在台账记录范围与验证，但功能、Bug、资产迁移和契约变更必须保留 Spec。F1 结果写为 `APPROVED`、`REVISE` 或 `ESCALATE`。
 
-Spec 和 F1 通过后，才允许修改 `Source/`、`Content/` 或 `Tools/`。本条是可执行流程门，不以口头计划替代。
+完成 Spec 后先运行 `python3 -B Tools/task_gate.py --mode plan --spec Doc/CombatSystem/Specs/<task-id>.spec.md --kind <feature|docs|process>`。计划检查通过后逐项审查，并记录 F1 结论、审查人、审查版本和计划审查证据。只有 F1=`APPROVED` 且审查版本等于 Spec 版本，才将状态设为 `BUILDING`，运行 `python3 -B Tools/task_gate.py --mode build --spec Doc/CombatSystem/Specs/<task-id>.spec.md --kind <feature|docs|process>`。
+
+F1 审查通过和 Build Gate 通过前，不得修改代码、测试、工具脚本、蓝图或资产；允许读取、运行已有检查和维护 Spec/计划记录。范围、架构、权限、迁移、测试矩阵或回滚实质变化时先递增 Spec 版本，F1 回到 `REVISE`、任务状态回到 `PLAN_REVIEW`，重新审查后才能继续实现。Gate 不追溯历史时序；不得用补写批准代替事前审查，且应保留已有用户改动。审批权限以 [00-05 §4](../../Doc/CombatSystem/00-Project/00-05-AI-Native-Development-Workflow.md#4-九阶段交付流水线) 为准。
 
 ### 4. BUILD：按 TDD 实现
 

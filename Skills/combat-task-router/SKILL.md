@@ -46,10 +46,10 @@ Gate 失败表示上下文或 Spec 不完整，应先修正记录；不能把“
 1. 提取动作（解释、实现、修复、迁移、创建 Skill）、对象（功能、技能、流程）和交付物。
 2. 判断是否触及源码、资产、运行时契约、网络权限、生命周期或仅为文字说明。
 3. 按上表选一个主 Skill，给出 `high / medium / low` 置信度和最多两个备选。
-4. 将“原始需求、路由结论、依据、非目标、需要用户决定的问题”写入任务 Spec；再加载主 Skill 执行。
+4. 将“原始需求、路由结论、依据、非目标、需要用户决定的问题”写入任务 Spec，加载主 Skill 完成 THINK/PLAN。F1 未批准当前 Spec 版本、Build Gate 未通过前，不得让执行 Skill 修改代码、测试、工具脚本、蓝图或资产；允许读取、运行已有检查和维护 Spec/计划记录。
 5. 主 Skill 完成后检查它的 Gate、测试和未执行项，再进行下方自评与 Reflect。
 
-交付前再次运行 `python3 -B Tools/task_gate.py --mode delivery --spec Doc/CombatSystem/Specs/<task-id>.spec.md --kind <feature|docs|process>`；只有机器 Gate 通过并且证据写回 Spec，才可给出 `READY_FOR_REVIEW`。
+计划审查运行 `python3 -B Tools/task_gate.py --mode plan --spec Doc/CombatSystem/Specs/<task-id>.spec.md --kind <feature|docs|process>`；F1 批准后、第一次行为文件修改前运行 `python3 -B Tools/task_gate.py --mode build --spec Doc/CombatSystem/Specs/<task-id>.spec.md --kind <feature|docs|process>`。交付前再次运行 `python3 -B Tools/task_gate.py --mode delivery --spec Doc/CombatSystem/Specs/<task-id>.spec.md --kind <feature|docs|process>`；只有机器 Gate 通过并且证据写回 Spec，才可给出 `READY_FOR_REVIEW`。
 
 ## 交付自评
 

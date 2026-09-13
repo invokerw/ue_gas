@@ -24,6 +24,9 @@ SPEC_BODY = """# DOC-TEST 任务 Gate
 - 路由置信度：high
 - F0 结论：`GO`
 - F1 结论：`{f1}`
+- F1 审查版本：`0.1`
+- F1 审查人：测试审查者
+- F1 计划审查证据：范围、AC、依赖、测试和回滚已逐项审查
 - F2 结论：`{f2}`
 - Push-Ready 结论：`{push}`
 - 验证：{verification}
@@ -94,6 +97,105 @@ class TaskGateTests(unittest.TestCase):
         result = task_gate.evaluate(self.root, self.spec, "preflight", changed=[])
         self.assertFalse(result["passed"])
         self.assertTrue({"missing_skill_route", "missing_f0"}.issubset({e["code"] for e in result["errors"]}))
+
+    def test_plan_accepts_clean_plan_before_behavior_changes(self):
+        self.write_spec(status="PLAN_REVIEW", f1="REVISE", f2="FINDINGS", push="BLOCKED",
+                        verification="计划检查待执行", unexecuted="N/A：尚未进入实现")
+        result = task_gate.evaluate(self.root, self.spec, "plan", changed=[self.spec])
+        self.assertTrue(result["passed"], result["errors"])
+
+    def test_plan_preserves_preexisting_behavior_changes(self):
+        self.write_spec(status="PLAN_REVIEW", f1="REVISE", f2="FINDINGS", push="BLOCKED",
+                        verification="计划检查待执行", unexecuted="N/A：尚未进入实现")
+        result = task_gate.evaluate(self.root, self.spec, "plan",
+                                    changed=[self.spec, "Source/ue_gas/Combat/Example.cpp"])
+        self.assertTrue(result["passed"], result["errors"])
+
+    def test_plan_rejects_missing_implementation_plan(self):
+        path = self.root / self.spec
+        path.write_text(path.read_text(encoding="utf-8").replace("## 4. 实施计划", "## 4. 草稿"), encoding="utf-8")
+        result = task_gate.evaluate(self.root, self.spec, "plan", changed=[])
+        self.assertIn("missing_plan_section", {e["code"] for e in result["errors"]})
+
+    def test_build_requires_f1_approval(self):
+        self.write_spec(status="BUILDING", f1="REVISE", f2="FINDINGS", push="BLOCKED",
+                        verification="计划检查通过", unexecuted="N/A：构建前")
+        result = task_gate.evaluate(self.root, self.spec, "build", changed=[self.spec])
+        self.assertFalse(result["passed"])
+        self.assertIn("missing_f1_for_build", {e["code"] for e in result["errors"]})
+
+    def test_build_accepts_approved_plan(self):
+        self.write_spec(status="BUILDING", f1="APPROVED", f2="FINDINGS", push="BLOCKED",
+                        verification="计划检查通过", unexecuted="N/A：构建前")
+        result = task_gate.evaluate(self.root, self.spec, "build", changed=[self.spec])
+        self.assertTrue(result["passed"], result["errors"])
+
+    def test_build_and_delivery_reject_stale_plan_approval(self):
+        path = self.root / self.spec
+        for mode, status in (("build", "BUILDING"), ("delivery", "READY_FOR_REVIEW")):
+            with self.subTest(mode=mode):
+                self.write_spec(status=status, f1="APPROVED", f2="PASS", push="READY",
+                                verification="unit PASS", unexecuted="N/A")
+                path.write_text(path.read_text(encoding="utf-8").replace("> Spec 版本：`0.1`", "> Spec 版本：`0.2`"), encoding="utf-8")
+                result = task_gate.evaluate(self.root, self.spec, mode, changed=[self.spec])
+                self.assertIn("stale_plan_approval", {e["code"] for e in result["errors"]})
+
+    def test_build_rejects_approval_without_review_evidence(self):
+        self.write_spec(status="BUILDING", f1="APPROVED", f2="PASS", push="READY",
+                        verification="unit PASS", unexecuted="N/A")
+        path = self.root / self.spec
+        path.write_text(path.read_text(encoding="utf-8").replace(
+            "- F1 计划审查证据：范围、AC、依赖、测试和回滚已逐项审查", "- F1 计划审查证据："), encoding="utf-8")
+        result = task_gate.evaluate(self.root, self.spec, "build", changed=[])
+        self.assertIn("missing_plan_review", {e["code"] for e in result["errors"]})
+
+    def test_current_revise_is_not_overridden_by_historical_approval(self):
+        self.write_spec(status="BUILDING", f1="REVISE", f2="PASS", push="READY",
+                        verification="unit PASS", unexecuted="N/A")
+        path = self.root / self.spec
+        with path.open("a", encoding="utf-8") as output:
+            output.write("\n历史记录：F1 APPROVED，仅覆盖旧范围。\n")
+        result = task_gate.evaluate(self.root, self.spec, "build", changed=[])
+        self.assertIn("missing_f1_for_build", {e["code"] for e in result["errors"]})
+
+    def test_build_rejects_f1_template_candidates(self):
+        self.write_spec(status="BUILDING", f1="APPROVED / REVISE / ESCALATE", f2="PASS", push="READY",
+                        verification="unit PASS", unexecuted="N/A")
+        result = task_gate.evaluate(self.root, self.spec, "build", changed=[])
+        self.assertIn("missing_f1_for_build", {e["code"] for e in result["errors"]})
+
+    def test_plan_rejects_f0_template_candidates(self):
+        path = self.root / self.spec
+        path.write_text(path.read_text(encoding="utf-8").replace(
+            "- F0 结论：`GO`", "- F0 结论：`GO / DEFER / ESCALATE`"), encoding="utf-8")
+        result = task_gate.evaluate(self.root, self.spec, "plan", changed=[])
+        self.assertIn("f0_not_go", {e["code"] for e in result["errors"]})
+
+    def test_history_cannot_supply_missing_current_f1(self):
+        self.write_spec(status="BUILDING", f1="APPROVED", f2="PASS", push="READY",
+                        verification="unit PASS", unexecuted="N/A")
+        path = self.root / self.spec
+        path.write_text(path.read_text(encoding="utf-8").replace("- F1 结论：`APPROVED`", "")
+                        + "\n历史记录：F1 APPROVED，仅覆盖旧范围。\n", encoding="utf-8")
+        result = task_gate.evaluate(self.root, self.spec, "build", changed=[])
+        self.assertIn("missing_f1_for_build", {e["code"] for e in result["errors"]})
+
+    def test_conflicting_current_f1_is_rejected(self):
+        self.write_spec(status="BUILDING", f1="APPROVED", f2="PASS", push="READY",
+                        verification="unit PASS", unexecuted="N/A")
+        path = self.root / self.spec
+        with path.open("a", encoding="utf-8") as output:
+            output.write("\n- F1 结论：`REVISE`\n")
+        result = task_gate.evaluate(self.root, self.spec, "build", changed=[])
+        self.assertIn("missing_f1_for_build", {e["code"] for e in result["errors"]})
+
+    def test_deferred_f0_cannot_enter_plan_or_build(self):
+        path = self.root / self.spec
+        path.write_text(path.read_text(encoding="utf-8").replace("- F0 结论：`GO`", "- F0 结论：`DEFER`"), encoding="utf-8")
+        for mode in ("plan", "build"):
+            with self.subTest(mode=mode):
+                result = task_gate.evaluate(self.root, self.spec, mode, changed=[])
+                self.assertIn("f0_not_go", {e["code"] for e in result["errors"]})
 
     def test_delivery_requires_tests_and_documentation_for_behavior_changes(self):
         result = task_gate.evaluate(self.root, self.spec, "delivery", kind="process",
