@@ -77,6 +77,17 @@ struct COMBAT_API FCombatLogRecord
 /** 在一条结构化日志提交后同步通知观察者。 */
 DECLARE_MULTICAST_DELEGATE_OneParam(FOnCombatLogRecord, const FCombatLogRecord&);
 
+/** 同步展示观察者的可选资源快照；仅随 Emit 调用存活，不进入核心日志 schema 或持有 gameplay 对象。 */
+struct COMBAT_API FCombatLogResourceChange
+{
+	bool bHasHealthChange = false;
+	float PreviousHealth = 0.0f;
+	float NewHealth = 0.0f;
+};
+
+/** 在核心诊断订阅者前通知只读显示投影，确保重入 Emit 仍遵守提交顺序。 */
+DECLARE_MULTICAST_DELEGATE_TwoParams(FOnCombatLogPresentationRecord, const FCombatLogRecord&, const FCombatLogResourceChange&);
+
 /**
  * 当前 World 的战斗事件编号和结构化日志中心。根事件表示一次行为的起点，子事件表示由它引发的后续伤害、治疗等；同一链共享根 ID，并限制最大嵌套深度。
  * 日志只保留最近窗口并同步通知订阅者，用于诊断和观察；接口本身不检查服务器权限，调用方负责仅在正确的一端记录权威结果。
@@ -95,7 +106,7 @@ public:
 	/** 从有效父事件创建子事件；超过 MaxDepth 时返回无效上下文。 */
 	FCombatEventContext CreateChildEvent(const FCombatEventContext& Parent);
 	/** 补齐序号和时间后写入最近记录并广播；超限时淘汰最旧记录。 */
-	void Emit(FCombatLogRecord Record);
+	void Emit(FCombatLogRecord Record, const FCombatLogResourceChange& ResourceChange = FCombatLogResourceChange());
 
 	/** 返回当前 World 的只读最近日志缓冲区。 */
 	const TArray<FCombatLogRecord>& GetRecentRecords() const { return RecentRecords; }
@@ -105,6 +116,8 @@ public:
 	uint64 GetTotalEmittedRecordCount() const { return NextLogSequence - 1; }
 	/** 返回日志提交委托，供 UI 和测试订阅。 */
 	FOnCombatLogRecord& OnRecord() { return RecordDelegate; }
+	/** 返回只读玩家展示委托；可选资源值来自真实事务，不允许订阅者驱动 gameplay。 */
+	FOnCombatLogPresentationRecord& OnPresentationRecord() { return PresentationDelegate; }
 
 	/** 事件因果链允许的最大深度。 */
 	UPROPERTY(EditAnywhere, Category="Combat|Log", meta=(ClampMin="1"))
@@ -126,4 +139,6 @@ private:
 	UPROPERTY(Transient) TArray<FCombatLogRecord> RecentRecords;
 	/** 日志提交后的同步观察者列表。 */
 	FOnCombatLogRecord RecordDelegate;
+	/** 同步只读投影订阅者，组件 EndPlay 必须显式解绑。 */
+	FOnCombatLogPresentationRecord PresentationDelegate;
 };

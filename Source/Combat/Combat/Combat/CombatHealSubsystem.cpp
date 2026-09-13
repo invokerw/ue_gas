@@ -106,7 +106,7 @@ FCombatHealResult UCombatHealSubsystem::Heal(const FCombatHealRequest& Request)
 	}
 	SourceModifiers->ExecutePostDealHeal(Result.Event);
 	TargetModifiers->ExecutePostTakeHeal(Result.Event);
-	EmitResultLog(Result);
+	EmitResultLog(Result, Delta);
 	return Result;
 }
 
@@ -120,7 +120,7 @@ FCombatEventContext UCombatHealSubsystem::CreateEventContext(const FCombatEventC
 	return Parent.IsValid() ? Events->CreateChildEvent(Parent) : Events->CreateRootEvent();
 }
 
-void UCombatHealSubsystem::EmitResultLog(const FCombatHealResult& Result) const
+void UCombatHealSubsystem::EmitResultLog(const FCombatHealResult& Result, const FCombatTransactionDelta& Delta) const
 {
 	UCombatEventSubsystem* Events = GetWorld() ? GetWorld()->GetSubsystem<UCombatEventSubsystem>() : nullptr;
 	if (!Events || !Result.Event.Context.IsValid())
@@ -138,5 +138,9 @@ void UCombatHealSubsystem::EmitResultLog(const FCombatHealResult& Result) const
 	Record.RequestedAmount = Result.Event.RequestedAmount;
 	Record.AppliedAmount = Result.Event.AppliedAmount;
 	Record.Diagnostic = FString::Printf(TEXT("HealResult Overheal=%.3f"), Result.Event.OverhealAmount);
-	Events->Emit(Record);
+	FCombatLogResourceChange Resource;
+	Resource.bHasHealthChange = true;
+	Resource.PreviousHealth = Delta.PreviousHealth;
+	Resource.NewHealth = Delta.NewHealth;
+	Events->Emit(Record, Resource);
 }

@@ -48,7 +48,7 @@ FCombatEventContext UCombatEventSubsystem::CreateChildEvent(const FCombatEventCo
 	return Context;
 }
 
-void UCombatEventSubsystem::Emit(FCombatLogRecord Record)
+void UCombatEventSubsystem::Emit(FCombatLogRecord Record, const FCombatLogResourceChange& ResourceChange)
 {
 	// 写入时统一覆盖 schema，防止调用者无意提交旧版或未知布局。
 	Record.SchemaVersion = CurrentSchemaVersion;
@@ -61,7 +61,9 @@ void UCombatEventSubsystem::Emit(FCombatLogRecord Record)
 		RecentRecords.RemoveAt(0, RecentRecords.Num() - MaxRecentRecords, EAllowShrinking::No);
 	}
 	UE_LOG(LogCombat, Log, TEXT("%s"), *Record.ToString());
-	RecordDelegate.Broadcast(RecentRecords.Last());
+	PresentationDelegate.Broadcast(Record, ResourceChange);
+	// 使用本次栈上快照：其他订阅者重入 Emit 时，环形数组可能扩容或淘汰当前项。
+	RecordDelegate.Broadcast(Record);
 }
 
 TArray<FCombatLogRecord> UCombatEventSubsystem::GetRecordsForRootEvent(const FCombatEventId RootEventId) const

@@ -101,3 +101,33 @@ Designer 中使用底边锚定的 ScaleBox，按 UE DPI 规则显示，狭窄区
 实际双玩家 Demo PIE 检查了常规与小窗口布局、客户端真实资源、头像叠加信息、常驻物品 / 背包，以及英雄和技能详情的悬停、点击固定、移出后保留、关闭按钮和 Escape。截图为 `Saved/BottomHUD/PIE-Client.png`。三 Target、Dedicated 与最终资产回读结果统一记录在进度台账和 `Saved/BottomHUD/Validation.md`；不将 PIE 视觉检查当作 Dedicated 网络证据。
 
 2026-09-10 的 DEMO-901 回归将 Q 槽切换为霜冻之箭 AutoCast，并把展示投影升级到 schema 4。自动化覆盖槽位筛选、服务器原子翻转、无 `CastNoTarget`、权威开关投影和“自动/关闭”文案；最终 `Combat.*` 59/59。Dedicated 服务器与两个客户端分别验证 2/1/1 个 owner-only 技能快照，均为 Pass；容量夹具把英雄固有 Modifier 计入冻结总量后保持 64 Unit / 256 Modifier，预算为 Pass。证据见 `Saved/DrowRangerDemo/Automation-Full-Final2.log` 与 `Dedicated-Final2.log`。
+
+## 7. 战斗记录窗口（HUD-LOG-001）
+
+`/Game/Combat/Demo/UI/WBP_CombatLog` 继承 `UCombatLogWidget`，由 `BP_CombatPlayerHUD.LogWidgetClass` 创建在本地屏幕层 20。左上角入口设计坐标为 `(16,16)`、大小 `138×36`；展开窗口为 `840×540`，从入口下方开始，ScaleBox 按可用区域缩小并为底部 HUD 留空。入口与窗口的几何、文字、复选框、下拉框和滑条由 Designer 维护；原生只生成复用的富文本记录行，字体和主要颜色可在蓝图默认值编辑。
+
+记录显示毫秒时间、蓝色来源、浅色目标、青色技能/伤害、绿色生命变化和紫色状态。名称来自稳定定义 ID，本地定义未加载时回退 ID，异步加载完成后刷新；富文本特殊字符转义。同名单位的下拉选项附带服务器实例编号；与“全部”或其他标签冲突时继续区分，确保选项不会覆盖彼此。已离场但正在筛选的实例保留选项。
+
+攻击者、目标、伤害/治疗/技能/状态、非英雄和时间条件按 AND 组合。时间滑条吸附 `30/60/120/300 秒/全部`，全部仍受 512 条历史上限约束。物品置灰并显示未接入提示。默认跟随最新；手动向上滚动暂停跟随，回到底部或勾选跟随恢复。关闭继续保存记录，打开时回到最新；右上角 × 或 Escape 关闭。窗口和入口处理鼠标事件，避免点击穿透至世界发出移动/攻击。
+
+按住标题栏的鼠标左键可拖动记录窗口，入口位置固定；标题栏中的关闭按钮与“跟随最新”仍执行各自操作。`LogTitleBar` 是 Designer 中高度 48、横向拉伸的透明拖动区域，位于标题文字和按钮后方，悬停显示移动光标与中文提示。原生平移最外层 `LogScale`，使面板及其祖先的鼠标点击区域一起移动；锚点和设计尺寸不变。位移转换到玩家视口坐标，再以未移动的 Canvas 锚点和面板实际尺寸约束边界，兼容 DPI/ScaleBox 缩放并避免逐帧反馈。窗口关闭再打开保留本次 Widget 的位置；首次创建使用 Designer 原位，不写磁盘。视口缩小时重新约束位置。
+
+拖动期间由窗口捕获对应用户的鼠标指针；松开左键、捕获丢失、Escape/关闭或 Destruct 结束拖动。主动取消只释放本 Widget 持有的那个指针，不干扰其他控件或玩家的捕获。正文和筛选区不能启动拖动，拖动过程不向世界发送 Order。
+
+下列绑定为必需控件，重命名应同步原生声明并编译蓝图：
+
+| 功能 | 控件名 |
+| --- | --- |
+| 入口与窗口 | `LogEntryButton`、`LogScale`、`LogPanel`、`LogTitleBar`、`CloseLogButton`、`LogScrollBox` |
+| 单位筛选 | `AttackerCombo`、`TargetCombo` |
+| 分类与跟随 | `DamageCheck`、`HealingCheck`、`AbilityCheck`、`ItemCheck`、`StatusCheck`、`NonHeroCheck`、`FollowLatestCheck` |
+| 时间与提示 | `TimeRangeSlider`、`TimeRangeText`、`RecordCountText`、`EmptyStateText` |
+
+生命周期审计（2026-09-12）：
+
+| 创建者 | 持有关系 | 终止与重建 | 旧回调隔离 |
+| --- | --- | --- | --- |
+| PlayerController 构造 | 强持有日志组件；组件弱缓存世界单位、弱观察事件子系统 | 组件 EndPlay 移除事件委托、清空历史/单位缓存并通知观察者后清空委托 | 无 gameplay 计时器；只复制服务器追加的历史 |
+| 本地 HUD BeginPlay | 强持有窗口；窗口弱观察日志组件、强持文字池与瞬态样式表 | 窗口 Destruct 解绑所有委托、取消加载并释放行；重建保留弱历史源并恢复一次订阅；HUD EndPlay 显式置空历史源并移除窗口 | 弱异步回调与 `BindingRevision`；过期请求不能写回新绑定；专用服务器不创建窗口 |
+
+相关测试为 `Combat.UI.Log.*` 的筛选与格式、容量边界、真实事务与组件 EndPlay、真实蓝图控件与重建，以及四档 DPI、视口边缘和缩小后的位置恢复。工程和联网证据记录在 [HUD-LOG-001 Spec](../Specs/HUD-LOG-001-combat-log.spec.md)，本地拖动增量证据见 [HUD-LOG-002 Spec](../Specs/HUD-LOG-002-window-drag.spec.md)；不改写此前 HUD 验收结论。

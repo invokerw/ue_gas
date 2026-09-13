@@ -1,6 +1,6 @@
 # 00-01 开发进度台账
 
-> 最后更新：2026-09-12
+> 最后更新：2026-09-13
 > 当前阶段：M8、SAM 与 DEMO-901 卓尔游侠 Demo 均已通过用户验收
 > 历史 M0-M8：82/82 Task 完成，9/9 里程碑由用户验收
 > SAM 进度：10/10 Task 完成；修正 Gate 和用户验收均已通过
@@ -8,6 +8,8 @@
 > 流程专项（2026-09-12）：DOC-008 已完成，待用户验收；TOOL-001 已完成，待用户验收；Spec、Skill 路由和验证证据已纳入可失败 Gate，UE 路径配置与 Dedicated 准入已纳入本地工具
 > 最近工程验证（2026-09-08）：Demo 普攻输入已统一为 Enhanced Input Action；该轮常规 Editor 构建、蓝图编译保存回读、全量 Combat 53/53 和资产 7/7 通过。头顶 UI 蓝图拆分及此前三 Target/Dedicated 回归已完成；该轮未重跑联机矩阵
 > HUD 专项（2026-09-09）：已实现并完成工程验证，待用户实机复验；三 Target、Combat 57/57、资产 7/7、双玩家 PIE 与 Dedicated 双客户端通过，见 [10-12](../10-Architecture/10-12-Bottom-HUD-Design.md) 与 ADR-047
+> 战斗记录专项（2026-09-13）：HUD-LOG-001 已通过用户验收；左上角入口、可筛选历史和 owner-only 事件投影已接入，三 Target、Combat 67/67、资产 10/10、PIE 与 Dedicated 双客户端通过，见 [Spec](../Specs/HUD-LOG-001-combat-log.spec.md)
+> 战斗记录交互（2026-09-13）：HUD-LOG-002 已通过用户验收；支持顶部栏拖动、视口约束和关闭重开保留位置，Editor、直接 Automation 5/5、资产 10/10 与实际 PIE 通过，见 [Spec](../Specs/HUD-LOG-002-window-drag.spec.md)
 
 本文件是项目执行状态的唯一来源。[00-02 实施路线图](00-02-Implementation-Roadmap.md)定义任务内容和依赖，本文件记录实际状态、验证证据和用户验收结论。
 
@@ -275,6 +277,17 @@
 | --- | --- | --- | --- |
 | TOOL-001 | 不同机器的 UE 编辑器路径配置与 Dedicated 测试准入 | 待验收 | `.env.example`、`Tools/ue_environment.py`、`Tools/RunDedicated.ps1` 和工具单测；Dedicated 入口在缺少 `UE_SOURCE_EDITOR` 或源码 `Build.bat` 时明确拒绝，不启动 UE；见 [TOOL-001 Spec](../Specs/TOOL-001-ue-environment-config.spec.md) |
 
+## 12.8 Post-M8：战斗记录窗口
+
+| Task | 状态 | 内容与证据 |
+| --- | --- | --- |
+| HUD-LOG-001 | 已验收 | 完成左上角战斗记录入口、中文彩色历史、来源/目标/类别/时间筛选、512 条 owner-only FastArray 与 Blueprint 布局；最终 Editor/Server/Client 三 Target、Combat 67/67、资产 10/10、PIE 和 Dedicated 双客户端通过。2026-09-13 用户验收并授权提交。见 [Spec](../Specs/HUD-LOG-001-combat-log.spec.md)、ADR-052 与 `Saved/CombatLog/`。 |
+| HUD-LOG-002 | 已验收 | 完成顶部栏左键拖动、DPI/视口约束、关闭重开保留位置和捕获清理；修复移动后祖先点击区域失配，连续拖动及原控件交互通过。Editor、Combat.UI.Log 5/5、资产 10/10、PIE 与交付 Gate 通过；2026-09-13 用户验收并授权提交。见 [Spec](../Specs/HUD-LOG-002-window-drag.spec.md) 和 `Saved/CombatLogDrag/`。 |
+
+用户验收状态：`用户已验收`（2026-09-13）；F0 GO、F1 APPROVED、F2 PASS、Push-Ready READY，自评 4.7/5。用户明确确认“验收完成，提交吧”，授权本地 Git 提交。
+
+HUD-LOG-002 追加交互状态：`用户已验收`（2026-09-13）；F0 GO、F1 APPROVED、F2 PASS、Push-Ready READY，自评 4.8/5。拖动增量未重跑 Server/Client、Dedicated 或 cook，原因是仅修改本地 UI；验收归档仅更新状态和检查提交内容。
+
 ## 13. 用户验收记录
 
 | 里程碑 | 提交验收日期 | 用户结论 | 修正要求 | 最终验收日期 | 下一阶段授权 |
@@ -290,6 +303,8 @@
 | M8 | 2026-08-27 | 已验收 | 无 | 2026-08-27 | 不适用（最终里程碑） |
 | SAM | 2026-09-02 | 已验收 | 用户反馈“启动 PIE，点击右键并不能移动”；默认出生拓扑已修复，并已补 AIController 唯一性与真实位移验证 | 2026-09-09 | 用户确认服务器权威单位移动验收通过 |
 | DEMO-901 | 2026-09-10 | 已验收 | 无 | 2026-09-11 | 不适用（独立 post-M8 任务） |
+| HUD-LOG-001 | 2026-09-12 | 已验收 | 追加顶部栏拖动，由 HUD-LOG-002 实现 | 2026-09-13 | 用户授权本地提交 |
+| HUD-LOG-002 | 2026-09-12 | 已验收 | 无 | 2026-09-13 | 用户授权本地提交 |
 
 ## 14. 更新日志
 
@@ -365,6 +380,10 @@
 | 2026-09-12 | 完成 REF-001：将 4 组模板 C++ h/cpp 文件及其反射类统一为 Combat 前缀，补充旧类名 CoreRedirect，并同步当前文档与默认配置段；Editor 构建、`Combat.*` 63/63、资产 10/10（0 error/0 warning）和文档校验通过 | post-M8 工程命名迁移 / REF-001 |
 | 2026-09-12 | 完成 REF-002：Runtime Module 迁移为 `Combat`，保留 `ue_gas.uproject` 与 `ue_gasEditor/Server/Client` Target 名称；补充 `/Script/ue_gas` PackageRedirect 与旧 Asset Registry 类路径兼容。Editor 构建、`Combat.*` 63/63、资产 10/10（0 error/0 warning）和文档校验通过；Server/Client 受安装版 UE 限制未构建 | post-M8 工程命名迁移 / REF-002 |
 | 2026-09-12 | 完成 TOOL-001：新增 `.env.example`、UE 环境解析/校验工具和配置驱动的 Dedicated Server + 两客户端入口；工具单测 32/32、文档校验 62 Markdown/325 本地链接、PowerShell 解析和空白检查通过；本机未配置 `.env`，Dedicated smoke 按预期拒绝启动并记为未执行 | post-M8 工具流程 / TOOL-001 |
+| 2026-09-12 | 完成 HUD-LOG-001：新增左上角战斗记录窗口、中文彩色服务器事件投影、来源/目标/类别/时间筛选和有界历史；三 Target、Combat 67/67、资产 10/10、PIE、Dedicated 双客户端与交付 Gate 通过，F2 发现固化回归，转为待用户验收 | post-M8 HUD / HUD-LOG-001 / ADR-052 |
+| 2026-09-12 | 启动 HUD-LOG-002：用户追加顶部栏拖动窗口；完成 F0/F1 和 preflight，保留上一轮日志系统，验证拖动、DPI/边界、输入释放和原控件行为 | post-M8 HUD / HUD-LOG-002 |
+| 2026-09-12 | 完成 HUD-LOG-002：标题栏左键拖动、入口固定、边界约束与本次 HUD 位置保留；修复移动后点击区域失配，Editor、直接 Automation 5/5、资产 10/10、真实 PIE 与交付 Gate 通过，转为待用户验收 | post-M8 HUD / HUD-LOG-002 |
+| 2026-09-13 | 用户确认战斗记录系统及顶部栏拖动验收完成并授权本地提交；同步两个 Spec、任务状态和最终验收日期，复核文档、交付 Gate、差异及 LFS 资产，不新增运行时验证结论 | post-M8 HUD / HUD-LOG-001 / HUD-LOG-002 |
 
 ## 15. 更新规则
 

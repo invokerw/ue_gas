@@ -17,6 +17,7 @@
 #include "Combat/Core/CombatTags.h"
 #include "Combat/Data/CombatDefinitionData.h"
 #include "Combat/Log/CombatEventSubsystem.h"
+#include "Combat/Log/CombatLogComponent.h"
 #include "Combat/Network/CombatNetworkTypes.h"
 #include "Combat/Order/CombatOrderComponent.h"
 #include "Combat/Targeting/CombatTargetingSubsystem.h"
@@ -31,6 +32,7 @@ ACombatPlayerController::ACombatPlayerController()
 	bShowMouseCursor = true;
 	DefaultMouseCursor = EMouseCursor::Default;
 	CommandPawnClass = ACombatCharacter::StaticClass();
+	CombatLogComponent = CreateDefaultSubobject<UCombatLogComponent>(TEXT("CombatLog"));
 }
 
 void ACombatPlayerController::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const

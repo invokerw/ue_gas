@@ -109,6 +109,15 @@
 - 迁移：`DefaultEngine.ini` 的 `[CoreRedirects]` 增加 `/Script/ue_gas` 到 `/Script/Combat` 的精确 `PackageRedirects`，三个既有原生类重定向直接指向新模块；配置类段、AssetManager 和 AbilitySystemGlobals 使用新包路径。资产校验同时识别新旧模块类路径，避免旧 Asset Registry 元数据使扫描静默变为 0；无需批量重存二进制资产。
 - 影响：模块 DLL、UHT 生成包和 API 导出宏改变；Gameplay、网络、DefinitionId、GameplayTag、事件 schema 与 `combat_v1_rc1` 不变。Dedicated/Server/Client Target 若被安装版 SDK 阻塞，必须记录未执行原因。
 
+### ADR-052：玩家战斗记录的独立只读投影（2026-09-12）
+
+- 状态：已定；用户授权参考 DOTA2 战斗日志，实施规格见 [HUD-LOG-001](../Specs/HUD-LOG-001-combat-log.spec.md)。
+- 核心 `FCombatLogRecord`/Event schema 1 与 `combat_v1_rc1` 不变。`Emit` 的原生可选展示上下文同步传递事务的真实生命前后值，不写入核心序列化，也不从事后 Health 反算。
+- 新增独立 `CombatLogPresentation` schema 1。PlayerController 持有服务器订阅的日志组件，按网络相关性筛选后以 owner-only FastArray 保留最近 512 条；不复制 Runtime/DataAsset UObject 指针，不提供客户端写日志或写战斗的 RPC。
+- Widget Blueprint 维护左上角入口、窗口和筛选布局；C++ 只整理文字、时间窗、定义解析、颜色标记及订阅生命周期。关闭窗口继续记录；历史跨死亡保留。
+- 当前英雄判别仅指事件发生时有玩家指挥的单位。“非英雄”关闭时排除双方均非玩家单位的记录；物品选项置灰，仍不扩展物品/经济玩法。
+- 新客户端和服务器同时更新，无存档迁移；回滚成组撤销日志组件、展示上下文、Widget 及 HUD 引用。验证覆盖真实事务、容量、分类过滤、重建/teardown、蓝图和 Dedicated 投影。
+
 ## 3. 本轮查漏补缺摘要
 
 原单体文档对 Damage、Modifier、Scheduler、AttackRecord 和网络权威已有较强约束；本轮新增或显式登记了以下遗漏：
@@ -170,6 +179,7 @@
 | GAP-022 | 明确延期（ADR-041） | Ability/移动本地预测和回滚 | v1 只保留 Projectile 纯视觉 PredictionKey；完整 PredictionKey owner、rollback 与 Cue reconcile 需独立 ADR/schema/Gate，发布契约固定 `bGameplayRollback=false`；评估见 [90-15 §3](../90-History/90-15-M8-Release-Candidate-Decision.md#3-rel-004-预测评估) | 2026-08-27 / post-v1 |
 | GAP-025 | 已关闭 | 暂停、global/custom time dilation 语义 | `UCombatSchedulerSubsystem` 使用 World game time；real-time UI 不进入 Scheduler；时序/catch-up/budget/teardown 自动化通过 | 2026-08-24 / FND-007 |
 | GAP-026 | 已关闭 | 直接 Possess Demo 允许 owning client 参与单位移动，客户端 Pawn 解穿透可产生服务器未认可的视觉位移 | ADR-043 已落地：服务器 Combat AIController + Command Pawn + 全客户端 SimulatedProxy + 单一 Detour Crowd；三档 Dedicated 双客户端对撞、RPC、64/256 容量和 teardown Gate 见 [10-10](../10-Architecture/10-10-Server-Authoritative-Movement-Kickoff.md) | 2026-09-02 / SAM-008 |
+| GAP-027 | 待处理 | 交互式 Editor 内运行既有完整 Automation 后切地图，部分技能测试的 CDO 持有临时 AbilityData，导致测试 World 无法 GC | HUD-LOG-001 验证时发现；引用链指向 Default__CombatSelfHealAbility、CombatMeatHookAbility 等既有测试配置，不含日志组件。当前以独立进程执行全量 Automation、干净 Editor 执行 PIE 隔离；后续为修改 CDO 的测试增加作用域恢复。证据 `Saved/CombatLog/Editor-UI.log` 的 World Memory Leaks 引用链 | 后续测试设施维护 |
 
 ## 7. 模板适配风险
 

@@ -24,6 +24,6 @@ public:
 private:
 	/** 创建根事件或受深度上限约束的子事件。 */
 	FCombatEventContext CreateEventContext(const FCombatEventContext& Parent) const;
-	/** 写入本次成功结算的伤害结果日志，包括免疫阻挡；前置校验失败的返回路径不调用此函数。 */
-	void EmitResultLog(const FCombatDamageResult& Result) const;
+	/** 写入成功结果；Delta 只给显示投影提供真实生命前后值，免疫阻挡时可为空，不从当前属性反算。 */
+	void EmitResultLog(const FCombatDamageResult& Result, const FCombatTransactionDelta* Delta = nullptr) const;
 };

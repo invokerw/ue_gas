@@ -12,6 +12,9 @@
 #include "Combat/Demo/CombatFissureBlocker.h"
 #include "Combat/Debug/CombatDebugSubsystem.h"
 #include "Combat/Log/CombatEventSubsystem.h"
+#include "Combat/Log/CombatLogComponent.h"
+#include "Combat/Combat/CombatDamageSubsystem.h"
+#include "Combat/Combat/CombatHealSubsystem.h"
 #include "Combat/Modifiers/CombatModifierComponent.h"
 #include "Combat/Order/CombatOrderComponent.h"
 #include "Combat/Network/CombatNetworkSecuritySubsystem.h"
@@ -316,6 +319,22 @@ void ACombatTestScenarioActor::StartM7NetworkScenario()
 		}
 	}
 	const bool bCapacityFixtureReady = ExpandM7CapacityScenario();
+	if (FParse::Param(FCommandLine::Get(), TEXT("CombatLogSmoke")))
+	{
+		// 测试地图通过正式事务制造一对可核对端点的记录；不把测试编排带入 Demo gameplay。
+		FCombatDamageRequest Damage;
+		Damage.Source = SpawnedUnits[0];
+		Damage.Target = SpawnedUnits[0];
+		Damage.Amount = 17.0f;
+		Damage.DamageType = ECombatDamageType::Pure;
+		Damage.Flags.AddTag(CombatTags::Damage_Flag_HPLoss);
+		const FCombatDamageResult DamageResult = GetWorld()->GetSubsystem<UCombatDamageSubsystem>()->DealDamage(Damage);
+		FCombatHealRequest Heal;
+		Heal.Source = SpawnedUnits[0];
+		Heal.Target = SpawnedUnits[0];
+		Heal.Amount = DamageResult.Event.AppliedAmount;
+		GetWorld()->GetSubsystem<UCombatHealSubsystem>()->Heal(Heal);
+	}
 
 	int32 MixedUnits = 0;
 	int32 MinimalUnits = 0;
@@ -522,6 +541,39 @@ void ACombatTestScenarioActor::LogHUDNetworkSnapshot()
 	UE_LOG(LogCombat, Display, TEXT("HUDNetworkSnapshot Role=%s Owners=%d Foreign=%d Skills=%d Result=%s"),
 		HasAuthority() ? TEXT("Server") : TEXT("Client"), CheckedOwners, CheckedForeign, CheckedSkills,
 		bPassed ? TEXT("Pass") : TEXT("Fail"));
+	if (FParse::Param(FCommandLine::Get(), TEXT("CombatLogSmoke")))
+	{
+		int32 Connections = 0;
+		bool bLogsPassed = true;
+		for (TActorIterator<ACombatPlayerController> It(GetWorld()); It; ++It)
+		{
+			if (!HasAuthority() && !It->IsLocalController()) continue;
+			++Connections;
+			const UCombatLogComponent* Log = It->FindComponentByClass<UCombatLogComponent>();
+			int32 DamageRows = 0, HealingRows = 0;
+			int64 PreviousSequence = 0;
+			bool bConnectionPassed = Log && !Log->GetEntries().IsEmpty()
+				&& Log->GetEntries().Num() <= CombatLogPresentation::MaxEntries;
+			if (Log) for (const FCombatLogEntry& Entry : Log->GetEntries())
+			{
+				bConnectionPassed &= Entry.Sequence > PreviousSequence && FMath::IsFinite(Entry.ServerTime);
+				PreviousSequence = Entry.Sequence;
+				if (!Entry.bHasHealthChange) continue;
+				bConnectionPassed &= FMath::IsNearlyEqual(FMath::Abs(Entry.NewHealth - Entry.PreviousHealth), Entry.Amount, 0.01f);
+				DamageRows += Entry.Category == ECombatLogCategory::Damage ? 1 : 0;
+				HealingRows += Entry.Category == ECombatLogCategory::Healing ? 1 : 0;
+			}
+			bConnectionPassed &= DamageRows > 0 && HealingRows > 0;
+			bLogsPassed &= bConnectionPassed;
+			UE_LOG(LogCombat, Display, TEXT("CombatLogConnection Role=%s Rows=%d Damage=%d Heal=%d Result=%s"),
+				HasAuthority() ? TEXT("Server") : TEXT("Client"), Log ? Log->GetEntries().Num() : 0,
+				DamageRows, HealingRows, bConnectionPassed ? TEXT("Pass") : TEXT("Fail"));
+		}
+		bLogsPassed &= Connections == (HasAuthority() ? 2 : 1);
+		UE_LOG(LogCombat, Display, TEXT("CombatLogNetworkSnapshot Role=%s Connections=%d Schema=%d Result=%s"),
+			HasAuthority() ? TEXT("Server") : TEXT("Client"), Connections, CombatLogPresentation::SchemaVersion,
+			bLogsPassed ? TEXT("Pass") : TEXT("Fail"));
+	}
 }
 
 void ACombatTestScenarioActor::LogM7PerformanceSnapshot()

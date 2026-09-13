@@ -24,6 +24,6 @@ public:
 private:
 	/** 创建根事件或受深度上限约束的子事件。 */
 	FCombatEventContext CreateEventContext(const FCombatEventContext& Parent) const;
-	/** 写入本次成功结算的治疗结果日志；前置校验失败的返回路径不调用此函数。 */
-	void EmitResultLog(const FCombatHealResult& Result) const;
+	/** 写入成功结果，并同步转交本次事务的真实生命前后值供玩家记录使用。 */
+	void EmitResultLog(const FCombatHealResult& Result, const FCombatTransactionDelta& Delta) const;
 };

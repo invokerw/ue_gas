@@ -12,6 +12,7 @@ class UNiagaraSystem;
 class UInputAction;
 class UInputMappingContext;
 class UEnhancedInputComponent;
+class UCombatLogComponent;
 struct FCombatOrderRequest;
 
 DECLARE_LOG_CATEGORY_EXTERN(LogTemplateCharacter, Log, All);
@@ -134,6 +135,9 @@ protected:
 	UPROPERTY(EditAnywhere, Category="Input|Abilities") TObjectPtr<UInputAction> AbilitySlotRAction;
 
 private:
+	/** 默认子对象记录本连接可见事件；生命周期跟随 Controller，HUD 关闭不停止记录。 */
+	UPROPERTY(VisibleAnywhere, Category="Combat|Log", meta=(DisplayName="战斗记录组件", ToolTip="服务器生成并仅向本连接复制的只读战斗历史。"))
+	TObjectPtr<UCombatLogComponent> CombatLogComponent;
 #if WITH_DEV_AUTOMATION_TESTS
 	friend class FCombatPlayerAttackInputTest;
 	friend class FCombatPlayerAttackInputCancellationTest;

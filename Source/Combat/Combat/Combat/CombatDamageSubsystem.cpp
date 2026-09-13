@@ -172,7 +172,7 @@ FCombatDamageResult UCombatDamageSubsystem::DealDamage(const FCombatDamageReques
 		}
 	}
 
-	EmitResultLog(Result);
+	EmitResultLog(Result, &Delta);
 	if (Delta.bLethal)
 	{
 		if (UCombatUnitLifecycleComponent* Lifecycle = Request.Target->GetCombatLifecycleComponent())
@@ -201,7 +201,7 @@ FCombatEventContext UCombatDamageSubsystem::CreateEventContext(const FCombatEven
 	return Parent.IsValid() ? Events->CreateChildEvent(Parent) : Events->CreateRootEvent();
 }
 
-void UCombatDamageSubsystem::EmitResultLog(const FCombatDamageResult& Result) const
+void UCombatDamageSubsystem::EmitResultLog(const FCombatDamageResult& Result, const FCombatTransactionDelta* Delta) const
 {
 	UCombatEventSubsystem* Events = GetWorld() ? GetWorld()->GetSubsystem<UCombatEventSubsystem>() : nullptr;
 	if (!Events || !Result.Event.Context.IsValid())
@@ -222,5 +222,12 @@ void UCombatDamageSubsystem::EmitResultLog(const FCombatDamageResult& Result) co
 	Record.AppliedAmount = Result.Event.AppliedAmount;
 	Record.Flags = Result.Event.Flags;
 	Record.Diagnostic = Result.bBlocked ? TEXT("Blocked") : TEXT("DamageResult");
-	Events->Emit(Record);
+	FCombatLogResourceChange Resource;
+	if (Delta)
+	{
+		Resource.bHasHealthChange = true;
+		Resource.PreviousHealth = Delta->PreviousHealth;
+		Resource.NewHealth = Delta->NewHealth;
+	}
+	Events->Emit(Record, Resource);
 }

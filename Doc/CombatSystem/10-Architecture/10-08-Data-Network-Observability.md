@@ -149,6 +149,20 @@ FailureTag / Flags
 
 第一版不承诺录像回放，但事件 schema 要带版本并避免 UObject 指针，为后续 replay 留入口。
 
+### 7.1 玩家战斗记录投影
+
+`UCombatLogComponent` 作为 PlayerController 的原生默认子对象，只在 Authority 订阅 `UCombatEventSubsystem::OnPresentationRecord`。它将 DamageApplied、HealApplied、技能成功开始/中断/格挡/AutoCast 切换、Modifier 施加/移除及死亡/复活转换成独立 schema 1 的 `FCombatLogEntry`；不展示内部攻击/弹体阶段或零治疗。原有 `FCombatLogRecord` schema 1 和发布契约保持不变（ADR-052）。
+
+Damage/Heal 在真实事务落账后，随 Emit 同步转交 `FCombatLogResourceChange` 中的生命前后值。这个原生临时上下文不参与核心事件序列化，也不反算或采样之后的生命值。已有记录的数值不会被后续恢复、反伤或死亡改写。
+
+出生授予的固有效果可能早于单位“初始化完成”标志，此时显示投影从已赋值、已校验的 UnitData 读取稳定 ID，保证首次效果名称正确；不改变单位初始化或技能授予顺序。
+
+`DefaultGame.ini` 的 CombatModifier/CombatProjectile 扫描同时覆盖 `/Game/Combat/Definitions/...` 和 `/Game/Combat/Demo`，因此本地加载能由记录 ID 找到已有的中文效果名称；缺失内容仍回退稳定 ID。
+
+每连接历史独立保存最多 512 条，超限淘汰最早提交的记录，拒绝重复或倒退 Sequence。`FCombatLogArray` 以 `COND_OwnerOnly` 增量复制；在网络模式下，来源和目标必须同时对该连接网络相关。载荷包含服务器不透明实例 ID、稳定定义 ID、时间、类别、真实 AppliedAmount、可选生命端点及事件时身份标志，不包含 Actor/Runtime/DataAsset 指针。当前“英雄”指玩家指挥的单位；关闭“非英雄”只隐藏双方均非玩家单位的记录。网络相关性不是另行实现战争迷雾，后续若加入迷雾需扩展展示权限契约。
+
+`PostReplicatedReceive` 完整应用增删后通知 UI。显示用有序副本按服务器 Sequence 排序，不能重排 FastArray 底层数组而破坏复制索引。关闭窗口仍接收，Widget 重建继续观察现有历史；PC EndPlay 解绑事件并清空历史，不持久化到磁盘。UI 的名称加载、筛选和 0.1 秒本地显示刷新不推进 gameplay。布局和生命周期见 [10-12 §7](10-12-Bottom-HUD-Design.md#7-战斗记录窗口hud-log-001)。
+
 ## 8. 调试与可观测性
 
 最低工具：

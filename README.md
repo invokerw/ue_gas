@@ -34,6 +34,8 @@ Demo 操作：右键点敌方单位持续普攻，超出范围时自动追击；
 
 底部 HUD 随本地玩家的指挥单位切换。悬停技能、Buff 或头像上的属性可查看详情，点击固定，关闭按钮或 Escape 取消固定；点击 HUD 不发出移动或施法请求。英雄等级和经验环读取服务器成长快照；有技能点且满足英雄等级时，技能图标上方显示“+”按钮，点击请求服务器加点。Q 槽显示“霜冻之箭”及服务器权威的“自动/关闭”状态，W/E/R 保留空位。界面配置入口见 [10-12 底部 HUD](Doc/CombatSystem/10-Architecture/10-12-Bottom-HUD-Design.md)。
 
+点击 HUD 左上角的 **战斗记录** 查看服务器确认的伤害、治疗、技能、状态与死亡/复活事件。记录包含毫秒时间戳、彩色名称、实际数值及生命前后值；攻击者、目标、类别与时间范围可以组合筛选，默认最近 30 秒，最多保留 512 条。上滚暂停跟随，勾选“跟随最新”回到底部；按住顶部栏左键拖动窗口，松开停留，关闭再打开保留当前位置；关闭窗口仍记录，Escape 收起窗口。物品选项因物品系统尚未接入而置灰。布局与颜色在 `WBP_CombatLog` 调整，详见 [战斗记录接入](Doc/CombatSystem/10-Architecture/10-12-Bottom-HUD-Design.md#7-战斗记录窗口hud-log-001)。
+
 开发调试时可在 Standalone 或服务器控制台执行 `combat.Debug.AddExperience 200`，给当前 World 的首个玩家主控单位增加 200 点经验；也可追加单位对象名或 `ActorUniqueId` 精确指定目标，例如 `combat.Debug.AddExperience 200 BP_DrowRanger_C_0`。命令仅在非 Shipping 构建注册，并复用服务器权威成长组件；客户端执行不会直接修改等级、经验或技能点。可先用 `combat.Debug.Unit <ActorUniqueId|Name>` 查询单位名称和 ID。
 
 ## 运行时主链路
