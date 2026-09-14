@@ -1,6 +1,9 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "CombatPlayerController.h"
+#include "Combat/Items/CombatWorldItem.h"
+#include "Combat/View/CombatUnitViewComponent.h"
+#include "Combat/UI/CombatAbilityIndicatorGround.h"
 
 #include "Engine/LocalPlayer.h"
 #include "Engine/World.h"
@@ -174,6 +177,9 @@ void ACombatPlayerController::OnRep_CommandBindingGeneration()
 
 void ACombatPlayerController::RefreshCommandBinding()
 {
+	PendingDropItem = {};
+	ItemFeedbackRequest = 0;
+	ItemFeedbackText = FText::GetEmpty();
 	if (AbilityAimComponent) AbilityAimComponent->ResetLocalState();
 	CancelAttackTargeting();
 	ResetDestinationInput();
@@ -238,6 +244,13 @@ void ACombatPlayerController::SetupInputComponent()
 		EnhancedInputComponent->BindAction(SlotActions[Slot], ETriggerEvent::Canceled, this, &ACombatPlayerController::OnAbilityInputCanceled, Slot);
 	}
 	BindCombatCommandActions(*EnhancedInputComponent);
+	for (int32 Slot = 0; Slot < FMath::Min(6, ItemSlotActions.Num()); ++Slot)
+	{
+		if (!ItemSlotActions[Slot]) continue;
+		EnhancedInputComponent->BindAction(ItemSlotActions[Slot], ETriggerEvent::Started, this, &ACombatPlayerController::OnItemSlotPressed, Slot);
+		EnhancedInputComponent->BindAction(ItemSlotActions[Slot], ETriggerEvent::Completed, this, &ACombatPlayerController::OnItemSlotReleased, Slot);
+		EnhancedInputComponent->BindAction(ItemSlotActions[Slot], ETriggerEvent::Canceled, this, &ACombatPlayerController::OnItemInputCanceled, Slot);
+	}
 }
 
 void ACombatPlayerController::BindCombatCommandActions(UEnhancedInputComponent& EnhancedInputComponent)
@@ -265,16 +278,30 @@ void ACombatPlayerController::OnInputStarted()
 void ACombatPlayerController::BeginDestinationInput(const FHitResult& Hit)
 {
 	const bool bWasAbilityAiming = AbilityAimComponent && AbilityAimComponent->IsAiming();
+	const bool bWasDroppingItem = PendingDropItem.IsValid();
+	PendingDropItem = {};
 	if (bWasAbilityAiming) AbilityAimComponent->ResetLocalState();
 	CancelAttackTargeting();
 	ResetDestinationInput();
 	// 右键取消消费整个手势，后续 Triggered/Completed 没有可恢复的移动目标。
-	if (bWasAbilityAiming || IsPointerOverCombatUI()) return;
+	if (bWasAbilityAiming || bWasDroppingItem || IsPointerOverCombatUI()) return;
 	if (!Hit.bBlockingHit || Hit.Location.ContainsNaN())
 	{
 		return;
 	}
 	// 只认射线实际点到的单位；技能的“附近目标”辅助会把地面右键误判成普攻。
+	if (!bIsTouch)
+	{
+		if (const ACombatWorldItem* Item = Cast<ACombatWorldItem>(Hit.GetActor()))
+		{
+			FCombatOrderRequest Order;
+			Order.Type = ECombatOrderType::PickupItem;
+			Order.ItemHandle = Item->GetItemHandle();
+			Order.ItemRevision = Item->GetItemRevision();
+			if (Order.ItemHandle.IsValid()) SubmitCombatOrder(Order);
+			return;
+		}
+	}
 	if (!bIsTouch && IssueCombatAttackOrder(Cast<ACombatUnitCharacter>(Hit.GetActor())))
 	{
 		return;
@@ -359,6 +386,7 @@ void ACombatPlayerController::OnTouchReleased()
 
 void ACombatPlayerController::OnAttackTargetingStarted()
 {
+	PendingDropItem = {};
 	if (AbilityAimComponent) AbilityAimComponent->ResetLocalState();
 	ResetDestinationInput();
 	bAttackTargeting = GetReadyCommandedUnit() != nullptr;
@@ -367,6 +395,16 @@ void ACombatPlayerController::OnAttackTargetingStarted()
 
 void ACombatPlayerController::OnAttackTargetConfirmed()
 {
+	if (PendingDropItem.IsValid())
+	{
+		if (IsPointerOverCombatUI()) return;
+		FCombatItemView Item;
+		Item.Handle = PendingDropItem;
+		Item.Revision = PendingDropRevision;
+		if (GetReadyCommandedUnit() && PendingDropBinding == GetCommandBindingGeneration() && PendingDropLife == GetReadyCommandedUnit()->GetLifeGeneration()
+			&& DropInventoryItemAtCursor(Item)) CancelCombatTargeting();
+		return;
+	}
 	if (AbilityAimComponent && AbilityAimComponent->IsAiming())
 	{
 		FHitResult Hit;
@@ -401,6 +439,7 @@ void ACombatPlayerController::CancelAttackTargeting()
 
 void ACombatPlayerController::OnStopCommand()
 {
+	PendingDropItem = {};
 	if (AbilityAimComponent) AbilityAimComponent->ResetLocalState();
 	CancelAttackTargeting();
 	ResetDestinationInput();
@@ -440,8 +479,11 @@ bool ACombatPlayerController::SubmitCombatOrder(const FCombatOrderRequest& Order
 	}
 	FCombatOrderBatchRequest Batch;
 	Batch.RequestId = NextCombatOrderRequestId;
+	Batch.UnitLifeGeneration = Unit->GetLifeGeneration();
+	Batch.CommandBindingGeneration = GetCommandBindingGeneration();
 	Batch.bAppendToExistingQueue = false;
 	Batch.Orders.Add(Order);
+	if (Order.ItemHandle.IsValid()) TrackItemRequest(Batch.RequestId, Order);
 	NextCombatOrderRequestId = NextCombatOrderRequestId == MAX_int32 ? 1 : NextCombatOrderRequestId + 1;
 	Unit->ServerIssueOrderBatch(MoveTemp(Batch));
 	return true;
@@ -454,6 +496,7 @@ void ACombatPlayerController::OnAbilitySlotR() { ActivateCombatAbilitySlot(3); }
 
 void ACombatPlayerController::ActivateCombatAbilitySlot(const int32 SlotIndex)
 {
+	PendingDropItem = {};
 	CancelAttackTargeting();
 	ResetDestinationInput();
 	AbilityAimComponent->CancelAim();
@@ -536,6 +579,8 @@ void ACombatPlayerController::ConfirmAbilityTarget(const FHitResult& Hit, const 
 
 void ACombatPlayerController::CancelCombatTargeting()
 {
+	PendingDropItem = {};
+	for (uint64& Serial : ItemPressSerials) Serial = 0;
 	CancelAttackTargeting();
 	ResetDestinationInput();
 	if (AbilityAimComponent) AbilityAimComponent->ResetLocalState();

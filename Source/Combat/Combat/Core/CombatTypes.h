@@ -47,7 +47,9 @@ enum class ECombatDirectSourceType : uint8
 	/** 来源是弹体定义。 */
 	Projectile,
 	/** 来源是一次攻击记录。 */
-	Attack
+	Attack,
+	/** 来源是物品实例；技能、效果和弹体仍保留各自的定义归因。 */
+	Item
 };
 
 /**
@@ -286,6 +288,34 @@ FORCEINLINE uint32 GetTypeHash(const FCombatScheduleHandle& Handle)
 	return GetTypeHash(Handle.Key);
 }
 
+/** 物品实例的稳定身份；不绑定英雄生命，装备、背包和地面之间转移时保持不变。 */
+USTRUCT(BlueprintType)
+struct COMBAT_API FCombatItemHandle
+{
+	GENERATED_BODY()
+	/** 世界登记表分配的编号和代次；LifeGeneration 固定为 0。 */
+	UPROPERTY(BlueprintReadOnly, Category="Combat|Item", meta=(DisplayName="实例身份", ToolTip="物品实例编号与登记表代次；移动或死亡不会生成新身份。")) FCombatHandleKey Key;
+	bool IsValid() const { return Key.IsValid() && Key.LifeGeneration == 0; }
+	FString ToString() const { return Key.ToString(TEXT("Item")); }
+	bool operator==(const FCombatItemHandle& Other) const { return Key == Other.Key; }
+	bool operator!=(const FCombatItemHandle& Other) const { return !(*this == Other); }
+	/** 身份键的内部字段没有反射属性，必须显式序列化物品网络身份。 */
+	bool NetSerialize(FArchive& Ar, UPackageMap* Map, bool& bOutSuccess)
+	{
+		Ar << Key.Id;
+		Ar << Key.Generation;
+		if (Ar.IsLoading()) Key.LifeGeneration = 0;
+		bOutSuccess = !Ar.IsError();
+		return true;
+	}
+};
+
+template<> struct TStructOpsTypeTraits<FCombatItemHandle> : public TStructOpsTypeTraitsBase2<FCombatItemHandle>
+{
+	enum { WithNetSerializer = true, WithIdenticalViaEquality = true };
+};
+FORCEINLINE uint32 GetTypeHash(const FCombatItemHandle& Handle) { return GetTypeHash(Handle.Key); }
+
 /** 可复制、可记录的战斗来源身份快照。 */
 USTRUCT(BlueprintType)
 struct COMBAT_API FCombatSourceContext
@@ -307,6 +337,11 @@ struct COMBAT_API FCombatSourceContext
 	/** 关联弹体的稳定定义 ID；不适用时为空。 */
 	UPROPERTY(BlueprintReadWrite, Category="Combat|Source")
 	FPrimaryAssetId ProjectileDefinitionId;
+
+	/** 产生此次效果的物品定义；旧事件与非物品来源为空。 */
+	UPROPERTY(BlueprintReadWrite, Category="Combat|Source", meta=(DisplayName="物品定义", ToolTip="物品产生效果时快照的稳定定义；效果离开物品后仍保留。")) FPrimaryAssetId ItemDefinitionId;
+	/** 快照的物品实例身份；物品消耗或转移后仍可追溯本次效果。 */
+	UPROPERTY(BlueprintReadWrite, Category="Combat|Source", meta=(DisplayName="物品实例", ToolTip="本次来源物品的身份快照，不是请求修改实例的权限。")) FCombatItemHandle ItemHandle;
 
 	/** 比较来源类别和全部稳定定义 ID。 */
 	bool operator==(const FCombatSourceContext& Other) const;

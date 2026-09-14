@@ -1,4 +1,4 @@
-#include "Combat/View/CombatUnitViewComponent.h"
+﻿#include "Combat/View/CombatUnitViewComponent.h"
 
 #include "Net/UnrealNetwork.h"
 #include "GameFramework/GameStateBase.h"
@@ -73,7 +73,7 @@ void UCombatUnitViewComponent::RefreshUnitView()
 	for (const FGameplayTag& Tag : {
 		CombatTags::State_Stunned.GetTag(), CombatTags::State_Silenced.GetTag(),
 		CombatTags::State_Rooted.GetTag(), CombatTags::State_Disarmed.GetTag(),
-		CombatTags::State_Hexed.GetTag(), CombatTags::State_Frozen.GetTag(),
+		CombatTags::State_Hexed.GetTag(), CombatTags::State_Frozen.GetTag(), CombatTags::State_Muted.GetTag(), CombatTags::State_OutOfGame.GetTag(),
 		CombatTags::State_NoHealthBar.GetTag() })
 	{
 		if (Asc->HasMatchingGameplayTag(Tag))
@@ -230,7 +230,7 @@ void UCombatUnitViewComponent::BeginPlay()
 		for (const FGameplayTag& Tag : {
 			CombatTags::State_Stunned.GetTag(), CombatTags::State_Silenced.GetTag(),
 			CombatTags::State_Rooted.GetTag(), CombatTags::State_Disarmed.GetTag(),
-			CombatTags::State_Hexed.GetTag(), CombatTags::State_Frozen.GetTag(),
+			CombatTags::State_Hexed.GetTag(), CombatTags::State_Frozen.GetTag(), CombatTags::State_Muted.GetTag(), CombatTags::State_OutOfGame.GetTag(),
 			CombatTags::State_NoHealthBar.GetTag() })
 		{
 			Asc->RegisterGameplayTagEvent(Tag, EGameplayTagEventType::NewOrRemoved)
@@ -270,7 +270,7 @@ void UCombatUnitViewComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 			for (const FGameplayTag& Tag : {
 				CombatTags::State_Stunned.GetTag(), CombatTags::State_Silenced.GetTag(),
 				CombatTags::State_Rooted.GetTag(), CombatTags::State_Disarmed.GetTag(),
-				CombatTags::State_Hexed.GetTag(), CombatTags::State_Frozen.GetTag(),
+				CombatTags::State_Hexed.GetTag(), CombatTags::State_Frozen.GetTag(), CombatTags::State_Muted.GetTag(), CombatTags::State_OutOfGame.GetTag(),
 				CombatTags::State_NoHealthBar.GetTag() })
 			{
 				Asc->RegisterGameplayTagEvent(Tag, EGameplayTagEventType::NewOrRemoved).RemoveAll(this);

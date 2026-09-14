@@ -66,8 +66,10 @@ private:
 	void CreateRuntimeUpgradeButton();
 	/** UButton 点击回调；只广播 UI 请求，不直接修改 ASC。 */
 	UFUNCTION() void HandleUpgradeClicked();
+protected:
 	/** 使用配置纹理；缺失美术时保留名称首字占位。 */
 	void SetIcon(UTexture2D* Texture, const FText& Name);
 	FText DetailText;
+private:
 	UPROPERTY(Transient) TObjectPtr<class UButton> RuntimeUpgradeButton;
 };

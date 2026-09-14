@@ -21,6 +21,22 @@
 #include "Combat/Unit/CombatUnitAIController.h"
 #include "Combat/Unit/CombatCharacterMovementComponent.h"
 #include "Combat/Unit/CombatUnitCharacter.h"
+#include "Combat/Items/CombatInventoryComponent.h"
+#include "Combat/Items/CombatItemSubsystem.h"
+#include "Combat/Items/CombatWorldItem.h"
+
+namespace CombatItemOrderResult
+{
+	/** 初始回执和最终回执复制同一关联快照；不读取当前已经变化的槽位。 */
+	void SetCorrelation(FCombatOrderResult& Result, const FCombatOrderRequest& Request)
+	{
+		Result.RequestId = Request.RequestCorrelationId;
+		Result.RequestOrderIndex = Request.RequestOrderIndex;
+		Result.ControlGeneration = Request.RequestControlGeneration;
+		Result.Type = Request.Type;
+		Result.ItemHandle = Request.ItemHandle;
+	}
+}
 
 UCombatOrderComponent::UCombatOrderComponent()
 {
@@ -32,6 +48,7 @@ FCombatOrderResult UCombatOrderComponent::IssueOrder(
 	const bool bQueue)
 {
 	FCombatOrderResult Result;
+	CombatItemOrderResult::SetCorrelation(Result, Request);
 	ACombatUnitCharacter* Unit = GetOwnerUnit();
 	if (!Unit || !Unit->HasAuthority())
 	{
@@ -53,6 +70,15 @@ FCombatOrderResult UCombatOrderComponent::IssueOrder(
 		Result.bSuccess = true;
 		Result.Handle = AllocateOrderHandle();
 		Result.State = ECombatOrderState::Completed;
+		return Result;
+	}
+	if (Request.Type == ECombatOrderType::SwapItems)
+	{
+		Result.Handle = AllocateOrderHandle();
+		Result.bSuccess = Unit->GetCombatInventoryComponent()->TrySwap(Request.FromItemSlot, Request.ToItemSlot,
+			Request.InventoryRevision, Request.ItemHandle, Request.OtherItemHandle, Result.FailureTag);
+		Result.State = Result.bSuccess ? ECombatOrderState::Completed : ECombatOrderState::Failed;
+		OrderFinishedDelegate.Broadcast(Result);
 		return Result;
 	}
 	if (bQueue && PendingOrders.Num() >= MaxQueuedOrders)
@@ -121,12 +147,13 @@ void UCombatOrderComponent::PumpCurrentOrder()
 		}
 
 		const ECombatOrderType Type = Order.Request.Type;
-		const bool bMoveOrder = Type == ECombatOrderType::MoveToPoint || Type == ECombatOrderType::MoveToUnit;
+		const bool bMoveOrder = Type == ECombatOrderType::MoveToPoint || Type == ECombatOrderType::MoveToUnit
+			|| Type == ECombatOrderType::PickupItem || Type == ECombatOrderType::DropItem;
 		const bool bCastOrder = Type == ECombatOrderType::CastNoTarget
 			|| Type == ECombatOrderType::CastPoint || Type == ECombatOrderType::CastTarget;
 		if ((bMoveOrder && Unit->IsMovementBlocked())
 			|| (Type == ECombatOrderType::AttackTarget && Unit->IsAttackBlocked())
-			|| (bCastOrder && Unit->IsAbilityBlocked()))
+			|| (bCastOrder && Unit->GetCombatAbilitySystemComponent()->IsCombatAbilityStateBlocked(Order.Request.AbilitySpecHandle)))
 		{
 			CancelFacingAsync();
 			TransitionTo(ECombatOrderState::Paused, CombatTags::Order_Failure_UnitStateBlocked,
@@ -143,6 +170,34 @@ void UCombatOrderComponent::PumpCurrentOrder()
 		TransitionTo(ECombatOrderState::Validating);
 		switch (Type)
 		{
+		case ECombatOrderType::PickupItem:
+		case ECombatOrderType::DropItem:
+		{
+			const auto Valid = ValidateItemOrder(Order.Request);
+			if (!Valid.bSuccess) { CompleteCurrentOrder(false, Valid.FailureTag, Valid.Diagnostic); continue; }
+			const UCombatItemInstance* Item = GetWorld()->GetSubsystem<UCombatItemSubsystem>()->FindItem(Order.Request.ItemHandle);
+			ACombatWorldItem* Actor = Item ? Item->GetWorldActor() : nullptr;
+			const FVector Point = Type == ECombatOrderType::PickupItem && Actor ? Actor->GetActorLocation() : Order.Request.TargetLocation;
+			const auto Interaction = GetWorld()->GetSubsystem<UCombatTargetingSubsystem>()->ValidateItemInteraction(Unit, Point, Actor, true, Type == ECombatOrderType::DropItem);
+			if (!Interaction.bValid && Interaction.FailureTag != CombatTags::Failure_Target_OutOfRange)
+			{
+				CompleteCurrentOrder(false, Interaction.FailureTag, Interaction.Diagnostic); continue;
+			}
+			if (!IsCurrentDestinationReached())
+			{
+				// 范围内被墙挡住不能当作抵达；有界追近失败最终反馈，旅行期间不锁定地面物品。
+				if (BeginMovement(true)) return;
+				CompleteCurrentOrder(false, CombatTags::Order_Failure_PathFailed, TEXT("Could not reach item interaction"));
+				continue;
+			}
+			CancelMovementAsync();
+			FGameplayTag Failure;
+			const bool bDone = Type == ECombatOrderType::PickupItem
+				? Unit->GetCombatInventoryComponent()->TryPickup(Order.Request.ItemHandle, Order.Request.ItemRevision, Failure)
+				: Unit->GetCombatInventoryComponent()->TryDrop(Order.Request.ItemHandle, Order.Request.ItemRevision, Order.Request.TargetLocation, Failure);
+			CompleteCurrentOrder(bDone, Failure, bDone ? TEXT("Item interaction completed") : TEXT("Item interaction rejected at arrival"));
+			continue;
+		}
 		case ECombatOrderType::MoveToPoint:
 		case ECombatOrderType::MoveToUnit:
 			if (Type == ECombatOrderType::MoveToUnit
@@ -167,6 +222,11 @@ void UCombatOrderComponent::PumpCurrentOrder()
 		case ECombatOrderType::CastPoint:
 		case ECombatOrderType::CastTarget:
 		{
+			if (Order.Request.ItemHandle.IsValid())
+			{
+				const auto Valid = ValidateItemOrder(Order.Request);
+				if (!Valid.bSuccess) { CompleteCurrentOrder(false, Valid.FailureTag, Valid.Diagnostic); continue; }
+			}
 			UCombatAbilitySystemComponent* Asc = Unit->GetCombatAbilitySystemComponent();
 			const UCombatAbilityData* Data = Asc ? Asc->GetCombatAbilityData(Order.Request.AbilitySpecHandle) : nullptr;
 			UCombatTargetingSubsystem* Targeting = GetWorld()->GetSubsystem<UCombatTargetingSubsystem>();
@@ -442,6 +502,16 @@ FCombatOperationResult UCombatOrderComponent::ValidateOrderRequest(const FCombat
 	const bool bFiniteLocation = !Request.TargetLocation.ContainsNaN()
 		&& FMath::IsFinite(Request.TargetLocation.X) && FMath::IsFinite(Request.TargetLocation.Y)
 		&& FMath::IsFinite(Request.TargetLocation.Z);
+	const bool bItemOperation = Request.Type == ECombatOrderType::PickupItem || Request.Type == ECombatOrderType::DropItem || Request.Type == ECombatOrderType::SwapItems;
+	const bool bItemAbility = Unit->GetCombatAbilitySystemComponent()->IsItemAbility(Request.AbilitySpecHandle);
+	if (bItemOperation || bItemAbility)
+	{
+		const auto Valid = ValidateItemOrder(Request);
+		if (!Valid.bSuccess || bItemOperation) return Valid;
+	}
+	else if (Request.ItemHandle.IsValid() || Request.ItemRevision != 0 || Request.OtherItemHandle.IsValid()
+		|| Request.FromItemSlot != INDEX_NONE || Request.ToItemSlot != INDEX_NONE || Request.InventoryRevision != 0)
+		return FCombatOperationResult::Failure(CombatTags::Order_Failure_InvalidRequest, TEXT("Non-item order contains item payload"));
 	switch (Request.Type)
 	{
 	case ECombatOrderType::MoveToPoint:
@@ -523,6 +593,7 @@ void UCombatOrderComponent::CompleteCurrentOrder(
 		return;
 	}
 	const FCombatOrderHandle Handle = CurrentOrder->Handle;
+	const FCombatOrderRequest FinishedRequest = CurrentOrder->Request;
 	CancelCurrentAsync(FailureTag);
 	TransitionTo(bSuccess ? ECombatOrderState::Completed : ECombatOrderState::Failed, FailureTag, Diagnostic);
 	FCombatOrderResult Result;
@@ -531,6 +602,7 @@ void UCombatOrderComponent::CompleteCurrentOrder(
 	Result.State = CurrentState;
 	Result.FailureTag = FailureTag;
 	Result.Diagnostic = Diagnostic;
+	CombatItemOrderResult::SetCorrelation(Result, FinishedRequest);
 	CurrentOrder.Reset();
 	CurrentState = ECombatOrderState::Idle;
 	OrderFinishedDelegate.Broadcast(Result);
@@ -545,6 +617,7 @@ void UCombatOrderComponent::AdvanceGenerationAndCancel(
 	const bool bBroadcastCurrent)
 {
 	TOptional<FCombatQueuedOrder> Previous = CurrentOrder;
+	const TArray<FCombatQueuedOrder> CancelledQueue = PendingOrders;
 	++OrderGeneration;
 	if (OrderGeneration == 0) { OrderGeneration = 1; }
 	CancelCurrentAsync(Reason);
@@ -558,6 +631,18 @@ void UCombatOrderComponent::AdvanceGenerationAndCancel(
 		Result.State = ECombatOrderState::Cancelled;
 		Result.FailureTag = Reason;
 		Result.Diagnostic = TEXT("Order cancelled by generation advance");
+		CombatItemOrderResult::SetCorrelation(Result, Previous->Request);
+		OrderFinishedDelegate.Broadcast(Result);
+	}
+	// 物品队列项必须获得最终回执；尚未开始也不能让 HUD 永久停在“已接受”。
+	for (const FCombatQueuedOrder& Queued : CancelledQueue)
+	{
+		if (!Queued.Request.ItemHandle.IsValid()) continue;
+		FCombatOrderResult Result;
+		Result.Handle = Queued.Handle;
+		Result.State = ECombatOrderState::Cancelled;
+		Result.FailureTag = Reason;
+		CombatItemOrderResult::SetCorrelation(Result, Queued.Request);
 		OrderFinishedDelegate.Broadcast(Result);
 	}
 }
@@ -619,6 +704,13 @@ bool UCombatOrderComponent::IsCurrentDestinationReached() const
 	}
 	const FCombatOrderRequest& Request = CurrentOrder->Request;
 	const float SourceRadius = Unit->GetCapsuleComponent()->GetScaledCapsuleRadius();
+	if (Request.Type == ECombatOrderType::PickupItem || Request.Type == ECombatOrderType::DropItem)
+	{
+		const UCombatItemInstance* Item = GetWorld()->GetSubsystem<UCombatItemSubsystem>()->FindItem(Request.ItemHandle);
+		const ACombatWorldItem* Actor = Item ? Item->GetWorldActor() : nullptr;
+		const FVector Point = Request.Type == ECombatOrderType::PickupItem && Actor ? Actor->GetActorLocation() : Request.TargetLocation;
+		return GetWorld()->GetSubsystem<UCombatTargetingSubsystem>()->ValidateItemInteraction(const_cast<ACombatUnitCharacter*>(Unit), Point, Actor, true, Request.Type == ECombatOrderType::DropItem).bValid;
+	}
 	float EdgeDistance = 0.0f;
 	if (Request.TargetUnit)
 	{
@@ -645,6 +737,7 @@ float UCombatOrderComponent::GetCurrentDesiredRange() const
 	{
 		return Unit->GetCombatAbilitySystemComponent()->GetNumericAttribute(UCombatAttributeSet::GetAttackRangeAttribute());
 	}
+	if (Request.Type == ECombatOrderType::PickupItem || Request.Type == ECombatOrderType::DropItem) return CombatItems::InteractionRange;
 	if (Request.Type == ECombatOrderType::CastPoint || Request.Type == ECombatOrderType::CastTarget)
 	{
 		const UCombatAbilitySystemComponent* Asc = Unit->GetCombatAbilitySystemComponent();
@@ -730,7 +823,8 @@ bool UCombatOrderComponent::GetFacingDirection(FVector& OutDirection) const
 		|| CurrentOrder->Handle.Key.Generation != OrderGeneration
 		|| CurrentOrder->UnitLifeGeneration != Unit->GetLifeGeneration() || Unit->GetLifeState() != ECombatLifeState::Alive
 		|| (Unit->GetCombatMotionComponent() && Unit->GetCombatMotionComponent()->HasActiveMotion())
-		|| (CurrentOrder->Request.Type == ECombatOrderType::AttackTarget ? Unit->IsAttackBlocked() : Unit->IsAbilityBlocked()))
+		|| (CurrentOrder->Request.Type == ECombatOrderType::AttackTarget ? Unit->IsAttackBlocked()
+			: Unit->GetCombatAbilitySystemComponent()->IsCombatAbilityStateBlocked(CurrentOrder->Request.AbilitySpecHandle)))
 	{
 		return false;
 	}
@@ -793,6 +887,12 @@ bool UCombatOrderComponent::BeginMovement(const bool bChasing)
 	if (NavigationAttemptGeneration == 0) { NavigationAttemptGeneration = 1; }
 	CurrentMoveGoal = CurrentOrder->Request.TargetUnit
 		? CurrentOrder->Request.TargetUnit->GetActorLocation() : CurrentOrder->Request.TargetLocation;
+	if (CurrentOrder->Request.Type == ECombatOrderType::PickupItem)
+	{
+		const UCombatItemInstance* Item = GetWorld()->GetSubsystem<UCombatItemSubsystem>()->FindItem(CurrentOrder->Request.ItemHandle);
+		if (!Item || !Item->GetWorldActor()) return false;
+		CurrentMoveGoal = Item->GetWorldActor()->GetActorLocation();
+	}
 	LastChaseTargetLocation = CurrentMoveGoal;
 	if (ChaseStartedAt <= 0.0)
 	{
@@ -870,6 +970,13 @@ bool UCombatOrderComponent::StartNavigationMove(const bool bChasing)
 	}
 	if (RequestResult.Code == EPathFollowingRequestResult::AlreadyAtGoal)
 	{
+		if (CurrentOrder->Request.Type == ECombatOrderType::PickupItem || CurrentOrder->Request.Type == ECombatOrderType::DropItem)
+		{
+			// 导航到达与交互范围可能不同；保留有界追击复核，避免在 Pump 栈内重入后丢失唤醒。
+			TransitionTo(ECombatOrderState::Chasing);
+			EnsureChaseSchedule();
+			return true;
+		}
 		TransitionTo(ECombatOrderState::Validating);
 		PumpCurrentOrder();
 		return true;
@@ -918,6 +1025,17 @@ void UCombatOrderComponent::HandleChaseCheck(
 	const FCombatScheduledTickContext& TickContext)
 {
 	(void)TickContext;
+	if (CurrentOrder.IsSet() && CurrentOrder->Handle == Handle && (CurrentOrder->Request.Type == ECombatOrderType::PickupItem || CurrentOrder->Request.Type == ECombatOrderType::DropItem))
+	{
+		const auto Valid = ValidateItemOrder(CurrentOrder->Request);
+		if (!Valid.bSuccess) { CompleteCurrentOrder(false, Valid.FailureTag, Valid.Diagnostic); return; }
+		if (GetWorld()->GetTimeSeconds() - ChaseStartedAt > MaxChaseDuration)
+		{
+			CompleteCurrentOrder(false, CombatTags::Order_Failure_RetryExhausted, TEXT("Item interaction chase timed out")); return;
+		}
+		if (IsCurrentDestinationReached()) { CancelMovementAsync(); PumpCurrentOrder(); }
+		return;
+	}
 	if (!CurrentOrder.IsSet() || CurrentOrder->Handle != Handle
 		|| Handle.Key.Generation != OrderGeneration || !CurrentOrder->Request.TargetUnit)
 	{

@@ -21,6 +21,7 @@ class UCombatProgressionComponent;
 class UCombatUnitData;
 class UCombatUnitLifecycleComponent;
 class UCombatUnitViewComponent;
+class UCombatInventoryComponent;
 class ACombatUnitAIController;
 class APlayerController;
 class UNetConnection;
@@ -74,6 +75,8 @@ public:
 	UCombatMotionComponent* GetCombatMotionComponent() const { return CombatMotionComponent; }
 	/** 返回向界面提供生命、法力、施法进度和可见效果快照的复制组件。 */
 	UCombatUnitViewComponent* GetCombatUnitViewComponent() const { return CombatUnitViewComponent; }
+	/** 单位始终拥有物品组件；客户端显示必须读取 UnitView 的拥有者快照。 */
+	UCombatInventoryComponent* GetCombatInventoryComponent() const { return CombatInventoryComponent; }
 	/** 返回默认挂载在 Unit 头顶的资源条、状态条与跳字组件。 */
 	UCombatOverheadWidgetComponent* GetCombatOverheadWidgetComponent() const { return CombatOverheadWidgetComponent; }
 
@@ -126,6 +129,7 @@ public:
 	const FCombatOrderBatchResult& GetLastOrderBatchResult() const { return LastOrderBatchResult; }
 	/** owning client 收到批次结果时广播。 */
 	UPROPERTY(BlueprintAssignable, Category="Combat|Network", meta=(DisplayName="命令批次结果", ToolTip="owning client 收到服务器批次结果时广播。")) FCombatOrderBatchResultDelegate OnOrderBatchResult;
+	UPROPERTY(BlueprintAssignable, Category="Combat|Network", meta=(DisplayName="命令最终结果", ToolTip="与初始接收分离的最终完成、失败或取消回执。")) FCombatOrderFinalResultDelegate OnOrderFinalResult;
 
 	/** 服务器按单位定义初始化队伍、胶囊、基础属性和技能授予表。已成功初始化为同一定义时直接返回 true，换定义则拒绝；主要配置先统一校验，但后续效果应用或技能授予失败不会回滚已经写入的部分。 */
 	UFUNCTION(BlueprintCallable, Category="Combat|Unit", meta=(DisplayName="从单位数据初始化", ToolTip="服务器按单位定义初始化队伍、胶囊、基础属性和技能授予表。已成功初始化为同一定义时直接返回 true，换定义则拒绝；主要配置先统一校验，但后续效果应用或技能授予失败不会回滚已经写入的部分。"))
@@ -217,6 +221,9 @@ protected:
 	/** 提供给客户端界面的只读单位与效果快照，不包含服务器效果实例。 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Combat|Components", meta=(DisplayName="战斗单位 View 组件", ToolTip="提供给客户端界面的只读单位与效果快照，不包含服务器效果实例。"))
 	TObjectPtr<UCombatUnitViewComponent> CombatUnitViewComponent;
+	/** 世界登记表实例的九槽持有关系，只在服务器修改。 */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Combat|Components", meta=(AllowPrivateAccess="true", DisplayName="物品背包", ToolTip="管理六个装备槽和三个背包槽的服务器组件。"))
+	TObjectPtr<UCombatInventoryComponent> CombatInventoryComponent;
 	/** DOTA 风格的屏幕空间头顶资源、施法、控制状态和战斗跳字表现。 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Combat|Components", meta=(DisplayName="战斗头顶 UI", ToolTip="读取 CombatUnitView，并接收服务器伤害/治疗跳字。"))
 	TObjectPtr<UCombatOverheadWidgetComponent> CombatOverheadWidgetComponent;
@@ -254,4 +261,7 @@ private:
 	/** 服务器把批次结果只返回 owning client。 */
 	UFUNCTION(Client, Reliable)
 	void ClientReceiveOrderBatchResult(FCombatOrderBatchResult Result);
+	/** 服务器指令唯一终结入口的观察者，把关联回执发给当前拥有者。 */
+	void HandleOrderFinished(const FCombatOrderResult& Result);
+	UFUNCTION(Client, Reliable) void ClientReceiveOrderFinalResult(FCombatOrderResult Result);
 };

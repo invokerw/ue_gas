@@ -37,6 +37,7 @@ bool FCombatLogFilter::Matches(const FCombatLogEntry& Entry, const double Server
 	case ECombatLogCategory::Healing: return bHealing;
 	case ECombatLogCategory::Ability: return bAbility;
 	case ECombatLogCategory::Status: return bStatus;
+	case ECombatLogCategory::Item: return bItem;
 	default: return false;
 	}
 }
@@ -45,6 +46,7 @@ bool CombatLogPresentation::Classify(const FGameplayTag EventType, ECombatLogCat
 {
 	if (EventType == CombatTags::Event_Combat_DamageApplied) OutCategory = ECombatLogCategory::Damage;
 	else if (EventType == CombatTags::Event_Combat_HealApplied) OutCategory = ECombatLogCategory::Healing;
+	else if (EventType == CombatTags::Event_Combat_ItemChanged) OutCategory = ECombatLogCategory::Item;
 	else if (EventType == CombatTags::Event_Combat_AbilitySpellStarted
 		|| EventType == CombatTags::Event_Combat_AbilityInterrupted
 		|| EventType == CombatTags::Event_Combat_AutoCastChanged
@@ -100,7 +102,15 @@ FString CombatLogPresentation::BuildRichText(const FCombatLogEntry& Entry, const
 	const FString Target = Styled(TEXT("target"), TargetName.IsEmpty() ? TEXT("未知目标") : TargetName);
 	const FString Effect = Styled(TEXT("effect"), EffectName);
 	FString Body;
-	if (Entry.Category == ECombatLogCategory::Damage || Entry.Category == ECombatLogCategory::Healing)
+	if (Entry.EventType == CombatTags::Event_Combat_ItemChanged)
+	{
+		const FString Action = Entry.ItemAction == TEXT("PickedUp") ? TEXT(" 拾取了 ") : Entry.ItemAction == TEXT("Dropped") ? TEXT(" 丢下了 ")
+			: Entry.ItemAction == TEXT("Consumed") ? TEXT(" 使用了 ") : Entry.ItemAction == TEXT("Cooldown") ? TEXT(" 开始冷却：")
+			: Entry.ItemAction == TEXT("DeathDrop") ? TEXT(" 阵亡掉落了 ")
+			: Entry.ItemAction == TEXT("Swapped") ? TEXT(" 调整了 ") : TEXT(" 获得了 ");
+		Body = Source + Action + Effect + FString::Printf(TEXT("（数量 %d，充能 %d）"), Entry.ItemQuantity, Entry.ItemCharges);
+	}
+	else if (Entry.Category == ECombatLogCategory::Damage || Entry.Category == ECombatLogCategory::Healing)
 	{
 		const bool bHeal = Entry.Category == ECombatLogCategory::Healing;
 		Body = Source + (EffectName.IsEmpty() ? TEXT("") : TEXT(" 使用了 ") + Effect)

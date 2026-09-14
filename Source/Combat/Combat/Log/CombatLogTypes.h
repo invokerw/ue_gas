@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "GameplayTagContainer.h"
+#include "Combat/Core/CombatTypes.h"
 #include "Net/Serialization/FastArraySerializer.h"
 #include "CombatLogTypes.generated.h"
 
@@ -14,7 +15,8 @@ enum class ECombatLogCategory : uint8
 	Damage UMETA(DisplayName="伤害信息"),
 	Healing UMETA(DisplayName="治疗信息"),
 	Ability UMETA(DisplayName="技能"),
-	Status UMETA(DisplayName="状态信息")
+	Status UMETA(DisplayName="状态信息"),
+	Item UMETA(DisplayName="物品操作")
 };
 
 /** 独立于核心事件 schema 的玩家历史快照；定义在本地解析，实例 ID 仅作不透明筛选键。 */
@@ -41,6 +43,11 @@ struct COMBAT_API FCombatLogEntry : public FFastArraySerializerItem
 	FPrimaryAssetId TargetDefinitionId;
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Log", meta=(DisplayName="效果定义", ToolTip="伤害与技能事件优先关联技能，状态事件优先持续效果；缺失时回退持续效果或弹体定义。"))
 	FPrimaryAssetId EffectDefinitionId;
+	UPROPERTY(BlueprintReadOnly, Category="Combat|Log", meta=(DisplayName="物品来源", ToolTip="事件发生时冻结的物品定义，实例销毁后仍保留。")) FPrimaryAssetId ItemDefinitionId;
+	UPROPERTY(BlueprintReadOnly, Category="Combat|Log", meta=(DisplayName="物品实例", ToolTip="服务器物品实例身份，仅用于归因。")) FCombatItemHandle ItemHandle;
+	UPROPERTY(BlueprintReadOnly, Category="Combat|Log", meta=(DisplayName="物品操作", ToolTip="物品变化的稳定动作名称。")) FName ItemAction;
+	UPROPERTY(BlueprintReadOnly, Category="Combat|Log", meta=(DisplayName="物品数量", ToolTip="此次物品操作完成后的堆叠数量，充能单独记录。")) int32 ItemQuantity = 0;
+	UPROPERTY(BlueprintReadOnly, Category="Combat|Log", meta=(DisplayName="物品充能", ToolTip="此次物品操作完成后的可用充能次数。")) int32 ItemCharges = 0;
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Log", meta=(DisplayName="来源是主控英雄", ToolTip="事件发生时来源有玩家指挥，用于非英雄筛选；不提供玩法分类。"))
 	bool bSourceHero = false;
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Log", meta=(DisplayName="目标是主控英雄", ToolTip="事件发生时目标有玩家指挥，历史不会因控制权变化而改写。"))
@@ -92,6 +99,7 @@ struct COMBAT_API FCombatLogFilter
 	bool bHealing = true;
 	bool bAbility = true;
 	bool bStatus = true;
+	bool bItem = true;
 	bool bIncludeNonHeroes = true;
 
 	/** 所有条件按 AND 组合；时间采用服务器时钟，拒绝非有限值。 */
@@ -101,7 +109,7 @@ struct COMBAT_API FCombatLogFilter
 /** 战斗记录展示规则；不读取或修改 gameplay 对象。 */
 namespace CombatLogPresentation
 {
-	inline constexpr int32 SchemaVersion = 1;
+	inline constexpr int32 SchemaVersion = 2;
 	inline constexpr int32 MaxEntries = 512;
 	/** 将玩家关心的事件归类；内部诊断和重复生命周期阶段返回 false。 */
 	COMBAT_API bool Classify(FGameplayTag EventType, ECombatLogCategory& OutCategory);

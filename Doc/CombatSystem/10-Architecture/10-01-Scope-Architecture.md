@@ -16,7 +16,7 @@
 
 第一版明确不做：
 
-- 完整物品、商店、经济、天赋、技能树和英雄选择系统。
+- 商店、经济、天赋、技能树和英雄选择系统。物品实例、主动被动、装备背包及场景交互已由 ITEM-001 接入，见 [10-14](10-14-Item-System.md)。
 - 大规模录像回放、观战、反作弊和高预测网络体验。
 - 为临时阻挡高频重建 NavMesh。
 - 逐帧完全确定性的跨平台 lockstep 模拟。
@@ -36,7 +36,7 @@
 - `Variant_Strategy` 与 `Variant_TwinStick` 模板源码、资产和关卡已移除；可玩与验证入口统一位于 `/Game/Combat/Demo` 和 `/Game/Combat/Tests`。
 - `/Game/TopDown` 模板蓝图、示例关卡及 World Partition 外部数据已移除；Combat 仍使用的移动输入、点击光标和环境材质已归档到 `/Game/Combat/Demo` 与 `/Game/Combat/Shared`。
 - `.codex/config.toml` 配置本地 `unreal-mcp` endpoint，Editor/Content/PIE 操作遵循“读取—修改—回读—测试”闭环。
-- M0-M8 已完成验收，核心发布契约为 `combat_v1_rc1`。最近一次完整发布证据见 [90-17 M8 验收记录](../90-History/90-17-M8-Acceptance.md)；该历史记录不自动证明后续工作区修改已回归。
+- M0-M8 的 `combat_v1_rc1` 已完成验收；当前代码契约为 `combat_v2_items_rc1`，物品扩展验证状态见 ITEM-001 台账。最近一次完整发布证据见 [90-17 M8 验收记录](../90-History/90-17-M8-Acceptance.md)；该历史记录不自动证明后续工作区修改已回归。
 
 ### 2.1 UE MCP 开发基线
 

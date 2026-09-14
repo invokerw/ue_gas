@@ -16,6 +16,8 @@ struct COMBAT_API FCombatOrderBatchRequest
 	/** 正整数请求 ID，在同一玩家的最近请求窗口内必须唯一；0、负数和窗口内重复值都会被拒绝。 */
 	UPROPERTY(BlueprintReadWrite, Category="Combat|Network", meta=(DisplayName="请求 ID", ToolTip="正整数请求 ID，在同一玩家的最近请求窗口内必须唯一；0、负数和窗口内重复值都会被拒绝。"))
 	int32 RequestId = 0;
+	UPROPERTY(BlueprintReadWrite, Category="Combat|Network", meta=(DisplayName="单位生命代次", ToolTip="物品命令必须匹配当前生命，拒绝复活前的旧操作。")) int64 UnitLifeGeneration = 0;
+	UPROPERTY(BlueprintReadWrite, Category="Combat|Network", meta=(DisplayName="控制绑定代次", ToolTip="物品命令必须匹配当前指挥绑定，拒绝控制权切换前的请求。")) int32 CommandBindingGeneration = 0;
 
 	/** 控制首条命令：true 追加到已有队列，false 请求替换旧行为；数组中的后续命令一律按顺序追加。各命令仍独立接受业务校验。 */
 	UPROPERTY(BlueprintReadWrite, Category="Combat|Network", meta=(DisplayName="追加到现有队列", ToolTip="控制首条命令：true 追加到已有队列，false 请求替换旧行为；数组中的后续命令一律按顺序追加。各命令仍独立接受业务校验。"))
@@ -75,3 +77,6 @@ struct COMBAT_API FCombatRpcSecurityStats
 
 /** owning client 收到 Order 批次结果时广播。 */
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FCombatOrderBatchResultDelegate, FCombatOrderBatchResult, Result);
+
+/** 最终完成回执与 Accepted 分离；客户端只展示匹配当前生命和控制权的结果。 */
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FCombatOrderFinalResultDelegate, FCombatOrderResult, Result);

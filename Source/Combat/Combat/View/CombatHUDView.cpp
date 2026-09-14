@@ -5,6 +5,7 @@
 #include "Combat/Attributes/CombatAttributeSet.h"
 #include "Combat/Core/CombatTags.h"
 #include "Combat/Data/CombatDefinitionData.h"
+#include "Combat/Items/CombatInventoryComponent.h"
 #include "Combat/Unit/CombatProgressionComponent.h"
 #include "Combat/Unit/CombatUnitCharacter.h"
 #include "GameFramework/PlayerController.h"
@@ -27,7 +28,7 @@ bool FCombatHUDOwnerView::operator==(const FCombatHUDOwnerView& Other) const
 		&& Level == Other.Level && Experience == Other.Experience
 		&& ExperienceIntoLevel == Other.ExperienceIntoLevel && ExperienceToNextLevel == Other.ExperienceToNextLevel
 		&& ExperienceProgress == Other.ExperienceProgress && UnspentAbilityPoints == Other.UnspentAbilityPoints
-		&& Abilities == Other.Abilities;
+		&& Abilities == Other.Abilities && Items == Other.Items && InventoryRevision == Other.InventoryRevision;
 }
 
 namespace CombatHUDView
@@ -40,7 +41,7 @@ namespace CombatHUDView
 		{
 			const UCombatGameplayAbility* Ability = Cast<UCombatGameplayAbility>(Spec.Ability);
 			const UCombatAbilityData* Data = Ability ? Ability->GetAbilityData() : nullptr;
-			if (!Data || !Data->ShouldOccupyPlayerAbilitySlot()) continue;
+			if (!Data || Asc.IsItemAbility(Spec.Handle) || !Data->ShouldOccupyPlayerAbilitySlot()) continue;
 			Result.Add(&Spec);
 			if (Result.Num() == 4) break;
 		}
@@ -83,6 +84,11 @@ void UCombatUnitViewComponent::RefreshHUDOwnerView()
 	{
 		Next.UnitDefinitionId = Unit->GetUnitDefinitionId();
 		Next.LifeGeneration = Unit->GetLifeGeneration();
+		if (const UCombatInventoryComponent* Inventory = Unit->GetCombatInventoryComponent())
+		{
+			Inventory->BuildViews(Next.Items);
+			Next.InventoryRevision = Inventory->GetRevision();
+		}
 		Next.AttackDamage = Asc->GetNumericAttribute(UCombatAttributeSet::GetAttackDamageAttribute());
 		Next.Armor = Asc->GetNumericAttribute(UCombatAttributeSet::GetArmorAttribute());
 		Next.MagicResist = Asc->GetNumericAttribute(UCombatAttributeSet::GetMagicResistAttribute());

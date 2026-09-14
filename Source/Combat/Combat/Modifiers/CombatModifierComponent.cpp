@@ -1,4 +1,5 @@
 #include "Combat/Modifiers/CombatModifierComponent.h"
+#include "Combat/Ability/CombatGameplayEffectContext.h"
 
 #include "GameplayEffect.h"
 
@@ -127,6 +128,8 @@ FCombatModifierApplyResult UCombatModifierComponent::ApplyNewModifier(
 
 	UCombatAbilitySystemComponent* SourceAsc = Request.Source->GetCombatAbilitySystemComponent();
 	FGameplayEffectContextHandle EffectContext = SourceAsc ? SourceAsc->MakeEffectContext() : TargetAsc->MakeEffectContext();
+	if (EffectContext.IsValid() && EffectContext.Get()->GetScriptStruct()->IsChildOf(FCombatGameplayEffectContext::StaticStruct()))
+		static_cast<FCombatGameplayEffectContext*>(EffectContext.Get())->Source = Request.SourceContext;
 	FGameplayEffectSpec EffectSpec(EffectDefinition, EffectContext, 1.0f);
 	EffectSpec.DynamicGrantedTags.AppendTags(Request.ModifierData->GrantedTags);
 	const FActiveGameplayEffectHandle ActiveEffectHandle = TargetAsc->ApplyGameplayEffectSpecToSelf(EffectSpec);
@@ -148,6 +151,8 @@ FCombatModifierApplyResult UCombatModifierComponent::ApplyNewModifier(
 	Runtime->ModifierData = Request.ModifierData;
 	Runtime->SourceUnit = Request.Source;
 	Runtime->AbilityOwnerHandle = Request.AbilityOwnerHandle;
+	Runtime->ItemOwnerHandle = Request.ItemOwnerHandle;
+	Runtime->SourceContext = Request.SourceContext;
 	Runtime->bHasInitialMotionRequest = Request.bHasInitialMotionRequest;
 	Runtime->InitialMotionRequest = Request.InitialMotionRequest;
 	Runtime->RuntimeParameterOverrides = Request.RuntimeParameterOverrides;
@@ -399,7 +404,8 @@ UCombatModifierRuntime* UCombatModifierComponent::FindRefreshCandidate(const FCo
 	{
 		if (Runtime && Runtime->IsActive() && Runtime->GetModifierData() == Request.ModifierData
 			&& Runtime->GetSourceUnit() == Request.Source
-			&& Runtime->GetAbilityOwnerHandle() == Request.AbilityOwnerHandle)
+			&& Runtime->GetAbilityOwnerHandle() == Request.AbilityOwnerHandle
+			&& Runtime->GetItemOwnerHandle() == Request.ItemOwnerHandle)
 		{
 			return Runtime;
 		}
@@ -722,6 +728,7 @@ void UCombatModifierComponent::EmitModifierLog(
 	FCombatLogRecord Record;
 	Record.Context = Events->CreateRootEvent();
 	Record.EventType = bRemoved ? CombatTags::Event_Combat_ModifierRemoved : CombatTags::Event_Combat_ModifierApplied;
+	Record.Source = Runtime.GetSourceContext();
 	Record.Source.DirectSourceType = ECombatDirectSourceType::Modifier;
 	Record.Source.ModifierDefinitionId = Data->GetPrimaryAssetId();
 	Record.SourceActorId = Runtime.GetSourceUnit() ? Runtime.GetSourceUnit()->GetUniqueID() : 0;

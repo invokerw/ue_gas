@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "GameplayAbilitySpec.h"
+#include "Combat/Items/CombatItemTypes.h"
 #include "CombatHUDViewTypes.generated.h"
 
 /** 一个已授予技能的拥有者展示数据；时间窗来自已提交的服务器冷却，不参与技能判定。 */
@@ -78,6 +79,8 @@ struct COMBAT_API FCombatHUDOwnerView
 	int32 UnspentAbilityPoints = 0;
 	UPROPERTY(BlueprintReadOnly, Category="Combat|HUD", meta=(DisplayName="技能槽", ToolTip="最多四个可直接输入的技能；包含主动技能及可切换 AutoCast 的被动技能，客户端按自身输入所用的 AbilitySpec 顺序匹配。"))
 	TArray<FCombatHUDAbilityView> Abilities;
+	UPROPERTY(BlueprintReadOnly, Category="Combat|HUD", meta=(DisplayName="物品槽", ToolTip="固定九槽的拥有者物品快照；前六格装备，后三格背包。")) TArray<FCombatItemView> Items;
+	UPROPERTY(BlueprintReadOnly, Category="Combat|HUD", meta=(DisplayName="背包修订", ToolTip="换位请求携带此值，拒绝操作已变化的旧背包快照。")) int32 InventoryRevision = 0;
 
 	/** 比较完整快照，不把本地倒计时写入复制数据。 */
 	bool operator==(const FCombatHUDOwnerView& Other) const;

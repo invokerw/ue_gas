@@ -16,6 +16,7 @@
 #include "Combat/Targeting/CombatTargetingSubsystem.h"
 #include "Combat/Thinker/CombatThinkerSubsystem.h"
 #include "Combat/Unit/CombatUnitCharacter.h"
+#include "Combat/Items/CombatInventoryComponent.h"
 #include "Combat/View/CombatUnitViewComponent.h"
 
 UCombatGameplayAbility::UCombatGameplayAbility()
@@ -75,12 +76,7 @@ bool UCombatGameplayAbility::CanActivateAbility(
 		if (OptionalRelevantTags) { OptionalRelevantTags->AddTag(CombatTags::Failure_ActionUnsupported); }
 		return false;
 	}
-	const bool bHardStateBlocked = Asc->HasMatchingGameplayTag(CombatTags::State_Stunned)
-		|| Asc->HasMatchingGameplayTag(CombatTags::State_Hexed)
-		|| Asc->HasMatchingGameplayTag(CombatTags::State_Frozen);
-	const bool bSilenceBlocked = Asc->HasMatchingGameplayTag(CombatTags::State_Silenced)
-		&& !AbilityData->BehaviorTags.HasTagExact(CombatTags::Ability_Behavior_IgnoreSilence);
-	if (bHardStateBlocked || bSilenceBlocked)
+	if (Asc->IsCombatAbilityStateBlocked(Handle))
 	{
 		if (OptionalRelevantTags) { OptionalRelevantTags->AddTag(CombatTags::Failure_Ability_UnitStateBlocked); }
 		return false;
@@ -144,6 +140,7 @@ void UCombatGameplayAbility::ActivateAbility(
 	CombatContext.Caster = Unit;
 	CombatContext.CasterLifeGeneration = Unit->GetLifeGeneration();
 	CombatContext.AbilityLevel = Spec->Level;
+	CombatContext.SourceContext = Asc->MakeAbilitySource(Handle);
 
 	UCombatTargetingSubsystem* Targeting = GetWorld()->GetSubsystem<UCombatTargetingSubsystem>();
 	const FCombatTargetValidationResult TargetResult = Targeting->ValidateAbilityTarget(
@@ -249,6 +246,8 @@ void UCombatGameplayAbility::EndAbility(
 		}
 	}
 	Super::EndAbility(Handle, ActorInfo, ActivationInfo, bReplicateEndAbility, bWasCancelled);
+	if (CombatContext.Caster && CombatContext.SourceContext.ItemHandle.IsValid())
+		CombatContext.Caster->GetCombatInventoryComponent()->NotifyAbilityEnded(CombatContext.SourceContext.ItemHandle);
 	bEnding = false;
 }
 
@@ -278,9 +277,7 @@ FCombatAbilityActionResult UCombatGameplayAbility::ExecuteDataDrivenActions()
 		Result.FailureTag = CombatTags::Failure_ActionUnsupported;
 		return Result;
 	}
-	FCombatSourceContext SourceContext;
-	SourceContext.DirectSourceType = ECombatDirectSourceType::Ability;
-	SourceContext.AbilityDefinitionId = AbilityData->GetPrimaryAssetId();
+	const FCombatSourceContext SourceContext = CombatContext.SourceContext;
 
 	for (const FCombatAbilityAction& Action : AbilityData->Actions)
 	{
@@ -467,6 +464,7 @@ FCombatAbilityActionResult UCombatGameplayAbility::ExecuteDataDrivenActions()
 				FCombatModifierApplyRequest Request;
 				Request.Source = Caster;
 				Request.ModifierData = Action.ModifierData;
+				Request.SourceContext = SourceContext;
 				bActionSucceeded = Target->GetCombatModifierComponent()->ApplyModifier(Request).bSuccess;
 				break;
 			}
@@ -690,8 +688,7 @@ void UCombatGameplayAbility::EmitLifecycleEvent(
 	Record.Context = CombatContext.EventContext;
 	Record.EventType = EventType;
 	Record.FailureTag = FailureTag;
-	Record.Source.DirectSourceType = ECombatDirectSourceType::Ability;
-	Record.Source.AbilityDefinitionId = AbilityData->GetPrimaryAssetId();
+	Record.Source = CombatContext.SourceContext;
 	Record.SourceActorId = CombatContext.Caster ? CombatContext.Caster->GetUniqueID() : 0;
 	Record.TargetActorId = CombatContext.TargetActor ? CombatContext.TargetActor->GetUniqueID() : 0;
 	Record.UnitLifeGeneration = CombatContext.CasterLifeGeneration;

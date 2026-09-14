@@ -1,4 +1,6 @@
 #include "Combat/Targeting/CombatTargetingSubsystem.h"
+#include "Combat/Items/CombatItemTypes.h"
+#include "NavigationSystem.h"
 
 #include "EngineUtils.h"
 #include "Components/CapsuleComponent.h"
@@ -165,6 +167,31 @@ FCombatTargetValidationResult UCombatTargetingSubsystem::ValidateUnitTargetInter
 		return Failure(CombatTags::Failure_Target_LineOfSightBlocked, TEXT("Unit target LOS is blocked"));
 	}
 	return Success(Target->GetActorLocation());
+}
+
+FCombatTargetValidationResult UCombatTargetingSubsystem::ValidateItemInteraction(ACombatUnitCharacter* Source,
+	const FVector& Location, const AActor* TargetToIgnore, bool bCheckRange, bool bRequireNavigation) const
+{
+	using namespace CombatTargetingPrivate;
+	if (!Source || Source->GetWorld() != GetWorld() || Location.ContainsNaN()) return Failure(CombatTags::Failure_Target_LocationInvalid, TEXT("Invalid item location"));
+	if (Source->GetLifeState() != ECombatLifeState::Alive) return Failure(CombatTags::Failure_Life_NotAlive, TEXT("Item interaction requires living unit"));
+	FVector Point = Location;
+	if (bRequireNavigation)
+	{
+		const UNavigationSystemV1* Navigation = FNavigationSystem::GetCurrent<UNavigationSystemV1>(GetWorld());
+		FNavLocation Projected;
+		if (!Navigation || !Navigation->ProjectPointToNavigation(Point, Projected, FVector(40, 40, 100))
+			|| FVector::Dist2D(Point, Projected.Location) > 40.0 || FMath::Abs(Point.Z - Projected.Location.Z) > 100.0)
+			return Failure(CombatTags::Failure_Target_LocationInvalid, TEXT("Drop point must be on navigable ground"));
+		Point = Projected.Location;
+	}
+	const float Radius = Source->GetCapsuleComponent()->GetScaledCapsuleRadius();
+	if (bCheckRange && (FVector::Dist2D(Source->GetActorLocation(), Point) - Radius > CombatItems::InteractionRange + FCombatNumericPolicyV1::RangeToleranceCm
+		|| FMath::Abs(Source->GetActorLocation().Z - Point.Z) > 220.0))
+		return Failure(CombatTags::Failure_Target_OutOfRange, TEXT("Item is outside interaction range"));
+	if (bCheckRange && !HasLineOfSight(*Source, Point + FVector(0, 0, bRequireNavigation ? 20 : 0), TargetToIgnore))
+		return Failure(CombatTags::Failure_Target_LineOfSightBlocked, TEXT("Item interaction is obstructed"));
+	return Success(Point);
 }
 
 FCombatTargetValidationResult UCombatTargetingSubsystem::ValidatePointTarget(

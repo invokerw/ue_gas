@@ -36,7 +36,7 @@ struct COMBAT_API FCombatLogRecord
 	GENERATED_BODY()
 
 	/** 当前结构化日志字段布局版本，便于离线工具拒绝不兼容记录。 */
-	UPROPERTY(BlueprintReadWrite, Category="Combat|Log") int32 SchemaVersion = 1;
+	UPROPERTY(BlueprintReadWrite, Category="Combat|Log") int32 SchemaVersion = 2;
 	/** 本条记录采用的冻结数值公式版本。 */
 	UPROPERTY(BlueprintReadWrite, Category="Combat|Log") int32 FormulaVersion = FCombatNumericPolicyV1::FormulaVersion;
 	/** 日志所属的事件树上下文。 */
@@ -47,6 +47,9 @@ struct COMBAT_API FCombatLogRecord
 	UPROPERTY(BlueprintReadWrite, Category="Combat|Log") FGameplayTag FailureTag;
 	/** 本次事件的稳定来源身份。 */
 	UPROPERTY(BlueprintReadWrite, Category="Combat|Log") FCombatSourceContext Source;
+	UPROPERTY(BlueprintReadOnly, Category="Combat|Log", meta=(DisplayName="物品操作", ToolTip="物品事件的稳定动作名；其他事件为空。")) FName ItemAction;
+	UPROPERTY(BlueprintReadOnly, Category="Combat|Log", meta=(DisplayName="物品数量", ToolTip="变化后的堆叠数量。")) int32 ItemQuantity = 0;
+	UPROPERTY(BlueprintReadOnly, Category="Combat|Log", meta=(DisplayName="物品充能", ToolTip="变化后的可用次数，独立于堆叠数量。")) int32 ItemCharges = 0;
 	/** 服务器进程内用于关联来源 Actor 的调试 ID。 */
 	UPROPERTY(BlueprintReadWrite, Category="Combat|Log") int32 SourceActorId = 0;
 	/** 服务器进程内用于关联目标 Actor 的调试 ID。 */
@@ -99,7 +102,7 @@ class COMBAT_API UCombatEventSubsystem : public UWorldSubsystem
 
 public:
 	/** 当前结构化 Combat Event 字段布局版本。 */
-	static constexpr int32 CurrentSchemaVersion = 1;
+	static constexpr int32 CurrentSchemaVersion = 2;
 
 	/** 创建深度为 0 且 RootEventId 等于自身的新根事件。 */
 	FCombatEventContext CreateRootEvent();

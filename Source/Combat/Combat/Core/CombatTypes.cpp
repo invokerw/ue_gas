@@ -28,7 +28,8 @@ bool FCombatSourceContext::operator==(const FCombatSourceContext& Other) const
 	return DirectSourceType == Other.DirectSourceType
 		&& AbilityDefinitionId == Other.AbilityDefinitionId
 		&& ModifierDefinitionId == Other.ModifierDefinitionId
-		&& ProjectileDefinitionId == Other.ProjectileDefinitionId;
+		&& ProjectileDefinitionId == Other.ProjectileDefinitionId
+		&& ItemDefinitionId == Other.ItemDefinitionId && ItemHandle == Other.ItemHandle;
 }
 
 FCombatOperationResult FCombatOperationResult::Success()

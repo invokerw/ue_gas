@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/PlayerController.h"
 #include "Combat/UI/CombatAbilityAimComponent.h"
+#include "Combat/Network/CombatNetworkTypes.h"
 #include "CombatPlayerController.generated.h"
 
 class ACombatUnitCharacter;
@@ -15,6 +16,8 @@ class UInputMappingContext;
 class UEnhancedInputComponent;
 class UCombatLogComponent;
 struct FCombatOrderRequest;
+struct FCombatHUDOwnerView;
+struct FCombatItemView;
 
 DECLARE_LOG_CATEGORY_EXTERN(LogTemplateCharacter, Log, All);
 
@@ -61,6 +64,20 @@ public:
 	bool IsPointerOverCombatUI() const;
 	/** HUD 消费 Escape 或应用失焦时也能取消本地意图，不发送 Stop。 */
 	void CancelCombatTargeting();
+	/** 使用一个精确物品快照；HUD 与快捷键都只经统一 Order 入口提交。 */
+	bool UseInventoryItem(int32 Slot, const FCombatItemView& Expected);
+	/** 请求交换快照中的两槽；不会替换服务器当前指令。 */
+	bool SwapInventoryItems(int32 From, int32 To, const FCombatHUDOwnerView& Expected);
+	/** 选择丢弃落点或把拖拽的精确实例投递到当前鼠标所指地面。 */
+	void BeginDropInventoryItem(const FCombatItemView& Expected);
+	bool DropInventoryItemAtCursor(const FCombatItemView& Expected);
+	/** 拖放使用释放事件的屏幕位置，避免拖拽期间视口鼠标查询失效；仍通过服务器地面/导航复核。 */
+	bool DropInventoryItemAtScreenPosition(const FCombatItemView& Expected, const FVector2D& ScreenPosition);
+	bool IsChoosingItemDrop() const { return PendingDropItem.IsValid(); }
+	/** 从 Enhanced Input 当前映射取得物品热键，不在 HUD 写死物理键。 */
+	FText GetItemHotkeyText(int32 Slot) const;
+	/** 拾取与放置最终结果，仅用于本地 HUD。 */
+	FText GetItemStatusText() const;
 
 protected:
 	/**
@@ -147,6 +164,7 @@ protected:
 	UPROPERTY(EditAnywhere, Category="Input|Abilities") TObjectPtr<UInputAction> AbilitySlotEAction;
 	/** R 技能槽输入。 */
 	UPROPERTY(EditAnywhere, Category="Input|Abilities") TObjectPtr<UInputAction> AbilitySlotRAction;
+	UPROPERTY(EditAnywhere, Category="Input|Items", meta=(DisplayName="物品快捷键动作", ToolTip="六个装备槽的 Enhanced Input Action，默认映射为数字 1 到 6，可在映射上下文中修改。")) TArray<TObjectPtr<UInputAction>> ItemSlotActions;
 
 private:
 	friend class ACombatAbilityAimScenarioActor;
@@ -218,6 +236,27 @@ private:
 	void OnAbilitySlotReleased(int32 SlotIndex);
 	/** Enhanced Input 的 Canceled 只取消，永远不按 Completed 提交。 */
 	void OnAbilityInputCanceled(int32 SlotIndex);
+	/** 六个物品动作的 Started/Completed 适配，与技能共用当前施法模式。 */
+	void OnItemSlotPressed(int32 Slot);
+	void OnItemSlotReleased(int32 Slot);
+	void OnItemInputCanceled(int32 Slot);
+	uint64 ItemPressSerials[6] = {};
+	FCombatItemHandle PendingDropItem;
+	/** 请求提交前登记，兼容 listen server 同栈先收到最终结果。 */
+	void TrackItemRequest(int32 RequestId, const FCombatOrderRequest& Order);
+	UFUNCTION() void HandleItemBatchResult(FCombatOrderBatchResult Result);
+	UFUNCTION() void HandleItemFinalResult(FCombatOrderResult Result);
+	TWeakObjectPtr<ACombatUnitCharacter> ItemFeedbackUnit;
+	FCombatItemHandle FeedbackItem;
+	int32 ItemFeedbackRequest = 0;
+	int32 ItemFeedbackBinding = 0;
+	uint32 ItemFeedbackLife = 0;
+	bool bItemFeedbackFinal = false;
+	FText ItemFeedbackText;
+	double ItemFeedbackUntil = 0;
+	int32 PendingDropRevision = 0;
+	int32 PendingDropBinding = 0;
+	uint32 PendingDropLife = 0;
 	/** 用当前实际命中和会话号尝试确认一次；保持唯一 SubmitCombatOrder 入口。 */
 	void ConfirmAbilityTarget(const FHitResult& Hit, uint64 Serial);
 	/** 向 CommandedUnit 提交替换型 MoveToPoint 批次。 */

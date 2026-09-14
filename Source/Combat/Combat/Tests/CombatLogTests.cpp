@@ -184,7 +184,13 @@ bool FCombatLogWidgetTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("Entry opens panel"), Widget->IsLogOpen());
 	TestEqual(TEXT("Hidden period retained actual damage"), Widget->GetVisibleEntryCount(), 1);
 	TestTrue(TEXT("Source options include units"), Sources->GetOptionCount() >= 3);
-	TestFalse(TEXT("Items explicitly unavailable"), Items->GetIsEnabled());
+	TestTrue(TEXT("Item actions are available for filtering"), Items->GetIsEnabled());
+	FCombatLogEntry ItemEntry;
+	TestTrue(TEXT("Item event has a display category"), CombatLogPresentation::Classify(CombatTags::Event_Combat_ItemChanged, ItemEntry.Category));
+	FCombatLogFilter ItemFilter;
+	TestTrue(TEXT("Item history is visible by default"), ItemFilter.Matches(ItemEntry, 0));
+	ItemFilter.bItem = false;
+	TestFalse(TEXT("Item filter hides item operations"), ItemFilter.Matches(ItemEntry, 0));
 	DamageCheck->SetIsChecked(false);
 	DamageCheck->OnCheckStateChanged.Broadcast(false);
 	TestEqual(TEXT("Checkbox filters actual rows"), Widget->GetVisibleEntryCount(), 0);

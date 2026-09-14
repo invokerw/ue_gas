@@ -2,6 +2,16 @@
 
 namespace CombatTags
 {
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(State_Muted, "State.Muted", "禁止物品主动，不禁用普通技能或物品属性")
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Ability_Source_Item, "Ability.Source.Item", "物品实例授予的技能；不占英雄技能槽")
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Failure_Item_Stale, "Combat.Failure.Item.Stale", "物品身份、位置或修订已改变")
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Failure_Item_Full, "Combat.Failure.Item.Full", "背包已满且无法完整合并")
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Failure_Item_NotEquipped, "Combat.Failure.Item.NotEquipped", "物品不在装备槽")
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Failure_Item_Muted, "Combat.Failure.Item.Muted", "物品处于重新装备禁用或单位被禁用物品")
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Failure_Item_Empty, "Combat.Failure.Item.Empty", "物品数量或能量不足")
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Failure_Item_Busy, "Combat.Failure.Item.Busy", "物品施法或背包事务进行中")
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Failure_Item_Bound, "Combat.Failure.Item.Bound", "物品绑定规则不允许此单位拾取")
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_Combat_ItemChanged, "Event.Combat.ItemChanged", "物品创建、拾取、换位、丢弃或消耗已提交")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(State_Alive, "State.Alive", "单位处于存活状态")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(State_Dying, "State.Dying", "单位正在执行死亡结算")
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(State_Dead, "State.Dead", "单位已经死亡")

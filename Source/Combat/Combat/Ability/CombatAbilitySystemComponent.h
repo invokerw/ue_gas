@@ -49,6 +49,16 @@ public:
 		bool bInitialAutoCast,
 		FGameplayAbilitySpecHandle& OutHandle,
 		FGameplayTag& OutFailureTag);
+	/** 仅为登记表中确由本单位持有的实例授予独立 Spec；允许重复定义，默认禁用英雄升级与固有被动协调。 */
+	bool GrantItemAbility(TSubclassOf<class UCombatGameplayAbility> AbilityClass, FCombatItemHandle Item,
+		FGameplayAbilitySpecHandle& OutHandle, FGameplayTag& OutFailureTag);
+	/** 服务器查实例映射，客户端查 Spec 来源标签；两者都不把物品计入英雄技能槽。 */
+	bool IsItemAbility(FGameplayAbilitySpecHandle Handle) const;
+	FCombatItemHandle GetAbilityItem(FGameplayAbilitySpecHandle Handle) const;
+	/** 物品激活快照与普通 Ability 共用的归因入口。 */
+	FCombatSourceContext MakeAbilitySource(FGameplayAbilitySpecHandle Handle) const;
+	/** 所有施法入口共用硬控/沉默/物品禁用规则。 */
+	bool IsCombatAbilityStateBlocked(FGameplayAbilitySpecHandle Handle) const;
 	/** 服务器修改已授予技能的等级并同步固有效果；越界或未授予时失败，不改变等级。 */
 	bool SetCombatAbilityLevel(FGameplayAbilitySpecHandle Handle, int32 NewLevel, FGameplayTag& OutFailureTag);
 	/** 移除已授予技能：先取消本次施法，再移除该技能的固有效果、自动施法和冷却记录；不会撤销已独立生效的普通效果。 */
@@ -130,6 +140,8 @@ private:
 
 	/** 按已授予技能句柄保存的服务器自动施法开关；这是技能行为状态，不表示技能正在施放。 */
 	TMap<FGameplayAbilitySpecHandle, bool> AutoCastStates;
+	/** 服务器授予时建立，Spec 最终清理时移除；客户端只复制 Spec 的物品来源标签。 */
+	TMap<FGameplayAbilitySpecHandle, FCombatItemHandle> ItemAbilityOwners;
 	/** 暂存激活入口与技能实例之间的一次性目标请求，技能激活消费后删除，不能用作长期目标状态。 */
 	TMap<FGameplayAbilitySpecHandle, FCombatAbilityTargetData> PendingTargetData;
 	/** 各技能已提交冷却的世界游戏时间终点，单位为秒；冷却缩减在提交时计算，之后属性变化不重算此终点。 */

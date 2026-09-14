@@ -53,13 +53,20 @@ ACombatPlayerController* UCombatAbilityAimComponent::GetCombatController() const
 const FGameplayAbilitySpec* UCombatAbilityAimComponent::ResolveSlot(ACombatUnitCharacter* Unit, const int32 Slot)
 {
 	const UCombatAbilitySystemComponent* Asc = Unit ? Unit->GetCombatAbilitySystemComponent() : nullptr;
-	if (!Asc || Slot < 0 || Slot >= 4) return nullptr;
+	if (!Asc || Slot < 0 || Slot >= 10) return nullptr;
+	if (Slot >= 4)
+	{
+		const FCombatHUDOwnerView View = Unit->GetCombatUnitViewComponent()->GetHUDOwnerView();
+		if (!View.Items.IsValidIndex(Slot - 4)) return nullptr;
+		const FGameplayAbilitySpec* Spec = Asc->FindAbilitySpecFromHandle(View.Items[Slot - 4].AbilityHandle);
+		return Spec && Asc->IsItemAbility(Spec->Handle) ? Spec : nullptr;
+	}
 	int32 Index = 0;
 	for (const FGameplayAbilitySpec& Spec : Asc->GetActivatableAbilities())
 	{
 		const UCombatGameplayAbility* Ability = Cast<UCombatGameplayAbility>(Spec.Ability);
 		const UCombatAbilityData* Data = Ability ? Ability->GetAbilityData() : nullptr;
-		if (!Data || !Data->ShouldOccupyPlayerAbilitySlot()) continue;
+		if (!Data || Asc->IsItemAbility(Spec.Handle) || !Data->ShouldOccupyPlayerAbilitySlot()) continue;
 		if (Index++ == Slot) return &Spec;
 	}
 	return nullptr;
@@ -98,6 +105,12 @@ bool UCombatAbilityAimComponent::BeginAim(const int32 Slot)
 		|| Unit->GetCommandingPlayerController() != PC || Unit->GetLifeState() != ECombatLifeState::Alive || !Spec) return false;
 	ActiveSlot = Slot;
 	ActiveHandle = Spec->Handle;
+	if (Slot >= 4)
+	{
+		const FCombatHUDOwnerView View = Unit->GetCombatUnitViewComponent()->GetHUDOwnerView();
+		ActiveItemHandle = View.Items[Slot - 4].Handle;
+		ActiveItemRevision = View.Items[Slot - 4].Revision;
+	}
 	SessionUnit = Unit;
 	BindingGeneration = PC->GetCommandBindingGeneration();
 	LifeGeneration = Unit->GetLifeGeneration();
@@ -111,6 +124,8 @@ void UCombatAbilityAimComponent::CancelAim()
 	if (SessionSerial == 0) ++SessionSerial;
 	ActiveSlot = INDEX_NONE;
 	ActiveHandle = {};
+	ActiveItemHandle = {};
+	ActiveItemRevision = 0;
 	SessionUnit.Reset();
 	Preview = {};
 	if (ACombatPlayerController* PC = GetCombatController()) PC->CurrentMouseCursor = PC->DefaultMouseCursor;
@@ -132,6 +147,12 @@ bool UCombatAbilityAimComponent::IsSessionCurrent() const
 		|| Unit->GetCommandingPlayerController() != PC || PC->GetCommandBindingGeneration() != BindingGeneration
 		|| Unit->GetLifeGeneration() != LifeGeneration || Unit->GetLifeState() != ECombatLifeState::Alive) return false;
 	const FGameplayAbilitySpec* Spec = ResolveSlot(SessionUnit.Get(), ActiveSlot);
+	if (ActiveItemHandle.IsValid())
+	{
+		const FCombatHUDOwnerView View = Unit->GetCombatUnitViewComponent()->GetHUDOwnerView();
+		if (!View.Items.IsValidIndex(ActiveSlot - 4) || View.Items[ActiveSlot - 4].Handle != ActiveItemHandle
+			|| View.Items[ActiveSlot - 4].Revision != ActiveItemRevision) return false;
+	}
 	return Spec && Spec->Handle == ActiveHandle;
 }
 
@@ -172,6 +193,21 @@ void UCombatAbilityAimComponent::UpdatePreview(const FHitResult& Hit, const bool
 	const FCombatUnitView& Public = View->GetUnitView();
 	const FCombatHUDAbilityView* Ability = Owner.Abilities.FindByPredicate(
 		[Spec](const FCombatHUDAbilityView& Item) { return Item.SpecHandle == Spec->Handle; });
+	const FCombatItemView* ItemView = Owner.Items.FindByPredicate([Spec](const FCombatItemView& Item) { return Item.AbilityHandle == Spec->Handle; });
+	FCombatHUDAbilityView ItemAbility;
+	if (Asc->IsItemAbility(Spec->Handle) && ItemView)
+	{
+		ItemAbility.SpecHandle = Spec->Handle;
+		ItemAbility.DefinitionId = Data->GetPrimaryAssetId();
+		ItemAbility.Level = 1;
+		ItemAbility.MaxLevel = 1;
+		ItemAbility.ManaCost = ItemView->ManaCost;
+		ItemAbility.bIgnoreSilence = true;
+		ItemAbility.CooldownDuration = ItemView->CooldownDuration;
+		const double Now = View->GetEstimatedServerTimeSeconds();
+		ItemAbility.CooldownEndTime = ItemView->GetRemaining(Now) > 0.0f ? Now + ItemView->GetRemaining(Now) : 0.0;
+		Ability = &ItemAbility;
+	}
 	// Unit 的初始化缓存只存在于服务器；客户端身份须核对同代的两份复制快照。
 	if (!Ability || Owner.LifeGeneration != Unit->GetLifeGeneration() || Public.LifeGeneration != Owner.LifeGeneration
 		|| !Owner.UnitDefinitionId.IsValid() || Owner.UnitDefinitionId != Public.UnitDefinitionId
@@ -205,6 +241,8 @@ void UCombatAbilityAimComponent::UpdatePreview(const FHitResult& Hit, const bool
 	else if (Public.VisibleStatusTags.HasTagExact(CombatTags::State_Silenced) && !Ability->bIgnoreSilence) Blocked = TEXT("已被沉默");
 	else if (Ability->CooldownEndTime > View->GetEstimatedServerTimeSeconds()) Blocked = TEXT("技能冷却中");
 	else if (Public.Mana < Ability->ManaCost) Blocked = TEXT("法力不足");
+	if (ItemView && (ItemView->EnabledAt > View->GetEstimatedServerTimeSeconds() || Public.VisibleStatusTags.HasTagExact(CombatTags::State_Muted))) Blocked = TEXT("物品暂时禁用");
+	if (ItemView && ItemView->Quantity <= 0) Blocked = TEXT("物品已消耗");
 	if (!Blocked.IsEmpty())
 	{
 		Preview.Status = ECombatAbilityAimStatus::Blocked;
@@ -262,6 +300,8 @@ bool UCombatAbilityAimComponent::BuildConfirmedOrder(const uint64 Serial, const 
 	const UCombatAbilityData* Data = SessionUnit->GetCombatAbilitySystemComponent()->GetCombatAbilityData(ActiveHandle);
 	if (!Data) return false;
 	OutOrder.AbilitySpecHandle = ActiveHandle;
+	OutOrder.ItemHandle = ActiveItemHandle;
+	OutOrder.ItemRevision = ActiveItemRevision;
 	if (Data->BehaviorTags.HasTagExact(CombatTags::Ability_Behavior_UnitTarget))
 	{
 		OutOrder.Type = ECombatOrderType::CastTarget;

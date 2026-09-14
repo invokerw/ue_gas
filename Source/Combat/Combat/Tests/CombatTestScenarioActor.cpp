@@ -1,4 +1,5 @@
 #include "Combat/Tests/CombatTestScenarioActor.h"
+#include "Combat/Tests/CombatItemNetworkScenario.h"
 
 #include "Combat/Ability/CombatAbilitySystemComponent.h"
 #include "Combat/Ability/CombatGameplayAbility.h"
@@ -51,6 +52,8 @@ ACombatTestScenarioActor::ACombatTestScenarioActor()
 void ACombatTestScenarioActor::BeginPlay()
 {
 	Super::BeginPlay();
+	if (FParse::Param(FCommandLine::Get(), TEXT("CombatItemsSmoke")))
+		GetWorld()->SpawnActor<ACombatItemNetworkScenario>();
 	if (FParse::Param(FCommandLine::Get(), TEXT("CombatHUDSmoke")))
 	{
 		GetWorldTimerManager().SetTimer(HUDNetworkSnapshotTimer, this, &ACombatTestScenarioActor::LogHUDNetworkSnapshot, 18.0f, false);
@@ -374,7 +377,7 @@ void ACombatTestScenarioActor::LogM8ReleaseContract()
 	FString Error;
 	const bool bValid = Contract.IsSelfConsistent(Error);
 	UE_LOG(LogCombat, Display,
-		TEXT("M8ReleaseContract Valid=%s Contract=%d Release=%s Content=%d Tags=%d Formula=%d RNG=%d Event=%d Authority=%s ProjectilePrediction=%s GameplayRollback=%s Replay=%s Summons=%s Economy=%s Error=%s"),
+		TEXT("M8ReleaseContract Valid=%s Contract=%d Release=%s Content=%d Tags=%d Formula=%d RNG=%d Event=%d Authority=%s ProjectilePrediction=%s GameplayRollback=%s Replay=%s Summons=%s Items=%s Economy=%s Error=%s"),
 		bValid ? TEXT("Pass") : TEXT("Fail"), Contract.ContractVersion, *Contract.ReleaseId.ToString(),
 		Contract.ContentVersion, Contract.GameplayTagSchemaVersion, Contract.FormulaVersion, Contract.RngAlgorithmVersion, Contract.EventSchemaVersion,
 		Contract.bServerAuthoritativeGameplay ? TEXT("Server") : TEXT("Invalid"),
@@ -382,7 +385,8 @@ void ACombatTestScenarioActor::LogM8ReleaseContract()
 		Contract.bGameplayRollback ? TEXT("Enabled") : TEXT("DeferredPostV1"),
 		Contract.bDeterministicReplay ? TEXT("Enabled") : TEXT("DeferredPostV1"),
 		Contract.bSummonsAndIllusions ? TEXT("Enabled") : TEXT("DeferredPostV1"),
-		Contract.bItemsAndEconomy ? TEXT("Enabled") : TEXT("DeferredPostV1"),
+		Contract.bItemsEnabled ? TEXT("Enabled") : TEXT("Disabled"),
+		Contract.bEconomyEnabled ? TEXT("Enabled") : TEXT("Deferred"),
 		Error.IsEmpty() ? TEXT("None") : *Error);
 }
 
@@ -532,7 +536,7 @@ void ACombatTestScenarioActor::LogHUDNetworkSnapshot()
 		for (const FGameplayAbilitySpec& Spec : Asc->GetActivatableAbilities())
 		{
 			const UCombatAbilityData* Data = Asc->GetCombatAbilityData(Spec.Handle);
-			if (!Data || !Data->ShouldOccupyPlayerAbilitySlot()) continue;
+			if (!Data || Asc->IsItemAbility(Spec.Handle) || !Data->ShouldOccupyPlayerAbilitySlot()) continue;
 			if (ExpectedIndex == 4) break;
 			if (Snapshot.Abilities.IsValidIndex(ExpectedIndex))
 			{
@@ -557,7 +561,7 @@ void ACombatTestScenarioActor::LogHUDNetworkSnapshot()
 		bPassed &= !It->GetIsReplicated() && !It->GetActorEnableCollision() && It->GetOwner() == LocalPlayer;
 	}
 	bPassed &= HasAuthority() ? Visuals == 0 : Visuals == 1;
-	UE_LOG(LogCombat, Display, TEXT("HUDNetworkSnapshot Schema=6 RangeFields=Checked Role=%s Owners=%d Foreign=%d Skills=%d Visuals=%d Result=%s"),
+	UE_LOG(LogCombat, Display, TEXT("HUDNetworkSnapshot Schema=7 RangeFields=Checked Role=%s Owners=%d Foreign=%d Skills=%d Visuals=%d Result=%s"),
 		HasAuthority() ? TEXT("Server") : TEXT("Client"), CheckedOwners, CheckedForeign, CheckedSkills,
 		Visuals, bPassed ? TEXT("Pass") : TEXT("Fail"));
 	if (!HasAuthority() && LocalPlayer) LocalPlayer->GetAbilityAimComponent()->ResetLocalState();

@@ -14,6 +14,7 @@
 #include "CombatDefinitionData.generated.h"
 
 class UCombatAbilitySet;
+class UCombatItemData;
 class UCombatGameplayAbility;
 class UCombatModifierRuntime;
 class UCombatProjectileData;
@@ -179,6 +180,15 @@ public:
 #endif
 };
 
+/** 出生时按顺序授予的物品；旧 UnitData 的数组默认空，保留原有装备行为。 */
+USTRUCT(BlueprintType)
+struct COMBAT_API FCombatInitialItem
+{
+	GENERATED_BODY()
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Item", meta=(DisplayName="物品定义", ToolTip="出生时授予的物品定义，先填装备槽，再填背包；旧单位默认为空。")) TSoftObjectPtr<UCombatItemData> Item;
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Item", meta=(DisplayName="数量", ToolTip="本条目授予数量，不超过该定义的最大堆叠。", ClampMin="1", ClampMax="99")) int32 Quantity = 1;
+};
+
 /**
  * 战斗单位的服务器初始化模板，集中配置出生时的属性、队伍、普攻规则和固有 AbilitySet。
  * 这里只保存初始值和定义引用；生成后的属性变化由 GAS 管理，运行中的技能与 Modifier 状态不回写资产。
@@ -244,6 +254,8 @@ public:
 	/** 单位初始化时按数组顺序加载的技能集合；每个集合再授予其中配置的技能。 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Unit", meta=(DisplayName="初始技能集合", ToolTip="单位初始化时按数组顺序加载并授予的 AbilitySet 软引用。"))
 	TArray<TSoftObjectPtr<UCombatAbilitySet>> AbilitySets;
+	/** 服务器出生时按配置顺序授予；为空保留旧版无物品出生行为。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Unit", meta=(DisplayName="初始物品", ToolTip="出生时授予的物品与数量；最多九项，支持同定义完整合并，旧单位默认空。", TitleProperty="Item")) TArray<FCombatInitialItem> InitialItems;
 
 	virtual FPrimaryAssetType GetCombatPrimaryAssetType() const override;
 

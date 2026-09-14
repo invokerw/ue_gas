@@ -143,6 +143,8 @@ struct COMBAT_API FCombatAbilityActivationContext
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Ability") FVector TargetLocation = FVector::ZeroVector;
 	/** 施法者激活时的生命代次，用于淘汰跨复活回调。 */
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Ability") int64 CasterLifeGeneration = 0;
+	/** 激活时冻结来源，物品末件消耗或持有者变化不会丢失后续效果的归因。 */
+	UPROPERTY(BlueprintReadOnly, Category="Combat|Ability", meta=(DisplayName="来源快照", ToolTip="本次激活的技能与物品身份，供动作和派生阶段传递。")) FCombatSourceContext SourceContext;
 	/** TargetActor 激活时的生命代次；没有单位目标时为 0。 */
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Ability") int64 TargetLifeGeneration = 0;
 	/** 当前 AbilitySpec 的权威等级快照。 */

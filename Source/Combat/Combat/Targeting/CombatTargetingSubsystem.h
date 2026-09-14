@@ -19,6 +19,9 @@ class COMBAT_API UCombatTargetingSubsystem : public UWorldSubsystem
 	GENERATED_BODY()
 
 public:
+	/** 物品交互共用的距离、视线与落点验证；不应用技能施法距离加成，丢弃要求落点在导航地面附近。 */
+	FCombatTargetValidationResult ValidateItemInteraction(ACombatUnitCharacter* Source, const FVector& Location,
+		const AActor* TargetToIgnore, bool bCheckRange, bool bRequireNavigation) const;
 	/** 根据 Ability 三种目标模式校验 TargetData，且拒绝客户端命中列表。 */
 	UFUNCTION(BlueprintCallable, Category="Combat|Targeting", meta=(DisplayName="验证技能目标", ToolTip="根据技能行为标签与目标规则校验目标数据；命中列表始终由服务器生成。"))
 	FCombatTargetValidationResult ValidateAbilityTarget(

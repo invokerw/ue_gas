@@ -9,6 +9,7 @@
 class ACombatUnitCharacter;
 class UCombatUnitViewComponent;
 class UCombatHUDSlotWidget;
+class UCombatHUDItemSlotWidget;
 class UCombatRadialProgress;
 class UTextBlock;
 class UImage;
@@ -41,6 +42,9 @@ public:
 	bool IsScreenPositionOverUI(FVector2D Position) const;
 	/** 返回当前屏幕位置的技能槽；范围悬停不依赖详情是否固定。 */
 	int32 GetHoveredAbilitySlot(FVector2D Position) const;
+	/** 拖拽期间临时接收视口落点；结束后恢复原命中策略。 */
+	void BeginItemDrag();
+	void FinishItemDrag();
 
 protected:
 	virtual void NativeConstruct() override;
@@ -51,6 +55,7 @@ protected:
 	virtual FReply NativeOnPreviewMouseButtonDown(const FGeometry& Geometry, const FPointerEvent& Event) override;
 	virtual FReply NativeOnMouseMove(const FGeometry& Geometry, const FPointerEvent& Event) override;
 	virtual void NativeOnMouseLeave(const FPointerEvent& Event) override;
+	virtual bool NativeOnDrop(const FGeometry& Geometry, const FDragDropEvent& Event, UDragDropOperation* Operation) override;
 
 	UPROPERTY(meta=(BindWidgetOptional)) TObjectPtr<UWidget> HUDPanel;
 	UPROPERTY(meta=(BindWidgetOptional)) TObjectPtr<UWidget> HUDFrame;
@@ -73,6 +78,15 @@ protected:
 	UPROPERTY(meta=(BindWidgetOptional)) TObjectPtr<UCombatHUDSlotWidget> SkillW;
 	UPROPERTY(meta=(BindWidgetOptional)) TObjectPtr<UCombatHUDSlotWidget> SkillE;
 	UPROPERTY(meta=(BindWidgetOptional)) TObjectPtr<UCombatHUDSlotWidget> SkillR;
+	UPROPERTY(meta=(BindWidgetOptional)) TObjectPtr<UCombatHUDItemSlotWidget> EquipItem0;
+	UPROPERTY(meta=(BindWidgetOptional)) TObjectPtr<UCombatHUDItemSlotWidget> EquipItem1;
+	UPROPERTY(meta=(BindWidgetOptional)) TObjectPtr<UCombatHUDItemSlotWidget> EquipItem2;
+	UPROPERTY(meta=(BindWidgetOptional)) TObjectPtr<UCombatHUDItemSlotWidget> EquipItem3;
+	UPROPERTY(meta=(BindWidgetOptional)) TObjectPtr<UCombatHUDItemSlotWidget> EquipItem4;
+	UPROPERTY(meta=(BindWidgetOptional)) TObjectPtr<UCombatHUDItemSlotWidget> EquipItem5;
+	UPROPERTY(meta=(BindWidgetOptional)) TObjectPtr<UCombatHUDItemSlotWidget> BackpackItem0;
+	UPROPERTY(meta=(BindWidgetOptional)) TObjectPtr<UCombatHUDItemSlotWidget> BackpackItem1;
+	UPROPERTY(meta=(BindWidgetOptional)) TObjectPtr<UCombatHUDItemSlotWidget> BackpackItem2;
 	UPROPERTY(meta=(BindWidgetOptional)) TObjectPtr<UPanelWidget> BuffPanel;
 	UPROPERTY(meta=(BindWidgetOptional)) TObjectPtr<UTextBlock> BuffOverflowText;
 	UPROPERTY(meta=(BindWidgetOptional)) TObjectPtr<UBorder> DetailPanel;
@@ -102,6 +116,8 @@ private:
 	UFUNCTION() void CloseDetail();
 	/** 返回 Designer 中有效的技能子控件，包括空位，维持四槽索引。 */
 	TArray<UCombatHUDSlotWidget*> GetSkillWidgets() const;
+	/** 固定九槽顺序与服务器快照保持一致。 */
+	TArray<UCombatHUDItemSlotWidget*> GetItemWidgets() const;
 	/** 将技能槽上方的加点按钮转换为一次服务器权威升级请求。 */
 	void HandleUpgradeRequested(UCombatHUDSlotWidget* Source);
 	/** 解析可选图标配置。 */
@@ -114,6 +130,7 @@ private:
 	TWeakObjectPtr<UCombatUnitViewComponent> BoundView;
 	TWeakObjectPtr<UCombatHUDSlotWidget> DetailSource;
 	TSharedPtr<FStreamableHandle> DefinitionLoad;
+	TSharedPtr<FStreamableHandle> ItemIconLoad;
 	TArray<FPrimaryAssetId> RequestedDefinitions;
 	TArray<FCombatModifierHandle> ModifierIdentities;
 	uint64 BindingRevision = 0;
@@ -122,6 +139,8 @@ private:
 	bool bDetailPinned = false;
 	bool bHeroHovered = false;
 	float RefreshAccumulator = 0.0f;
+	bool bItemDragging = false;
+	ESlateVisibility BeforeDragVisibility = ESlateVisibility::SelfHitTestInvisible;
 	UPROPERTY(Transient) FCombatHUDOwnerView DisplaySnapshot;
 	UPROPERTY(Transient) TArray<TObjectPtr<UCombatHUDSlotWidget>> BuffWidgets;
 };

@@ -54,7 +54,7 @@ void UCombatLogWidget::NativeConstruct()
 	if (LogEntryButton) LogEntryButton->OnClicked.AddUniqueDynamic(this, &UCombatLogWidget::ToggleLog);
 	if (CloseLogButton) CloseLogButton->OnClicked.AddUniqueDynamic(this, &UCombatLogWidget::CloseLog);
 	bUpdatingControls = true;
-	for (UCheckBox* Check : { DamageCheck.Get(), HealingCheck.Get(), AbilityCheck.Get(), StatusCheck.Get(), NonHeroCheck.Get() })
+	for (UCheckBox* Check : { DamageCheck.Get(), HealingCheck.Get(), AbilityCheck.Get(), StatusCheck.Get(), ItemCheck.Get(), NonHeroCheck.Get() })
 	{
 		if (!Check) continue;
 		Check->SetIsChecked(true);
@@ -65,9 +65,8 @@ void UCombatLogWidget::NativeConstruct()
 	bOptionsDirty = true;
 	if (ItemCheck)
 	{
-		ItemCheck->SetIsChecked(false);
-		ItemCheck->SetIsEnabled(false);
-		ItemCheck->SetToolTipText(NSLOCTEXT("CombatLog", "ItemsUnavailable", "物品系统尚未接入"));
+		ItemCheck->SetIsEnabled(true);
+		ItemCheck->SetToolTipText(NSLOCTEXT("CombatLog", "ItemActions", "筛选拾取、丢弃、换槽和消耗记录；物品伤害与治疗仍归对应类别"));
 	}
 	if (FollowLatestCheck)
 	{
@@ -120,7 +119,7 @@ void UCombatLogWidget::NativeDestruct()
 	BoundLog = Previous;
 	if (LogEntryButton) LogEntryButton->OnClicked.RemoveAll(this);
 	if (CloseLogButton) CloseLogButton->OnClicked.RemoveAll(this);
-	for (UCheckBox* Check : { DamageCheck.Get(), HealingCheck.Get(), AbilityCheck.Get(), StatusCheck.Get(), NonHeroCheck.Get(), FollowLatestCheck.Get() })
+	for (UCheckBox* Check : { DamageCheck.Get(), HealingCheck.Get(), AbilityCheck.Get(), StatusCheck.Get(), ItemCheck.Get(), NonHeroCheck.Get(), FollowLatestCheck.Get() })
 		if (Check) Check->OnCheckStateChanged.RemoveAll(this);
 	if (AttackerCombo) AttackerCombo->OnSelectionChanged.RemoveAll(this);
 	if (TargetCombo) TargetCombo->OnSelectionChanged.RemoveAll(this);
@@ -438,6 +437,7 @@ void UCombatLogWidget::HandleCategoryChanged(const bool bChecked)
 	Filter.bHealing = HealingCheck && HealingCheck->IsChecked();
 	Filter.bAbility = AbilityCheck && AbilityCheck->IsChecked();
 	Filter.bStatus = StatusCheck && StatusCheck->IsChecked();
+	Filter.bItem = ItemCheck && ItemCheck->IsChecked();
 	Filter.bIncludeNonHeroes = NonHeroCheck && NonHeroCheck->IsChecked();
 	bDirty = true;
 	RefreshDisplay();

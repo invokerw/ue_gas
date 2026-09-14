@@ -6,7 +6,19 @@
 namespace CombatTags
 {
 	/** Native GameplayTag 命名与语义 schema 版本；不兼容改名或语义变化时递增。 */
-	inline constexpr int32 SchemaVersion = 1;
+	inline constexpr int32 SchemaVersion = 2;
+
+	/** 物品主动独立于沉默；来源标签在 Spec 授予前写入并随 GAS 复制。 */
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Muted)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Ability_Source_Item)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Failure_Item_Stale)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Failure_Item_Full)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Failure_Item_NotEquipped)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Failure_Item_Muted)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Failure_Item_Empty)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Failure_Item_Busy)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Failure_Item_Bound)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Combat_ItemChanged)
 
 	/** Unit 生命周期、控制、可见性与碰撞状态标签。 */
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Alive)

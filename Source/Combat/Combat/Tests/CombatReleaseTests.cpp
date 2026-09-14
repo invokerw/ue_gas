@@ -118,6 +118,8 @@ bool FCombatM8ReleaseContractTest::RunTest(const FString& Parameters)
 	TestFalse(TEXT("Deterministic replay is deferred after v1"), Contract.bDeterministicReplay);
 	TestFalse(TEXT("Summons and illusions are deferred after v1"), Contract.bSummonsAndIllusions);
 	TestFalse(TEXT("Items and economy are deferred after v1"), Contract.bItemsAndEconomy);
+	TestTrue(TEXT("Items are enabled in contract v2"), Contract.bItemsEnabled);
+	TestFalse(TEXT("Economy remains deferred"), Contract.bEconomyEnabled);
 
 	FCombatReleaseContract Drifted = Contract;
 	++Drifted.EventSchemaVersion;

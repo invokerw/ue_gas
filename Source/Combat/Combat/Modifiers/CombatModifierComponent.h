@@ -51,6 +51,10 @@ struct COMBAT_API FCombatModifierApplyRequest
 	UPROPERTY(BlueprintReadWrite, Category="Combat|Modifier", meta=(DisplayName="持续时间覆盖", ToolTip="本次持续时间，单位为秒：[-1,0) 使用定义值，0 为无限，正数覆盖定义；小于 -1 被拒绝。负面效果还可能按目标状态抗性缩短。", Units="s")) float DurationOverride = -1.0f;
 	/** 固有 Modifier 用它区分所属 AbilitySpec；普通效果保持无效，避免无关施加被误判为同一刷新对象。 */
 	UPROPERTY(BlueprintReadWrite, Category="Combat|Modifier", meta=(DisplayName="所属技能句柄", ToolTip="Intrinsic Modifier 使用的 AbilitySpec 所有者键；普通 Modifier 保持无效。")) FGameplayAbilitySpecHandle AbilityOwnerHandle;
+	/** 常驻物品与光环子效果用实例身份区分独立所有者；普通技能效果为空。 */
+	UPROPERTY(BlueprintReadWrite, Category="Combat|Modifier", meta=(DisplayName="所属物品句柄", ToolTip="常驻物品和物品光环子效果的唯一所有者键；不同实例不互相合并或撤销。")) FCombatItemHandle ItemOwnerHandle;
+	/** 效果产生时的来源快照，后续 Hook 可以延续原物品归因。 */
+	UPROPERTY(BlueprintReadWrite, Category="Combat|Modifier", meta=(DisplayName="来源快照", ToolTip="保存技能、物品、弹体等来源身份；不会赋予客户端结算权限。")) FCombatSourceContext SourceContext;
 	/** 启用后把初始强制位移请求交给新建效果实例；是否执行由该实例的创建回调决定，刷新已有实例不重新注入。 */
 	UPROPERTY(BlueprintReadWrite, Category="Combat|Modifier", meta=(DisplayName="包含初始位移请求", ToolTip="启用后把初始强制位移请求交给新建效果实例；是否执行由该实例的创建回调决定，刷新已有实例不重新注入。")) bool bHasInitialMotionRequest = false;
 	/** 新建效果可在 OnCreated 中使用的强制位移参数，例如肉钩拉拽；仅在启用初始位移请求时有效。 */

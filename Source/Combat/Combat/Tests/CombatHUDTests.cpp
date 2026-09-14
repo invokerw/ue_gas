@@ -179,13 +179,14 @@ bool FCombatHUDBlueprintLifecycleTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("Skill Q keeps the established icon top"), static_cast<double>(MainSkillQSlot->GetPosition().Y + 26.0), 257.0);
 		TestEqual(TEXT("Skill Q reserves the upgrade hit area"), static_cast<double>(MainSkillQSlot->GetSize().Y), 104.0);
 	}
-	for (const TCHAR* Prefix : { TEXT("ItemSlot"), TEXT("BackpackSlot") })
+	for (const TCHAR* Prefix : { TEXT("EquipItem"), TEXT("BackpackItem") })
 	{
-		const int32 Count = FString(Prefix) == TEXT("ItemSlot") ? 6 : 3;
+		const int32 Count = FString(Prefix) == TEXT("EquipItem") ? 6 : 3;
 		for (int32 Index = 0; Index < Count; ++Index)
 		{
 			UWidget* Item = Widget->WidgetTree->FindWidget(FName(FString::Printf(TEXT("%s%d"), Prefix, Index)));
 			if (!TestNotNull(TEXT("Permanent rectangular slot exists"), Item)) return false;
+			TestTrue(TEXT("Inventory slot binds real item widget"), Item->GetClass()->IsChildOf(FindObject<UClass>(nullptr, TEXT("/Script/Combat.CombatHUDItemSlotWidget"))));
 			const UCanvasPanelSlot* Slot = Cast<UCanvasPanelSlot>(Item->Slot);
 			if (!TestNotNull(TEXT("Slot has Designer geometry"), Slot)) return false;
 			TestTrue(TEXT("Item is landscape"), Slot->GetSize().X > Slot->GetSize().Y);

@@ -125,6 +125,9 @@ public:
 	ACombatUnitCharacter* GetSourceUnit() const { return SourceUnit.Get(); }
 	/** 返回此固有效果所属的已授予技能句柄；普通效果没有该归属，返回无效句柄。 */
 	FGameplayAbilitySpecHandle GetAbilityOwnerHandle() const { return AbilityOwnerHandle; }
+	FCombatItemHandle GetItemOwnerHandle() const { return ItemOwnerHandle; }
+	/** 已施加效果的不可变来源，供派生 Hook 继承物品和技能归因。 */
+	const FCombatSourceContext& GetSourceContext() const { return SourceContext; }
 	/** 返回承载该 Runtime 的目标单位。 */
 	ACombatUnitCharacter* GetTargetUnit() const { return TargetUnit.Get(); }
 	/** 返回只读 Modifier 定义。 */
@@ -171,6 +174,8 @@ private:
 	TWeakObjectPtr<ACombatUnitCharacter> SourceUnit;
 	/** 固有效果所属的技能句柄，与来源和定义共同区分刷新对象；普通效果为无效值。 */
 	FGameplayAbilitySpecHandle AbilityOwnerHandle;
+	FCombatItemHandle ItemOwnerHandle;
+	FCombatSourceContext SourceContext;
 	/** 承载 Modifier 的单位。 */
 	TWeakObjectPtr<ACombatUnitCharacter> TargetUnit;
 	/** 与 Runtime 一一对应的公共句柄。 */

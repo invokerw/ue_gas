@@ -84,8 +84,8 @@ void UCombatNetworkSecuritySubsystem::Deinitialize()
 int32 UCombatNetworkSecuritySubsystem::EstimatePayloadBytes(const FCombatOrderBatchRequest& Request)
 {
 	// 固定字段按对齐后的保守上界估算；实际网络序列化仍由 UE 属性系统约束。
-	constexpr int32 HeaderBytes = 16;
-	constexpr int32 OrderBytes = 80;
+	constexpr int32 HeaderBytes = 32;
+	constexpr int32 OrderBytes = 160;
 	return HeaderBytes + Request.Orders.Num() * OrderBytes;
 }
 

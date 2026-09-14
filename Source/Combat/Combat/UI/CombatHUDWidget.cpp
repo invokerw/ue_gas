@@ -1,11 +1,13 @@
 #include "Combat/UI/CombatHUDWidget.h"
 
 #include "Combat/UI/CombatHUDSlotWidget.h"
+#include "Combat/UI/CombatHUDItemSlotWidget.h"
 #include "Combat/UI/CombatRadialProgress.h"
 #include "Combat/View/CombatUnitViewComponent.h"
 #include "Combat/Unit/CombatProgressionComponent.h"
 #include "Combat/Unit/CombatUnitCharacter.h"
 #include "Combat/Data/CombatDefinitionData.h"
+#include "Combat/Items/CombatItemData.h"
 #include "CombatPlayerController.h"
 #include "Engine/AssetManager.h"
 #include "Engine/StreamableManager.h"
@@ -42,11 +44,25 @@ TArray<UCombatHUDSlotWidget*> UCombatHUDWidget::GetSkillWidgets() const
 	return { SkillQ, SkillW, SkillE, SkillR };
 }
 
+TArray<UCombatHUDItemSlotWidget*> UCombatHUDWidget::GetItemWidgets() const
+{
+	return { EquipItem0, EquipItem1, EquipItem2, EquipItem3, EquipItem4, EquipItem5, BackpackItem0, BackpackItem1, BackpackItem2 };
+}
+
 void UCombatHUDWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
 	bConstructed = true;
 	SetIsFocusable(true);
+	const auto ItemWidgets = GetItemWidgets();
+	for (int32 Index = 0; Index < ItemWidgets.Num(); ++Index)
+	{
+		UCombatHUDItemSlotWidget* Entry = ItemWidgets[Index];
+		if (!Entry) continue;
+		Entry->BindInventorySlot(this, Index);
+		Entry->OnDetailRequested.RemoveAll(this);
+		Entry->OnDetailRequested.AddUObject(this, &UCombatHUDWidget::HandleDetail, static_cast<UCombatHUDSlotWidget*>(Entry));
+	}
 	if (CloseDetailButton) CloseDetailButton->OnClicked.AddUniqueDynamic(this, &UCombatHUDWidget::CloseDetail);
 	for (UCombatHUDSlotWidget* Entry : GetSkillWidgets())
 	{
@@ -98,6 +114,7 @@ void UCombatHUDWidget::InitializeForUnit(ACombatUnitCharacter* Unit)
 void UCombatHUDWidget::UnbindView()
 {
 	++BindingRevision;
+	if (ItemIconLoad) { ItemIconLoad->CancelHandle(); ItemIconLoad.Reset(); }
 	if (DefinitionLoad) { DefinitionLoad->CancelHandle(); DefinitionLoad.Reset(); }
 	RequestedDefinitions.Reset();
 	if (BoundView.IsValid())
@@ -112,6 +129,8 @@ void UCombatHUDWidget::UnbindView()
 
 void UCombatHUDWidget::ResetPresentation()
 {
+	FinishItemDrag();
+	for (UCombatHUDItemSlotWidget* Entry : GetItemWidgets()) if (Entry) Entry->ShowItem({}, {}, 0, FText::GetEmpty());
 	CloseDetail();
 	for (UCombatHUDSlotWidget* Entry : BuffWidgets) if (Entry) Entry->OnDetailRequested.RemoveAll(this);
 	BuffWidgets.Reset();
@@ -188,6 +207,7 @@ void UCombatHUDWidget::RequestDefinitions(const TArray<FPrimaryAssetId>& Ids)
 	if (Desired == RequestedDefinitions) return;
 	RequestedDefinitions = MoveTemp(Desired);
 	++BindingRevision;
+	if (ItemIconLoad) { ItemIconLoad->CancelHandle(); ItemIconLoad.Reset(); }
 	if (DefinitionLoad) { DefinitionLoad->CancelHandle(); DefinitionLoad.Reset(); }
 	TArray<FSoftObjectPath> Paths;
 	for (const FPrimaryAssetId& Id : RequestedDefinitions)
@@ -201,7 +221,17 @@ void UCombatHUDWidget::RequestDefinitions(const TArray<FPrimaryAssetId>& Ids)
 	DefinitionLoad = UAssetManager::GetStreamableManager().RequestAsyncLoad(Paths,
 		FStreamableDelegate::CreateWeakLambda(this, [this, Revision, Generation]()
 		{
-			if (bConstructed && Revision == BindingRevision && Generation == DisplayLifeGeneration) RefreshDisplay();
+			if (!bConstructed || Revision != BindingRevision || Generation != DisplayLifeGeneration) return;
+			TArray<FSoftObjectPath> Icons;
+			for (const FPrimaryAssetId& Id : RequestedDefinitions)
+				if (const UCombatItemData* Item = Cast<UCombatItemData>(UAssetManager::Get().GetPrimaryAssetObject(Id)); Item && !Item->Icon.IsNull())
+					Icons.AddUnique(Item->Icon.ToSoftObjectPath());
+			if (!Icons.IsEmpty()) ItemIconLoad = UAssetManager::GetStreamableManager().RequestAsyncLoad(Icons,
+				FStreamableDelegate::CreateWeakLambda(this, [this, Revision, Generation]()
+				{
+					if (bConstructed && Revision == BindingRevision && Generation == DisplayLifeGeneration) RefreshDisplay();
+				}));
+			RefreshDisplay();
 		}));
 }
 
@@ -217,6 +247,7 @@ void UCombatHUDWidget::RefreshDisplay()
 	if (DisplayLifeGeneration != Unit.LifeGeneration)
 	{
 		++BindingRevision;
+		if (ItemIconLoad) { ItemIconLoad->CancelHandle(); ItemIconLoad.Reset(); }
 		if (DefinitionLoad) { DefinitionLoad->CancelHandle(); DefinitionLoad.Reset(); }
 		RequestedDefinitions.Reset();
 		ResetPresentation();
@@ -260,6 +291,7 @@ void UCombatHUDWidget::RefreshDisplay()
 	}
 	TArray<FPrimaryAssetId> Ids = { Unit.UnitDefinitionId };
 	for (const FCombatHUDAbilityView& Ability : DisplaySnapshot.Abilities) if (Ability.DefinitionId.IsValid()) Ids.AddUnique(Ability.DefinitionId);
+	for (const FCombatItemView& Item : DisplaySnapshot.Items) if (Item.DefinitionId.IsValid()) Ids.AddUnique(Item.DefinitionId);
 	TArray<FCombatModifierView> Modifiers = BoundView->GetVisibleModifiers();
 	Modifiers.StableSort([](const FCombatModifierView& A, const FCombatModifierView& B) { return !A.bIsDebuff && B.bIsDebuff; });
 	for (const FCombatModifierView& Modifier : Modifiers) Ids.AddUnique(Modifier.DefinitionId);
@@ -286,6 +318,11 @@ void UCombatHUDWidget::RefreshDisplay()
 	CombatHUD::Text(StatsText, bOwnerReady ? FString::Printf(TEXT("攻  %.0f\n甲  %.0f\n抗  %.0f%%\n速  %.0f"),
 		DisplaySnapshot.AttackDamage, DisplaySnapshot.Armor, DisplaySnapshot.MagicResist * 100.0f, DisplaySnapshot.MoveSpeed) : TEXT("攻  —\n甲  —\n抗  —\n速  —"));
 	const double Now = BoundView->GetEstimatedServerTimeSeconds();
+	const auto ItemWidgets = GetItemWidgets();
+	const ACombatPlayerController* ItemPC = Cast<ACombatPlayerController>(GetOwningPlayer());
+	for (int32 Index = 0; Index < ItemWidgets.Num(); ++Index)
+		if (ItemWidgets[Index]) ItemWidgets[Index]->ShowItem(DisplaySnapshot, Unit, Now,
+			ItemPC && Index < 6 ? ItemPC->GetItemHotkeyText(Index) : FText::GetEmpty());
 	const TArray<UCombatHUDSlotWidget*> Slots = GetSkillWidgets();
 	const TCHAR* Keys[] = { TEXT("Q"), TEXT("W"), TEXT("E"), TEXT("R") };
 	for (int32 Index = 0; Index < Slots.Num(); ++Index)
@@ -334,7 +371,12 @@ void UCombatHUDWidget::RefreshDisplay()
 		BuffOverflowText->SetToolTipText(FText::FromString(Overflow));
 	}
 	FString Activity;
-	if (const ACombatPlayerController* PC = Cast<ACombatPlayerController>(GetOwningPlayer())) Activity = PC->GetAbilityAimComponent()->GetStatusText().ToString();
+	if (const ACombatPlayerController* PC = Cast<ACombatPlayerController>(GetOwningPlayer()))
+	{
+		Activity = PC->GetAbilityAimComponent()->GetStatusText().ToString();
+		if (PC->IsChoosingItemDrop()) Activity = TEXT("左键选择物品落点 · 右键或 Esc 取消");
+		else if (Activity.IsEmpty()) Activity = PC->GetItemStatusText().ToString();
+	}
 	if (!bAlive) Activity = TEXT("已阵亡");
 	else if (Unit.AbilityPhase != ECombatAbilityViewPhase::None && Unit.ActiveAbilityDefinitionId.IsValid())
 	{
@@ -410,6 +452,10 @@ FReply UCombatHUDWidget::NativeOnPreviewMouseButtonDown(const FGeometry& Geometr
 {
 	if (Event.GetEffectingButton() == EKeys::RightMouseButton && IsScreenPositionOverUI(Event.GetScreenSpacePosition()))
 	{
+		const ACombatPlayerController* ItemPC = Cast<ACombatPlayerController>(GetOwningPlayer());
+		if (ItemPC && !ItemPC->GetAbilityAimComponent()->IsAiming() && !ItemPC->IsChoosingItemDrop())
+			for (UCombatHUDItemSlotWidget* Entry : GetItemWidgets())
+				if (Entry && Entry->GetCachedGeometry().IsUnderLocation(Event.GetScreenSpacePosition())) return FReply::Unhandled();
 		if (ACombatPlayerController* PC = Cast<ACombatPlayerController>(GetOwningPlayer())) PC->CancelCombatTargeting();
 		return FReply::Handled();
 	}
@@ -450,7 +496,34 @@ int32 UCombatHUDWidget::GetHoveredAbilitySlot(const FVector2D Position) const
 	{
 		if (Slots[Index] && Slots[Index]->IsVisible() && Slots[Index]->GetCachedGeometry().IsUnderLocation(Position)) return Index;
 	}
+	const auto Items = GetItemWidgets();
+	for (int32 Index = 0; Index < 6; ++Index)
+		if (Items[Index] && Items[Index]->IsVisible() && Items[Index]->GetCachedGeometry().IsUnderLocation(Position)) return 4 + Index;
 	return INDEX_NONE;
+}
+
+void UCombatHUDWidget::BeginItemDrag()
+{
+	if (bItemDragging) return;
+	bItemDragging = true;
+	BeforeDragVisibility = GetVisibility();
+	SetVisibility(ESlateVisibility::Visible);
+}
+void UCombatHUDWidget::FinishItemDrag()
+{
+	if (!bItemDragging) return;
+	bItemDragging = false;
+	SetVisibility(BeforeDragVisibility);
+}
+bool UCombatHUDWidget::NativeOnDrop(const FGeometry& Geometry, const FDragDropEvent& Event, UDragDropOperation* Operation)
+{
+	UCombatItemDragOperation* Drag = Cast<UCombatItemDragOperation>(Operation);
+	if (!Drag) return false;
+	ACombatPlayerController* PC = Cast<ACombatPlayerController>(GetOwningPlayer());
+	if (Drag->IsCurrent(PC) && !IsScreenPositionOverUI(Event.GetScreenSpacePosition()) && Drag->Snapshot.Items.IsValidIndex(Drag->SourceSlot))
+		PC->DropInventoryItemAtScreenPosition(Drag->Snapshot.Items[Drag->SourceSlot], Event.GetScreenSpacePosition());
+	FinishItemDrag();
+	return true;
 }
 
 FReply UCombatHUDWidget::NativeOnMouseMove(const FGeometry& Geometry, const FPointerEvent& Event)

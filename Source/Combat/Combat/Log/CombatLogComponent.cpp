@@ -74,6 +74,8 @@ void UCombatLogComponent::HandleRecord(const FCombatLogRecord& Record, const FCo
 		|| !FMath::IsFinite(Record.ServerTime) || Record.AppliedAmount < 0.0f) return;
 	FCombatLogEntry Entry;
 	if (!CombatLogPresentation::Classify(Record.EventType, Entry.Category)) return;
+	if (Record.EventType == CombatTags::Event_Combat_ItemChanged
+		&& (Record.ItemAction == TEXT("Cooldown") || Record.ItemAction == TEXT("Removed"))) return;
 	if (Entry.Category == ECombatLogCategory::Healing && Record.AppliedAmount <= KINDA_SMALL_NUMBER) return;
 	ACombatUnitCharacter* Source = FindUnit(Record.SourceActorId);
 	ACombatUnitCharacter* Target = FindUnit(Record.TargetActorId);
@@ -99,6 +101,12 @@ void UCombatLogComponent::HandleRecord(const FCombatLogRecord& Record, const FCo
 	Entry.EffectDefinitionId = Entry.Category == ECombatLogCategory::Status ? Record.Source.ModifierDefinitionId : Record.Source.AbilityDefinitionId;
 	if (!Entry.EffectDefinitionId.IsValid()) Entry.EffectDefinitionId = Record.Source.ModifierDefinitionId;
 	if (!Entry.EffectDefinitionId.IsValid()) Entry.EffectDefinitionId = Record.Source.ProjectileDefinitionId;
+	Entry.ItemDefinitionId = Record.Source.ItemDefinitionId;
+	Entry.ItemHandle = Record.Source.ItemHandle;
+	Entry.ItemAction = Record.ItemAction;
+	Entry.ItemQuantity = Record.ItemQuantity;
+	Entry.ItemCharges = Record.ItemCharges;
+	if (Entry.ItemDefinitionId.IsValid()) Entry.EffectDefinitionId = Entry.ItemDefinitionId;
 	Entry.Amount = Record.AppliedAmount;
 	Entry.bHasHealthChange = ResourceChange.bHasHealthChange && FMath::IsFinite(ResourceChange.PreviousHealth)
 		&& FMath::IsFinite(ResourceChange.NewHealth);

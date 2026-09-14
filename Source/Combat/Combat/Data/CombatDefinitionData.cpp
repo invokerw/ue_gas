@@ -1,4 +1,6 @@
 #include "Combat/Data/CombatDefinitionData.h"
+#include "Combat/Items/CombatItemData.h"
+#include "Combat/Items/CombatItemTypes.h"
 #include "Combat/Ability/CombatAbilityIndicatorGeometry.h"
 
 #include "Algo/AllOf.h"
@@ -412,6 +414,20 @@ EDataValidationResult UCombatUnitData::IsDataValid(FDataValidationContext& Conte
 {
 	EDataValidationResult Result = Super::IsDataValid(Context);
 	FString Diagnostic;
+	if (InitialItems.Num() > CombatItems::TotalSlots)
+	{
+		Context.AddError(FText::FromString(TEXT("Initial inventory exceeds nine slots")));
+		Result = EDataValidationResult::Invalid;
+	}
+	for (const FCombatInitialItem& Entry : InitialItems)
+	{
+		const UCombatItemData* Item = Entry.Item.LoadSynchronous();
+		if (!Item || !Item->ValidateRuntime(Diagnostic) || Entry.Quantity < 1 || Entry.Quantity > Item->MaxStack)
+		{
+			Context.AddError(FText::FromString(TEXT("Invalid initial item reference, definition or quantity: ") + Entry.Item.ToString()));
+			Result = EDataValidationResult::Invalid;
+		}
+	}
 	if (!BaseStats.IsValid(&Diagnostic))
 	{
 		Context.AddError(FText::FromString(Diagnostic));

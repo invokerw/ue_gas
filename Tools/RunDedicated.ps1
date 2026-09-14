@@ -2,14 +2,16 @@
 param(
     [int]$Port = 7859,
     [int]$TimeoutSeconds = 90,
-    [string]$PythonExe = 'python'
+    [string]$PythonExe = 'python',
+    [switch]$Items,
+    [switch]$InstalledEditor
 )
 
 $ErrorActionPreference = 'Stop'
 $dedicatedRepoRoot = Split-Path $PSScriptRoot -Parent
 $dedicatedProjectFile = Join-Path $dedicatedRepoRoot 'ue_gas.uproject'
 $dedicatedEnvironmentTool = Join-Path $PSScriptRoot 'ue_environment.py'
-$dedicatedOutputRoot = Join-Path $dedicatedRepoRoot 'Saved/UEEnvironment/Dedicated'
+$dedicatedOutputRoot = Join-Path $dedicatedRepoRoot $(if ($InstalledEditor) { 'Saved/UEEnvironment/Dedicated-Installed' } else { 'Saved/UEEnvironment/Dedicated' })
 $dedicatedServerLog = Join-Path $dedicatedOutputRoot 'DedicatedServer.log'
 $dedicatedProcesses = @()
 
@@ -20,26 +22,29 @@ if (-not (Test-Path -LiteralPath $dedicatedEnvironmentTool -PathType Leaf)) {
     throw "环境检查工具不存在：$dedicatedEnvironmentTool"
 }
 
-$dedicatedCheckJson = & $PythonExe $dedicatedEnvironmentTool check --repo-root $dedicatedRepoRoot --require dedicated --json 2>&1
+$dedicatedRequirement = if ($InstalledEditor) { 'editor' } else { 'dedicated' }
+$dedicatedCheckJson = & $PythonExe $dedicatedEnvironmentTool check --repo-root $dedicatedRepoRoot --require $dedicatedRequirement --json 2>&1
 $dedicatedCheckExitCode = $LASTEXITCODE
 if ($dedicatedCheckExitCode -ne 0) {
     $dedicatedDiagnostics = ($dedicatedCheckJson -join [Environment]::NewLine)
-    throw "Dedicated Server smoke 未运行：UE_SOURCE_EDITOR 或源码引擎 Build.bat 未通过检查。`n$dedicatedDiagnostics"
+    throw "Dedicated Server smoke 未运行：所选 UE Editor 入口未通过检查。`n$dedicatedDiagnostics"
 }
 $dedicatedEnvironment = ($dedicatedCheckJson -join [Environment]::NewLine) | ConvertFrom-Json
-$dedicatedEngineExe = [string]$dedicatedEnvironment.source_editor
+$dedicatedEngineExe = if ($InstalledEditor) { [string]$dedicatedEnvironment.installed_editor } else { [string]$dedicatedEnvironment.source_editor }
 
 New-Item -ItemType Directory -Path $dedicatedOutputRoot -Force | Out-Null
 $dedicatedCommonArgs = @(
     '-unattended', '-NoSplash', '-NullRHI', '-NoSound', '-NoP4',
     '-CombatHUDSmoke', '-CombatSAMMovementSmoke', '-ini:Engine:[ConsoleVariables]:t.MaxFPS=120'
 )
+if ($Items) { $dedicatedCommonArgs += '-CombatItemsSmoke' }
 
 function Quote-DedicatedArgument([string]$Value) {
     return '"' + $Value.Replace('"', '\"') + '"'
 }
 
 try {
+    $dedicatedRunStartedUtc = [DateTime]::UtcNow
     $dedicatedServerArgs = @(
         (Quote-DedicatedArgument $dedicatedProjectFile),
         '/Game/Combat/Tests/L_CombatTest?game=/Game/Combat/Demo/Framework/BP_CombatDemoGameMode.BP_CombatDemoGameMode_C',
@@ -53,7 +58,9 @@ try {
         Start-Sleep -Seconds 2
         $dedicatedServer.Refresh()
         if ($dedicatedServer.HasExited) { throw 'Dedicated Server 提前退出' }
-        $dedicatedReady = (Test-Path -LiteralPath $dedicatedServerLog) -and ((Get-Content -LiteralPath $dedicatedServerLog -Raw -ErrorAction SilentlyContinue) -match "listening on port $Port")
+        $dedicatedReady = (Test-Path -LiteralPath $dedicatedServerLog) -and
+            ((Get-Item -LiteralPath $dedicatedServerLog).LastWriteTimeUtc -ge $dedicatedRunStartedUtc) -and
+            ((Get-Content -LiteralPath $dedicatedServerLog -Raw -ErrorAction SilentlyContinue) -match "listening on port $Port")
     } until ($dedicatedReady -or (Get-Date) -gt $dedicatedDeadline)
     if (-not $dedicatedReady) { throw 'Dedicated Server 监听超时' }
 
@@ -72,16 +79,22 @@ try {
         Start-Sleep -Seconds 3
         $dedicatedLogs = @($dedicatedServerLog, (Join-Path $dedicatedOutputRoot 'DedicatedClient1.log'), (Join-Path $dedicatedOutputRoot 'DedicatedClient2.log'))
         $dedicatedReports = foreach ($dedicatedLogPath in $dedicatedLogs) {
-            if (Test-Path -LiteralPath $dedicatedLogPath) {
-                Get-Content -LiteralPath $dedicatedLogPath | Where-Object { $_ -match 'HUDNetworkSnapshot|SAMCollisionServerResult|M7ScenarioReady' }
+            if ((Test-Path -LiteralPath $dedicatedLogPath) -and
+                ((Get-Item -LiteralPath $dedicatedLogPath).LastWriteTimeUtc -ge $dedicatedRunStartedUtc)) {
+                Get-Content -LiteralPath $dedicatedLogPath | Where-Object { $_ -match 'HUDNetworkSnapshot|SAMCollisionServerResult|M7ScenarioReady|ItemNetworkSmoke|ItemNetworkContention|M7Performance' }
             }
         }
         $dedicatedFinished = @($dedicatedReports | Where-Object { $_ -match 'HUDNetworkSnapshot' }).Count -ge 3
+        if ($Items) { $dedicatedFinished = $dedicatedFinished -and @($dedicatedReports | Where-Object { $_ -match 'ItemNetworkSmoke' }).Count -ge 3 }
     } until ($dedicatedFinished -or (Get-Date) -gt $dedicatedDeadline)
     $dedicatedReports | Set-Content -LiteralPath (Join-Path $dedicatedOutputRoot 'DedicatedSummary.txt')
     $dedicatedReports
-    if (-not $dedicatedFinished) { throw 'HUD 联机快照等待超时' }
-    if (@($dedicatedReports | Where-Object { $_ -match 'Result=Fail' }).Count -gt 0) { throw 'HUD 或移动联机检查失败' }
+    if (-not $dedicatedFinished) { throw 'HUD 或物品联机快照等待超时' }
+    if (@($dedicatedReports | Where-Object { $_ -match 'Result=Fail|Budget=Fail|CapacityFixture=Invalid' }).Count -gt 0) { throw 'HUD、物品、移动或容量联机检查失败' }
+    if ($Items -and (@($dedicatedReports | Where-Object { $_ -match 'ItemNetworkContention.*Outcome=Won' }).Count -ne 1 -or
+                    @($dedicatedReports | Where-Object { $_ -match 'ItemNetworkContention.*Outcome=Lost' }).Count -ne 1)) {
+        throw '物品竞争必须恰好产生一个胜者和一个失败回执'
+    }
 }
 finally {
     foreach ($dedicatedProcess in $dedicatedProcesses) {

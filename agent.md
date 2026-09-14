@@ -6,7 +6,7 @@
 
 - 引擎基线是 Unreal Engine 5.8。
 - Combat 位于 `Source/Combat/Combat`，当前保持在 `Combat` 单 Runtime Module 中；项目文件和 Target 名称仍保留 `ue_gas`。
-- 核心发布契约是 `combat_v1_rc1`；发布边界由 `FCombatReleaseContract`、版本常量、自动化和文档共同保护。
+- 当前发布契约是 `combat_v2_items_rc1`（物品；商店与经济仍关闭）；发布边界由 `FCombatReleaseContract`、版本常量、自动化和文档共同保护。
 - `Doc/CombatSystem/00-Project/00-01-Progress-Tracker.md` 是任务状态的唯一来源。`Doc/CombatSystem/00-Project/00-02-Implementation-Roadmap.md` 是历史 WBS 和 Gate 定义，不能用它判断当前完成度。
 - `Content/Combat/Demo` 是可玩内容；`Content/Combat/Tests` 和 `Source/Combat/Combat/Tests` 是验证基础设施，不能把测试专用旁路带入生产玩法。
 

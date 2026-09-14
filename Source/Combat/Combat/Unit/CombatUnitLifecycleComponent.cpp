@@ -7,6 +7,7 @@
 #include "Combat/Attributes/CombatAttributeSet.h"
 #include "Combat/Core/CombatTags.h"
 #include "Combat/Modifiers/CombatModifierComponent.h"
+#include "Combat/Items/CombatInventoryComponent.h"
 #include "Combat/Motion/CombatMotionComponent.h"
 #include "Combat/Order/CombatOrderComponent.h"
 #include "Combat/Scheduling/CombatSchedulerSubsystem.h"
@@ -45,6 +46,7 @@ bool UCombatUnitLifecycleComponent::RequestDeath(
 	{
 		Asc->CancelAllAbilities();
 	}
+	if (UCombatInventoryComponent* Inventory = Unit->GetCombatInventoryComponent()) Inventory->HandleOwnerDeath();
 	if (UCombatAttackComponent* Attacks = Unit->GetCombatAttackComponent())
 	{
 		Attacks->HandleOwnerDeath();
@@ -129,6 +131,7 @@ bool UCombatUnitLifecycleComponent::RespawnAtLocation(const FVector NewLocation)
 		Orders->HandleOwnerRespawn();
 	}
 	Unit->SetLifeStateFromLifecycle(ECombatLifeState::Alive);
+	if (UCombatInventoryComponent* Inventory = Unit->GetCombatInventoryComponent()) Inventory->ReconcileEffects();
 	if (UCombatAbilitySystemComponent* Asc = Unit->GetCombatAbilitySystemComponent())
 	{
 		Asc->ReconcileIntrinsicModifiers();

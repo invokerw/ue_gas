@@ -14,6 +14,9 @@
 #include "Combat/Modifiers/CombatModifierRuntime.h"
 #include "Combat/Targeting/CombatTargetingSubsystem.h"
 #include "Combat/Unit/CombatUnitCharacter.h"
+#include "Combat/Items/CombatInventoryComponent.h"
+#include "Combat/Items/CombatItemSubsystem.h"
+#include "Combat/View/CombatUnitViewComponent.h"
 
 UCombatAbilitySystemComponent::UCombatAbilitySystemComponent()
 {
@@ -151,6 +154,7 @@ bool UCombatAbilitySystemComponent::SetCombatAbilityLevel(
 	}
 	FGameplayAbilitySpec* Spec = FindAbilitySpecFromHandle(Handle);
 	const UCombatAbilityData* Data = GetCombatAbilityData(Handle);
+	if (IsItemAbility(Handle)) { OutFailureTag = CombatTags::Failure_ActionUnsupported; return false; }
 	if (!Spec || !Data)
 	{
 		OutFailureTag = CombatTags::Failure_Ability_NotGranted;
@@ -208,6 +212,7 @@ bool UCombatAbilitySystemComponent::RemoveCombatAbility(
 	PendingTargetData.Remove(Handle);
 	AutoCastStates.Remove(Handle);
 	ClearAbility(Handle);
+	ItemAbilityOwners.Remove(Handle);
 	return true;
 }
 
@@ -255,7 +260,7 @@ FGameplayAbilitySpec* UCombatAbilitySystemComponent::FindCombatAbilitySpecByDefi
 	for (FGameplayAbilitySpec& Spec : GetActivatableAbilities())
 	{
 		const UCombatGameplayAbility* Ability = Cast<UCombatGameplayAbility>(Spec.Ability.Get());
-		if (Ability && Ability->GetAbilityData()
+		if (!IsItemAbility(Spec.Handle) && Ability && Ability->GetAbilityData()
 			&& Ability->GetAbilityData()->GetPrimaryAssetId() == DefinitionId)
 		{
 			return &Spec;
@@ -301,12 +306,7 @@ bool UCombatAbilitySystemComponent::TryActivateCombatAbility(
 		OutFailureTag = CombatTags::Failure_Ability_AlreadyActive;
 		return false;
 	}
-	const bool bHardStateBlocked = HasMatchingGameplayTag(CombatTags::State_Stunned)
-		|| HasMatchingGameplayTag(CombatTags::State_Hexed)
-		|| HasMatchingGameplayTag(CombatTags::State_Frozen);
-	const bool bSilenceBlocked = HasMatchingGameplayTag(CombatTags::State_Silenced)
-		&& !Data->BehaviorTags.HasTagExact(CombatTags::Ability_Behavior_IgnoreSilence);
-	if (bHardStateBlocked || bSilenceBlocked)
+	if (IsCombatAbilityStateBlocked(Handle))
 	{
 		OutFailureTag = CombatTags::Failure_Ability_UnitStateBlocked;
 		return false;
@@ -363,6 +363,8 @@ void UCombatAbilitySystemComponent::ServerTryActivateCombatAbility_Implementatio
 	const FGameplayAbilitySpecHandle Handle,
 	const FCombatAbilityTargetData TargetData)
 {
+	// 物品网络激活必须携带生命和控制绑定信封，并经过共用 Order 限频；旧 RPC 保留英雄技能兼容。
+	if (IsItemAbility(Handle)) return;
 	FGameplayTag FailureTag;
 	TryActivateCombatAbility(Handle, TargetData, FailureTag);
 }
@@ -418,6 +420,7 @@ bool UCombatAbilitySystemComponent::PreflightCombatAbility(
 		OutFailureTag = CombatTags::Failure_Ability_InvalidLevel;
 		return false;
 	}
+	if (IsItemAbility(Handle) && (!GetCombatAvatar() || !GetCombatAvatar()->GetCombatInventoryComponent()->ValidateActive(GetAbilityItem(Handle), true, OutFailureTag))) return false;
 	const float ManaCost = AbilityData.GetSpecialValue(TEXT("mana_cost"), AbilityLevel);
 	if (!FMath::IsFinite(ManaCost) || ManaCost < 0.0f
 		|| GetNumericAttribute(UCombatAttributeSet::GetManaAttribute()) + KINDA_SMALL_NUMBER < ManaCost)
@@ -445,6 +448,30 @@ bool UCombatAbilitySystemComponent::CommitCombatAbilityStage(
 	OutFailureTag = FGameplayTag();
 	const bool bNeedCost = !bCostCommitted && AbilityData.CostCommitPoint == Stage;
 	const bool bNeedCooldown = !bCooldownCommitted && AbilityData.CooldownCommitPoint == Stage;
+	if (IsItemAbility(Handle))
+	{
+		ACombatUnitCharacter* Unit = GetCombatAvatar();
+		UCombatInventoryComponent* Inventory = Unit ? Unit->GetCombatInventoryComponent() : nullptr;
+		const FCombatItemHandle Item = GetAbilityItem(Handle);
+		if (!Inventory || IsCombatAbilityStateBlocked(Handle) || !Inventory->ValidateActive(Item, bNeedCost, OutFailureTag))
+		{
+			if (!OutFailureTag.IsValid()) OutFailureTag = CombatTags::Failure_Ability_UnitStateBlocked;
+			return false;
+		}
+		const float Cost = AbilityData.GetSpecialValue(TEXT("mana_cost"), AbilityLevel);
+		const float Cooldown = AbilityData.GetSpecialValue(TEXT("cooldown"), AbilityLevel);
+		if (bNeedCost && (!FMath::IsFinite(Cost) || Cost < 0.0f || GetNumericAttribute(UCombatAttributeSet::GetManaAttribute()) + KINDA_SMALL_NUMBER < Cost))
+		{
+			OutFailureTag = CombatTags::Failure_Ability_Cost; return false;
+		}
+		if (bNeedCooldown && (!FMath::IsFinite(Cooldown) || Cooldown < 0.0f || GetCombatAbilityCooldownRemaining(Handle) > 0.0f))
+		{
+			OutFailureTag = CombatTags::Failure_Ability_Cooldown; return false;
+		}
+		const float Cdr = FCombatNumericPolicyV1::ClampReduction(GetNumericAttribute(UCombatAttributeSet::GetCooldownReductionPctAttribute()));
+		return Inventory->CommitActiveStage(Item, Cost, Cooldown * (1.0f - Cdr), bNeedCost, bNeedCooldown,
+			bCostCommitted, bCooldownCommitted, OutFailureTag);
+	}
 	if (!bNeedCost && !bNeedCooldown)
 	{
 		return true;
@@ -500,6 +527,20 @@ bool UCombatAbilitySystemComponent::CommitCombatAbilityStage(
 float UCombatAbilitySystemComponent::GetCombatAbilityCooldownRemaining(
 	const FGameplayAbilitySpecHandle Handle) const
 {
+	if (IsItemAbility(Handle))
+	{
+		const UCombatItemSubsystem* Items = GetWorld() ? GetWorld()->GetSubsystem<UCombatItemSubsystem>() : nullptr;
+		const UCombatItemInstance* Item = Items ? Items->FindItem(GetAbilityItem(Handle)) : nullptr;
+		if (Item) return Item->GetCooldownRemaining(GetWorld()->GetTimeSeconds());
+		const ACombatUnitCharacter* Unit = GetCombatAvatar();
+		if (Unit && !Unit->HasAuthority() && Unit->GetCombatUnitViewComponent())
+		{
+			const UCombatUnitViewComponent* View = Unit->GetCombatUnitViewComponent();
+			for (const FCombatItemView& Entry : View->GetHUDOwnerView().Items)
+				if (Entry.AbilityHandle == Handle) return Entry.GetRemaining(View->GetEstimatedServerTimeSeconds());
+		}
+		return 0.0f;
+	}
 	const double* EndTime = CooldownEndTimes.Find(Handle);
 	return EndTime && GetWorld()
 		? static_cast<float>(FMath::Max(0.0, *EndTime - GetWorld()->GetTimeSeconds())) : 0.0f;
@@ -510,6 +551,27 @@ void UCombatAbilitySystemComponent::GetCombatAbilityCooldownWindow(
 {
 	OutEndTime = 0.0;
 	OutDuration = 0.0f;
+	if (IsItemAbility(Handle))
+	{
+		const UCombatItemSubsystem* Items = GetWorld() ? GetWorld()->GetSubsystem<UCombatItemSubsystem>() : nullptr;
+		const UCombatItemInstance* Item = Items ? Items->FindItem(GetAbilityItem(Handle)) : nullptr;
+		if (Item)
+		{
+			OutEndTime = GetWorld()->GetTimeSeconds() + Item->GetCooldownRemaining(GetWorld()->GetTimeSeconds()) / Item->GetCooldownRate();
+			OutDuration = Item->GetCooldownDuration() / Item->GetCooldownRate();
+		}
+		else if (const ACombatUnitCharacter* Unit = GetCombatAvatar(); Unit && !Unit->HasAuthority() && Unit->GetCombatUnitViewComponent())
+		{
+			const UCombatUnitViewComponent* View = Unit->GetCombatUnitViewComponent();
+			for (const FCombatItemView& Entry : View->GetHUDOwnerView().Items)
+				if (Entry.AbilityHandle == Handle && Entry.CooldownRate > 0.0f)
+				{
+					OutEndTime = View->GetEstimatedServerTimeSeconds() + Entry.GetRemaining(View->GetEstimatedServerTimeSeconds()) / Entry.CooldownRate;
+					OutDuration = Entry.CooldownDuration / Entry.CooldownRate;
+				}
+		}
+		return;
+	}
 	if (GetCombatAbilityCooldownRemaining(Handle) <= 0.0f) return;
 	if (const double* EndTime = CooldownEndTimes.Find(Handle)) OutEndTime = *EndTime;
 	if (const FActiveGameplayEffectHandle* EffectHandle = CooldownEffectHandles.Find(Handle))
@@ -541,7 +603,8 @@ void UCombatAbilitySystemComponent::ReconcileIntrinsicModifiers()
 void UCombatAbilitySystemComponent::CancelCombatAbilitiesBlockedByStatus(const FGameplayTag StatusTag)
 {
 	if (StatusTag != CombatTags::State_Stunned && StatusTag != CombatTags::State_Hexed
-		&& StatusTag != CombatTags::State_Frozen && StatusTag != CombatTags::State_Silenced)
+		&& StatusTag != CombatTags::State_Frozen && StatusTag != CombatTags::State_Silenced && StatusTag != CombatTags::State_Muted
+		&& StatusTag != CombatTags::State_OutOfGame)
 	{
 		return;
 	}
@@ -552,10 +615,7 @@ void UCombatAbilitySystemComponent::CancelCombatAbilitiesBlockedByStatus(const F
 		{
 			continue;
 		}
-		const UCombatAbilityData* Data = GetCombatAbilityData(Spec.Handle);
-		const bool bIgnoreSilence = Data
-			&& Data->BehaviorTags.HasTagExact(CombatTags::Ability_Behavior_IgnoreSilence);
-		if (StatusTag != CombatTags::State_Silenced || !bIgnoreSilence)
+		if (IsCombatAbilityStateBlocked(Spec.Handle))
 		{
 			HandlesToCancel.Add(Spec.Handle);
 		}
@@ -615,8 +675,7 @@ void UCombatAbilitySystemComponent::EmitAbilitySpecLog(
 	FCombatLogRecord Record;
 	Record.Context = Events->CreateRootEvent();
 	Record.EventType = EventType;
-	Record.Source.DirectSourceType = ECombatDirectSourceType::Ability;
-	Record.Source.AbilityDefinitionId = Data->GetPrimaryAssetId();
+	Record.Source = MakeAbilitySource(Handle);
 	Record.SourceActorId = Unit->GetUniqueID();
 	Record.TargetActorId = Unit->GetUniqueID();
 	Record.UnitLifeGeneration = Unit->GetLifeGeneration();
@@ -627,6 +686,7 @@ void UCombatAbilitySystemComponent::EmitAbilitySpecLog(
 
 bool UCombatAbilitySystemComponent::ReconcileIntrinsicModifier(const FGameplayAbilitySpecHandle Handle)
 {
+	if (IsItemAbility(Handle)) return true;
 	ACombatUnitCharacter* Unit = GetCombatAvatar();
 	const UCombatAbilityData* Data = GetCombatAbilityData(Handle);
 	if (!Unit || !Data)

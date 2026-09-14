@@ -35,6 +35,9 @@ bool FCombatGameplayEffectContext::NetSerialize(FArchive& Ar, UPackageMap* Map, 
 	Ar << Source.AbilityDefinitionId;
 	Ar << Source.ModifierDefinitionId;
 	Ar << Source.ProjectileDefinitionId;
+	Ar << Source.ItemDefinitionId;
+	Ar << Source.ItemHandle.Key.Id;
+	Ar << Source.ItemHandle.Key.Generation;
 
 	bOutSuccess = bBaseSuccess && !Ar.IsError();
 	return bBaseResult && bOutSuccess;

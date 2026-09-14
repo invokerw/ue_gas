@@ -1,6 +1,7 @@
 # 00-01 开发进度台账
 
-> 最后更新：2026-09-13
+> 最后更新：2026-09-14
+> 物品系统（2026-09-14）：ITEM-001 已通过用户游玩验收并获准本地提交。六装备/三背包、主动/被动、场景放下与走近拾取、HUD/日志及 v2 物品契约已落地；最终 Editor/Server/Client、Combat 82/82、资产 29/29、迁移器 3/3、冷启动 PIE、Dedicated 双客户端争用/控制互换及 64/256 容量通过。F0 GO、F1 APPROVED、F2 PASS、Push-Ready READY；未做 cook/打包、长时间浸泡和人工网络损伤，不推送。见 [Spec](../Specs/ITEM-001-item-system.spec.md)、[操作与配置](../10-Architecture/10-14-Item-System.md) 和 ADR-055。
 > 指示器修正（2026-09-13）：[AIM-002](../Specs/AIM-002-ground-only-indicators.spec.md) 已通过用户实机验收并获准本地提交；地面接收过滤与点目标地面查询已修复，保留 Hero 其他贴花。Editor、Combat.Input. 7/7、资产 17/17、三地图 114 个地面组件独立重载与原生 PIE 41/41（含 Hero 遮挡、坡道/高台 GPU 像素对照）通过；本轮不改变 RPC/复制/服务器结算，未重跑 Dedicated。
 > 技能指示器（2026-09-13）：AIM-001 连同 AIM-002 修正已通过用户验收；本地瞄准、范围预览与独立训练场已落地，首版 Editor/Server/Client 及最终增量构建、Combat 70/70、资产 17/17、PIE 22 项（含悬停和真实追近）与 Dedicated 双客户端通过，见 [Spec](../Specs/AIM-001-skill-indicators.spec.md)。
 > 当前阶段：M8、SAM 与 DEMO-901 卓尔游侠 Demo 均已通过用户验收
@@ -249,7 +250,7 @@
 
 证据：`Saved/BottomHUD/Validation.md`、`EditorBuild.log`、`ServerBuildFinal.log`、`ClientBuild.log`、`AutomationFinal/index.json`（2026.09.09-10.16.49 UTC）、`AssetReport.json`、`PIE-Client.png`、`DedicatedSummary.txt`。HUD 网络专项服务端检查 2 个拥有者 / 2 个技能，两客户端各检查 1 个拥有者 / 1 个技能，其他可见单位快照均为空。64 Unit / 256 Modifier 容量样本 Budget=Pass，移动单位位移 316.617 cm，静止单位 0 cm。
 
-范围（HUD-001–003 验收时）：等级 / 经验 / 物品 / 背包为视觉占位；等级与经验已由后续 PROG-001 接入服务器成长快照，物品与背包仍为占位。Demo 当前只授予一个可切换 AutoCast 的被动技能，Q 显示霜冻之箭，W/E/R 为空。头像为可替换的原创示意美术，技能 / Buff 无配置纹理时使用名称首字。未执行 cook / 打包；源码 UE 5.8.0 验证 Server/Client 编译，安装版 UE 5.8.1 验证资产和同版本独立 `-server/-game` 联机，沿用既有工具插件初始化和动态 GE 定义日志边界。后台测试进程已退出，不影响原有 SAM 用户验收状态。
+范围（HUD-001–003 验收时）：等级 / 经验 / 物品 / 背包为视觉占位；等级与经验已由后续 PROG-001 接入服务器成长快照，物品与背包由后续 ITEM-001 接入真实服务器库存。Demo 的英雄技能仍只授予一个可切换 AutoCast 的被动技能，Q 显示霜冻之箭，W/E/R 为空；物品主动独立使用 1–6。头像为可替换的原创示意美术，技能 / Buff 无配置纹理时使用名称首字。当时未执行 cook / 打包；源码 UE 5.8.0 验证 Server/Client 编译，安装版 UE 5.8.1 验证资产和同版本独立 `-server/-game` 联机，沿用既有工具插件初始化和动态 GE 定义日志边界。后台测试进程已退出，不影响原有 SAM 用户验收状态。
 
 ## 12.4 Post-M8：卓尔游侠 Demo 流程
 

@@ -30,6 +30,8 @@ class COMBAT_API UCombatOrderComponent : public UActorComponent
 
 public:
 	UCombatOrderComponent();
+	/** 物品输入在接收时与到达时共用身份校验，旅行期间不预占地面实例。 */
+	FCombatOperationResult ValidateItemOrder(const FCombatOrderRequest& Request) const;
 
 	/**
 	 * 在服务器验证并接收一条命令。bQueue=false 先取消当前项和全部排队项，再执行新命令；true 追加到队尾且受容量限制。

@@ -179,7 +179,7 @@ M0 已关闭授予身份和产品默认值，完整契约见 [90-01 M0 设计冻
 - Intrinsic Modifier 以 AbilitySpecHandle + DefinitionId 作为 owner key；授予、ActorInfo 重建和 respawn reconcile 幂等，移除 Spec 后不得残留。
 - AbilitySpec、等级、AutoCast 和 cooldown 默认跨 Death/Respawn 保留；活动实例在 Dying 被取消。
 
-技能点、经验和物品临时授予不属于第一版；未来只能调用相同服务器 API，不能成为第二套等级权威来源。
+成长组件已接入经验与技能点。物品主动使用独立实例 Spec、Item 冷却账本和既有公共 Action，不占英雄技能槽、不使用英雄技能点；同款物品允许重复 DefinitionId。物品的激活、提交、撤销和状态区别见 [10-14](10-14-Item-System.md)。
 
 ## 7. DataDriven Actions
 

@@ -97,6 +97,22 @@ void UCombatAttributeSet::PreAttributeChange(const FGameplayAttribute& Attribute
 	}
 }
 
+void UCombatAttributeSet::PreAttributeBaseChange(const FGameplayAttribute& Attribute, float& NewValue) const
+{
+	Super::PreAttributeBaseChange(Attribute, NewValue);
+	// 只限制 CurrentValue 会让自然回复一直增加 BaseValue；之后的扣蓝先抵消隐藏余额。
+	if (Attribute == GetHealthAttribute()) NewValue = FCombatNumericPolicyV1::ClampHealth(NewValue, GetMaxHealth());
+	if (Attribute == GetManaAttribute()) NewValue = FCombatNumericPolicyV1::ClampHealth(NewValue, GetMaxMana());
+}
+
+void UCombatAttributeSet::PostAttributeChange(const FGameplayAttribute& Attribute, float OldValue, float NewValue)
+{
+	Super::PostAttributeChange(Attribute, OldValue, NewValue);
+	// 属于属性集合自身的数值不变量；不是治疗或消耗事务，不发送虚假的伤害/治疗事件。
+	if (Attribute == GetMaxHealthAttribute() && GetHealth() > NewValue) SetHealth(NewValue);
+	if (Attribute == GetMaxManaAttribute() && GetMana() > NewValue) SetMana(NewValue);
+}
+
 void UCombatAttributeSet::PostGameplayEffectExecute(const FGameplayEffectModCallbackData& Data)
 {
 	Super::PostGameplayEffectExecute(Data);

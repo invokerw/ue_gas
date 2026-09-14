@@ -135,6 +135,16 @@
 - 指示器材质同时检查 stencil、CustomDepth/SceneDepth 一致和向上法线（Z >= 0.5），防止地面标记透过角色染到其身体，或沿平台侧壁拉伸。其他材质和角色 ReceivesDecals 不改。
 - 点目标的预览与三种确认方式共用地面查询，命中未配置组件/陡面/无地面时不提交、不重用旧点。Demo、训练与测试地图地面通过 Unreal API 迁移；配置步骤和验证边界见 [10-13](../10-Architecture/10-13-Skill-Indicators.md)。
 
+### ADR-055：独立物品实例与 post-v1 物品契约（2026-09-13）
+
+- 状态：设计已由用户审核并授权实现；执行与验证见 [ITEM-001 Spec](../Specs/ITEM-001-item-system.spec.md)。
+- 物品由 World 注册表持有稳定实例与位置真值，单位库存提供六装备/三背包操作，地面 Actor 只引用实例。普通死亡保留物品；World/Unit EndPlay 有明确清理，转移不新建副本。
+- 被动使用 Modifier/GE/Hook/Aura 公共入口并绑定物品来源；主动按物品实例授予 Spec，隔离英雄四槽和技能点。物品冷却独立于临时 Spec 且仅有注册表一份权威记录，ASC 委托查询/提交；装备 1 倍、背包/地面 0.5 倍，换入装备 6 秒休眠，均不因丢捡刷新。
+- 拾取/放下沿用 Order 与服务器 PathFollowing，即时换格共用连接安全状态且不打断普通移动。所有激活与提交入口检查真实物品归属、版本、装备/休眠/充能/状态；最终结果不同于初始 Accepted。
+- 当前发布身份迁为 `combat_v2_items_rc1`、ContractVersion 2，明确分离 ItemsEnabled=true 与 EconomyEnabled=false；保留旧合并字段为废弃兼容字段。标签 schema 2、事件 schema 2、展示 schema 7、日志展示 schema 2；Formula/RNG 与旧内容保持 v1，旧资产默认无物品。旧事件 JSON 迁移补空物品身份，未知新版本明确拒绝；联机双方同版本部署。
+- SourceContext 增加物品定义与实例身份，后续 Modifier/Projectile 保留来源快照；HUD/日志只消费只读投影。原始 M8 v1 验收证据保留，不把物品或经济追认进历史发布。
+- 回滚成组恢复源码、配置、明确修改的 Demo/UI 资产及新资产引用；需重跑三 Target、全量 Automation、资产/PIE、Dedicated 双客户端和容量/teardown，不以编译替代行为证据。
+
 ## 3. 本轮查漏补缺摘要
 
 原单体文档对 Damage、Modifier、Scheduler、AttackRecord 和网络权威已有较强约束；本轮新增或显式登记了以下遗漏：
@@ -189,7 +199,7 @@
 | --- | --- | --- | --- | --- |
 | GAP-014 | 已关闭（ADR-036） | Aura 没有 owner/target 生命周期 | 每 World registry、Scheduler Coalesce、统一 Targeting 与普通 child Modifier reconcile；完整规则见 [90-11 §4](../90-History/90-11-M6-Content-Decision.md#4-aura关闭-gap-014-的基线) | 2026-08-26 / EXT-601 |
 | GAP-015 | 明确延期（ADR-041） | Summon/illusion 的 Owner、Team、ASC、Order 权限 | 不属于 v1；发布契约固定 `bSummonsAndIllusions=false`。引入前新增独立 ADR，冻结独立 Unit/ASC、CommandingController 与 gameplay owner、Team 继承和 teardown Gate | post-v1 / 引入召唤物前 |
-| GAP-017 | 明确延期（ADR-041；成长部分由 ADR-049 兼容扩展） | 物品、背包、技能点、天赋、经验和经济 | 物品、背包、天赋和经济仍不属于 v1；经验与技能点按 ADR-049 接入 post-v1 成长组件，发布契约仍固定 `bItemsAndEconomy=false` | post-v1 |
+| GAP-017 | 部分解除（ADR-049、ADR-055） | 物品、背包、技能点、天赋、经验和经济 | 经验与技能点按 ADR-049 接入成长组件；物品与背包按 ADR-055 进入 `combat_v2_items_rc1`。天赋与经济仍延期；废弃合并字段保持 false，新能力字段分别表达物品开启、经济关闭 | post-v1 / v2 |
 | GAP-018 | 已关闭（ADR-040） | 目标容量/帧/带宽预算和池化触发阈值 | 预算、采样边界与优化触发规则见 [90-13 §7](../90-History/90-13-M7-Network-Observability-Decision.md#7-容量预算关闭-gap-018-的目标值)；64 Unit/256 Modifier 双客户端 soak 通过，验收证据见 [90-14](../90-History/90-14-M7-Acceptance.md) | 2026-08-27 / PERF-701 |
 | GAP-019 | 已关闭（ADR-039） | Combat Event schema 版本、存档/回放边界 | schema v1、环形诊断与明确不支持的 replay 边界见 [90-13 §6](../90-History/90-13-M7-Network-Observability-Decision.md#6-事件调试和回放边界关闭-gap-019-的目标值) | 2026-08-27 / OBS-701 |
 | GAP-021 | 已关闭（ADR-038） | RPC token bucket、批量命令上限和重复 request id 窗口 | ownership、20/s + 32 burst、8 Order/4096 bytes、128 RequestId 窗口及失败 Tag 见 [90-13 §3](../90-History/90-13-M7-Network-Observability-Decision.md#3-order-rpc-安全基线关闭-gap-021-的目标值) | 2026-08-27 / NET-002 |

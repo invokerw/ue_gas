@@ -80,6 +80,10 @@ public:
 
 	/** 在聚合值即将变化时应用 Numeric Policy v1 的有限值与区间约束。 */
 	virtual void PreAttributeChange(const FGameplayAttribute& Attribute, float& NewValue) override;
+	/** 瞬时 GE 修改资源基础值时也限幅，避免满蓝回复积累不可见余额并抵消后续费用。 */
+	virtual void PreAttributeBaseChange(const FGameplayAttribute& Attribute, float& NewValue) const override;
+	/** 最大资源降低时裁剪当前值；提高上限不补满，反复穿脱物品不能制造生命或法力。 */
+	virtual void PostAttributeChange(const FGameplayAttribute& Attribute, float OldValue, float NewValue) override;
 	/** 立即生效的效果执行后，将临时伤害/治疗转换为实际生命变化并回报；临时数值随后清零，不会成为持续累积的属性。 */
 	virtual void PostGameplayEffectExecute(const FGameplayEffectModCallbackData& Data) override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;

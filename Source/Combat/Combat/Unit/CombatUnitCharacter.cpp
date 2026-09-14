@@ -1,4 +1,5 @@
 #include "Combat/Unit/CombatUnitCharacter.h"
+#include "Combat/Items/CombatItemData.h"
 
 #include "Combat/Ability/CombatAbilitySystemComponent.h"
 #include "Combat/Ability/CombatGameplayAbility.h"
@@ -10,6 +11,8 @@
 #include "Combat/Data/CombatDefinitionData.h"
 #include "Combat/Log/CombatEventSubsystem.h"
 #include "Combat/Modifiers/CombatModifierComponent.h"
+#include "Combat/Items/CombatInventoryComponent.h"
+#include "Combat/Items/CombatItemData.h"
 #include "Combat/Motion/CombatMotionComponent.h"
 #include "Combat/Network/CombatNetworkSecuritySubsystem.h"
 #include "Combat/Order/CombatOrderComponent.h"
@@ -47,6 +50,7 @@ ACombatUnitCharacter::ACombatUnitCharacter(const FObjectInitializer& ObjectIniti
 	CombatOrderComponent = CreateDefaultSubobject<UCombatOrderComponent>(TEXT("CombatOrders"));
 	CombatMotionComponent = CreateDefaultSubobject<UCombatMotionComponent>(TEXT("CombatMotion"));
 	CombatUnitViewComponent = CreateDefaultSubobject<UCombatUnitViewComponent>(TEXT("CombatUnitView"));
+	CombatInventoryComponent = CreateDefaultSubobject<UCombatInventoryComponent>(TEXT("CombatInventory"));
 	CombatOverheadWidgetComponent = CreateDefaultSubobject<UCombatOverheadWidgetComponent>(TEXT("CombatOverheadUI"));
 	CombatOverheadWidgetComponent->SetupAttachment(GetRootComponent());
 	CombatOverheadWidgetComponent->SetRelativeLocation(FVector(0.0f, 0.0f, 145.0f));
@@ -244,8 +248,26 @@ FCombatOrderBatchResult ACombatUnitCharacter::ProcessOrderBatchForConnection(
 	for (int32 Index = 0; Index < Request.Orders.Num(); ++Index)
 	{
 		const bool bQueue = Request.bAppendToExistingQueue || Index > 0;
+		FCombatOrderRequest Order = Request.Orders[Index];
+		Order.RequestCorrelationId = Request.RequestId;
+		Order.RequestOrderIndex = Index;
+		Order.RequestControlGeneration = Request.CommandBindingGeneration;
+		const bool bItemRequest = Order.ItemHandle.IsValid() || Order.Type == ECombatOrderType::PickupItem
+			|| Order.Type == ECombatOrderType::DropItem || Order.Type == ECombatOrderType::SwapItems
+			|| CombatAbilitySystemComponent->IsItemAbility(Order.AbilitySpecHandle);
+		const ACombatPlayerController* Player = Cast<ACombatPlayerController>(RequestingController);
+		if (bItemRequest && (Request.UnitLifeGeneration != GetLifeGeneration() || !Player
+			|| Request.CommandBindingGeneration != Player->GetCommandBindingGeneration()))
+		{
+			FCombatOrderResult& Rejected = Result.OrderResults.AddDefaulted_GetRef();
+			Rejected.RequestId = Request.RequestId;
+			Rejected.FailureTag = CombatTags::Failure_Item_Stale;
+			continue;
+		}
+		CombatOrderComponent->OnOrderFinished().RemoveAll(this);
+		CombatOrderComponent->OnOrderFinished().AddUObject(this, &ACombatUnitCharacter::HandleOrderFinished);
 		FCombatOrderResult& OrderResult = Result.OrderResults.Add_GetRef(
-			CombatOrderComponent->IssueOrder(Request.Orders[Index], bQueue));
+			CombatOrderComponent->IssueOrder(Order, bQueue));
 		Result.AcceptedOrderCount += OrderResult.bSuccess ? 1 : 0;
 	}
 	return Result;
@@ -259,6 +281,24 @@ void ACombatUnitCharacter::ClientReceiveOrderBatchResult_Implementation(FCombatO
 		LastOrderBatchResult.bAccepted ? TEXT("true") : TEXT("false"),
 		LastOrderBatchResult.AcceptedOrderCount, *LastOrderBatchResult.FailureTag.ToString());
 	OnOrderBatchResult.Broadcast(LastOrderBatchResult);
+}
+
+void ACombatUnitCharacter::HandleOrderFinished(const FCombatOrderResult& Result)
+{
+	if (HasAuthority() && Result.RequestId > 0 && Result.ItemHandle.IsValid())
+	{
+		FCombatOrderResult Snapshot = Result;
+		Snapshot.UnitLifeGeneration = Result.Handle.Key.LifeGeneration;
+		ClientReceiveOrderFinalResult(Snapshot);
+	}
+}
+
+void ACombatUnitCharacter::ClientReceiveOrderFinalResult_Implementation(FCombatOrderResult Result)
+{
+	const ACombatPlayerController* Player = Cast<ACombatPlayerController>(GetCommandingPlayerController());
+	if (!Player || !Player->IsLocalController() || Result.UnitLifeGeneration != GetLifeGeneration()
+		|| Result.ControlGeneration != Player->GetCommandBindingGeneration()) return;
+	OnOrderFinalResult.Broadcast(Result);
 }
 
 UAbilitySystemComponent* ACombatUnitCharacter::GetAbilitySystemComponent() const
@@ -339,6 +379,14 @@ bool ACombatUnitCharacter::InitializeFromUnitData(UCombatUnitData* InUnitData)
 		}
 	}
 
+	// 出生物品先校验完整清单，非法内容不能在属性初始化后才被发现。
+	if (InUnitData->InitialItems.Num() > CombatItems::TotalSlots - CombatInventoryComponent->GetItemCount()) return false;
+	for (const FCombatInitialItem& Entry : InUnitData->InitialItems)
+	{
+		const UCombatItemData* Item = Entry.Item.LoadSynchronous();
+		FString ItemError;
+		if (!Item || !Item->ValidateRuntime(ItemError) || Entry.Quantity < 1 || Entry.Quantity > Item->MaxStack) return false;
+	}
 	UnitData = InUnitData;
 	if (TeamId != InUnitData->InitialTeamId)
 	{
@@ -395,6 +443,16 @@ bool ACombatUnitCharacter::InitializeFromUnitData(UCombatUnitData* InUnitData)
 		InUnitData->InitialLevel, InUnitData->InitialExperience))
 	{
 		return false;
+	}
+	for (const FCombatInitialItem& Entry : InUnitData->InitialItems)
+	{
+		FCombatItemHandle Handle;
+		FGameplayTag Failure;
+		if (!CombatInventoryComponent->GiveItem(Entry.Item.LoadSynchronous(), Entry.Quantity, Handle, Failure))
+		{
+			UE_LOG(LogCombat, Error, TEXT("Initial item grant failed Unit=%s Item=%s Failure=%s"), *GetName(), *Entry.Item.ToString(), *Failure.ToString());
+			return false;
+		}
 	}
 	InitializedUnitDefinitionId = RequestedId;
 	// 动态 Spawn 的最小 World 可能在 BeginPlay 后才具备最终 Authority/Owner；初始化结束再应用一次产品策略。
@@ -512,6 +570,8 @@ void ACombatUnitCharacter::BeginPlay()
 
 void ACombatUnitCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+	// 必须在 ASC ActorInfo 和 ModifierComponent 清理之前释放物品授予与精确效果。
+	if (CombatInventoryComponent) CombatInventoryComponent->ClearInventory();
 	if (HasAuthority())
 	{
 		if (ACombatPlayerController* CommandingController = Cast<ACombatPlayerController>(GetCommandingPlayerController()))

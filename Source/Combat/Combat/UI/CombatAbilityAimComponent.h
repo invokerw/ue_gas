@@ -104,6 +104,9 @@ private:
 	TWeakObjectPtr<ACombatUnitCharacter> SessionUnit;
 	int32 BindingGeneration = 0;
 	uint32 LifeGeneration = 0;
+	/** 物品瞄准额外绑定实例和修订，换槽或消耗后旧确认立即失效。 */
+	FCombatItemHandle ActiveItemHandle;
+	int32 ActiveItemRevision = 0;
 	FCombatAbilityAimPreview Preview;
 	FDelegateHandle DeactivateHandle;
 	TWeakObjectPtr<ACombatUnitCharacter> ReceiptUnit;

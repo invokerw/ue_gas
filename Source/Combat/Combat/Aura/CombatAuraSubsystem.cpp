@@ -278,6 +278,8 @@ bool UCombatAuraSubsystem::ReconcileRecord(FCombatAuraRuntimeRecord& Record)
 		Request.Source = Owner;
 		Request.ModifierData = Record.Spec.ChildModifierData;
 		Request.DurationOverride = Record.Spec.ChildDurationOverride;
+		Request.ItemOwnerHandle = Record.Spec.SourceContext.ItemHandle;
+		Request.SourceContext = Record.Spec.SourceContext;
 		const FCombatModifierApplyResult ApplyResult = Target->GetCombatModifierComponent()->ApplyModifier(Request);
 		if (ApplyResult.bSuccess && ApplyResult.Handle.IsValid())
 		{
