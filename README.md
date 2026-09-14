@@ -17,7 +17,7 @@ Combat 当前位于 `Combat` 单 Runtime Module 中，不是独立插件或独�
 ## 快速入口
 
 1. 安装 UE 5.8，并确保 Git LFS 已拉取 `.uasset`、`.umap` 等二进制资产。
-2. 打开 `ue_gas.uproject`。可玩 Demo 地图位于 `/Game/Combat/Demo/Maps/L_CombatDemo`。
+2. **一般情况下请使用下载版 UE 启动项目并打开 `ue_gas.uproject`。** 可玩 Demo 地图位于 `/Game/Combat/Demo/Maps/L_CombatDemo`。只有需要测试 Dedicated Server 时，才切换到源码编译版 UE。
 3. 自动化测试地图位于 `/Game/Combat/Tests/L_CombatTest`。
 4. Combat C++ 入口位于 `Source/Combat/Combat`；新增技能先阅读 [公共技能扩展与迁移指南](Doc/CombatSystem/20-Content/20-03-M8-Public-Extension-Guide.md)。
 5. AI 协作开发先阅读 [AI-Native 开发流程与文档体系](Doc/CombatSystem/00-Project/00-05-AI-Native-Development-Workflow.md)，新需求或修复使用 [Spec 模板](Doc/CombatSystem/Specs/_template.spec.md)。
@@ -104,8 +104,8 @@ notepad .env
 
 配置两个编辑器入口：
 
-- `UE_INSTALLED_EDITOR`：Launcher/下载版 `UnrealEditor.exe`，用于普通 Editor、Automation 和资产校验。
-- `UE_SOURCE_EDITOR`：从源码编译的 `UnrealEditor.exe`，用于 Server/Client Target 和 Dedicated smoke。工具会从该路径上溯找到源码引擎根目录，并检查 `Engine/Build/BatchFiles/Build.bat`。
+- `UE_INSTALLED_EDITOR`：Launcher/下载版 `UnrealEditor.exe`。这是**默认入口**，用于打开项目、日常 Demo、普通 Editor、Automation 和资产校验。
+- `UE_SOURCE_EDITOR`：从源码编译的 `UnrealEditor.exe`。这是 **Dedicated Server 测试专用入口**，仅在构建/运行 Server/Client Target 或 Dedicated smoke 时使用；工具会从该路径上溯找到源码引擎根目录，并检查 `Engine/Build/BatchFiles/Build.bat`。
 
 检查配置状态：
 
@@ -123,8 +123,15 @@ python Tools/ue_environment.py check --require dedicated --json
 
 日志和进程摘要写入 `Saved/UEEnvironment/Dedicated/`。脚本只清理本次启动的 UE 进程。
 
+需要构建 Server/Client Target 时，使用源码版 UE：
+
 ```powershell
 & "<UE_SOURCE_ROOT>\Engine\Build\BatchFiles\Build.bat" ue_gasEditor Win64 Development "<REPO>\ue_gas.uproject" -WaitMutex
+```
+
+普通 Editor、Automation 和资产校验使用下载版 UE：
+
+```powershell
 
 & "<UE_INSTALLED_ROOT>\Engine\Binaries\Win64\UnrealEditor-Cmd.exe" "<REPO>\ue_gas.uproject" `
   -unattended -nop4 -nosplash -NullRHI -NoSound `
@@ -135,6 +142,8 @@ python Tools/ue_environment.py check --require dedicated --json
   -run=CombatAssetValidation -Unattended -NoP4 `
   -Report="<REPO>\Saved\CombatValidation\CombatAssetReport.json"
 ```
+
+上面的源码引擎 Build 命令只用于需要 Dedicated Server 的测试准备；日常打开项目不需要源码引擎。Dedicated Server + 两客户端 smoke 仍通过 `Tools/RunDedicated.ps1` 使用源码版 UE。
 
 上面的 `<UE_SOURCE_ROOT>` 和 `<UE_INSTALLED_ROOT>` 只是命令中的说明占位符；实际路径以 `.env` 中的两个编辑器文件位置为准。Dedicated Server/Client Target 需要支持该 Target 的源码引擎。详细环境边界见 [M1 环境决策](Doc/CombatSystem/90-History/90-02-M1-Environment-Decision.md)，完整测试分层见 [测试计划](Doc/CombatSystem/00-Project/00-03-Test-Plan.md)。
 
