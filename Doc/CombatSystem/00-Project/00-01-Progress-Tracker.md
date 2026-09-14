@@ -2,6 +2,8 @@
 
 > 最后更新：2026-09-14
 > 物品系统（2026-09-14）：ITEM-001 已通过用户游玩验收并获准本地提交。六装备/三背包、主动/被动、场景放下与走近拾取、HUD/日志及 v2 物品契约已落地；最终 Editor/Server/Client、Combat 82/82、资产 29/29、迁移器 3/3、冷启动 PIE、Dedicated 双客户端争用/控制互换及 64/256 容量通过。F0 GO、F1 APPROVED、F2 PASS、Push-Ready READY；未做 cook/打包、长时间浸泡和人工网络损伤，不推送。见 [Spec](../Specs/ITEM-001-item-system.spec.md)、[操作与配置](../10-Architecture/10-14-Item-System.md) 和 ADR-055。
+> HUD 技能点击（2026-09-14）：HUD-ABILITY-CLICK-001 已完成技能槽左键施法接入；点击复用 Q/W/E/R 的无目标、目标瞄准和 AutoCast 链路，右键在未瞄准时固定详情，升级按钮保持优先。安装版 UE 5.8.2 Editor 构建、HUD 5/5、AbilityAim 4/4、全量 Combat 83/83、文档校验和交付 Gate 通过；真实交互 PIE 已由 HUD-ABILITY-CLICK-002 后续回归覆盖，用户已验收并授权本地提交，见 [Spec](../Specs/HUD-ABILITY-CLICK-001-skill-hud-click.spec.md) 与 ADR-056。
+> HUD 技能取消后换槽（2026-09-14）：HUD-ABILITY-CLICK-002 已定位为 GameAndUI 焦点切换触发 `FlushPressedKeys` 清掉同一 MouseDown 新建的技能会话；HUD 请求现排到下一帧，右键取消后另一技能首击进入指示器。安装版 UE 5.8.2 构建、Editor 输入回归、全量 Automation、真实 PIE 首击、文档校验与交付 Gate 均通过；用户已验收并授权本地提交，见 [Spec](../Specs/HUD-ABILITY-CLICK-002-cancel-reclick.spec.md) 与 ADR-057。
 > 指示器修正（2026-09-13）：[AIM-002](../Specs/AIM-002-ground-only-indicators.spec.md) 已通过用户实机验收并获准本地提交；地面接收过滤与点目标地面查询已修复，保留 Hero 其他贴花。Editor、Combat.Input. 7/7、资产 17/17、三地图 114 个地面组件独立重载与原生 PIE 41/41（含 Hero 遮挡、坡道/高台 GPU 像素对照）通过；本轮不改变 RPC/复制/服务器结算，未重跑 Dedicated。
 > 技能指示器（2026-09-13）：AIM-001 连同 AIM-002 修正已通过用户验收；本地瞄准、范围预览与独立训练场已落地，首版 Editor/Server/Client 及最终增量构建、Combat 70/70、资产 17/17、PIE 22 项（含悬停和真实追近）与 Dedicated 双客户端通过，见 [Spec](../Specs/AIM-001-skill-indicators.spec.md)。
 > 当前阶段：M8、SAM 与 DEMO-901 卓尔游侠 Demo 均已通过用户验收
@@ -291,6 +293,8 @@
 用户验收状态：`用户已验收`（2026-09-13）；F0 GO、F1 APPROVED、F2 PASS、Push-Ready READY，自评 4.7/5。用户明确确认“验收完成，提交吧”，授权本地 Git 提交。
 
 HUD-LOG-002 追加交互状态：`用户已验收`（2026-09-13）；F0 GO、F1 APPROVED、F2 PASS、Push-Ready READY，自评 4.8/5。拖动增量未重跑 Server/Client、Dedicated 或 cook，原因是仅修改本地 UI；验收归档仅更新状态和检查提交内容。
+
+HUD-ABILITY-CLICK-001/002 追加验收状态：`用户已验收`（2026-09-14）；F0 GO、F1 APPROVED、F2 PASS、Push-Ready READY。用户确认技能 HUD 点击、右键取消和换槽首击行为，授权本地 Git 提交。
 
 ## 13. 用户验收记录
 

@@ -71,6 +71,8 @@ void UCombatHUDWidget::NativeConstruct()
 		Entry->OnDetailRequested.AddUObject(this, &UCombatHUDWidget::HandleDetail, Entry);
 		Entry->OnUpgradeRequested.RemoveAll(this);
 		Entry->OnUpgradeRequested.AddUObject(this, &UCombatHUDWidget::HandleUpgradeRequested);
+		Entry->OnAbilityUseRequested.RemoveAll(this);
+		Entry->OnAbilityUseRequested.AddUObject(this, &UCombatHUDWidget::HandleAbilityUseRequested);
 	}
 	CombatHUD::Text(LevelText, TEXT("—"));
 	CombatHUD::Text(ExperienceText, TEXT(""));
@@ -161,6 +163,7 @@ void UCombatHUDWidget::NativeDestruct()
 		if (!Entry) continue;
 		Entry->OnDetailRequested.RemoveAll(this);
 		Entry->OnUpgradeRequested.RemoveAll(this);
+		Entry->OnAbilityUseRequested.RemoveAll(this);
 	}
 	if (CloseDetailButton) CloseDetailButton->OnClicked.RemoveDynamic(this, &UCombatHUDWidget::CloseDetail);
 	Super::NativeDestruct();
@@ -407,6 +410,24 @@ void UCombatHUDWidget::HandleUpgradeRequested(UCombatHUDSlotWidget* Source)
 	}
 }
 
+void UCombatHUDWidget::HandleAbilityUseRequested(UCombatHUDSlotWidget* Source)
+{
+	if (!Source || !BoundUnit.IsValid() || !DisplaySnapshot.LifeGeneration)
+	{
+		return;
+	}
+	const TArray<UCombatHUDSlotWidget*> Slots = GetSkillWidgets();
+	const int32 Index = Slots.IndexOfByKey(Source);
+	if (!DisplaySnapshot.Abilities.IsValidIndex(Index))
+	{
+		return;
+	}
+	if (ACombatPlayerController* PC = Cast<ACombatPlayerController>(GetOwningPlayer()))
+	{
+		PC->ActivateCombatAbilitySlotFromHUD(Index);
+	}
+}
+
 FText UCombatHUDWidget::BuildHeroDetail() const
 {
 	if (!BoundView.IsValid()) return FText::GetEmpty();
@@ -452,10 +473,14 @@ FReply UCombatHUDWidget::NativeOnPreviewMouseButtonDown(const FGeometry& Geometr
 {
 	if (Event.GetEffectingButton() == EKeys::RightMouseButton && IsScreenPositionOverUI(Event.GetScreenSpacePosition()))
 	{
-		const ACombatPlayerController* ItemPC = Cast<ACombatPlayerController>(GetOwningPlayer());
-		if (ItemPC && !ItemPC->GetAbilityAimComponent()->IsAiming() && !ItemPC->IsChoosingItemDrop())
+		const ACombatPlayerController* CombatPC = Cast<ACombatPlayerController>(GetOwningPlayer());
+		if (CombatPC && !CombatPC->GetAbilityAimComponent()->IsAiming() && !CombatPC->IsChoosingItemDrop())
+		{
 			for (UCombatHUDItemSlotWidget* Entry : GetItemWidgets())
 				if (Entry && Entry->GetCachedGeometry().IsUnderLocation(Event.GetScreenSpacePosition())) return FReply::Unhandled();
+			for (UCombatHUDSlotWidget* Entry : GetSkillWidgets())
+				if (Entry && Entry->GetCachedGeometry().IsUnderLocation(Event.GetScreenSpacePosition())) return FReply::Unhandled();
+		}
 		if (ACombatPlayerController* PC = Cast<ACombatPlayerController>(GetOwningPlayer())) PC->CancelCombatTargeting();
 		return FReply::Handled();
 	}

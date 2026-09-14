@@ -8,7 +8,7 @@
 
 Controller 的 `Input|Abilities / 技能施法方式` 可选标准、按下快施或松开快施。快施只改变确认时机；松开必须属于仍有效的同一会话。换技能、输入 Canceled、失焦或 UI 上松开不会使用旧落点。所有按键继续使用现有 InputAction 和 IMC 映射。
 
-悬停技能槽显示已知范围，点击仍固定详情。底部 HUD、技能升级按钮、详情和日志入口/窗口阻断世界点击；日志拖动捕获期间也阻断。HUD 消费 Escape 时同步取消瞄准。
+悬停技能槽显示已知范围。左键点击技能槽复用 Q/W/E/R 输入：目标技能进入瞄准并由世界左键确认，无目标技能立即提交，AutoCast 技能请求服务器切换；未瞄准时右键固定详情，瞄准期间右键取消。底部 HUD、技能升级按钮、详情和日志入口/窗口阻断世界点击；日志拖动捕获期间也阻断。HUD 消费 Escape 时同步取消瞄准。
 
 ## 2. 三层视觉与状态
 
@@ -42,7 +42,7 @@ Controller 的 `Input|Abilities / 技能施法方式` 可选标准、按下快�
 
 Controller 解释输入并独占 `SubmitCombatOrder`。不复制的 `UCombatAbilityAimComponent` 保存弱 Unit、SpecHandle、SessionSerial、CommandBindingGeneration、LifeGeneration。确认时重新追踪、匹配授予身份并通过公共 Targeting 本地预检，再生成一次原有 Cast 请求。
 
-Tick 只整理展示，不查询全场单位、不预测命中、不发送逐帧 RPC。换技能、控制转移、死亡/复活、撤销授予、Owner EndPlay、视口按键冲刷、应用失焦和 World teardown 使旧会话失效。旧 KeyUp 和旧 RequestId 回执无法确认新会话。
+Tick 只整理展示，不查询全场单位、不预测命中、不发送逐帧 RPC。换技能、控制转移、死亡/复活、撤销授予、Owner EndPlay、视口按键冲刷、应用失焦和 World teardown 使旧会话失效。HUD 点击请求在焦点切换收尾后下一帧启动；显式取消会清除尚未执行的请求，旧 KeyUp 和旧 RequestId 回执无法确认新会话。
 
 提交前关联原有 `OnOrderBatchResult`；匹配绑定/生命的首个回执仅显示“指令已接收”或“施法指令被拒绝”，不宣称技能完成，不自动重发。提示到期解绑。实际技能阶段继续取公共 UnitView。
 

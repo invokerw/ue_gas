@@ -177,6 +177,7 @@ void ACombatPlayerController::OnRep_CommandBindingGeneration()
 
 void ACombatPlayerController::RefreshCommandBinding()
 {
+	if (GetWorld()) GetWorld()->GetTimerManager().ClearTimer(PendingHUDAbilityTimer);
 	PendingDropItem = {};
 	ItemFeedbackRequest = 0;
 	ItemFeedbackText = FText::GetEmpty();
@@ -277,6 +278,7 @@ void ACombatPlayerController::OnInputStarted()
 
 void ACombatPlayerController::BeginDestinationInput(const FHitResult& Hit)
 {
+	if (GetWorld()) GetWorld()->GetTimerManager().ClearTimer(PendingHUDAbilityTimer);
 	const bool bWasAbilityAiming = AbilityAimComponent && AbilityAimComponent->IsAiming();
 	const bool bWasDroppingItem = PendingDropItem.IsValid();
 	PendingDropItem = {};
@@ -494,6 +496,29 @@ void ACombatPlayerController::OnAbilitySlotW() { ActivateCombatAbilitySlot(1); }
 void ACombatPlayerController::OnAbilitySlotE() { ActivateCombatAbilitySlot(2); }
 void ACombatPlayerController::OnAbilitySlotR() { ActivateCombatAbilitySlot(3); }
 
+void ACombatPlayerController::ActivateCombatAbilitySlotFromHUD(const int32 SlotIndex)
+{
+	if (!IsLocalController() || SlotIndex < 0 || SlotIndex >= 4)
+	{
+		return;
+	}
+	if (!GetWorld())
+	{
+		ActivateCombatAbilitySlot(SlotIndex);
+		return;
+	}
+	GetWorld()->GetTimerManager().ClearTimer(PendingHUDAbilityTimer);
+	TWeakObjectPtr<ACombatPlayerController> WeakThis(this);
+	PendingHUDAbilityTimer = GetWorld()->GetTimerManager().SetTimerForNextTick(
+		FTimerDelegate::CreateWeakLambda(this, [WeakThis, SlotIndex]()
+		{
+			if (ACombatPlayerController* PC = WeakThis.Get())
+			{
+				PC->ActivateCombatAbilitySlot(SlotIndex);
+			}
+		}));
+}
+
 void ACombatPlayerController::ActivateCombatAbilitySlot(const int32 SlotIndex)
 {
 	PendingDropItem = {};
@@ -579,6 +604,7 @@ void ACombatPlayerController::ConfirmAbilityTarget(const FHitResult& Hit, const 
 
 void ACombatPlayerController::CancelCombatTargeting()
 {
+	if (!bFlushingPressedKeys && GetWorld()) GetWorld()->GetTimerManager().ClearTimer(PendingHUDAbilityTimer);
 	PendingDropItem = {};
 	for (uint64& Serial : ItemPressSerials) Serial = 0;
 	CancelAttackTargeting();
@@ -589,7 +615,9 @@ void ACombatPlayerController::CancelCombatTargeting()
 
 void ACombatPlayerController::FlushPressedKeys()
 {
+	bFlushingPressedKeys = true;
 	CancelCombatTargeting();
+	bFlushingPressedKeys = false;
 	Super::FlushPressedKeys();
 }
 

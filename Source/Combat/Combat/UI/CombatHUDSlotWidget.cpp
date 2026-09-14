@@ -109,6 +109,7 @@ void UCombatHUDSlotWidget::ShowAbility(const FCombatHUDAbilityView& Ability, con
 {
 	using namespace CombatHUDSlot;
 	if (!Ability.DefinitionId.IsValid()) { ClearEntry(); if (HotkeyText) HotkeyText->SetText(Key); return; }
+	bIsAbilityEntry = true;
 	// 某些旧版蓝图在尚未加入视口时不会执行 NativeConstruct；首次显示时补建按钮。
 	CreateRuntimeUpgradeButton();
 	if (UButton* Button = GetEffectiveUpgradeButton())
@@ -162,6 +163,7 @@ void UCombatHUDSlotWidget::ShowModifier(const FCombatModifierView& Modifier, dou
 	const FText& Name, UTexture2D* Texture)
 {
 	using namespace CombatHUDSlot;
+	bIsAbilityEntry = false;
 	if (UButton* Button = GetEffectiveUpgradeButton()) Button->SetVisibility(ESlateVisibility::Collapsed);
 	SetIcon(Texture, Name);
 	const bool bInfinite = Modifier.ServerEndTime <= 0.0;
@@ -184,6 +186,7 @@ void UCombatHUDSlotWidget::ShowModifier(const FCombatModifierView& Modifier, dou
 
 void UCombatHUDSlotWidget::ClearEntry()
 {
+	bIsAbilityEntry = false;
 	DetailText = FText::GetEmpty();
 	SetIcon(nullptr, FText::FromString(TEXT("—")));
 	for (UTextBlock* Label : { CostText.Get(), CountText.Get(), StackText.Get(), RankText.Get() })
@@ -221,10 +224,22 @@ FReply UCombatHUDSlotWidget::NativeOnMouseButtonDown(const FGeometry& Geometry, 
 				return FReply::Handled();
 			}
 		}
+		if (bIsAbilityEntry)
+		{
+			// 技能槽左键与 Q/W/E/R 共用同一 Controller 入口；目标技能后续仍由世界确认。
+			OnAbilityUseRequested.Broadcast(this);
+			return FReply::Handled();
+		}
 		OnDetailRequested.Broadcast(DetailText, true);
 		return FReply::Handled();
 	}
-	// 面板内右键也不能透传成地图移动；技能与物品本轮只有信息交互。
+	if (Event.GetEffectingButton() == EKeys::RightMouseButton && bIsAbilityEntry)
+	{
+		// 未瞄准时允许右键固定技能详情；父 HUD 会在瞄准期间优先取消会话。
+		OnDetailRequested.Broadcast(DetailText, true);
+		return FReply::Handled();
+	}
+	// 面板内右键也不能透传成地图移动。
 	if (Event.GetEffectingButton() == EKeys::RightMouseButton) return FReply::Handled();
 	return Super::NativeOnMouseButtonDown(Geometry, Event);
 }
@@ -234,5 +249,6 @@ void UCombatHUDSlotWidget::NativeDestruct()
 	if (UButton* Button = GetEffectiveUpgradeButton()) Button->OnClicked.RemoveDynamic(this, &UCombatHUDSlotWidget::HandleUpgradeClicked);
 	OnDetailRequested.Clear();
 	OnUpgradeRequested.Clear();
+	OnAbilityUseRequested.Clear();
 	Super::NativeDestruct();
 }

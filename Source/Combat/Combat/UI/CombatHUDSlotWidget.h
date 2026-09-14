@@ -13,13 +13,15 @@ class UTexture2D;
 class UCombatHUDSlotWidget;
 class UButton;
 
-/** 槽位请求主 HUD 显示详情；空文本结束悬停，点击请求固定。 */
+/** 槽位请求主 HUD 显示详情；空文本结束悬停，固定由详情入口触发。 */
 DECLARE_MULTICAST_DELEGATE_TwoParams(FCombatHUDDetailRequested, const FText&, bool);
 /** 技能升级按钮请求主 HUD 向服务器提交一次技能加点。 */
 DECLARE_MULTICAST_DELEGATE_OneParam(FCombatHUDUpgradeRequested, UCombatHUDSlotWidget*);
+/** 技能槽请求主 HUD 使用对应的 Q/W/E/R 槽位；只传递本地 UI 来源，不直接触发战斗结算。 */
+DECLARE_MULTICAST_DELEGATE_OneParam(FCombatHUDAbilityUseRequested, UCombatHUDSlotWidget*);
 
-/** 技能与 Buff 蓝图的只读适配；所有控件和样式由 Designer 提供，空绑定安全跳过。 */
-UCLASS(Blueprintable, meta=(DisplayName="战斗 HUD 槽位", ToolTip="显示技能或 Buff 的只读内容，不提交战斗请求。"))
+/** 技能与 Buff 蓝图的展示适配；技能左键只发本地使用意图，所有控件和样式由 Designer 提供。 */
+UCLASS(Blueprintable, meta=(DisplayName="战斗 HUD 槽位", ToolTip="显示技能或 Buff；技能左键发出本地使用意图，Buff 只展示详情。"))
 class COMBAT_API UCombatHUDSlotWidget : public UUserWidget
 {
 	GENERATED_BODY()
@@ -33,6 +35,7 @@ public:
 	void ClearEntry();
 	FCombatHUDDetailRequested OnDetailRequested;
 	FCombatHUDUpgradeRequested OnUpgradeRequested;
+	FCombatHUDAbilityUseRequested OnAbilityUseRequested;
 	const FText& GetDetailText() const { return DetailText; }
 	/** 公共显示规则，供展示与自动化共用；剩余时间不会为负或 NaN。 */
 	static float Remaining(double EndTime, double ServerTime);
@@ -62,6 +65,7 @@ protected:
 	UPROPERTY(EditDefaultsOnly, Category="Appearance", meta=(DisplayName="减益颜色", ToolTip="减益图标和持续时间环的颜色。"))
 	FLinearColor DebuffColor = FLinearColor(0.75f, 0.31f, 0.26f);
 private:
+	friend class FCombatHUDSkillClickTest;
 	/** 为旧版技能槽蓝图补建位于技能图标上方的“+”按钮。 */
 	void CreateRuntimeUpgradeButton();
 	/** UButton 点击回调；只广播 UI 请求，不直接修改 ASC。 */
@@ -72,4 +76,6 @@ protected:
 	FText DetailText;
 private:
 	UPROPERTY(Transient) TObjectPtr<class UButton> RuntimeUpgradeButton;
+	/** 当前内容是否为已复制的 Ability；Buff 或空槽点击仍只处理详情/输入消费。 */
+	bool bIsAbilityEntry = false;
 };

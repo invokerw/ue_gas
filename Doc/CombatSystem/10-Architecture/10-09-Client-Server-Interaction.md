@@ -65,7 +65,8 @@ owning client 调用 `ACombatUnitCharacter::ServerIssueOrderBatch`。服务器�
 - 鼠标右键（`IMC_Default` 当前映射）直接点中可选敌方单位时，提交一次替换型 `AttackTarget`；由服务器追击、转身、前摇并持续普攻。按住及松开这次右键不会再提交移动或重置攻击周期。
 - 按 A 显示选敌准星，再左键点中可选敌人确认 `AttackTarget`。点地面、友军、自身或不可选目标时保留选敌模式，不自动选择附近敌人，也不执行 Attack Move。
 - S 清理本地手势并通过同一 RPC 提交 `Stop`；Escape 退出本地攻击选敌或技能瞄准。右键和 Q/W/E/R 输入也会退出选敌模式；攻击确认、技能、停止和控制绑定刷新会清除旧拖动手势。
-- Q/W/E/R 按 AbilitySpec 授予顺序选择最多四个直接输入技能：目标技能默认进入本地瞄准，左键确认后生成 Cast Order；无目标技能立即提交，Controller 可选按下/松开快施。瞄准期间右键只取消并消费该手势，超距仍提交原目标给服务器追近。`Passive + AutoCast` 技能只调用所属 ASC 的可靠 Toggle RPC，由服务器按当前值原子翻转，不依赖可能滞后的客户端展示状态。纯被动技能不占槽。卓尔 Q 保留霜冻之箭开关，W/E/R 为空。详见 [10-13](10-13-Skill-Indicators.md)。
+- Q/W/E/R 按 AbilitySpec 授予顺序选择最多四个直接输入技能；键盘和 HUD 左键点击共用同一入口：目标技能默认进入本地瞄准，世界左键确认后生成 Cast Order；无目标技能立即提交，Controller 可选按下/松开快施。瞄准期间右键只取消并消费该手势，超距仍提交原目标给服务器追近。未瞄准时 HUD 技能右键仅固定详情。`Passive + AutoCast` 技能只调用所属 ASC 的可靠 Toggle RPC，由服务器按当前值原子翻转，不依赖可能滞后的客户端展示状态。纯被动技能不占槽。卓尔 Q 保留霜冻之箭开关，W/E/R 为空。详见 [10-13](10-13-Skill-Indicators.md)。
+- HUD 左键请求在本地排到下一帧执行，以等待 `GameAndUI` 焦点切换可能触发的 `FlushPressedKeys` 完成；右键取消后下一次技能点击不会被焦点冲刷撤销。排队请求仍走同一个 Controller 入口，显式取消、换绑、Stop、失焦和 EndPlay 会使其失效，不产生额外 Order。
 - 未处于技能瞄准且未命中 UI 时，右键/触摸按下命中地面立即提交 `MoveToPoint`。拖动以 0.20 秒最短间隔、25 cm 目标变化阈值重发，松开时读取最终落点并按距离阈值补发；进入 HUD/日志后清除该移动手势。
 
 所有操作统一使用 Enhanced Input。`/Game/Combat/Demo/Input/IMC_Default` 保留右键、触摸与 Q/W/E/R 的原映射，并增加以下默认映射：

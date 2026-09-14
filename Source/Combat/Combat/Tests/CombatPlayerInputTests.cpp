@@ -387,6 +387,15 @@ bool FCombatAbilityAimInputTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("Regrant skill"), Asc->GrantCombatAbility(UCombatPointAoeAbility::StaticClass(), 1, false, Handle, Failure));
 	View->RefreshHUDOwnerView();
 	PC->OnAbilitySlotQ();
+	// HUD 点击先排到下一帧，等待视口焦点切换触发的 FlushPressedKeys 收尾，不能被该清理误取消。
+	PC->CancelCombatTargeting();
+	PC->ActivateCombatAbilitySlotFromHUD(0);
+	PC->FlushPressedKeys();
+	TestFalse(TEXT("Queued HUD skill waits through focus flush"), Aim->IsAiming());
+	World.Tick(LEVELTICK_All, 0.01f);
+	World.GetTimerManager().Tick(0.01f);
+	TestTrue(TEXT("Queued HUD skill starts on next tick"), Aim->IsAiming());
+	PC->CancelCombatTargeting();
 	FCombatEventContext Death;
 	Unit->GetCombatLifecycleComponent()->RequestDeath(Death, nullptr);
 	Aim->UpdatePreview(FarPoint, true);

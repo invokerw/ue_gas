@@ -10,6 +10,7 @@
 #include "Components/TextBlock.h"
 #include "Components/Image.h"
 #include "Components/Button.h"
+#include "Input/Events.h"
 #include "Combat/Ability/CombatAbilitySystemComponent.h"
 #include "Combat/Attributes/CombatAttributeSet.h"
 #include "Combat/Combat/CombatEffectUtilities.h"
@@ -311,6 +312,55 @@ bool FCombatHUDSlotStateTest::RunTest(const FString& Parameters)
 	Buff->ReleaseSlateResources(true);
 	SkillSlate.Reset();
 	BuffSlate.Reset();
+	return true;
+}
+
+/** 技能槽左键发出使用请求，右键保留详情入口，空槽不伪造 Ability 请求。 */
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FCombatHUDSkillClickTest, "Combat.UI.HUD.SkillClickRequest", CombatHUDTests::Flags)
+bool FCombatHUDSkillClickTest::RunTest(const FString& Parameters)
+{
+	(void)Parameters;
+	FCombatAutomationWorldFixture Fixture;
+	if (!Fixture.IsValid()) return false;
+	APlayerController* Player = Fixture.GetWorld()->SpawnActor<APlayerController>();
+	UClass* SkillClass = LoadClass<UCombatHUDSlotWidget>(nullptr, TEXT("/Game/Combat/Demo/UI/WBP_CombatHUDSkill.WBP_CombatHUDSkill_C"));
+	if (!TestNotNull(TEXT("Player"), Player) || !TestNotNull(TEXT("Skill Blueprint"), SkillClass)) return false;
+	UCombatHUDSlotWidget* Skill = NewObject<UCombatHUDSlotWidget>(Player, SkillClass);
+	if (!TestNotNull(TEXT("Skill widget"), Skill)) return false;
+	Skill->Initialize();
+	TSharedPtr<SWidget> Slate = Skill->TakeWidget();
+	FCombatHUDAbilityView Ability;
+	Ability.DefinitionId = FPrimaryAssetId(TEXT("CombatAbility"), TEXT("hud_click_skill"));
+	Ability.Level = 1;
+	Ability.MaxLevel = 4;
+	Ability.bCanUpgrade = false;
+	FCombatUnitView Unit;
+	Unit.LifeState = ECombatLifeState::Alive;
+	Skill->ShowAbility(Ability, Unit, 0.0, FText::FromString(TEXT("点击技能")), FText::GetEmpty(), nullptr, FText::FromString(TEXT("Q")));
+
+	bool bUseRequested = false;
+	bool bDetailPinned = false;
+	Skill->OnAbilityUseRequested.AddLambda([&bUseRequested](UCombatHUDSlotWidget*) { bUseRequested = true; });
+	Skill->OnDetailRequested.AddLambda([&bDetailPinned](const FText& Text, bool bPin)
+	{
+		bDetailPinned = bPin && !Text.IsEmpty();
+	});
+	const TSet<FKey> PressedButtons;
+	const FPointerEvent LeftClick(0, FVector2D::ZeroVector, FVector2D::ZeroVector, PressedButtons,
+		EKeys::LeftMouseButton, 0.0f, FModifierKeysState());
+	TestTrue(TEXT("Skill left click is consumed"), Skill->NativeOnMouseButtonDown(FGeometry(), LeftClick).IsEventHandled());
+	TestTrue(TEXT("Skill left click emits use request"), bUseRequested);
+	const FPointerEvent RightClick(0, FVector2D::ZeroVector, FVector2D::ZeroVector, PressedButtons,
+		EKeys::RightMouseButton, 0.0f, FModifierKeysState());
+	Skill->NativeOnMouseButtonDown(FGeometry(), RightClick);
+	TestTrue(TEXT("Skill right click pins detail"), bDetailPinned);
+
+	Skill->ClearEntry();
+	bUseRequested = false;
+	Skill->NativeOnMouseButtonDown(FGeometry(), LeftClick);
+	TestFalse(TEXT("Empty slot emits no use request"), bUseRequested);
+	Skill->ReleaseSlateResources(true);
+	Slate.Reset();
 	return true;
 }
 #endif

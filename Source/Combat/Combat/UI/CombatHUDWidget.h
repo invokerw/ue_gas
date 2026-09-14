@@ -120,6 +120,8 @@ private:
 	TArray<UCombatHUDItemSlotWidget*> GetItemWidgets() const;
 	/** 将技能槽上方的加点按钮转换为一次服务器权威升级请求。 */
 	void HandleUpgradeRequested(UCombatHUDSlotWidget* Source);
+	/** 将技能槽左键转换为对应 Q/W/E/R 的本地 Controller 请求。 */
+	void HandleAbilityUseRequested(UCombatHUDSlotWidget* Source);
 	/** 解析可选图标配置。 */
 	UTexture2D* FindIcon(const FPrimaryAssetId& Id) const;
 	/** 以本次 View 快照生成英雄属性详情，尚未复制的字段保持空白。 */

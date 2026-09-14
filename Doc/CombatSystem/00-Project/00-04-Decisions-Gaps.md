@@ -145,6 +145,23 @@
 - SourceContext 增加物品定义与实例身份，后续 Modifier/Projectile 保留来源快照；HUD/日志只消费只读投影。原始 M8 v1 验收证据保留，不把物品或经济追认进历史发布。
 - 回滚成组恢复源码、配置、明确修改的 Demo/UI 资产及新资产引用；需重跑三 Target、全量 Automation、资产/PIE、Dedicated 双客户端和容量/teardown，不以编译替代行为证据。
 
+### ADR-056：HUD 技能槽左键复用技能输入（2026-09-14）
+
+- 状态：已定；由 `HUD-ABILITY-CLICK-001` 修复并完成 Editor/Automation 验证，取代 ADR-047/048 中“技能槽鼠标点击只固定详情”的当前交互约束；真实 PIE 待用户复验。
+- 选择：技能槽左键通过本地 HUD 委托映射到 Q/W/E/R 槽位，并调用既有 `ACombatPlayerController::ActivateCombatAbilitySlot` 入口；无目标技能、目标技能瞄准和 `Passive + AutoCast` 分别沿原键盘语义执行。
+- 详情与取消：技能悬停仍展示详情；未瞄准时右键固定技能详情，瞄准期间右键继续取消会话。升级按钮优先于技能使用，空槽和非 Ability 槽不发使用请求。
+- 权威边界：HUD 只传本地槽位索引，不提交 Ability 类、目标、数值或资源；Controller/Order/Targeting/ASC 的服务器权限、RPC、View schema 和发布契约均不变。
+- 兼容与回滚：现有 Q/W/E/R 快捷键、物品点击、技能瞄准和 AutoCast RPC 保持兼容；回滚 HUD 委托、Controller 转发、测试和文档即可恢复原点击固定语义。
+- 验证：新增 `Combat.UI.HUD.SkillClickRequest` 覆盖技能左键、右键详情和空槽边界，并回归既有 HUD/Input/AbilityAim；交付证据见 `HUD-ABILITY-CLICK-001` Spec。
+
+### ADR-057：焦点切换期间 HUD 技能点击延后一帧（2026-09-14）
+
+- 状态：已定；由 `HUD-ABILITY-CLICK-002` 的 PIE 复现与输入日志确认。
+- 背景：`FInputModeGameAndUI` 从世界视口切到 HUD 时会调用 `ACombatPlayerController::FlushPressedKeys`。若 HUD 的左键请求在同一 MouseDown 中立即启动技能，随后冲刷会把刚建立的本地瞄准会话清掉，表现为右键取消后换技能需要第二次点击。
+- 选择：HUD 槽位仍沿用 ADR-056 的统一 Controller 入口，但使用 `FTimerManager::SetTimerForNextTick` 排到焦点切换收尾后执行；`FlushPressedKeys` 的清理保护只覆盖该排队请求，显式右键、Escape、Stop、换绑和 EndPlay 仍可取消它。
+- 权威边界：延迟只存在于本地输入调度，不新增 Order、RequestId 或网络协议；技能目标、资源、权限和服务器结算不变。
+- 验证与回滚：输入测试覆盖 Flush 后下一帧启动，真实 PIE 覆盖“W → 右键 → E 单击”首击进入 Crosshairs；删除排队 Timer 和对应测试/文档即可回退。
+
 ## 3. 本轮查漏补缺摘要
 
 原单体文档对 Damage、Modifier、Scheduler、AttackRecord 和网络权威已有较强约束；本轮新增或显式登记了以下遗漏：

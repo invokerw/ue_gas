@@ -64,6 +64,8 @@ public:
 	bool IsPointerOverCombatUI() const;
 	/** HUD 消费 Escape 或应用失焦时也能取消本地意图，不发送 Stop。 */
 	void CancelCombatTargeting();
+	/** 本地 HUD 技能槽点击入口；只转发槽位索引，Ability/目标/权限仍由现有输入与服务器链路处理。 */
+	void ActivateCombatAbilitySlotFromHUD(int32 SlotIndex);
 	/** 使用一个精确物品快照；HUD 与快捷键都只经统一 Order 入口提交。 */
 	bool UseInventoryItem(int32 Slot, const FCombatItemView& Expected);
 	/** 请求交换快照中的两槽；不会替换服务器当前指令。 */
@@ -257,6 +259,10 @@ private:
 	int32 PendingDropRevision = 0;
 	int32 PendingDropBinding = 0;
 	uint32 PendingDropLife = 0;
+	/** HUD 技能点击等待本帧焦点收尾后执行，避免 FlushPressedKeys 清掉新会话。 */
+	FTimerHandle PendingHUDAbilityTimer;
+	/** FlushPressedKeys 只清理旧输入，不能取消同一焦点切换中已排队的 HUD 技能点击。 */
+	bool bFlushingPressedKeys = false;
 	/** 用当前实际命中和会话号尝试确认一次；保持唯一 SubmitCombatOrder 入口。 */
 	void ConfirmAbilityTarget(const FHitResult& Hit, uint64 Serial);
 	/** 向 CommandedUnit 提交替换型 MoveToPoint 批次。 */
