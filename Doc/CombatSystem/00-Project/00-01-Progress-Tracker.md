@@ -1,8 +1,9 @@
 # 00-01 开发进度台账
 
-> 最后更新：2026-09-14
+> 最后更新：2026-09-15
 > 物品系统（2026-09-14）：ITEM-001 已通过用户游玩验收并获准本地提交。六装备/三背包、主动/被动、场景放下与走近拾取、HUD/日志及 v2 物品契约已落地；最终 Editor/Server/Client、Combat 82/82、资产 29/29、迁移器 3/3、冷启动 PIE、Dedicated 双客户端争用/控制互换及 64/256 容量通过。F0 GO、F1 APPROVED、F2 PASS、Push-Ready READY；未做 cook/打包、长时间浸泡和人工网络损伤，不推送。见 [Spec](../Specs/ITEM-001-item-system.spec.md)、[操作与配置](../10-Architecture/10-14-Item-System.md) 和 ADR-055。
 > HUD 技能点击（2026-09-14）：HUD-ABILITY-CLICK-001 已完成技能槽左键施法接入；点击复用 Q/W/E/R 的无目标、目标瞄准和 AutoCast 链路，右键在未瞄准时固定详情，升级按钮保持优先。安装版 UE 5.8.2 Editor 构建、HUD 5/5、AbilityAim 4/4、全量 Combat 83/83、文档校验和交付 Gate 通过；真实交互 PIE 已由 HUD-ABILITY-CLICK-002 后续回归覆盖，用户已验收并授权本地提交，见 [Spec](../Specs/HUD-ABILITY-CLICK-001-skill-hud-click.spec.md) 与 ADR-056。
+> 属性系统（2026-09-15）：ATTR-001 已完成 DOTA2 风格 Strength/Agility/Intelligence、Formula v2 派生属性和 owner-only HUD 全量快照；Editor 增量构建、核心与全量 Automation、资产校验、Dedicated smoke、文档校验和交付 Gate 已通过。Server/Client Target 受安装版引擎限制未执行，用户已验收实现结果并授权本地提交；各层验证的执行时点见 [Spec](../Specs/ATTR-001-attributes.spec.md) 与 ADR-058。
 > HUD 技能取消后换槽（2026-09-14）：HUD-ABILITY-CLICK-002 已定位为 GameAndUI 焦点切换触发 `FlushPressedKeys` 清掉同一 MouseDown 新建的技能会话；HUD 请求现排到下一帧，右键取消后另一技能首击进入指示器。安装版 UE 5.8.2 构建、Editor 输入回归、全量 Automation、真实 PIE 首击、文档校验与交付 Gate 均通过；用户已验收并授权本地提交，见 [Spec](../Specs/HUD-ABILITY-CLICK-002-cancel-reclick.spec.md) 与 ADR-057。
 > 指示器修正（2026-09-13）：[AIM-002](../Specs/AIM-002-ground-only-indicators.spec.md) 已通过用户实机验收并获准本地提交；地面接收过滤与点目标地面查询已修复，保留 Hero 其他贴花。Editor、Combat.Input. 7/7、资产 17/17、三地图 114 个地面组件独立重载与原生 PIE 41/41（含 Hero 遮挡、坡道/高台 GPU 像素对照）通过；本轮不改变 RPC/复制/服务器结算，未重跑 Dedicated。
 > 技能指示器（2026-09-13）：AIM-001 连同 AIM-002 修正已通过用户验收；本地瞄准、范围预览与独立训练场已落地，首版 Editor/Server/Client 及最终增量构建、Combat 70/70、资产 17/17、PIE 22 项（含悬停和真实追近）与 Dedicated 双客户端通过，见 [Spec](../Specs/AIM-001-skill-indicators.spec.md)。
@@ -296,6 +297,14 @@ HUD-LOG-002 追加交互状态：`用户已验收`（2026-09-13）；F0 GO、F1 
 
 HUD-ABILITY-CLICK-001/002 追加验收状态：`用户已验收`（2026-09-14）；F0 GO、F1 APPROVED、F2 PASS、Push-Ready READY。用户确认技能 HUD 点击、右键取消和换槽首击行为，授权本地 Git 提交。
 
+## 12.9 Post-M8：三围与派生属性
+
+> 状态：用户已验收并授权本地提交（2026-09-15）。[ATTR-001 Spec](../Specs/ATTR-001-attributes.spec.md) v0.3 的实现验收完成；F0=`GO`、F1=`APPROVED`、F2=`PASS`、Push-Ready=`READY`，各层验证的执行时点、Server/Client Target 与真实交互 PIE 的未执行原因已在 Spec 记录。
+
+| Task | 内容 | 状态 | 证据 |
+| --- | --- | --- | --- |
+| ATTR-001 | DOTA2 风格 Strength/Agility/Intelligence、主属性、GAS 派生属性、全量 owner-only HUD 快照 | 已验收 | `CombatAttributeSet.*`、`CombatUnitCharacter.*`、`CombatHUDView.*` 与 `CombatHUDWidget.cpp` 已落地；三围公式、动态 GE、旧资产默认值、HUD 快照、全量 `Combat.` 85/85、资产 29/29 与 Dedicated Schema=8 Pass。2026-09-15 用户确认“验收完成，提交吧”，授权本地 Git 提交。 |
+
 ## 13. 用户验收记录
 
 | 里程碑 | 提交验收日期 | 用户结论 | 修正要求 | 最终验收日期 | 下一阶段授权 |
@@ -314,6 +323,7 @@ HUD-ABILITY-CLICK-001/002 追加验收状态：`用户已验收`（2026-09-14）
 | DOC-009 | 2026-09-12 | 已验收 | 无 | 2026-09-12 | 用户确认“验收完成，提交吧”，授权本地提交 |
 | HUD-LOG-001 | 2026-09-12 | 已验收 | 追加顶部栏拖动，由 HUD-LOG-002 实现 | 2026-09-13 | 用户授权本地提交 |
 | HUD-LOG-002 | 2026-09-12 | 已验收 | 无 | 2026-09-13 | 用户授权本地提交 |
+| ATTR-001 | 2026-09-15 | 已验收 | 删除冗余初始化重算；只读盘点确认现有 5 个 UnitData 无需数据迁移 | 2026-09-15 | 用户确认“验收完成，提交吧”，授权本地提交 |
 
 ## 14. 更新日志
 
@@ -395,6 +405,8 @@ HUD-ABILITY-CLICK-001/002 追加验收状态：`用户已验收`（2026-09-14）
 | 2026-09-12 | 启动 HUD-LOG-002：用户追加顶部栏拖动窗口；完成 F0/F1 和 preflight，保留上一轮日志系统，验证拖动、DPI/边界、输入释放和原控件行为 | post-M8 HUD / HUD-LOG-002 |
 | 2026-09-12 | 完成 HUD-LOG-002：标题栏左键拖动、入口固定、边界约束与本次 HUD 位置保留；修复移动后点击区域失配，Editor、直接 Automation 5/5、资产 10/10、真实 PIE 与交付 Gate 通过，转为待用户验收 | post-M8 HUD / HUD-LOG-002 |
 | 2026-09-13 | 用户确认战斗记录系统及顶部栏拖动验收完成并授权本地提交；同步两个 Spec、任务状态和最终验收日期，复核文档、交付 Gate、差异及 LFS 资产，不新增运行时验证结论 | post-M8 HUD / HUD-LOG-001 / HUD-LOG-002 |
+| 2026-09-15 | 完成 ATTR-001：新增三围与主属性、Formula v2 八项派生属性、GAS 动态重算、owner-only HUD 全量快照与回归测试；复核后删除零三围旧资产的冗余初始化重算，保留统一初始资源填充。Editor 增量构建、核心 1/1、全量 `Combat.` 85/85、资产 29/29、Dedicated Schema=8、文档校验和交付 Gate 通过；Server/Client Target 受安装版引擎限制未执行，转为待用户验收 | post-M8 属性系统 / ATTR-001 / ADR-058 |
+| 2026-09-15 | 用户确认 ATTR-001 验收完成并授权本地提交；同步 Spec、任务状态和验收日期，明确最终专项复测与此前全量验证的证据边界，复核文档、差异与交付 Gate，不新增 UE 运行时验证结论 | post-M8 属性系统 / ATTR-001 / 用户验收 |
 
 ## 15. 更新规则
 

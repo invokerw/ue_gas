@@ -397,12 +397,12 @@ bool ACombatUnitCharacter::InitializeFromUnitData(UCombatUnitData* InUnitData)
 		GetCapsuleComponent()->SetCapsuleRadius(InUnitData->CapsuleRadiusOverride);
 	}
 	const FCombatUnitBaseStats& Stats = InUnitData->BaseStats;
-	// 先写最大生命/法力再写当前值，保证同一初始化效果按新的资源上限限制当前值。
+	// 先保存不含三围收益的种子，并设置主属性；三围写入后由 AttributeSet 统一重算派生值。
+	CombatAttributeSet->InitializeDerivedBaseStats(Stats);
+	// 先写基础种子和三围，当前资源在派生上限确定后单独填满。
 	const TArray<TPair<FGameplayAttribute, float>> InitialAttributes = {
 		{ UCombatAttributeSet::GetMaxHealthAttribute(), Stats.MaxHealth },
-		{ UCombatAttributeSet::GetHealthAttribute(), Stats.MaxHealth },
 		{ UCombatAttributeSet::GetMaxManaAttribute(), Stats.MaxMana },
-		{ UCombatAttributeSet::GetManaAttribute(), Stats.MaxMana },
 		{ UCombatAttributeSet::GetArmorAttribute(), Stats.Armor },
 		{ UCombatAttributeSet::GetMagicResistAttribute(), Stats.MagicResist },
 		{ UCombatAttributeSet::GetEvasionAttribute(), Stats.Evasion },
@@ -419,9 +419,20 @@ bool ACombatUnitCharacter::InitializeFromUnitData(UCombatUnitData* InUnitData)
 		{ UCombatAttributeSet::GetCastRangeBonusAttribute(), Stats.CastRangeBonus },
 		{ UCombatAttributeSet::GetStatusResistancePctAttribute(), Stats.StatusResistancePct },
 		{ UCombatAttributeSet::GetHealAmplifyPctAttribute(), Stats.HealAmplifyPct },
-		{ UCombatAttributeSet::GetHealReceivedPctAttribute(), Stats.HealReceivedPct }
+		{ UCombatAttributeSet::GetHealReceivedPctAttribute(), Stats.HealReceivedPct },
+		{ UCombatAttributeSet::GetStrengthAttribute(), Stats.Strength },
+		{ UCombatAttributeSet::GetAgilityAttribute(), Stats.Agility },
+		{ UCombatAttributeSet::GetIntelligenceAttribute(), Stats.Intelligence }
 	};
 	if (!CombatEffectUtilities::ApplyAttributeOverrides(this, *CombatAbilitySystemComponent, InitialAttributes))
+	{
+		return false;
+	}
+	// 派生上限确定后统一填满初始资源；运行中上限变化仍遵循 AttributeSet 的资源不变量。
+	if (!CombatEffectUtilities::ApplyAttributeOverrides(this, *CombatAbilitySystemComponent, {
+		{ UCombatAttributeSet::GetHealthAttribute(), CombatAttributeSet->GetMaxHealth() },
+		{ UCombatAttributeSet::GetManaAttribute(), CombatAttributeSet->GetMaxMana() }
+	}))
 	{
 		return false;
 	}

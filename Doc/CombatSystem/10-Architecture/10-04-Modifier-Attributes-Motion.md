@@ -110,6 +110,7 @@ Priority descending -> ApplySequence ascending
 | 语义 | GAS Attribute |
 | --- | --- |
 | 生命/魔法 | `Health`、`MaxHealth`、`Mana`、`MaxMana` |
+| 三围 | `Strength`、`Agility`、`Intelligence`；`PrimaryAttribute` 选择主属性 |
 | 防御 | `Armor`、`MagicResist`、`Evasion` |
 | 普攻 | `AttackDamage`、`AttackSpeed`、`BaseAttackTime`、`AttackRange` |
 | 移动 | `MoveSpeed` |
@@ -126,7 +127,9 @@ final = (base + additive) * (1 + additive_pct) * total_multiplier
 
 GAS ModifierOp 覆盖常规聚合；Dota 特殊公式由纯 C++ Calculator 或 AttributeSet clamp 负责，不能两处重复。所有输入先验证有限值；百分比和速度上限必须由显式规则定义。
 
-M0 已冻结 Numeric Policy v1：请求非法值拒绝，聚合 Attribute 在消费点按集中常量 clamp，中间不取整；Health/Mana、Armor、MagicResist、Evasion、增幅、吸血、CDR 和状态抗性的具体边界见 [90-01 M0 设计冻结](../90-History/90-01-M0-Design-Freeze.md#51-numeric-policy-v1)。任何边界或公式变化都必须增加 FormulaVersion，不能在局部 Runtime 覆盖。
+Numeric Policy v2 在保留原有边界的基础上增加 DOTA2 风格三围派生：力量每点 +22 最大生命/+0.1 生命恢复，敏捷每点 +1 攻击速度/+1/6 护甲，智力每点 +12 最大法力/+0.05 法力恢复/+0.001 魔法抗性，主属性每点 +1 攻击力。请求非法值拒绝，聚合 Attribute 在消费点按集中常量 clamp，中间不取整；Health/Mana、Armor、MagicResist、Evasion、增幅、吸血、CDR 和状态抗性的边界沿用 [90-01 M0 设计冻结](../90-History/90-01-M0-Design-Freeze.md#51-numeric-policy-v1)。公式变化由 `FormulaVersion=2` 标记，不能在局部 Runtime 覆盖。
+
+三围由 `FCombatUnitBaseStats` 初始化为 GAS 属性；UnitData 的旧字段作为不含三围收益的种子。服务器在三围聚合变化后更新八项派生属性的 GAS BaseValue，已有装备或 Modifier 的聚合层保持不变；初始化时在派生上限确定后填满当前生命/法力，运行中提高上限不自动补充当前资源。
 
 动态属性推荐：
 

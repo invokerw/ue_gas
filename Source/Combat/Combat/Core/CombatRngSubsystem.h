@@ -4,6 +4,7 @@
 #include "Subsystems/WorldSubsystem.h"
 
 #include "Combat/Core/CombatTypes.h"
+#include "Combat/Core/CombatNumericPolicy.h"
 
 #include "CombatRngSubsystem.generated.h"
 
@@ -36,7 +37,7 @@ struct COMBAT_API FCombatRngRollRecord
 	GENERATED_BODY()
 
 	/** 生成概率结果所使用的数值公式版本。 */
-	uint16 FormulaVersion = 1;
+	uint16 FormulaVersion = FCombatNumericPolicyV1::FormulaVersion;
 	/** keyed RNG 哈希算法版本。 */
 	uint16 RngAlgorithmVersion = FCombatRngPolicyV1::AlgorithmVersion;
 	/** 本次随机判定所属的根战斗事件。 */

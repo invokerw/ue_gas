@@ -33,7 +33,7 @@ struct COMBAT_API FCombatReleaseContract
 
 	/** 伤害、治疗与数值限制规则的公式版本。 */
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Release", meta=(DisplayName="公式版本", ToolTip="战斗数值公式与取整、限制策略的版本。"))
-	int32 FormulaVersion = 1;
+	int32 FormulaVersion = 2;
 
 	/** keyed RNG 哈希算法版本。 */
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Release", meta=(DisplayName="随机算法版本", ToolTip="确定性随机输入到随机位的算法版本。"))

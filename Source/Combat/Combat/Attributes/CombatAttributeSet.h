@@ -4,6 +4,8 @@
 #include "AttributeSet.h"
 #include "AbilitySystemComponent.h"
 
+#include "Combat/Core/CombatTypes.h"
+
 #include "CombatAttributeSet.generated.h"
 
 /** 为 AttributeSet 属性生成 GAS 标准 getter、setter 与 FGameplayAttribute 访问器。 */
@@ -22,6 +24,15 @@ USTRUCT(BlueprintType)
 struct COMBAT_API FCombatUnitBaseStats
 {
 	GENERATED_BODY()
+
+	/** 力量三围；每点增加最大生命和生命恢复。旧资产默认为 0。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Attributes|Primary", meta=(ClampMin="0", ClampMax="1000000000", DisplayName="力量", ToolTip="每点力量增加 22 点最大生命和 0.1 点生命恢复；旧资产默认为 0。")) float Strength = 0.0f;
+	/** 敏捷三围；每点增加护甲和攻击速度。旧资产默认为 0。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Attributes|Primary", meta=(ClampMin="0", ClampMax="1000000000", DisplayName="敏捷", ToolTip="每点敏捷增加 1 点攻击速度和约 0.167 点护甲；旧资产默认为 0。")) float Agility = 0.0f;
+	/** 智力三围；每点增加最大法力、法力恢复和魔法抗性。旧资产默认为 0。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Attributes|Primary", meta=(ClampMin="0", ClampMax="1000000000", DisplayName="智力", ToolTip="每点智力增加 12 点最大法力、0.05 点法力恢复和 0.1% 魔法抗性；旧资产默认为 0。")) float Intelligence = 0.0f;
+	/** 主属性；每点主属性额外增加 1 点攻击力。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Attributes|Primary", meta=(DisplayName="主属性", ToolTip="选择力量、敏捷或智力作为主属性；每点主属性额外增加 1 点攻击力。")) ECombatPrimaryAttribute PrimaryAttribute = ECombatPrimaryAttribute::Strength;
 
 	/** 初始化 MaxHealth，并把当前 Health 同步设为该值。 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Attributes", meta=(ClampMin="1", ClampMax="1000000000", DisplayName="最大生命值", ToolTip="单位初始化后的当前生命和最大生命，范围为 1 到 10 亿。")) float MaxHealth = 100.0f;
@@ -78,7 +89,14 @@ class COMBAT_API UCombatAttributeSet : public UAttributeSet
 public:
 	UCombatAttributeSet();
 
-	/** 在聚合值即将变化时应用 Numeric Policy v1 的有限值与区间约束。 */
+	/** 设置 UnitData 提供的派生属性种子；后续三围和动态 Modifier 都在 GAS 内重算。 */
+	void InitializeDerivedBaseStats(const FCombatUnitBaseStats& Stats);
+	/** 按当前三围和种子重算八项派生属性；仅服务器初始化或 GAS 属性变化时调用。 */
+	void RecalculateDerivedAttributes();
+	/** 返回服务器初始化时选择的主属性。 */
+	ECombatPrimaryAttribute GetPrimaryAttribute() const { return PrimaryAttribute; }
+
+	/** 在聚合值即将变化时应用 Numeric Policy v2 的有限值与区间约束。 */
 	virtual void PreAttributeChange(const FGameplayAttribute& Attribute, float& NewValue) override;
 	/** 瞬时 GE 修改资源基础值时也限幅，避免满蓝回复积累不可见余额并抵消后续费用。 */
 	virtual void PreAttributeBaseChange(const FGameplayAttribute& Attribute, float& NewValue) const override;
@@ -87,6 +105,18 @@ public:
 	/** 立即生效的效果执行后，将临时伤害/治疗转换为实际生命变化并回报；临时数值随后清零，不会成为持续累积的属性。 */
 	virtual void PostGameplayEffectExecute(const FGameplayEffectModCallbackData& Data) override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+
+	/** 力量三围；通过 GAS Modifier 动态聚合，影响最大生命和生命恢复。 */
+	UPROPERTY(BlueprintReadOnly, ReplicatedUsing=OnRep_Strength, Category="Combat|Attributes|Primary") FGameplayAttributeData Strength;
+	COMBAT_ATTRIBUTE_ACCESSORS(UCombatAttributeSet, Strength)
+	/** 敏捷三围；通过 GAS Modifier 动态聚合，影响护甲和攻击速度。 */
+	UPROPERTY(BlueprintReadOnly, ReplicatedUsing=OnRep_Agility, Category="Combat|Attributes|Primary") FGameplayAttributeData Agility;
+	COMBAT_ATTRIBUTE_ACCESSORS(UCombatAttributeSet, Agility)
+	/** 智力三围；通过 GAS Modifier 动态聚合，影响最大法力、法力恢复和魔法抗性。 */
+	UPROPERTY(BlueprintReadOnly, ReplicatedUsing=OnRep_Intelligence, Category="Combat|Attributes|Primary") FGameplayAttributeData Intelligence;
+	COMBAT_ATTRIBUTE_ACCESSORS(UCombatAttributeSet, Intelligence)
+	/** 当前 UnitData 选择的主属性；只影响主属性攻击力加成。 */
+	UPROPERTY(BlueprintReadOnly, Replicated, Category="Combat|Attributes|Primary") ECombatPrimaryAttribute PrimaryAttribute = ECombatPrimaryAttribute::Strength;
 
 	/** 当前生命值，限制在 0..MaxHealth。 */
 	UPROPERTY(BlueprintReadOnly, ReplicatedUsing=OnRep_Health, Category="Combat|Attributes") FGameplayAttributeData Health;
@@ -182,6 +212,24 @@ protected:
 	UFUNCTION() void OnRep_StatusResistancePct(const FGameplayAttributeData& OldValue);
 	UFUNCTION() void OnRep_HealAmplifyPct(const FGameplayAttributeData& OldValue);
 	UFUNCTION() void OnRep_HealReceivedPct(const FGameplayAttributeData& OldValue);
+	UFUNCTION() void OnRep_Strength(const FGameplayAttributeData& OldValue);
+	UFUNCTION() void OnRep_Agility(const FGameplayAttributeData& OldValue);
+	UFUNCTION() void OnRep_Intelligence(const FGameplayAttributeData& OldValue);
+
+private:
+	/** 返回当前主属性的聚合值，统一供攻击力派生和基础值写入校准使用。 */
+	float GetPrimaryAttributeValue() const;
+	/** UnitData 中不含三围收益的基础种子；动态 GE 只改变聚合值，不会污染这些种子。 */
+	mutable float BaseMaxHealthSeed = 100.0f;
+	mutable float BaseHealthRegenSeed = 0.0f;
+	mutable float BaseArmorSeed = 0.0f;
+	mutable float BaseAttackDamageSeed = 50.0f;
+	mutable float BaseAttackSpeedSeed = 100.0f;
+	mutable float BaseMaxManaSeed = 100.0f;
+	mutable float BaseManaRegenSeed = 0.0f;
+	mutable float BaseMagicResistSeed = 0.25f;
+	/** 避免派生属性重算写回 BaseValue 时再次更新种子或触发递归。 */
+	mutable bool bRecalculatingDerivedAttributes = false;
 };
 
 #undef COMBAT_ATTRIBUTE_ACCESSORS

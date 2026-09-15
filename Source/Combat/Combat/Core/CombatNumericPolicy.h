@@ -2,11 +2,25 @@
 
 #include "CoreMinimal.h"
 
-/** 集中定义 Combat 数值 v1 的有限值、Clamp 和容差规则。 */
+/** 集中定义 Combat 数值 v2 的有限值、Clamp 和三围派生规则。 */
 struct COMBAT_API FCombatNumericPolicyV1
 {
 	/** 写入日志和回放数据的公式版本。 */
-	static constexpr uint16 FormulaVersion = 1;
+	static constexpr uint16 FormulaVersion = 2;
+	/** 每点力量增加的最大生命。 */
+	static constexpr float StrengthMaxHealthPerPoint = 22.0f;
+	/** 每点力量增加的生命恢复。 */
+	static constexpr float StrengthHealthRegenPerPoint = 0.1f;
+	/** 每点敏捷增加的护甲。 */
+	static constexpr float AgilityArmorPerPoint = 1.0f / 6.0f;
+	/** 每点敏捷增加的攻击速度。 */
+	static constexpr float AgilityAttackSpeedPerPoint = 1.0f;
+	/** 每点智力增加的最大法力。 */
+	static constexpr float IntelligenceMaxManaPerPoint = 12.0f;
+	/** 每点智力增加的法力恢复。 */
+	static constexpr float IntelligenceManaRegenPerPoint = 0.05f;
+	/** 每点智力增加的魔法抗性比例。 */
+	static constexpr float IntelligenceMagicResistPerPoint = 0.001f;
 	/** 所有战斗数值允许的最大绝对值。 */
 	static constexpr float MaxAbsoluteValue = 1.0e9f;
 	/** 护甲输入下界。 */

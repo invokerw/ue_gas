@@ -162,6 +162,14 @@
 - 权威边界：延迟只存在于本地输入调度，不新增 Order、RequestId 或网络协议；技能目标、资源、权限和服务器结算不变。
 - 验证与回滚：输入测试覆盖 Flush 后下一帧启动，真实 PIE 覆盖“W → 右键 → E 单击”首击进入 Crosshairs；删除排队 Timer 和对应测试/文档即可回退。
 
+### ADR-058：DOTA2 风格三围与派生属性（2026-09-14）
+
+- 状态：accepted；用户已验收 `ATTR-001` Spec 并授权实现。
+- 选择：在 `FCombatUnitBaseStats` 和 GAS `UCombatAttributeSet` 中增加 Strength、Agility、Intelligence 以及 Strength/Agility/Intelligence 主属性选择。力量每点提供 +22 最大生命和 +0.1 生命恢复；敏捷每点提供 +1 攻击速度和 +1/6 护甲；智力每点提供 +12 最大法力、+0.05 法力恢复和 +0.001 魔法抗性；主属性每点额外提供 +1 攻击力。
+- 聚合：UnitData 的旧属性字段作为不含三围收益的基础种子；服务器在三围聚合变化后更新八项派生属性 BaseValue，现有装备/Modifier 聚合层保持不变。初始化时派生上限确定后填满当前资源，运行中提高上限不自动补充当前生命或法力。
+- 兼容与版本：旧资产新增三围默认为 0，结果保持原值；Numeric Policy 与发布契约 FormulaVersion 升至 2，拥有者 HUD 的 `PresentationSchemaVersion` 由 7 升至 8。客户端只消费复制属性和 owner-only 快照，非拥有者不获得补充 HUD 字段。
+- 测试与回滚：新增三围公式、非法值、动态 Modifier 叠加/移除和 HUD 全量快照测试；回滚时成组撤销 AttributeSet、UnitData、HUD 字段、版本声明及文档，旧资产无需迁移。
+
 ## 3. 本轮查漏补缺摘要
 
 原单体文档对 Damage、Modifier、Scheduler、AttackRecord 和网络权威已有较强约束；本轮新增或显式登记了以下遗漏：

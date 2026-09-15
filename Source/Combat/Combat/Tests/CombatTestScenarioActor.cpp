@@ -531,7 +531,22 @@ void ACombatTestScenarioActor::LogHUDNetworkSnapshot()
 			&& FMath::IsNearlyEqual(Snapshot.Armor, Asc->GetNumericAttribute(UCombatAttributeSet::GetArmorAttribute()))
 			&& FMath::IsNearlyEqual(Snapshot.CastRangeBonus, Asc->GetNumericAttribute(UCombatAttributeSet::GetCastRangeBonusAttribute()))
 			&& FMath::IsNearlyEqual(Snapshot.AttackRange, Asc->GetNumericAttribute(UCombatAttributeSet::GetAttackRangeAttribute()))
-			&& FMath::IsNearlyEqual(Snapshot.MoveSpeed, Asc->GetNumericAttribute(UCombatAttributeSet::GetMoveSpeedAttribute()));
+			&& FMath::IsNearlyEqual(Snapshot.MoveSpeed, Asc->GetNumericAttribute(UCombatAttributeSet::GetMoveSpeedAttribute()))
+			&& FMath::IsNearlyEqual(Snapshot.Strength, Asc->GetNumericAttribute(UCombatAttributeSet::GetStrengthAttribute()))
+			&& FMath::IsNearlyEqual(Snapshot.Agility, Asc->GetNumericAttribute(UCombatAttributeSet::GetAgilityAttribute()))
+			&& FMath::IsNearlyEqual(Snapshot.Intelligence, Asc->GetNumericAttribute(UCombatAttributeSet::GetIntelligenceAttribute()))
+			&& Snapshot.PrimaryAttribute == It->GetCombatAttributeSet()->GetPrimaryAttribute()
+			&& FMath::IsNearlyEqual(Snapshot.MaxHealth, Asc->GetNumericAttribute(UCombatAttributeSet::GetMaxHealthAttribute()))
+			&& FMath::IsNearlyEqual(Snapshot.MaxMana, Asc->GetNumericAttribute(UCombatAttributeSet::GetMaxManaAttribute()))
+			&& FMath::IsNearlyEqual(Snapshot.Evasion, Asc->GetNumericAttribute(UCombatAttributeSet::GetEvasionAttribute()))
+			&& FMath::IsNearlyEqual(Snapshot.AttackSpeed, Asc->GetNumericAttribute(UCombatAttributeSet::GetAttackSpeedAttribute()))
+			&& FMath::IsNearlyEqual(Snapshot.BaseAttackTime, Asc->GetNumericAttribute(UCombatAttributeSet::GetBaseAttackTimeAttribute()))
+			&& FMath::IsNearlyEqual(Snapshot.LifestealPct, Asc->GetNumericAttribute(UCombatAttributeSet::GetLifestealPctAttribute()))
+			&& FMath::IsNearlyEqual(Snapshot.SpellAmplifyPct, Asc->GetNumericAttribute(UCombatAttributeSet::GetSpellAmplifyPctAttribute()))
+			&& FMath::IsNearlyEqual(Snapshot.CooldownReductionPct, Asc->GetNumericAttribute(UCombatAttributeSet::GetCooldownReductionPctAttribute()))
+			&& FMath::IsNearlyEqual(Snapshot.StatusResistancePct, Asc->GetNumericAttribute(UCombatAttributeSet::GetStatusResistancePctAttribute()))
+			&& FMath::IsNearlyEqual(Snapshot.HealAmplifyPct, Asc->GetNumericAttribute(UCombatAttributeSet::GetHealAmplifyPctAttribute()))
+			&& FMath::IsNearlyEqual(Snapshot.HealReceivedPct, Asc->GetNumericAttribute(UCombatAttributeSet::GetHealReceivedPctAttribute()));
 		int32 ExpectedIndex = 0;
 		for (const FGameplayAbilitySpec& Spec : Asc->GetActivatableAbilities())
 		{
@@ -561,8 +576,8 @@ void ACombatTestScenarioActor::LogHUDNetworkSnapshot()
 		bPassed &= !It->GetIsReplicated() && !It->GetActorEnableCollision() && It->GetOwner() == LocalPlayer;
 	}
 	bPassed &= HasAuthority() ? Visuals == 0 : Visuals == 1;
-	UE_LOG(LogCombat, Display, TEXT("HUDNetworkSnapshot Schema=7 RangeFields=Checked Role=%s Owners=%d Foreign=%d Skills=%d Visuals=%d Result=%s"),
-		HasAuthority() ? TEXT("Server") : TEXT("Client"), CheckedOwners, CheckedForeign, CheckedSkills,
+	UE_LOG(LogCombat, Display, TEXT("HUDNetworkSnapshot Schema=%d RangeFields=Checked Role=%s Owners=%d Foreign=%d Skills=%d Visuals=%d Result=%s"),
+		UCombatUnitViewComponent::PresentationSchemaVersion, HasAuthority() ? TEXT("Server") : TEXT("Client"), CheckedOwners, CheckedForeign, CheckedSkills,
 		Visuals, bPassed ? TEXT("Pass") : TEXT("Fail"));
 	if (!HasAuthority() && LocalPlayer) LocalPlayer->GetAbilityAimComponent()->ResetLocalState();
 	if (FParse::Param(FCommandLine::Get(), TEXT("CombatLogSmoke")))

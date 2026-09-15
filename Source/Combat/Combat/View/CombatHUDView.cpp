@@ -22,9 +22,16 @@ bool FCombatHUDAbilityView::operator==(const FCombatHUDAbilityView& Other) const
 bool FCombatHUDOwnerView::operator==(const FCombatHUDOwnerView& Other) const
 {
 	return UnitDefinitionId == Other.UnitDefinitionId && LifeGeneration == Other.LifeGeneration
+		&& Strength == Other.Strength && Agility == Other.Agility && Intelligence == Other.Intelligence
+		&& PrimaryAttribute == Other.PrimaryAttribute && Health == Other.Health && MaxHealth == Other.MaxHealth
+		&& Mana == Other.Mana && MaxMana == Other.MaxMana
 		&& AttackDamage == Other.AttackDamage && Armor == Other.Armor && MagicResist == Other.MagicResist
 		&& MoveSpeed == Other.MoveSpeed && HealthRegen == Other.HealthRegen && ManaRegen == Other.ManaRegen
 		&& CastRangeBonus == Other.CastRangeBonus && AttackRange == Other.AttackRange
+		&& Evasion == Other.Evasion && AttackSpeed == Other.AttackSpeed && BaseAttackTime == Other.BaseAttackTime
+		&& LifestealPct == Other.LifestealPct && SpellAmplifyPct == Other.SpellAmplifyPct
+		&& CooldownReductionPct == Other.CooldownReductionPct && StatusResistancePct == Other.StatusResistancePct
+		&& HealAmplifyPct == Other.HealAmplifyPct && HealReceivedPct == Other.HealReceivedPct
 		&& Level == Other.Level && Experience == Other.Experience
 		&& ExperienceIntoLevel == Other.ExperienceIntoLevel && ExperienceToNextLevel == Other.ExperienceToNextLevel
 		&& ExperienceProgress == Other.ExperienceProgress && UnspentAbilityPoints == Other.UnspentAbilityPoints
@@ -84,19 +91,37 @@ void UCombatUnitViewComponent::RefreshHUDOwnerView()
 	{
 		Next.UnitDefinitionId = Unit->GetUnitDefinitionId();
 		Next.LifeGeneration = Unit->GetLifeGeneration();
+		Next.PrimaryAttribute = Unit->GetCombatAttributeSet()
+			? Unit->GetCombatAttributeSet()->GetPrimaryAttribute() : ECombatPrimaryAttribute::Strength;
 		if (const UCombatInventoryComponent* Inventory = Unit->GetCombatInventoryComponent())
 		{
 			Inventory->BuildViews(Next.Items);
 			Next.InventoryRevision = Inventory->GetRevision();
 		}
+		Next.Strength = Asc->GetNumericAttribute(UCombatAttributeSet::GetStrengthAttribute());
+		Next.Agility = Asc->GetNumericAttribute(UCombatAttributeSet::GetAgilityAttribute());
+		Next.Intelligence = Asc->GetNumericAttribute(UCombatAttributeSet::GetIntelligenceAttribute());
+		Next.Health = Asc->GetNumericAttribute(UCombatAttributeSet::GetHealthAttribute());
+		Next.MaxHealth = Asc->GetNumericAttribute(UCombatAttributeSet::GetMaxHealthAttribute());
+		Next.Mana = Asc->GetNumericAttribute(UCombatAttributeSet::GetManaAttribute());
+		Next.MaxMana = Asc->GetNumericAttribute(UCombatAttributeSet::GetMaxManaAttribute());
 		Next.AttackDamage = Asc->GetNumericAttribute(UCombatAttributeSet::GetAttackDamageAttribute());
 		Next.Armor = Asc->GetNumericAttribute(UCombatAttributeSet::GetArmorAttribute());
 		Next.MagicResist = Asc->GetNumericAttribute(UCombatAttributeSet::GetMagicResistAttribute());
+		Next.Evasion = Asc->GetNumericAttribute(UCombatAttributeSet::GetEvasionAttribute());
+		Next.AttackSpeed = Asc->GetNumericAttribute(UCombatAttributeSet::GetAttackSpeedAttribute());
+		Next.BaseAttackTime = Asc->GetNumericAttribute(UCombatAttributeSet::GetBaseAttackTimeAttribute());
 		Next.MoveSpeed = Asc->GetNumericAttribute(UCombatAttributeSet::GetMoveSpeedAttribute());
 		Next.HealthRegen = Asc->GetNumericAttribute(UCombatAttributeSet::GetHealthRegenAttribute());
 		Next.ManaRegen = Asc->GetNumericAttribute(UCombatAttributeSet::GetManaRegenAttribute());
+		Next.LifestealPct = Asc->GetNumericAttribute(UCombatAttributeSet::GetLifestealPctAttribute());
+		Next.SpellAmplifyPct = Asc->GetNumericAttribute(UCombatAttributeSet::GetSpellAmplifyPctAttribute());
+		Next.CooldownReductionPct = Asc->GetNumericAttribute(UCombatAttributeSet::GetCooldownReductionPctAttribute());
 		Next.CastRangeBonus = Asc->GetNumericAttribute(UCombatAttributeSet::GetCastRangeBonusAttribute());
+		Next.StatusResistancePct = Asc->GetNumericAttribute(UCombatAttributeSet::GetStatusResistancePctAttribute());
 		Next.AttackRange = Asc->GetNumericAttribute(UCombatAttributeSet::GetAttackRangeAttribute());
+		Next.HealAmplifyPct = Asc->GetNumericAttribute(UCombatAttributeSet::GetHealAmplifyPctAttribute());
+		Next.HealReceivedPct = Asc->GetNumericAttribute(UCombatAttributeSet::GetHealReceivedPctAttribute());
 		if (const UCombatProgressionComponent* Progression = Unit->GetCombatProgressionComponent())
 		{
 			Next.Level = Progression->GetLevel();

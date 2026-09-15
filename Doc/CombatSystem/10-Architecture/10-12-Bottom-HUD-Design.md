@@ -81,7 +81,7 @@ Designer 中使用底边锚定的 ScaleBox，按 UE DPI 规则显示，狭窄区
 
 ## 5. 数据与生命周期
 
-`UCombatUnitViewComponent` 的公共 View 继续提供生命、法力、生命代次、可见状态、施法阶段及 Modifier FastArray。`FCombatHUDOwnerView` 以 `COND_OwnerOnly` 复制英雄等级、累计经验、当前等级经验、升级所需经验、经验进度、未使用技能点，以及攻击力、护甲、魔抗、移速、恢复速率和最多四个直接输入技能的 Spec 句柄、稳定定义 ID、等级、费用、已提交冷却结束时间、冻结时长、AutoCast 切换语义与可升级标志。纯被动技能隐藏，`Passive + AutoCast` 与主动技能按 AbilitySpec 授予顺序占槽。
+`UCombatUnitViewComponent` 的公共 View 继续提供生命、法力、生命代次、可见状态、施法阶段及 Modifier FastArray。`FCombatHUDOwnerView` 以 `COND_OwnerOnly` 复制英雄等级、累计经验、当前等级经验、升级所需经验、经验进度、未使用技能点，以及 Strength/Agility/Intelligence、主属性、资源、攻击、防御、恢复、增幅、抗性和距离等全量战斗属性；同时复制最多四个直接输入技能的 Spec 句柄、稳定定义 ID、等级、费用、已提交冷却结束时间、冻结时长、AutoCast 切换语义与可升级标志。纯被动技能隐藏，`Passive + AutoCast` 与主动技能按 AbilitySpec 授予顺序占槽。属性快照扩展使展示 schema 从 7 升至 8。
 
 服务器每 0.1 秒采样展示数据，仅在内容改变时更新快照；该 Tick 不执行 gameplay。客户端先核对单位定义与生命代次，再按本地输入使用的 Spec 顺序匹配技能，复制未齐时留空。冷却使用校准服务器时间推进本地遮罩，不重算旧冷却，也不因 UI 倒计时归零而移除 Buff。失去拥有权时公共读取入口屏蔽旧缓存。
 

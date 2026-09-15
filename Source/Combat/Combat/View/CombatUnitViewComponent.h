@@ -21,8 +21,8 @@ class COMBAT_API UCombatUnitViewComponent : public UActorComponent
 	GENERATED_BODY()
 
 public:
-	/** v5 在拥有者快照增加成长字段和技能可升级标志；原公共 View 和核心 Combat Event schema 保持兼容。 */
-	static constexpr int32 PresentationSchemaVersion = 7;
+	/** v8 在拥有者快照增加三围、主属性和全量战斗属性；原公共 View 和核心 Combat Event schema 保持兼容。 */
+	static constexpr int32 PresentationSchemaVersion = 8;
 	UCombatUnitViewComponent();
 
 	/** 返回当前客户端或服务器的单位 View。 */

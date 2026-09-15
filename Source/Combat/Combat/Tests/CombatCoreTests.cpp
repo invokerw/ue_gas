@@ -12,8 +12,10 @@
 #include "Combat/Attributes/CombatAttributeSet.h"
 #include "Combat/Combat/CombatDamageCalculator.h"
 #include "Combat/Combat/CombatDamageSubsystem.h"
+#include "Combat/Combat/CombatEffectUtilities.h"
 #include "Combat/Combat/CombatHealSubsystem.h"
 #include "Combat/Combat/CombatTransactionSubsystem.h"
+#include "Combat/Core/CombatNumericPolicy.h"
 #include "Combat/Core/CombatTags.h"
 #include "Combat/Data/CombatDefinitionData.h"
 #include "Combat/Demo/CombatDemoAbilities.h"
@@ -192,6 +194,126 @@ bool FCombatAttributeLifecycleTest::RunTest(const FString& Parameters)
 	TestNotNull(TEXT("Non-RemoveOnDeath modifier survives Respawn"), Unit->GetCombatModifierComponent()->FindRuntime(PersistentHandle));
 	TestFalse(TEXT("Alive unit cannot respawn twice"), Unit->GetCombatLifecycleComponent()->RespawnAtLocation(FVector::ZeroVector));
 	Unit->GetCombatModifierComponent()->RemoveModifier(PersistentHandle);
+	return true;
+}
+
+/** 验证三围公式、初始化满资源、动态 GE 叠加/移除和非法配置边界。 */
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FCombatPrimaryAttributesTest,
+	"Combat.Core.Attributes.PrimaryAndDerivedAttributes",
+	CombatCoreTests::Flags)
+
+bool FCombatPrimaryAttributesTest::RunTest(const FString& Parameters)
+{
+	(void)Parameters;
+	FCombatUnitBaseStats Stats;
+	TestTrue(TEXT("Legacy zero-primary defaults are valid"), Stats.IsValid());
+	TestEqual(TEXT("Legacy Strength defaults to zero"), Stats.Strength, 0.0f);
+	Stats.Strength = -1.0f;
+	TestFalse(TEXT("Negative primary stat is rejected"), Stats.IsValid());
+	Stats.Strength = std::numeric_limits<float>::quiet_NaN();
+	TestFalse(TEXT("Non-finite primary stat is rejected"), Stats.IsValid());
+	Stats.Strength = FCombatNumericPolicyV1::MaxAbsoluteValue * 2.0f;
+	TestFalse(TEXT("Over-limit primary stat is rejected"), Stats.IsValid());
+	Stats.Strength = 20.0f;
+	Stats.Agility = 12.0f;
+	Stats.Intelligence = 10.0f;
+	Stats.PrimaryAttribute = static_cast<ECombatPrimaryAttribute>(255);
+	TestFalse(TEXT("Unknown primary attribute is rejected"), Stats.IsValid());
+	Stats.PrimaryAttribute = ECombatPrimaryAttribute::Strength;
+	Stats.MaxHealth = 200.0f;
+	Stats.MaxMana = 120.0f;
+	TestTrue(TEXT("Configured primary stats are valid"), Stats.IsValid());
+
+	FCombatAutomationWorldFixture Fixture;
+	if (!Fixture.IsValid()) return false;
+	UWorld& World = *Fixture.GetWorld();
+	ACombatUnitCharacter* Unit = CombatCoreTests::SpawnInitializedUnit(World, TEXT("primary_attribute_unit"), FVector::ZeroVector, &Stats);
+	if (!TestNotNull(TEXT("Primary stat unit initializes"), Unit)) return false;
+	UCombatAbilitySystemComponent* Asc = Unit->GetCombatAbilitySystemComponent();
+	auto Expect = [this, Asc](const TCHAR* Message, const FGameplayAttribute& Attribute, float Value)
+	{
+		TestTrue(Message, FMath::IsNearlyEqual(Asc->GetNumericAttribute(Attribute), Value, 0.001f));
+	};
+	Expect(TEXT("Strength adds 22 health per point"), UCombatAttributeSet::GetMaxHealthAttribute(), 640.0f);
+	Expect(TEXT("Spawn health fills derived maximum"), UCombatAttributeSet::GetHealthAttribute(), 640.0f);
+	Expect(TEXT("Strength adds health regeneration"), UCombatAttributeSet::GetHealthRegenAttribute(), 2.0f);
+	Expect(TEXT("Agility adds one sixth armor per point"), UCombatAttributeSet::GetArmorAttribute(), 2.0f);
+	Expect(TEXT("Agility adds attack speed"), UCombatAttributeSet::GetAttackSpeedAttribute(), 112.0f);
+	Expect(TEXT("Intelligence adds maximum mana"), UCombatAttributeSet::GetMaxManaAttribute(), 240.0f);
+	Expect(TEXT("Spawn mana fills derived maximum"), UCombatAttributeSet::GetManaAttribute(), 240.0f);
+	Expect(TEXT("Intelligence adds mana regeneration"), UCombatAttributeSet::GetManaRegenAttribute(), 0.5f);
+	Expect(TEXT("Intelligence adds magic resistance"), UCombatAttributeSet::GetMagicResistAttribute(), 0.26f);
+	Expect(TEXT("Strength primary adds attack damage"), UCombatAttributeSet::GetAttackDamageAttribute(), 70.0f);
+
+	auto AddChange = [](UCombatModifierData& Data, const FGameplayAttribute& Attribute, float Magnitude)
+	{
+		FCombatModifierAttributeChange& Change = Data.AttributeChanges.AddDefaulted_GetRef();
+		Change.Attribute = Attribute;
+		Change.Magnitude = Magnitude;
+	};
+	UCombatModifierData* FlatBonus = CombatCoreTests::MakeModifierData(*Unit, TEXT("primary_flat_bonus"));
+	AddChange(*FlatBonus, UCombatAttributeSet::GetArmorAttribute(), 3.0f);
+	AddChange(*FlatBonus, UCombatAttributeSet::GetAttackDamageAttribute(), 7.0f);
+	AddChange(*FlatBonus, UCombatAttributeSet::GetMaxHealthAttribute(), 50.0f);
+	FCombatModifierApplyRequest Apply;
+	Apply.Source = Unit;
+	Apply.ModifierData = FlatBonus;
+	UCombatModifierComponent* Modifiers = Unit->GetCombatModifierComponent();
+	const FCombatModifierApplyResult FlatResult = Modifiers->ApplyModifier(Apply);
+	TestTrue(TEXT("Independent derived attribute modifier applies"), FlatResult.bSuccess);
+	UCombatModifierData* PrimaryBonus = CombatCoreTests::MakeModifierData(*Unit, TEXT("primary_stat_bonus"));
+	PrimaryBonus->MaxStacks = 2;
+	AddChange(*PrimaryBonus, UCombatAttributeSet::GetStrengthAttribute(), 5.0f);
+	AddChange(*PrimaryBonus, UCombatAttributeSet::GetAgilityAttribute(), 6.0f);
+	AddChange(*PrimaryBonus, UCombatAttributeSet::GetIntelligenceAttribute(), 8.0f);
+	Apply.ModifierData = PrimaryBonus;
+	const FCombatModifierApplyResult PrimaryResult = Modifiers->ApplyModifier(Apply);
+	TestTrue(TEXT("Primary attribute modifier applies"), PrimaryResult.bSuccess);
+	TestTrue(TEXT("Primary attribute modifier stacks"), Modifiers->ApplyModifier(Apply).bRefreshed);
+	Expect(TEXT("Stacked Strength is aggregated"), UCombatAttributeSet::GetStrengthAttribute(), 30.0f);
+	Expect(TEXT("Stacked Agility is aggregated"), UCombatAttributeSet::GetAgilityAttribute(), 24.0f);
+	Expect(TEXT("Stacked Intelligence is aggregated"), UCombatAttributeSet::GetIntelligenceAttribute(), 26.0f);
+	Expect(TEXT("Derived maximum preserves independent GE"), UCombatAttributeSet::GetMaxHealthAttribute(), 910.0f);
+	Expect(TEXT("Raising maximum does not heal"), UCombatAttributeSet::GetHealthAttribute(), 640.0f);
+	Expect(TEXT("Derived armor preserves independent GE"), UCombatAttributeSet::GetArmorAttribute(), 7.0f);
+	Expect(TEXT("Derived attack preserves independent GE"), UCombatAttributeSet::GetAttackDamageAttribute(), 87.0f);
+	Expect(TEXT("Stacked Intelligence updates maximum mana"), UCombatAttributeSet::GetMaxManaAttribute(), 432.0f);
+	Expect(TEXT("Stacked Intelligence updates resistance"), UCombatAttributeSet::GetMagicResistAttribute(), 0.276f);
+	CombatCoreTests::SetHealth(*Unit, 910.0f);
+	Modifiers->RemoveModifier(PrimaryResult.Handle);
+	Expect(TEXT("Removing primary GE restores Strength"), UCombatAttributeSet::GetStrengthAttribute(), 20.0f);
+	Expect(TEXT("Removing primary GE restores derived maximum"), UCombatAttributeSet::GetMaxHealthAttribute(), 690.0f);
+	Expect(TEXT("Lowering maximum clamps current health"), UCombatAttributeSet::GetHealthAttribute(), 690.0f);
+	Modifiers->RemoveModifier(FlatResult.Handle);
+	Expect(TEXT("Removing all GE leaves no armor residue"), UCombatAttributeSet::GetArmorAttribute(), 2.0f);
+	Expect(TEXT("Removing all GE leaves no attack residue"), UCombatAttributeSet::GetAttackDamageAttribute(), 70.0f);
+	Expect(TEXT("Removing all GE leaves no health residue"), UCombatAttributeSet::GetMaxHealthAttribute(), 640.0f);
+
+	TestTrue(TEXT("Instant derived GE applies"), CombatEffectUtilities::ApplyAttributeAdditive(
+		Unit, *Asc, UCombatAttributeSet::GetMaxHealthAttribute(), 30.0f));
+	TestTrue(TEXT("Instant Strength GE applies"), CombatEffectUtilities::ApplyAttributeAdditive(
+		Unit, *Asc, UCombatAttributeSet::GetStrengthAttribute(), 1.0f));
+	Expect(TEXT("Instant base change is preserved without double counting"), UCombatAttributeSet::GetMaxHealthAttribute(), 692.0f);
+	Asc->SetNumericAttributeBase(UCombatAttributeSet::GetStrengthAttribute(), -5.0f);
+	Expect(TEXT("Runtime Strength cannot become negative"), UCombatAttributeSet::GetStrengthAttribute(), 0.0f);
+	Expect(TEXT("Zero Strength removes only its own contribution"), UCombatAttributeSet::GetMaxHealthAttribute(), 230.0f);
+	Asc->SetNumericAttributeBase(UCombatAttributeSet::GetIntelligenceAttribute(), FCombatNumericPolicyV1::MaxAbsoluteValue);
+	Expect(TEXT("Derived magic resistance follows numeric cap"), UCombatAttributeSet::GetMagicResistAttribute(), FCombatNumericPolicyV1::MaxMagicResistance);
+	Expect(TEXT("Derived maximum mana follows numeric cap"), UCombatAttributeSet::GetMaxManaAttribute(), FCombatNumericPolicyV1::MaxAbsoluteValue);
+
+	Stats.PrimaryAttribute = ECombatPrimaryAttribute::Agility;
+	ACombatUnitCharacter* AgilityUnit = CombatCoreTests::SpawnInitializedUnit(World, TEXT("agility_primary_unit"), FVector(400.0, 0.0, 0.0), &Stats);
+	if (TestNotNull(TEXT("Agility primary unit initializes"), AgilityUnit))
+	{
+		TestEqual(TEXT("Agility primary supplies attack damage"), AgilityUnit->GetCombatAttributeSet()->GetAttackDamage(), 62.0f);
+	}
+	Stats.PrimaryAttribute = ECombatPrimaryAttribute::Intelligence;
+	ACombatUnitCharacter* IntelligenceUnit = CombatCoreTests::SpawnInitializedUnit(World, TEXT("intelligence_primary_unit"), FVector(800.0, 0.0, 0.0), &Stats);
+	if (TestNotNull(TEXT("Intelligence primary unit initializes"), IntelligenceUnit))
+	{
+		TestEqual(TEXT("Intelligence primary supplies attack damage"), IntelligenceUnit->GetCombatAttributeSet()->GetAttackDamage(), 60.0f);
+	}
 	return true;
 }
 

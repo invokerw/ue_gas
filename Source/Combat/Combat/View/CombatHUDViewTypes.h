@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "GameplayAbilitySpec.h"
+#include "Combat/Core/CombatTypes.h"
 #include "Combat/Items/CombatItemTypes.h"
 #include "CombatHUDViewTypes.generated.h"
 
@@ -48,6 +49,22 @@ struct COMBAT_API FCombatHUDOwnerView
 	FPrimaryAssetId UnitDefinitionId;
 	UPROPERTY(BlueprintReadOnly, Category="Combat|HUD", meta=(DisplayName="生命代次", ToolTip="与公共 View 同代次时才显示该快照；0 表示尚未就绪。"))
 	int64 LifeGeneration = 0;
+	UPROPERTY(BlueprintReadOnly, Category="Combat|HUD", meta=(DisplayName="力量", ToolTip="服务器 ASC 当前聚合力量三围。"))
+	float Strength = 0.0f;
+	UPROPERTY(BlueprintReadOnly, Category="Combat|HUD", meta=(DisplayName="敏捷", ToolTip="服务器 ASC 当前聚合敏捷三围。"))
+	float Agility = 0.0f;
+	UPROPERTY(BlueprintReadOnly, Category="Combat|HUD", meta=(DisplayName="智力", ToolTip="服务器 ASC 当前聚合智力三围。"))
+	float Intelligence = 0.0f;
+	UPROPERTY(BlueprintReadOnly, Category="Combat|HUD", meta=(DisplayName="主属性", ToolTip="服务器 UnitData 选择的主属性；每点主属性额外增加攻击力。"))
+	ECombatPrimaryAttribute PrimaryAttribute = ECombatPrimaryAttribute::Strength;
+	UPROPERTY(BlueprintReadOnly, Category="Combat|HUD", meta=(DisplayName="当前生命值", ToolTip="服务器 ASC 当前聚合生命值；公共 Unit View 也提供该字段。"))
+	float Health = 0.0f;
+	UPROPERTY(BlueprintReadOnly, Category="Combat|HUD", meta=(DisplayName="最大生命值", ToolTip="服务器 ASC 当前聚合最大生命值；公共 Unit View 也提供该字段。"))
+	float MaxHealth = 0.0f;
+	UPROPERTY(BlueprintReadOnly, Category="Combat|HUD", meta=(DisplayName="当前法力值", ToolTip="服务器 ASC 当前聚合法力值；公共 Unit View 也提供该字段。"))
+	float Mana = 0.0f;
+	UPROPERTY(BlueprintReadOnly, Category="Combat|HUD", meta=(DisplayName="最大法力值", ToolTip="服务器 ASC 当前聚合最大法力值；公共 Unit View 也提供该字段。"))
+	float MaxMana = 0.0f;
 	UPROPERTY(BlueprintReadOnly, Category="Combat|HUD", meta=(DisplayName="攻击力", ToolTip="服务器 ASC 当前聚合后的普通攻击基础伤害。"))
 	float AttackDamage = 0.0f;
 	UPROPERTY(BlueprintReadOnly, Category="Combat|HUD", meta=(DisplayName="护甲", ToolTip="服务器 ASC 当前聚合护甲，允许负值。"))
@@ -64,6 +81,24 @@ struct COMBAT_API FCombatHUDOwnerView
 	float CastRangeBonus = 0.0f;
 	UPROPERTY(BlueprintReadOnly, Category="Combat|HUD", meta=(DisplayName="攻击距离", ToolTip="服务器 ASC 当前普通攻击边缘距离；用于 AutoCast 悬停预览，实际攻击仍由服务器裁决。", Units="cm"))
 	float AttackRange = 0.0f;
+	UPROPERTY(BlueprintReadOnly, Category="Combat|HUD", meta=(DisplayName="闪避概率", ToolTip="服务器 ASC 当前普攻闪避概率，0.25 表示 25%。"))
+	float Evasion = 0.0f;
+	UPROPERTY(BlueprintReadOnly, Category="Combat|HUD", meta=(DisplayName="攻击速度", ToolTip="服务器 ASC 当前攻击速度属性。"))
+	float AttackSpeed = 0.0f;
+	UPROPERTY(BlueprintReadOnly, Category="Combat|HUD", meta=(DisplayName="基础攻击间隔", ToolTip="服务器 ASC 当前基础攻击间隔，单位为秒。", Units="s"))
+	float BaseAttackTime = 0.0f;
+	UPROPERTY(BlueprintReadOnly, Category="Combat|HUD", meta=(DisplayName="吸血比例", ToolTip="服务器 ASC 当前吸血比例；0.2 表示 20%。"))
+	float LifestealPct = 0.0f;
+	UPROPERTY(BlueprintReadOnly, Category="Combat|HUD", meta=(DisplayName="技能伤害增幅", ToolTip="服务器 ASC 当前非物理伤害增幅；0.25 表示 25%。"))
+	float SpellAmplifyPct = 0.0f;
+	UPROPERTY(BlueprintReadOnly, Category="Combat|HUD", meta=(DisplayName="冷却缩减比例", ToolTip="服务器 ASC 当前技能冷却缩减比例；0.25 表示 25%。"))
+	float CooldownReductionPct = 0.0f;
+	UPROPERTY(BlueprintReadOnly, Category="Combat|HUD", meta=(DisplayName="状态抗性比例", ToolTip="服务器 ASC 当前状态抗性比例；0.25 表示 25%。"))
+	float StatusResistancePct = 0.0f;
+	UPROPERTY(BlueprintReadOnly, Category="Combat|HUD", meta=(DisplayName="治疗来源增幅", ToolTip="服务器 ASC 当前施加治疗增幅；0.25 表示 25%。"))
+	float HealAmplifyPct = 0.0f;
+	UPROPERTY(BlueprintReadOnly, Category="Combat|HUD", meta=(DisplayName="受到治疗增幅", ToolTip="服务器 ASC 当前受到治疗增幅；0.25 表示 25%。"))
+	float HealReceivedPct = 0.0f;
 	/** 服务器权威成长快照；经验和技能点只向拥有者复制。 */
 	UPROPERTY(BlueprintReadOnly, Category="Combat|HUD", meta=(DisplayName="英雄等级", ToolTip="当前主控单位的服务器权威英雄等级。"))
 	int32 Level = 1;

@@ -67,6 +67,8 @@ bool FCombatHUDOwnerProjectionTest::RunTest(const FString& Parameters)
 	const FCombatHUDOwnerView Initial = View->GetHUDOwnerView();
 	TestEqual(TEXT("Negative armor remains visible"), Initial.Armor, -3.0f);
 	TestEqual(TEXT("Attack comes from ASC"), Initial.AttackDamage, 68.0f);
+	TestEqual(TEXT("Legacy HUD Strength defaults to zero"), Initial.Strength, 0.0f);
+	TestEqual(TEXT("Legacy HUD primary defaults to Strength"), Initial.PrimaryAttribute, ECombatPrimaryAttribute::Strength);
 	TestEqual(TEXT("Projection has current life"), Initial.LifeGeneration, Unit->GetLifeGeneration());
 	View->RefreshHUDOwnerView();
 	TestTrue(TEXT("Unchanged sampling produces identical payload"), Initial == View->GetHUDOwnerView());
@@ -122,6 +124,52 @@ bool FCombatHUDOwnerProjectionTest::RunTest(const FString& Parameters)
 	Player->SetCommandedUnitAuthority(nullptr);
 	View->RefreshHUDOwnerView();
 	TestEqual(TEXT("Unowned snapshot cleared"), View->GetHUDOwnerView().LifeGeneration, int64(0));
+	return true;
+}
+
+/** 验证 owner-only HUD 快照同步三围和 AttributeSet 全量战斗属性。 */
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FCombatHUDPrimaryAttributesTest, "Combat.UI.HUD.PrimaryAndFullAttributeProjection", CombatHUDTests::Flags)
+bool FCombatHUDPrimaryAttributesTest::RunTest(const FString& Parameters)
+{
+	(void)Parameters;
+	FCombatAutomationWorldFixture Fixture;
+	if (!Fixture.IsValid()) return false;
+	ACombatPlayerController* Player = Fixture.GetWorld()->SpawnActor<ACombatPlayerController>();
+	if (!TestNotNull(TEXT("Player"), Player)) return false;
+	ACombatUnitCharacter* Unit = CombatHUDTests::SpawnUnit(*Fixture.GetWorld(), *Player, TEXT("hud_primary"));
+	if (!TestNotNull(TEXT("Unit"), Unit)) return false;
+	UCombatAbilitySystemComponent* Asc = Unit->GetCombatAbilitySystemComponent();
+	UCombatUnitViewComponent* View = Unit->GetCombatUnitViewComponent();
+	TestTrue(TEXT("Strength modifier applies"), CombatEffectUtilities::ApplyAttributeAdditive(
+		Unit, *Asc, UCombatAttributeSet::GetStrengthAttribute(), 7.0f));
+	TestTrue(TEXT("Agility modifier applies"), CombatEffectUtilities::ApplyAttributeAdditive(
+		Unit, *Asc, UCombatAttributeSet::GetAgilityAttribute(), 6.0f));
+	TestTrue(TEXT("Intelligence modifier applies"), CombatEffectUtilities::ApplyAttributeAdditive(
+		Unit, *Asc, UCombatAttributeSet::GetIntelligenceAttribute(), 3.0f));
+	Asc->SetNumericAttributeBase(UCombatAttributeSet::GetEvasionAttribute(), 0.2f);
+	Asc->SetNumericAttributeBase(UCombatAttributeSet::GetLifestealPctAttribute(), 0.15f);
+	Asc->SetNumericAttributeBase(UCombatAttributeSet::GetSpellAmplifyPctAttribute(), 0.25f);
+	Asc->SetNumericAttributeBase(UCombatAttributeSet::GetCooldownReductionPctAttribute(), 0.3f);
+	Asc->SetNumericAttributeBase(UCombatAttributeSet::GetStatusResistancePctAttribute(), 0.4f);
+	Asc->SetNumericAttributeBase(UCombatAttributeSet::GetHealAmplifyPctAttribute(), 0.1f);
+	Asc->SetNumericAttributeBase(UCombatAttributeSet::GetHealReceivedPctAttribute(), 0.2f);
+	View->RefreshHUDOwnerView();
+	const FCombatHUDOwnerView Snapshot = View->GetHUDOwnerView();
+	TestEqual(TEXT("HUD Strength snapshot"), Snapshot.Strength, 7.0f);
+	TestEqual(TEXT("HUD Agility snapshot"), Snapshot.Agility, 6.0f);
+	TestEqual(TEXT("HUD Intelligence snapshot"), Snapshot.Intelligence, 3.0f);
+	TestEqual(TEXT("HUD primary attribute snapshot"), Snapshot.PrimaryAttribute, ECombatPrimaryAttribute::Strength);
+	TestEqual(TEXT("HUD derived max health snapshot"), Snapshot.MaxHealth, 254.0f);
+	TestEqual(TEXT("HUD derived max mana snapshot"), Snapshot.MaxMana, 536.0f);
+	TestEqual(TEXT("HUD full evasion snapshot"), Snapshot.Evasion, 0.2f);
+	TestEqual(TEXT("HUD full lifesteal snapshot"), Snapshot.LifestealPct, 0.15f);
+	TestEqual(TEXT("HUD full spell amplification snapshot"), Snapshot.SpellAmplifyPct, 0.25f);
+	TestEqual(TEXT("HUD full cooldown reduction snapshot"), Snapshot.CooldownReductionPct, 0.3f);
+	TestEqual(TEXT("HUD full status resistance snapshot"), Snapshot.StatusResistancePct, 0.4f);
+	TestEqual(TEXT("HUD full source heal amplification snapshot"), Snapshot.HealAmplifyPct, 0.1f);
+	TestEqual(TEXT("HUD full received heal amplification snapshot"), Snapshot.HealReceivedPct, 0.2f);
+	TestEqual(TEXT("HUD full snapshot reads current health"), Snapshot.Health, 100.0f);
+	TestEqual(TEXT("HUD full snapshot reads current mana"), Snapshot.Mana, 500.0f);
 	return true;
 }
 

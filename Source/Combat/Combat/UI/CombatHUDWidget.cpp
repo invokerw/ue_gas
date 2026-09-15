@@ -318,8 +318,10 @@ void UCombatHUDWidget::RefreshDisplay()
 	const bool bAlive = Unit.LifeState == ECombatLifeState::Alive;
 	CombatHUD::Text(HealthRegenText, bAlive && bOwnerReady ? FString::Printf(TEXT("+%.1f/s"), DisplaySnapshot.HealthRegen) : TEXT("—"));
 	CombatHUD::Text(ManaRegenText, bAlive && bOwnerReady ? FString::Printf(TEXT("+%.1f/s"), DisplaySnapshot.ManaRegen) : TEXT("—"));
-	CombatHUD::Text(StatsText, bOwnerReady ? FString::Printf(TEXT("攻  %.0f\n甲  %.0f\n抗  %.0f%%\n速  %.0f"),
-		DisplaySnapshot.AttackDamage, DisplaySnapshot.Armor, DisplaySnapshot.MagicResist * 100.0f, DisplaySnapshot.MoveSpeed) : TEXT("攻  —\n甲  —\n抗  —\n速  —"));
+	CombatHUD::Text(StatsText, bOwnerReady ? FString::Printf(TEXT("力  %.0f  敏  %.0f  智  %.0f\n攻  %.0f\n甲  %.1f\n抗  %.1f%%\n速  %.0f"),
+		DisplaySnapshot.Strength, DisplaySnapshot.Agility, DisplaySnapshot.Intelligence,
+		DisplaySnapshot.AttackDamage, DisplaySnapshot.Armor, DisplaySnapshot.MagicResist * 100.0f, DisplaySnapshot.MoveSpeed)
+		: TEXT("力  —  敏  —  智  —\n攻  —\n甲  —\n抗  —\n速  —"));
 	const double Now = BoundView->GetEstimatedServerTimeSeconds();
 	const auto ItemWidgets = GetItemWidgets();
 	const ACombatPlayerController* ItemPC = Cast<ACombatPlayerController>(GetOwningPlayer());
@@ -433,10 +435,25 @@ FText UCombatHUDWidget::BuildHeroDetail() const
 	if (!BoundView.IsValid()) return FText::GetEmpty();
 	const FString Name = ResolveName(BoundView->GetUnitView().UnitDefinitionId).ToString();
 	if (DisplaySnapshot.LifeGeneration == 0) return FText::FromString(Name + TEXT("\n属性同步中"));
-	return FText::FromString(FString::Printf(TEXT("%s\n等级 %d · 经验 %lld\n未使用技能点 %d\n攻击力 %.0f · 护甲 %.1f\n魔法抗性 %.0f%% · 移动速度 %.0f\n生命恢复 %.1f / 秒\n法力恢复 %.1f / 秒"),
-		*Name, DisplaySnapshot.Level, static_cast<long long>(DisplaySnapshot.Experience), DisplaySnapshot.UnspentAbilityPoints,
-		DisplaySnapshot.AttackDamage, DisplaySnapshot.Armor, DisplaySnapshot.MagicResist * 100.0f,
-		DisplaySnapshot.MoveSpeed, DisplaySnapshot.HealthRegen, DisplaySnapshot.ManaRegen));
+	const TCHAR* PrimaryName = TEXT("力量");
+	switch (DisplaySnapshot.PrimaryAttribute)
+	{
+	case ECombatPrimaryAttribute::Agility: PrimaryName = TEXT("敏捷"); break;
+	case ECombatPrimaryAttribute::Intelligence: PrimaryName = TEXT("智力"); break;
+	default: break;
+	}
+	return FText::FromString(FString::Printf(TEXT("%s\n等级 %d · 经验 %lld\n力量 %.0f · 敏捷 %.0f · 智力 %.0f（主属性：%s）\n生命 %.0f / %.0f · 法力 %.0f / %.0f\n攻击力 %.0f · 攻击速度 %.0f · 攻击间隔 %.2f\n护甲 %.1f · 魔法抗性 %.1f%% · 闪避 %.1f%%\n移动速度 %.0f · 攻击距离 %.0f · 施法距离 %+0.f\n生命恢复 %.1f / 秒 · 法力恢复 %.1f / 秒\n吸血 %.1f%% · 技能增幅 %.1f%% · 冷却缩减 %.1f%% · 状态抗性 %.1f%%\n治疗来源增幅 %.1f%% · 受到治疗增幅 %.1f%%\n未使用技能点 %d"),
+		*Name, DisplaySnapshot.Level, static_cast<long long>(DisplaySnapshot.Experience),
+		DisplaySnapshot.Strength, DisplaySnapshot.Agility, DisplaySnapshot.Intelligence, PrimaryName,
+		DisplaySnapshot.Health, DisplaySnapshot.MaxHealth, DisplaySnapshot.Mana, DisplaySnapshot.MaxMana,
+		DisplaySnapshot.AttackDamage, DisplaySnapshot.AttackSpeed, DisplaySnapshot.BaseAttackTime,
+		DisplaySnapshot.Armor, DisplaySnapshot.MagicResist * 100.0f, DisplaySnapshot.Evasion * 100.0f,
+		DisplaySnapshot.MoveSpeed, DisplaySnapshot.AttackRange, DisplaySnapshot.CastRangeBonus,
+		DisplaySnapshot.HealthRegen, DisplaySnapshot.ManaRegen,
+		DisplaySnapshot.LifestealPct * 100.0f, DisplaySnapshot.SpellAmplifyPct * 100.0f,
+		DisplaySnapshot.CooldownReductionPct * 100.0f, DisplaySnapshot.StatusResistancePct * 100.0f,
+		DisplaySnapshot.HealAmplifyPct * 100.0f, DisplaySnapshot.HealReceivedPct * 100.0f,
+		DisplaySnapshot.UnspentAbilityPoints));
 }
 
 void UCombatHUDWidget::HandleDetail(const FText& Text, bool bPin, UCombatHUDSlotWidget* Source)

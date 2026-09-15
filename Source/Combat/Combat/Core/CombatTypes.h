@@ -34,6 +34,18 @@ enum class ECombatLifeState : uint8
 	Respawning
 };
 
+/** DOTA2 风格的三围主属性；主属性只额外提供攻击力，其他派生收益由各自三围决定。 */
+UENUM(BlueprintType)
+enum class ECombatPrimaryAttribute : uint8
+{
+	/** 力量：提供生命、生命恢复，并在作为主属性时提供攻击力。 */
+	Strength UMETA(DisplayName="力量"),
+	/** 敏捷：提供护甲、攻击速度，并在作为主属性时提供攻击力。 */
+	Agility UMETA(DisplayName="敏捷"),
+	/** 智力：提供法力、法力恢复、魔法抗性，并在作为主属性时提供攻击力。 */
+	Intelligence UMETA(DisplayName="智力")
+};
+
 /** 标识一次战斗结果最直接的来源类型。 */
 UENUM(BlueprintType)
 enum class ECombatDirectSourceType : uint8

@@ -11,7 +11,7 @@
 bool FCombatUnitBaseStats::IsValid(FString* OutDiagnostic) const
 {
 	const float Values[] = {
-		MaxHealth, MaxMana, Armor, MagicResist, Evasion, AttackDamage, AttackSpeed, BaseAttackTime,
+		Strength, Agility, Intelligence, MaxHealth, MaxMana, Armor, MagicResist, Evasion, AttackDamage, AttackSpeed, BaseAttackTime,
 		AttackRange, MoveSpeed, HealthRegen, ManaRegen, LifestealPct, SpellAmplifyPct,
 		CooldownReductionPct, CastRangeBonus, StatusResistancePct, HealAmplifyPct, HealReceivedPct
 	};
@@ -24,6 +24,8 @@ bool FCombatUnitBaseStats::IsValid(FString* OutDiagnostic) const
 		}
 	}
 	const bool bValid = MaxHealth >= 1.0f && MaxHealth <= FCombatNumericPolicyV1::MaxAbsoluteValue
+		&& Strength >= 0.0f && Agility >= 0.0f && Intelligence >= 0.0f
+		&& static_cast<uint8>(PrimaryAttribute) <= static_cast<uint8>(ECombatPrimaryAttribute::Intelligence)
 		&& MaxMana >= 1.0f && MaxMana <= FCombatNumericPolicyV1::MaxAbsoluteValue
 		&& Armor >= FCombatNumericPolicyV1::MinArmor && Armor <= FCombatNumericPolicyV1::MaxArmor
 		&& MagicResist >= FCombatNumericPolicyV1::MinMagicResistance
@@ -42,13 +44,16 @@ bool FCombatUnitBaseStats::IsValid(FString* OutDiagnostic) const
 		&& HealReceivedPct <= FCombatNumericPolicyV1::MaxAmplification;
 	if (!bValid && OutDiagnostic)
 	{
-		*OutDiagnostic = TEXT("Base stats violate positive max/resource/range/timing constraints");
+		*OutDiagnostic = TEXT("Base stats violate non-negative primary/resource/range/timing constraints");
 	}
 	return bValid;
 }
 
 UCombatAttributeSet::UCombatAttributeSet()
 {
+	InitStrength(0.0f);
+	InitAgility(0.0f);
+	InitIntelligence(0.0f);
 	InitHealth(100.0f);
 	InitMaxHealth(100.0f);
 	InitMana(100.0f);
@@ -59,6 +64,60 @@ UCombatAttributeSet::UCombatAttributeSet()
 	InitBaseAttackTime(1.7f);
 	InitAttackRange(150.0f);
 	InitMoveSpeed(300.0f);
+}
+
+void UCombatAttributeSet::InitializeDerivedBaseStats(const FCombatUnitBaseStats& Stats)
+{
+	BaseMaxHealthSeed = Stats.MaxHealth;
+	BaseHealthRegenSeed = Stats.HealthRegen;
+	BaseArmorSeed = Stats.Armor;
+	BaseAttackDamageSeed = Stats.AttackDamage;
+	BaseAttackSpeedSeed = Stats.AttackSpeed;
+	BaseMaxManaSeed = Stats.MaxMana;
+	BaseManaRegenSeed = Stats.ManaRegen;
+	BaseMagicResistSeed = Stats.MagicResist;
+	PrimaryAttribute = Stats.PrimaryAttribute;
+}
+
+void UCombatAttributeSet::RecalculateDerivedAttributes()
+{
+	UAbilitySystemComponent* Asc = GetOwningAbilitySystemComponent();
+	const AActor* Avatar = Asc ? Asc->GetAvatarActor() : nullptr;
+	if (!Asc || !Avatar || !Avatar->HasAuthority() || bRecalculatingDerivedAttributes)
+	{
+		return;
+	}
+
+	const float StrengthValue = GetStrength();
+	const float AgilityValue = GetAgility();
+	const float IntelligenceValue = GetIntelligence();
+	const TArray<TPair<FGameplayAttribute, float>> DerivedValues = {
+		{ GetMaxHealthAttribute(), BaseMaxHealthSeed + StrengthValue * FCombatNumericPolicyV1::StrengthMaxHealthPerPoint },
+		{ GetHealthRegenAttribute(), BaseHealthRegenSeed + StrengthValue * FCombatNumericPolicyV1::StrengthHealthRegenPerPoint },
+		{ GetArmorAttribute(), BaseArmorSeed + AgilityValue * FCombatNumericPolicyV1::AgilityArmorPerPoint },
+		{ GetAttackSpeedAttribute(), BaseAttackSpeedSeed + AgilityValue * FCombatNumericPolicyV1::AgilityAttackSpeedPerPoint },
+		{ GetMaxManaAttribute(), BaseMaxManaSeed + IntelligenceValue * FCombatNumericPolicyV1::IntelligenceMaxManaPerPoint },
+		{ GetManaRegenAttribute(), BaseManaRegenSeed + IntelligenceValue * FCombatNumericPolicyV1::IntelligenceManaRegenPerPoint },
+		{ GetMagicResistAttribute(), BaseMagicResistSeed + IntelligenceValue * FCombatNumericPolicyV1::IntelligenceMagicResistPerPoint },
+		{ GetAttackDamageAttribute(), BaseAttackDamageSeed + GetPrimaryAttributeValue() }
+	};
+
+	bRecalculatingDerivedAttributes = true;
+	for (const TPair<FGameplayAttribute, float>& Pair : DerivedValues)
+	{
+		Asc->SetNumericAttributeBase(Pair.Key, Pair.Value);
+	}
+	bRecalculatingDerivedAttributes = false;
+}
+
+float UCombatAttributeSet::GetPrimaryAttributeValue() const
+{
+	switch (PrimaryAttribute)
+	{
+	case ECombatPrimaryAttribute::Agility: return GetAgility();
+	case ECombatPrimaryAttribute::Intelligence: return GetIntelligence();
+	default: return GetStrength();
+	}
 }
 
 void UCombatAttributeSet::PreAttributeChange(const FGameplayAttribute& Attribute, float& NewValue)
@@ -84,7 +143,8 @@ void UCombatAttributeSet::PreAttributeChange(const FGameplayAttribute& Attribute
 	{
 		NewValue = FCombatNumericPolicyV1::ClampReduction(NewValue);
 	}
-	else if (Attribute == GetAttackDamageAttribute() || Attribute == GetAttackSpeedAttribute()
+	else if (Attribute == GetStrengthAttribute() || Attribute == GetAgilityAttribute() || Attribute == GetIntelligenceAttribute()
+		|| Attribute == GetAttackDamageAttribute() || Attribute == GetAttackSpeedAttribute()
 		|| Attribute == GetAttackRangeAttribute() || Attribute == GetMoveSpeedAttribute()
 		|| Attribute == GetHealthRegenAttribute() || Attribute == GetManaRegenAttribute()
 		|| Attribute == GetBaseAttackTimeAttribute())
@@ -103,6 +163,22 @@ void UCombatAttributeSet::PreAttributeBaseChange(const FGameplayAttribute& Attri
 	// 只限制 CurrentValue 会让自然回复一直增加 BaseValue；之后的扣蓝先抵消隐藏余额。
 	if (Attribute == GetHealthAttribute()) NewValue = FCombatNumericPolicyV1::ClampHealth(NewValue, GetMaxHealth());
 	if (Attribute == GetManaAttribute()) NewValue = FCombatNumericPolicyV1::ClampHealth(NewValue, GetMaxMana());
+	if (Attribute == GetStrengthAttribute() || Attribute == GetAgilityAttribute() || Attribute == GetIntelligenceAttribute())
+	{
+		NewValue = FMath::IsFinite(NewValue) ? FMath::Clamp(NewValue, 0.0f, FCombatNumericPolicyV1::MaxAbsoluteValue) : 0.0f;
+	}
+	if (!bRecalculatingDerivedAttributes)
+	{
+		// 外部瞬时 GE 或 BaseValue 写入表达的是当前基础总量；扣除已含的三围收益，避免下次重算重复加成。
+		if (Attribute == GetMaxHealthAttribute()) BaseMaxHealthSeed = NewValue - GetStrength() * FCombatNumericPolicyV1::StrengthMaxHealthPerPoint;
+		else if (Attribute == GetHealthRegenAttribute()) BaseHealthRegenSeed = NewValue - GetStrength() * FCombatNumericPolicyV1::StrengthHealthRegenPerPoint;
+		else if (Attribute == GetArmorAttribute()) BaseArmorSeed = NewValue - GetAgility() * FCombatNumericPolicyV1::AgilityArmorPerPoint;
+		else if (Attribute == GetAttackDamageAttribute()) BaseAttackDamageSeed = NewValue - GetPrimaryAttributeValue();
+		else if (Attribute == GetAttackSpeedAttribute()) BaseAttackSpeedSeed = NewValue - GetAgility() * FCombatNumericPolicyV1::AgilityAttackSpeedPerPoint;
+		else if (Attribute == GetMaxManaAttribute()) BaseMaxManaSeed = NewValue - GetIntelligence() * FCombatNumericPolicyV1::IntelligenceMaxManaPerPoint;
+		else if (Attribute == GetManaRegenAttribute()) BaseManaRegenSeed = NewValue - GetIntelligence() * FCombatNumericPolicyV1::IntelligenceManaRegenPerPoint;
+		else if (Attribute == GetMagicResistAttribute()) BaseMagicResistSeed = NewValue - GetIntelligence() * FCombatNumericPolicyV1::IntelligenceMagicResistPerPoint;
+	}
 }
 
 void UCombatAttributeSet::PostAttributeChange(const FGameplayAttribute& Attribute, float OldValue, float NewValue)
@@ -111,6 +187,10 @@ void UCombatAttributeSet::PostAttributeChange(const FGameplayAttribute& Attribut
 	// 属于属性集合自身的数值不变量；不是治疗或消耗事务，不发送虚假的伤害/治疗事件。
 	if (Attribute == GetMaxHealthAttribute() && GetHealth() > NewValue) SetHealth(NewValue);
 	if (Attribute == GetMaxManaAttribute() && GetMana() > NewValue) SetMana(NewValue);
+	if (Attribute == GetStrengthAttribute() || Attribute == GetAgilityAttribute() || Attribute == GetIntelligenceAttribute())
+	{
+		RecalculateDerivedAttributes();
+	}
 }
 
 void UCombatAttributeSet::PostGameplayEffectExecute(const FGameplayEffectModCallbackData& Data)
@@ -173,6 +253,10 @@ void UCombatAttributeSet::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& 
 	COMBAT_REPLICATE_ATTRIBUTE(MaxHealth);
 	COMBAT_REPLICATE_ATTRIBUTE(Mana);
 	COMBAT_REPLICATE_ATTRIBUTE(MaxMana);
+	COMBAT_REPLICATE_ATTRIBUTE(Strength);
+	COMBAT_REPLICATE_ATTRIBUTE(Agility);
+	COMBAT_REPLICATE_ATTRIBUTE(Intelligence);
+	DOREPLIFETIME(UCombatAttributeSet, PrimaryAttribute);
 	COMBAT_REPLICATE_ATTRIBUTE(Armor);
 	COMBAT_REPLICATE_ATTRIBUTE(MagicResist);
 	COMBAT_REPLICATE_ATTRIBUTE(Evasion);
@@ -204,6 +288,9 @@ COMBAT_DEFINE_ATTRIBUTE_REP_NOTIFY(Health)
 COMBAT_DEFINE_ATTRIBUTE_REP_NOTIFY(MaxHealth)
 COMBAT_DEFINE_ATTRIBUTE_REP_NOTIFY(Mana)
 COMBAT_DEFINE_ATTRIBUTE_REP_NOTIFY(MaxMana)
+COMBAT_DEFINE_ATTRIBUTE_REP_NOTIFY(Strength)
+COMBAT_DEFINE_ATTRIBUTE_REP_NOTIFY(Agility)
+COMBAT_DEFINE_ATTRIBUTE_REP_NOTIFY(Intelligence)
 COMBAT_DEFINE_ATTRIBUTE_REP_NOTIFY(Armor)
 COMBAT_DEFINE_ATTRIBUTE_REP_NOTIFY(MagicResist)
 COMBAT_DEFINE_ATTRIBUTE_REP_NOTIFY(Evasion)
