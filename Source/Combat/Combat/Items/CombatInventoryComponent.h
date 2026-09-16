@@ -9,6 +9,7 @@ class UCombatItemData;
 class UCombatItemInstance;
 class UCombatItemSubsystem;
 class ACombatUnitCharacter;
+class UCombatEconomyComponent;
 
 /**
  * 单位的服务器背包。六个装备槽、三个背包槽只保存世界登记表句柄；UI 只读取 UnitView。
@@ -53,6 +54,7 @@ public:
 	int32 GetItemCount() const;
 
 private:
+	friend class UCombatEconomyComponent;
 	/** 新实例或地面实例的共同接管入口，调用前持有事务锁。 */
 	bool AcceptItem(UCombatItemInstance& Item, FCombatItemHandle& OutHandle, FGameplayTag& Failure);
 	/** 将背包冷却结算到当前时间，并在换位后按新位置设置速率和启用时间。 */

@@ -334,6 +334,7 @@ bool ACombatUnitCharacter::InitializeFromUnitData(UCombatUnitData* InUnitData)
 	FString StatsDiagnostic;
 	if (!InUnitData->BaseStats.IsValid(&StatsDiagnostic) || !InUnitData->InitialTeamId.IsValid()
 		|| InUnitData->InitialLevel < 1 || InUnitData->InitialExperience < 0 || InUnitData->ExperienceReward < 0
+		|| InUnitData->GoldReward < 0
 		|| !CombatProgressionComponent || InUnitData->InitialLevel > CombatProgressionComponent->GetMaxLevel()
 		|| !FMath::IsFinite(InUnitData->BaseAttackPoint) || InUnitData->BaseAttackPoint < 0.0f
 		|| !FMath::IsFinite(InUnitData->AttackFacingToleranceDegrees)

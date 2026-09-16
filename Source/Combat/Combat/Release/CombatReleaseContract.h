@@ -17,19 +17,19 @@ struct COMBAT_API FCombatReleaseContract
 
 	/** 发布契约结构自身的版本。 */
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Release", meta=(DisplayName="发布契约版本", ToolTip="发布契约结构自身的版本；修改字段语义时必须递增。"))
-	int32 ContractVersion = 2;
+	int32 ContractVersion = 3;
 
 	/** 当前候选发布的稳定标识。 */
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Release", meta=(DisplayName="候选发布标识", ToolTip="用于日志、验收报告与问题追踪的稳定候选发布标识。"))
-	FName ReleaseId = TEXT("combat_v2_items_rc1");
+	FName ReleaseId = TEXT("combat_v3_economy_rc1");
 
 	/** Combat PrimaryDataAsset 内容 schema 版本。 */
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Release", meta=(DisplayName="内容版本", ToolTip="Combat PrimaryDataAsset 与 DefinitionId 迁移所使用的内容 schema 版本。"))
-	int32 ContentVersion = 1;
+	int32 ContentVersion = 2;
 
 	/** Native GameplayTag 命名与语义 schema 版本。 */
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Release", meta=(DisplayName="标签结构版本", ToolTip="Native GameplayTag 的命名和语义版本；不兼容改名或语义变化时必须递增。"))
-	int32 GameplayTagSchemaVersion = 2;
+	int32 GameplayTagSchemaVersion = 3;
 
 	/** 伤害、治疗与数值限制规则的公式版本。 */
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Release", meta=(DisplayName="公式版本", ToolTip="战斗数值公式与取整、限制策略的版本。"))
@@ -41,7 +41,15 @@ struct COMBAT_API FCombatReleaseContract
 
 	/** Combat 日志事件 schema 版本。 */
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Release", meta=(DisplayName="事件结构版本", ToolTip="CombatLogRecord 事件结构与消费者兼容性版本。"))
-	int32 EventSchemaVersion = 2;
+	int32 EventSchemaVersion = 3;
+
+	/** 玩家金币与储藏处 UI 快照的布局版本。 */
+	UPROPERTY(BlueprintReadOnly, Category="Combat|Release", meta=(DisplayName="经济表现版本", ToolTip="金币与六格储藏处拥有者快照的兼容版本。"))
+	int32 EconomyPresentationSchemaVersion = 1;
+
+	/** 唯一商店目录与配方展示的布局版本。 */
+	UPROPERTY(BlueprintReadOnly, Category="Combat|Release", meta=(DisplayName="商店目录版本", ToolTip="基础/升级页、分类和配方目录的兼容版本。"))
+	int32 ShopCatalogSchemaVersion = 1;
 
 	/** 当前发布 gameplay 结算是否只允许服务器权威入口。 */
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Release", meta=(DisplayName="服务器权威结算", ToolTip="为 true 时客户端请求不能直接写入战斗结果，所有 gameplay 结算由服务器完成。"))
@@ -68,8 +76,8 @@ struct COMBAT_API FCombatReleaseContract
 	bool bItemsAndEconomy = false;
 	/** 当前发布包含服务器权威物品、背包、拾取与 HUD。 */
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Release", meta=(DisplayName="物品系统", ToolTip="当前发布提供物品实例、主动被动、装备背包、场景拾取与 HUD。")) bool bItemsEnabled = true;
-	/** 经济系统仍未进入本次发布。 */
-	UPROPERTY(BlueprintReadOnly, Category="Combat|Release", meta=(DisplayName="经济系统", ToolTip="当前发布不包含货币、商店、合成或交易。")) bool bEconomyEnabled = false;
+	/** 当前发布包含单一金币、全局 UI 商店、储藏处、合成与出售。 */
+	UPROPERTY(BlueprintReadOnly, Category="Combat|Release", meta=(DisplayName="经济系统", ToolTip="当前发布包含单一金币、全局 UI 商店、储藏处、配方合成与出售。")) bool bEconomyEnabled = true;
 
 	/** 校验本契约是否仍与代码中的冻结版本常量和发布边界一致。 */
 	bool IsSelfConsistent(FString& OutError) const;

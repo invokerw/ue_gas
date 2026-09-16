@@ -2,6 +2,7 @@
 
 #include "CombatPlayerController.h"
 #include "Combat/Items/CombatWorldItem.h"
+#include "Combat/Economy/CombatEconomyComponent.h"
 #include "Combat/View/CombatUnitViewComponent.h"
 #include "Combat/UI/CombatAbilityIndicatorGround.h"
 
@@ -22,11 +23,14 @@
 #include "Combat/Log/CombatEventSubsystem.h"
 #include "Combat/Log/CombatLogComponent.h"
 #include "Combat/Network/CombatNetworkTypes.h"
+#include "Combat/Network/CombatNetworkSecuritySubsystem.h"
 #include "Combat/Order/CombatOrderComponent.h"
 #include "Combat/Targeting/CombatTargetingSubsystem.h"
 #include "Combat/UI/CombatPlayerHUD.h"
 #include "Combat/UI/CombatHUDWidget.h"
 #include "Combat/UI/CombatLogWidget.h"
+#include "Combat/UI/CombatShopWidget.h"
+#include "Combat/UI/CombatStashWidget.h"
 #include "Combat/Unit/CombatUnitAIController.h"
 #include "Combat/Unit/CombatUnitCharacter.h"
 #include "Combat.h"
@@ -39,6 +43,7 @@ ACombatPlayerController::ACombatPlayerController()
 	DefaultMouseCursor = EMouseCursor::Default;
 	CommandPawnClass = ACombatCharacter::StaticClass();
 	CombatLogComponent = CreateDefaultSubobject<UCombatLogComponent>(TEXT("CombatLog"));
+	CombatEconomyComponent = CreateDefaultSubobject<UCombatEconomyComponent>(TEXT("CombatEconomy"));
 	AbilityAimComponent = CreateDefaultSubobject<UCombatAbilityAimComponent>(TEXT("AbilityAim"));
 }
 
@@ -480,15 +485,145 @@ bool ACombatPlayerController::SubmitCombatOrder(const FCombatOrderRequest& Order
 		return false;
 	}
 	FCombatOrderBatchRequest Batch;
-	Batch.RequestId = NextCombatOrderRequestId;
+	Batch.RequestId = AllocateCombatRequestId();
 	Batch.UnitLifeGeneration = Unit->GetLifeGeneration();
 	Batch.CommandBindingGeneration = GetCommandBindingGeneration();
 	Batch.bAppendToExistingQueue = false;
 	Batch.Orders.Add(Order);
 	if (Order.ItemHandle.IsValid()) TrackItemRequest(Batch.RequestId, Order);
-	NextCombatOrderRequestId = NextCombatOrderRequestId == MAX_int32 ? 1 : NextCombatOrderRequestId + 1;
 	Unit->ServerIssueOrderBatch(MoveTemp(Batch));
 	return true;
+}
+
+int32 ACombatPlayerController::AllocateCombatRequestId()
+{
+	const int32 Result = NextCombatOrderRequestId;
+	NextCombatOrderRequestId = NextCombatOrderRequestId == MAX_int32 ? 1 : NextCombatOrderRequestId + 1;
+	return Result;
+}
+
+bool ACombatPlayerController::PurchaseShopItem(const FPrimaryAssetId ItemDefinitionId)
+{
+	if (!IsLocalController() || !CombatEconomyComponent || !ItemDefinitionId.IsValid()) return false;
+	FCombatEconomyRequest Request;
+	Request.Action = ECombatEconomyAction::Purchase;
+	Request.ItemDefinitionId = ItemDefinitionId;
+	return SubmitEconomyRequest(MoveTemp(Request));
+}
+
+bool ACombatPlayerController::SellStashItem(const FCombatItemView& ExpectedItem)
+{
+	if (!IsLocalController() || !CombatEconomyComponent || !ExpectedItem.Handle.IsValid()) return false;
+	FCombatEconomyRequest Request;
+	Request.Action = ECombatEconomyAction::SellStashItem;
+	Request.ItemHandle = ExpectedItem.Handle;
+	Request.ItemRevision = ExpectedItem.Revision;
+	return SubmitEconomyRequest(MoveTemp(Request));
+}
+
+bool ACombatPlayerController::TransferStashItem(const FCombatItemView& ExpectedItem)
+{
+	if (!IsLocalController() || !CombatEconomyComponent || !ExpectedItem.Handle.IsValid()) return false;
+	FCombatEconomyRequest Request;
+	Request.Action = ECombatEconomyAction::TransferStashItem;
+	Request.ItemHandle = ExpectedItem.Handle;
+	Request.ItemRevision = ExpectedItem.Revision;
+	return SubmitEconomyRequest(MoveTemp(Request));
+}
+
+bool ACombatPlayerController::TakeAllStashItems()
+{
+	if (!IsLocalController() || !CombatEconomyComponent) return false;
+	FCombatEconomyRequest Request;
+	Request.Action = ECombatEconomyAction::TakeAllStashItems;
+	return SubmitEconomyRequest(MoveTemp(Request));
+}
+
+bool ACombatPlayerController::SubmitEconomyRequest(FCombatEconomyRequest Request)
+{
+	if (!CombatEconomyComponent || !CombatEconomyComponent->IsInitialized()) return false;
+	Request.RequestId = AllocateCombatRequestId();
+	Request.CommandBindingGeneration = CommandBindingGeneration;
+	Request.ExpectedEconomyRevision = CombatEconomyComponent->GetEconomyRevision();
+	Request.ExpectedStashRevision = CombatEconomyComponent->GetStashRevision();
+	ServerSubmitEconomyRequest(MoveTemp(Request));
+	return true;
+}
+
+void ACombatPlayerController::ServerSubmitEconomyRequest_Implementation(FCombatEconomyRequest Request)
+{
+	ClientReceiveEconomyResult(ProcessEconomyRequestForConnection(this, Request));
+}
+
+FCombatEconomyResult ACombatPlayerController::ProcessEconomyRequestForConnection(
+	APlayerController* RequestingController, const FCombatEconomyRequest& Request)
+{
+	FCombatEconomyResult Result;
+	Result.RequestId = Request.RequestId;
+	Result.CommandBindingGeneration = Request.CommandBindingGeneration;
+	Result.ItemDefinitionId = Request.ItemDefinitionId;
+	if (CombatEconomyComponent)
+	{
+		Result.EconomyRevision = CombatEconomyComponent->GetEconomyRevision();
+		Result.StashRevision = CombatEconomyComponent->GetStashRevision();
+	}
+	UCombatNetworkSecuritySubsystem* Security = GetWorld()
+		? GetWorld()->GetSubsystem<UCombatNetworkSecuritySubsystem>() : nullptr;
+	FString Diagnostic;
+	if (!Security || !Security->ValidateAndConsumeEconomyRequest(
+		RequestingController, CombatEconomyComponent, Request, Result.FailureTag, Diagnostic))
+	{
+		if (!Result.FailureTag.IsValid()) Result.FailureTag = CombatTags::Failure_ActionUnsupported;
+		return Result;
+	}
+	if (Request.CommandBindingGeneration != CommandBindingGeneration)
+	{
+		Result.FailureTag = CombatTags::Failure_Economy_Stale;
+		return Result;
+	}
+	if (!CombatEconomyComponent)
+	{
+		Result.FailureTag = CombatTags::Failure_Economy_Uninitialized;
+		return Result;
+	}
+
+	const int64 BeforeGold = CombatEconomyComponent->GetGold();
+	switch (Request.Action)
+	{
+	case ECombatEconomyAction::Purchase:
+		Result.bSuccess = CombatEconomyComponent->PurchaseItem(Request.ItemDefinitionId,
+			Request.ExpectedEconomyRevision, Request.ExpectedStashRevision, Result.ItemHandle, Result.FailureTag);
+		break;
+	case ECombatEconomyAction::SellStashItem:
+		Result.ItemHandle = Request.ItemHandle;
+		Result.bSuccess = CombatEconomyComponent->SellStashItem(Request.ItemHandle, Request.ItemRevision,
+			Request.ExpectedEconomyRevision, Request.ExpectedStashRevision, Result.FailureTag);
+		break;
+	case ECombatEconomyAction::TransferStashItem:
+		Result.ItemHandle = Request.ItemHandle;
+		Result.bSuccess = CombatEconomyComponent->TransferStashItem(Request.ItemHandle, Request.ItemRevision,
+			Request.ExpectedEconomyRevision, Request.ExpectedStashRevision, Result.ItemHandle, Result.FailureTag);
+		Result.MovedItemCount = Result.bSuccess ? 1 : 0;
+		break;
+	case ECombatEconomyAction::TakeAllStashItems:
+		Result.bSuccess = CombatEconomyComponent->TakeAllStashItems(Request.ExpectedEconomyRevision,
+			Request.ExpectedStashRevision, Result.MovedItemCount, Result.FailureTag);
+		break;
+	default:
+		Result.FailureTag = CombatTags::Failure_ActionUnsupported;
+		break;
+	}
+	Result.GoldDelta = CombatEconomyComponent->GetGold() - BeforeGold;
+	Result.EconomyRevision = CombatEconomyComponent->GetEconomyRevision();
+	Result.StashRevision = CombatEconomyComponent->GetStashRevision();
+	return Result;
+}
+
+void ACombatPlayerController::ClientReceiveEconomyResult_Implementation(FCombatEconomyResult Result)
+{
+	if (Result.CommandBindingGeneration != CommandBindingGeneration) return;
+	LastEconomyResult = Result;
+	OnEconomyResult.Broadcast(Result);
 }
 
 void ACombatPlayerController::OnAbilitySlotQ() { ActivateCombatAbilitySlot(0); }
@@ -627,7 +762,9 @@ bool ACombatPlayerController::IsPointerOverCombatUI() const
 	if (!HUD || !FSlateApplication::IsInitialized()) return false;
 	const FVector2D Cursor = FSlateApplication::Get().GetCursorPos();
 	return (HUD->GetCombatWidget() && HUD->GetCombatWidget()->IsScreenPositionOverUI(Cursor))
-		|| (HUD->GetLogWidget() && HUD->GetLogWidget()->IsScreenPositionOverUI(Cursor));
+		|| (HUD->GetLogWidget() && HUD->GetLogWidget()->IsScreenPositionOverUI(Cursor))
+		|| (HUD->GetShopWidget() && HUD->GetShopWidget()->IsScreenPositionOverUI(Cursor))
+		|| (HUD->GetStashWidget() && HUD->GetStashWidget()->IsScreenPositionOverUI(Cursor));
 }
 
 bool ACombatPlayerController::IssueCombatMoveOrder()

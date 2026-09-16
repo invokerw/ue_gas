@@ -1,4 +1,4 @@
-"""物品事件迁移：历史归因不变、空来源补齐、未来版本拒绝。"""
+"""经济事件迁移：历史归因不变、空字段补齐、未来版本拒绝。"""
 import unittest
 from Tools.migrate_item_events import migrate_record
 
@@ -8,20 +8,35 @@ class ItemEventMigrationTests(unittest.TestCase):
         original = {'schemaVersion': 1, 'context': {'eventId': 17, 'rootEventId': 3},
                     'source': {'abilityDefinitionId': 'CombatAbility:bolt'}, 'appliedAmount': 42}
         result = migrate_record(original)
-        self.assertEqual(result['schemaVersion'], 2)
+        self.assertEqual(result['schemaVersion'], 3)
         self.assertEqual(result['context'], original['context'])
         self.assertEqual(result['appliedAmount'], 42)
         self.assertEqual(result['source']['abilityDefinitionId'], 'CombatAbility:bolt')
         self.assertEqual(result['source']['itemHandle']['key']['id'], 0)
+        self.assertEqual(result['goldDelta'], 0)
+        self.assertEqual(result['goldBalance'], 0)
         self.assertNotIn('itemHandle', original['source'])
 
     def test_pascal_and_idempotence(self):
         result = migrate_record({'SchemaVersion': 1, 'Source': {}})
         self.assertEqual(result['ItemQuantity'], 0)
+        self.assertEqual(result['GoldDelta'], 0)
         self.assertEqual(result, migrate_record(result))
 
+    def test_v2_adds_only_economy_fields(self):
+        original = {
+            'schemaVersion': 2,
+            'source': {'itemDefinitionId': 'CombatItem:ring'},
+            'itemQuantity': 1,
+        }
+        result = migrate_record(original)
+        self.assertEqual(result['schemaVersion'], 3)
+        self.assertEqual(result['source'], original['source'])
+        self.assertEqual(result['itemQuantity'], 1)
+        self.assertEqual(result['goldDelta'], 0)
+
     def test_future_missing_and_malformed_are_rejected(self):
-        for record in ({'schemaVersion': 3}, {}, {'schemaVersion': True}, {'schemaVersion': 1, 'source': []}):
+        for record in ({'schemaVersion': 4}, {}, {'schemaVersion': True}, {'schemaVersion': 1, 'source': []}):
             with self.assertRaises(ValueError):
                 migrate_record(record)
 

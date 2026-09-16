@@ -1,6 +1,8 @@
 # 00-01 开发进度台账
 
-> 最后更新：2026-09-15
+> 最后更新：2026-09-16
+> 紧凑商店与独立储藏室（2026-09-16）：ECON-002 v0.3 已通过用户验收并获准本地提交；在 1920×1080 百分比布局上，合成固定区已移除滚轮、标题、价格、提示、说明和交易文字，只显示配方节点图，无选择或无配方时留白。DebugGame Editor 与 Development 后缀模块构建、v0.3 UI 1/1、完整 `Combat.` 94/94 通过；Codex 未取得可回读的真实 PIE 日志，当前打开的 Editor 仍需重启后载入新模块，见 [ECON-002](../Specs/ECON-002-compact-shop-stash-ui.spec.md)。
+> 经济商店合成（2026-09-15）：ECON-001 继续上一会话完成并转为待用户验收；单一金币、关卡 EconomyData/ShopData、六格储藏处、递归配方购买/出售、共享 RPC 安全、Demo 资产和 Native Shop Widget 已落地。安装版 UE 5.8.2 Editor 构建、Economy 8/8、Shop UI 1/1、全量 `Combat.` 94/94、资产 31/31 无错误、迁移工具/文档校验和 delivery Gate 通过；Server/Client Target、Dedicated 双客户端、真实 PIE 几何/输入、经济 soak/perf 未执行。F0 GO、F1 APPROVED、F2 PASS、Push-Ready READY；用户验收 `IN_PROGRESS`，见 [ECON-001](../Specs/ECON-001-money-shop-crafting.spec.md)、[10-15](../10-Architecture/10-15-Economy-Shop-Crafting.md) 和 ADR-059。
 > 物品系统（2026-09-14）：ITEM-001 已通过用户游玩验收并获准本地提交。六装备/三背包、主动/被动、场景放下与走近拾取、HUD/日志及 v2 物品契约已落地；最终 Editor/Server/Client、Combat 82/82、资产 29/29、迁移器 3/3、冷启动 PIE、Dedicated 双客户端争用/控制互换及 64/256 容量通过。F0 GO、F1 APPROVED、F2 PASS、Push-Ready READY；未做 cook/打包、长时间浸泡和人工网络损伤，不推送。见 [Spec](../Specs/ITEM-001-item-system.spec.md)、[操作与配置](../10-Architecture/10-14-Item-System.md) 和 ADR-055。
 > HUD 技能点击（2026-09-14）：HUD-ABILITY-CLICK-001 已完成技能槽左键施法接入；点击复用 Q/W/E/R 的无目标、目标瞄准和 AutoCast 链路，右键在未瞄准时固定详情，升级按钮保持优先。安装版 UE 5.8.2 Editor 构建、HUD 5/5、AbilityAim 4/4、全量 Combat 83/83、文档校验和交付 Gate 通过；真实交互 PIE 已由 HUD-ABILITY-CLICK-002 后续回归覆盖，用户已验收并授权本地提交，见 [Spec](../Specs/HUD-ABILITY-CLICK-001-skill-hud-click.spec.md) 与 ADR-056。
 > 属性系统（2026-09-15）：ATTR-001 已完成 DOTA2 风格 Strength/Agility/Intelligence、Formula v2 派生属性和 owner-only HUD 全量快照；Editor 增量构建、核心与全量 Automation、资产校验、Dedicated smoke、文档校验和交付 Gate 已通过。Server/Client Target 受安装版引擎限制未执行，用户已验收实现结果并授权本地提交；各层验证的执行时点见 [Spec](../Specs/ATTR-001-attributes.spec.md) 与 ADR-058。
@@ -406,7 +408,12 @@ HUD-ABILITY-CLICK-001/002 追加验收状态：`用户已验收`（2026-09-14）
 | 2026-09-12 | 完成 HUD-LOG-002：标题栏左键拖动、入口固定、边界约束与本次 HUD 位置保留；修复移动后点击区域失配，Editor、直接 Automation 5/5、资产 10/10、真实 PIE 与交付 Gate 通过，转为待用户验收 | post-M8 HUD / HUD-LOG-002 |
 | 2026-09-13 | 用户确认战斗记录系统及顶部栏拖动验收完成并授权本地提交；同步两个 Spec、任务状态和最终验收日期，复核文档、交付 Gate、差异及 LFS 资产，不新增运行时验证结论 | post-M8 HUD / HUD-LOG-001 / HUD-LOG-002 |
 | 2026-09-15 | 完成 ATTR-001：新增三围与主属性、Formula v2 八项派生属性、GAS 动态重算、owner-only HUD 全量快照与回归测试；复核后删除零三围旧资产的冗余初始化重算，保留统一初始资源填充。Editor 增量构建、核心 1/1、全量 `Combat.` 85/85、资产 29/29、Dedicated Schema=8、文档校验和交付 Gate 通过；Server/Client Target 受安装版引擎限制未执行，转为待用户验收 | post-M8 属性系统 / ATTR-001 / ADR-058 |
+| 2026-09-15 | 完成 ECON-001：补齐 Economy/Shop 代码、Demo DataAsset/UI 资产、v3 发布契约和迁移工具；修复 Scheduler 被动收入绝对时间回调与 Shop Widget 初始可见性/Native fixture；Economy 8/8、Shop UI 1/1、全量 `Combat.` 94/94、资产 31/31、文档与 delivery Gate 通过，转为待用户验收 | post-M8 经济商店合成 / ECON-001 / ADR-059 |
 | 2026-09-15 | 用户确认 ATTR-001 验收完成并授权本地提交；同步 Spec、任务状态和验收日期，明确最终专项复测与此前全量验证的证据边界，复核文档、差异与交付 Gate，不新增 UE 运行时验证结论 | post-M8 属性系统 / ATTR-001 / 用户验收 |
+| 2026-09-16 | 完成 ECON-002：商店与常驻储藏室拆为两个 Native Widget，落实固定紧凑尺寸、左键配方/右键购买、结果到直接组件的合成图和弱互联生命周期；Editor、UI 1/1、Economy 8/8、完整 Combat 94/94、资产 31/31、文档与 delivery Gate 通过，转为待用户验收 | post-M8 紧凑商店与储藏室 / ECON-002 |
+| 2026-09-16 | 完成 ECON-002 v0.2 布局修订：以 1920×1080 百分比基准将商店缩为 456×842、顶距 54，固定物品/合成区为 594/151；布局 Red/Green、Editor、完整 Combat 94/94、资产、文档与 delivery Gate 通过，转为待用户视觉验收 | post-M8 紧凑商店百分比布局 / ECON-002 v0.2 |
+| 2026-09-16 | 完成 ECON-002 v0.3 合成区精简：移除滚轮与所有辅助文字，仅保留配方图；Recipe-only Red/Green、DebugGame Editor、Development 后缀模块及完整 Combat 94/94 通过，转为待用户视觉验收 | post-M8 极简合成区 / ECON-002 v0.3 |
+| 2026-09-16 | 用户确认 ECON-002 v0.3 验收成功并授权本地提交；同步 Spec、当前状态和验收日期，保留 Codex 未取得可回读真实 PIE 日志的证据边界，不新增运行时验证结论 | post-M8 紧凑商店与储藏室 / ECON-002 / 用户验收 |
 
 ## 15. 更新规则
 

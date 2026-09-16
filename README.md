@@ -6,11 +6,11 @@ Combat 当前位于 `Combat` 单 Runtime Module 中，不是独立插件或独�
 
 ## 当前基线
 
-- 当前物品契约：`combat_v2_items_rc1`，Contract/GameplayTag/Event 为 2，HUD View 为 7、玩家日志投影为 2；Content/Formula/RNG 保持 1。验证状态见 ITEM-001 台账。
+- 当前发布契约：`combat_v3_economy_rc1`，Contract 为 3，物品与经济开关分别开启，GameplayTag/Event 为 3，经济目录/表现 schema 为 1；Content/Formula/RNG 保持 1。物品与经济验证状态见 ITEM-001/ECON-001 台账。
 - 权威模型：服务器结算；客户端 TargetData 仅作为请求，目标、资源和结果由服务器复核。
 - M0-M8 共 82 个 Task 已完成并通过用户验收；最近一次发布 Gate 记录为 `Combat.*` 40/40、Editor/Server/Client 构建、资产校验和 Dedicated 双客户端容量场景通过。
 - M8 之后增加了卓尔游侠远程攻击 Demo、头顶资源/状态/施法条、伤害治疗跳字，以及底部居中的英雄、技能、Buff HUD。C++ 提供只读数据，Widget Blueprint 维护布局和视觉；等级经验与技能加点已接入服务器权威成长组件，六格装备与三格背包已接入物品主动、被动、场景交互和权威投影。
-- 完整 gameplay 预测回滚、跨进程确定性 Replay、召唤物/幻象、商店与经济尚未接入。
+- 完整 gameplay 预测回滚、跨进程确定性 Replay、召唤物/幻象仍未接入；商店与经济已在 ECON-001 落地，真实 Dedicated/PIE 经济流程仍待专项验收。
 
 以上测试数字是已归档的最近验收证据，不自动代表任意工作区修改已经重新验证。实时任务状态以 [开发进度台账](Doc/CombatSystem/00-Project/00-01-Progress-Tracker.md) 为准。
 

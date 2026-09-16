@@ -1,6 +1,6 @@
 # 物品系统：配置、操作与权威边界
 
-ITEM-001 在 Combat 单 Runtime Module 内增加物品实例、库存、地面拾取物和 HUD。当前契约为 `combat_v2_items_rc1`；设计批准、实际验证和用户验收状态见 [Spec](../Specs/ITEM-001-item-system.spec.md) 与 [进度台账](../00-Project/00-01-Progress-Tracker.md)，版本决策见 ADR-055。
+ITEM-001 在 Combat 单 Runtime Module 内增加物品实例、库存、地面拾取物和 HUD。当前物品能力作为 `combat_v3_economy_rc1` 的基础；物品自身规则仍见 [Spec](../Specs/ITEM-001-item-system.spec.md) 与 [进度台账](../00-Project/00-01-Progress-Tracker.md)，经济扩展见 [10-15](10-15-Economy-Shop-Crafting.md) 和 ADR-059。
 
 ## 1. Demo 操作
 
@@ -87,13 +87,13 @@ Pickup / Drop 进入 Order 状态机，复用 AI 导航、路径跟随、Schedul
 
 | 契约 | 当前值 |
 | --- | --- |
-| ReleaseId / ContractVersion | combat_v2_items_rc1 / 2 |
-| GameplayTag / Combat Event | 2 / 2 |
-| HUD View / 玩家日志投影 | 7 / 2 |
+| ReleaseId / ContractVersion | combat_v3_economy_rc1 / 3 |
+| GameplayTag / Combat Event | 3 / 3 |
+| HUD View / 玩家日志投影 | 8 / 3 |
 | Content / Formula / RNG | 1 / 1 / 1 |
-| 能力开关 | bItemsEnabled=true，bEconomyEnabled=false |
+| 能力开关 | bItemsEnabled=true，bEconomyEnabled=true；旧 `bItemsAndEconomy=false` |
 
-旧 `bItemsAndEconomy` 是废弃兼容字段，固定 false。服务器和客户端要求同版本，不承诺 v1/v2 混合连接；已有定义保持原 ID，旧 UnitData 的空库存继续有效。
+旧 `bItemsAndEconomy` 是废弃兼容字段，固定 false。服务器和客户端要求同版本，不承诺 v1/v2/v3 混合连接；已有定义保持原 ID，旧 UnitData 的空库存继续有效。
 
 `SourceContext` 与日志保留物品定义/实例以及操作后的数量/能量，实例销毁后仍可追溯。旧 JSON 事件使用离线迁移器：`python Tools/migrate_item_events.py old-events.json item-events-v2.json`，保留旧因果字段并补空物品来源；拒绝未知版本和覆盖现有输出。
 

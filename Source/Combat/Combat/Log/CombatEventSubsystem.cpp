@@ -7,7 +7,7 @@ DEFINE_LOG_CATEGORY(LogCombat);
 FString FCombatLogRecord::ToString() const
 {
 	return FString::Printf(
-		TEXT("Schema=%d Formula=%d Seq=%llu Event=%s Root=%s Depth=%d Type=%s Source=%d Target=%d Life=%lld Requested=%.3f Mitigated=%.3f Absorbed=%.3f Applied=%.3f Flags=%s Failure=%s Detail=%s"),
+		TEXT("Schema=%d Formula=%d Seq=%llu Event=%s Root=%s Depth=%d Type=%s Source=%d Target=%d Life=%lld Requested=%.3f Mitigated=%.3f Absorbed=%.3f Applied=%.3f GoldDelta=%lld GoldBalance=%lld Flags=%s Failure=%s Detail=%s"),
 		SchemaVersion,
 		FormulaVersion,
 		Sequence,
@@ -22,6 +22,8 @@ FString FCombatLogRecord::ToString() const
 		MitigatedAmount,
 		AbsorbedAmount,
 		AppliedAmount,
+		static_cast<long long>(GoldDelta),
+		static_cast<long long>(GoldBalance),
 		*Flags.ToStringSimple(),
 		*FailureTag.ToString(),
 		*Diagnostic);

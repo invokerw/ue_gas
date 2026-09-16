@@ -6,6 +6,22 @@
 
 class UTexture2D;
 class UStaticMesh;
+class UCombatItemData;
+
+/** 一条确定性合成配方需求；同一定义可出现多次，也可用 Quantity 表达重复组件。 */
+USTRUCT(BlueprintType)
+struct COMBAT_API FCombatItemRecipeIngredient
+{
+	GENERATED_BODY()
+
+	/** 需要消耗的物品定义；必须属于当前关卡唯一商店目录。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Item|Recipe", meta=(DisplayName="组件物品", ToolTip="合成时消耗的物品定义；可引用基础物品、配方卷轴或另一个升级物品。"))
+	TSoftObjectPtr<UCombatItemData> Item;
+
+	/** 此配方节点需要的数量。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Item|Recipe", meta=(ClampMin="1", ClampMax="99", DisplayName="组件数量", ToolTip="合成一件目标物品需要消耗的该组件数量，范围 1 到 99。"))
+	int32 Quantity = 1;
+};
 
 /** 地面物品的拾取授权；绑定在第一次进入背包时确定，丢弃不清除绑定。 */
 UENUM(BlueprintType)
@@ -40,6 +56,27 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Presentation", meta=(DisplayName="图标简称", ToolTip="没有图标纹理时使用的一至两个字，例如甲、靴、药。")) FText Glyph;
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Presentation", meta=(DisplayName="物品颜色", ToolTip="地面轮廓与 HUD 图标底色，仅用于表现。")) FLinearColor Tint = FLinearColor(0.3f, 0.65f, 0.8f);
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Presentation", meta=(DisplayName="地面模型", ToolTip="可选拾取物模型；为空时使用统一的物品晶体模型。")) TSoftObjectPtr<UStaticMesh> WorldMesh;
+	/** 基础物品或配方卷轴的单件购买价格；升级物品由配方叶子递归求和。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Economy", meta=(ClampMin="0", DisplayName="购买价格", ToolTip="可直接购买物品的单件金币价格，必须大于 0；有配方的升级物品保持 0，由服务器递归计算组件总价。"))
+	int64 PurchasePrice = 0;
+	/** 是否允许作为商店可直接购买的叶子；升级物品通过购买目标补齐组件，不直接使用本字段价格。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Economy", meta=(DisplayName="允许直接购买", ToolTip="启用后该无配方物品可直接购买且购买价格必须大于 0；旧物品默认关闭。"))
+	bool bPurchasable = false;
+	/** 是否允许通过玩家储藏处出售。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Economy", meta=(DisplayName="允许出售", ToolTip="启用后该物品可按当前关卡退款/折价规则出售；旧物品默认关闭。"))
+	bool bSellable = false;
+	/** 标记该叶子只表达配方成本，不提供装备效果。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Economy", meta=(DisplayName="配方卷轴", ToolTip="启用后该物品是可购买的配方卷轴，可作为升级物品组件；它自身不能再拥有配方。"))
+	bool bRecipeScroll = false;
+	/** 合成一件本物品需要的直接组件；空数组表示基础物品或不可合成物品。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Economy", meta=(DisplayName="合成配方", ToolTip="合成一件本物品需要消耗的直接组件；支持重复与嵌套，环和无效引用会被资产校验拒绝。", TitleProperty="Item"))
+	TArray<FCombatItemRecipeIngredient> Recipe;
+	/** 多个配方同时满足时的自动合成优先级；数值高者先处理，同值按 DefinitionId 排序。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Economy", meta=(DisplayName="合成优先级", ToolTip="自动合成候选的稳定排序值；数值越大越先处理，同值按稳定 DefinitionId 排序。"))
+	int32 CraftPriority = 0;
+	/** 本地搜索使用的附加关键词；不参与价格、购买或合成判定。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Presentation", meta=(DisplayName="搜索关键词", ToolTip="商店搜索除名称外匹配的附加关键词；仅用于本地筛选。"))
+	TArray<FString> SearchKeywords;
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Item", meta=(DisplayName="最大堆叠数量", ToolTip="同一实例允许的物品数量，范围 1 到 99；带独立能量的物品必须为 1。", ClampMin="1", ClampMax="99")) int32 MaxStack = 1;
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Item", meta=(DisplayName="初始能量", ToolTip="实例生成时的使用次数；0 表示不使用能量，带能量时最大堆叠必须为 1。", ClampMin="0", ClampMax="9999")) int32 InitialCharges = 0;
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Item", meta=(DisplayName="每次消耗数量", ToolTip="在技能费用提交阶段扣除的物品数量；0 表示不消耗物品，最后一件消耗后等当前施法结束才撤销技能。", ClampMin="0", ClampMax="99")) int32 QuantityPerUse = 0;

@@ -16,7 +16,7 @@ enum class ECombatLogCategory : uint8
 	Healing UMETA(DisplayName="治疗信息"),
 	Ability UMETA(DisplayName="技能"),
 	Status UMETA(DisplayName="状态信息"),
-	Item UMETA(DisplayName="物品操作")
+	Item UMETA(DisplayName="物品与经济")
 };
 
 /** 独立于核心事件 schema 的玩家历史快照；定义在本地解析，实例 ID 仅作不透明筛选键。 */
@@ -48,6 +48,8 @@ struct COMBAT_API FCombatLogEntry : public FFastArraySerializerItem
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Log", meta=(DisplayName="物品操作", ToolTip="物品变化的稳定动作名称。")) FName ItemAction;
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Log", meta=(DisplayName="物品数量", ToolTip="此次物品操作完成后的堆叠数量，充能单独记录。")) int32 ItemQuantity = 0;
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Log", meta=(DisplayName="物品充能", ToolTip="此次物品操作完成后的可用充能次数。")) int32 ItemCharges = 0;
+	UPROPERTY(BlueprintReadOnly, Category="Combat|Log", meta=(DisplayName="金币变化", ToolTip="购买为负、收入和出售为正；非经济事件为 0。")) int64 GoldDelta = 0;
+	UPROPERTY(BlueprintReadOnly, Category="Combat|Log", meta=(DisplayName="金币余额", ToolTip="经济事务完成后的服务器权威单一金币余额。")) int64 GoldBalance = 0;
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Log", meta=(DisplayName="来源是主控英雄", ToolTip="事件发生时来源有玩家指挥，用于非英雄筛选；不提供玩法分类。"))
 	bool bSourceHero = false;
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Log", meta=(DisplayName="目标是主控英雄", ToolTip="事件发生时目标有玩家指挥，历史不会因控制权变化而改写。"))
@@ -109,7 +111,7 @@ struct COMBAT_API FCombatLogFilter
 /** 战斗记录展示规则；不读取或修改 gameplay 对象。 */
 namespace CombatLogPresentation
 {
-	inline constexpr int32 SchemaVersion = 2;
+	inline constexpr int32 SchemaVersion = 3;
 	inline constexpr int32 MaxEntries = 512;
 	/** 将玩家关心的事件归类；内部诊断和重复生命周期阶段返回 false。 */
 	COMBAT_API bool Classify(FGameplayTag EventType, ECombatLogCategory& OutCategory);

@@ -22,6 +22,8 @@
 #include "Framework/Application/SlateApplication.h"
 #include "Combat/UI/CombatPlayerHUD.h"
 #include "Combat/UI/CombatLogWidget.h"
+#include "Combat/UI/CombatShopWidget.h"
+#include "Combat/UI/CombatStashWidget.h"
 
 namespace CombatHUD
 {
@@ -178,8 +180,11 @@ void UCombatHUDWidget::NativeTick(const FGeometry& Geometry, float DeltaTime)
 	{
 		const FVector2D PointerPosition = FSlateApplication::Get().GetCursorPos();
 		const ACombatPlayerHUD* HUD = Cast<ACombatPlayerHUD>(Controller->GetHUD());
-		const bool bOverLog = HUD && HUD->GetLogWidget() && HUD->GetLogWidget()->IsScreenPositionOverUI(PointerPosition);
-		Controller->GetAbilityAimComponent()->SetHoveredSlot(bOverLog ? INDEX_NONE : GetHoveredAbilitySlot(PointerPosition));
+		const bool bOverOverlay = HUD
+			&& ((HUD->GetLogWidget() && HUD->GetLogWidget()->IsScreenPositionOverUI(PointerPosition))
+				|| (HUD->GetShopWidget() && HUD->GetShopWidget()->IsScreenPositionOverUI(PointerPosition))
+				|| (HUD->GetStashWidget() && HUD->GetStashWidget()->IsScreenPositionOverUI(PointerPosition)));
+		Controller->GetAbilityAimComponent()->SetHoveredSlot(bOverOverlay ? INDEX_NONE : GetHoveredAbilitySlot(PointerPosition));
 	}
 	RefreshAccumulator += DeltaTime;
 	if (RefreshAccumulator >= 0.05f)

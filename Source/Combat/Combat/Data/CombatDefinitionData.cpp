@@ -119,6 +119,15 @@ FPrimaryAssetType UCombatDefinitionData::GetCombatPrimaryAssetType() const
 	return FPrimaryAssetType();
 }
 
+bool UCombatDefinitionData::UpgradeSchemaToCurrent()
+{
+	if (SchemaVersion > FCombatDefinitionRegistry::CombatContentVersion) return false;
+	if (SchemaVersion == FCombatDefinitionRegistry::CombatContentVersion) return true;
+	SchemaVersion = FCombatDefinitionRegistry::CombatContentVersion;
+	MarkPackageDirty();
+	return true;
+}
+
 bool UCombatDefinitionData::IsValidDefinitionName(const FName Name)
 {
 	const FString Value = Name.ToString();
@@ -174,7 +183,7 @@ EDataValidationResult UCombatDefinitionData::IsDataValid(FDataValidationContext&
 		Context.AddError(FText::FromString(TEXT("DefinitionName must be non-empty lower_snake_case")));
 		Result = EDataValidationResult::Invalid;
 	}
-	if (SchemaVersion != 1)
+	if (SchemaVersion != FCombatDefinitionRegistry::CombatContentVersion)
 	{
 		Context.AddError(FText::FromString(FString::Printf(TEXT("Unsupported combat schema version: %d"), SchemaVersion)));
 		Result = EDataValidationResult::Invalid;

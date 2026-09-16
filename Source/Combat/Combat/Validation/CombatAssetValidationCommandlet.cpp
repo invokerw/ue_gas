@@ -1,5 +1,7 @@
 #include "Combat/Validation/CombatAssetValidationCommandlet.h"
 #include "Combat/Items/CombatItemData.h"
+#include "Combat/Economy/CombatEconomyData.h"
+#include "Combat/Economy/CombatShopData.h"
 
 #include "AssetRegistry/AssetRegistryModule.h"
 #include "AssetRegistry/IAssetRegistry.h"
@@ -72,7 +74,7 @@ FCombatAssetValidationReport FCombatAssetValidator::ValidateDefinitions(
 			continue;
 		}
 		const FString AssetPath = Definition->GetPathName();
-		if (Definition->SchemaVersion != 1)
+		if (Definition->SchemaVersion != FCombatDefinitionRegistry::CombatContentVersion)
 		{
 			CombatAssetValidation::AddIssue(Report, AssetPath, TEXT("Schema"),
 				FString::Printf(TEXT("不支持的定义 schema 版本：%d"), Definition->SchemaVersion), true);
@@ -118,12 +120,16 @@ FCombatAssetValidationReport FCombatAssetValidator::ValidateProjectAssets()
 		UCombatProjectileData::StaticClass()->GetClassPathName(),
 		UCombatAbilitySet::StaticClass()->GetClassPathName(),
 		UCombatItemData::StaticClass()->GetClassPathName(),
+		UCombatEconomyData::StaticClass()->GetClassPathName(),
+		UCombatShopData::StaticClass()->GetClassPathName(),
 		FTopLevelAssetPath(FName(TEXT("/Script/ue_gas")), FName(TEXT("CombatDefinitionData"))),
 		FTopLevelAssetPath(FName(TEXT("/Script/ue_gas")), FName(TEXT("CombatUnitData"))),
 		FTopLevelAssetPath(FName(TEXT("/Script/ue_gas")), FName(TEXT("CombatAbilityData"))),
 		FTopLevelAssetPath(FName(TEXT("/Script/ue_gas")), FName(TEXT("CombatModifierData"))),
 		FTopLevelAssetPath(FName(TEXT("/Script/ue_gas")), FName(TEXT("CombatProjectileData"))),
 		FTopLevelAssetPath(FName(TEXT("/Script/ue_gas")), FName(TEXT("CombatAbilitySet"))),
+		FTopLevelAssetPath(FName(TEXT("/Script/Combat")), FName(TEXT("CombatEconomyData"))),
+		FTopLevelAssetPath(FName(TEXT("/Script/Combat")), FName(TEXT("CombatShopData"))),
 	};
 
 	TArray<const UCombatDefinitionData*> Definitions;

@@ -106,6 +106,8 @@ void UCombatLogComponent::HandleRecord(const FCombatLogRecord& Record, const FCo
 	Entry.ItemAction = Record.ItemAction;
 	Entry.ItemQuantity = Record.ItemQuantity;
 	Entry.ItemCharges = Record.ItemCharges;
+	Entry.GoldDelta = Record.GoldDelta;
+	Entry.GoldBalance = Record.GoldBalance;
 	if (Entry.ItemDefinitionId.IsValid()) Entry.EffectDefinitionId = Entry.ItemDefinitionId;
 	Entry.Amount = Record.AppliedAmount;
 	Entry.bHasHealthChange = ResourceChange.bHasHealthChange && FMath::IsFinite(ResourceChange.PreviousHealth)

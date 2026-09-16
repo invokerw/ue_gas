@@ -46,7 +46,11 @@ bool CombatLogPresentation::Classify(const FGameplayTag EventType, ECombatLogCat
 {
 	if (EventType == CombatTags::Event_Combat_DamageApplied) OutCategory = ECombatLogCategory::Damage;
 	else if (EventType == CombatTags::Event_Combat_HealApplied) OutCategory = ECombatLogCategory::Healing;
-	else if (EventType == CombatTags::Event_Combat_ItemChanged) OutCategory = ECombatLogCategory::Item;
+	else if (EventType == CombatTags::Event_Combat_ItemChanged
+		|| EventType == CombatTags::Event_Combat_GoldChanged
+		|| EventType == CombatTags::Event_Combat_ItemPurchased
+		|| EventType == CombatTags::Event_Combat_ItemSold
+		|| EventType == CombatTags::Event_Combat_ItemCrafted) OutCategory = ECombatLogCategory::Item;
 	else if (EventType == CombatTags::Event_Combat_AbilitySpellStarted
 		|| EventType == CombatTags::Event_Combat_AbilityInterrupted
 		|| EventType == CombatTags::Event_Combat_AutoCastChanged
@@ -102,7 +106,21 @@ FString CombatLogPresentation::BuildRichText(const FCombatLogEntry& Entry, const
 	const FString Target = Styled(TEXT("target"), TargetName.IsEmpty() ? TEXT("未知目标") : TargetName);
 	const FString Effect = Styled(TEXT("effect"), EffectName);
 	FString Body;
-	if (Entry.EventType == CombatTags::Event_Combat_ItemChanged)
+	if (Entry.EventType == CombatTags::Event_Combat_GoldChanged)
+	{
+		Body = FString::Printf(TEXT("%s金币 %s%s，余额 %s"), *Source,
+			Entry.GoldDelta >= 0 ? TEXT("+") : TEXT(""), *FString::Printf(TEXT("%lld"), static_cast<long long>(Entry.GoldDelta)),
+			*Styled(TEXT("amount"), FString::Printf(TEXT("%lld"), static_cast<long long>(Entry.GoldBalance))));
+	}
+	else if (Entry.EventType == CombatTags::Event_Combat_ItemPurchased
+		|| Entry.EventType == CombatTags::Event_Combat_ItemCrafted
+		|| Entry.EventType == CombatTags::Event_Combat_ItemSold)
+	{
+		const TCHAR* Verb = Entry.EventType == CombatTags::Event_Combat_ItemSold ? TEXT(" 出售了 ")
+			: Entry.EventType == CombatTags::Event_Combat_ItemCrafted ? TEXT(" 合成了 ") : TEXT(" 购买了 ");
+		Body = Source + Verb + Effect;
+	}
+	else if (Entry.EventType == CombatTags::Event_Combat_ItemChanged)
 	{
 		const FString Action = Entry.ItemAction == TEXT("PickedUp") ? TEXT(" 拾取了 ") : Entry.ItemAction == TEXT("Dropped") ? TEXT(" 丢下了 ")
 			: Entry.ItemAction == TEXT("Consumed") ? TEXT(" 使用了 ") : Entry.ItemAction == TEXT("Cooldown") ? TEXT(" 开始冷却：")

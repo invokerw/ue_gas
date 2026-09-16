@@ -2,6 +2,7 @@
 #include "Combat/Items/CombatItemData.h"
 #include "Combat/Items/CombatItemSubsystem.h"
 #include "Combat/Items/CombatWorldItem.h"
+#include "Combat/Economy/CombatEconomyComponent.h"
 #include "Combat/Ability/CombatAbilitySystemComponent.h"
 #include "Combat/Ability/CombatGameplayAbility.h"
 #include "Combat/Aura/CombatAuraSubsystem.h"
@@ -16,6 +17,7 @@
 #include "Combat/Targeting/CombatTeamSubsystem.h"
 #include "Combat/Unit/CombatUnitCharacter.h"
 #include "Combat/View/CombatUnitViewComponent.h"
+#include "CombatPlayerController.h"
 #include "Engine/World.h"
 
 UCombatInventoryComponent::UCombatInventoryComponent()
@@ -51,7 +53,17 @@ bool UCombatInventoryComponent::GiveItem(UCombatItemData* Definition, int32 Quan
 		bAccepted = AcceptItem(*Item, OutHandle, Failure);
 		if (!bAccepted) Items->DestroyItem(Created);
 	}
-	if (bAccepted) ReconcileEffects();
+	if (bAccepted)
+	{
+		if (ACombatPlayerController* Player = Cast<ACombatPlayerController>(Unit->GetCommandingPlayerController()))
+		{
+			if (UCombatEconomyComponent* Economy = Player->GetCombatEconomyComponent())
+			{
+				Economy->StabilizeInventoryCrafting(*this, OutHandle);
+			}
+		}
+		ReconcileEffects();
+	}
 	return bAccepted;
 }
 
@@ -146,12 +158,22 @@ bool UCombatInventoryComponent::TryPickup(FCombatItemHandle Handle, int32 Expect
 	const auto Validation = Targeting->ValidateItemInteraction(Unit, Item->WorldActor->GetActorLocation(), Item->WorldActor.Get(), true, false);
 	if (!Validation.bValid) { Failure = Validation.FailureTag; return false; }
 	bool bAccepted;
+	FCombatItemHandle ResultHandle;
 	{
 		TGuardValue<bool> Guard(bMutating, true);
-		FCombatItemHandle Result;
-		bAccepted = AcceptItem(*Item, Result, Failure);
+		bAccepted = AcceptItem(*Item, ResultHandle, Failure);
 	}
-	if (bAccepted) ReconcileEffects();
+	if (bAccepted)
+	{
+		if (ACombatPlayerController* Player = Cast<ACombatPlayerController>(Unit->GetCommandingPlayerController()))
+		{
+			if (UCombatEconomyComponent* Economy = Player->GetCombatEconomyComponent())
+			{
+				Economy->StabilizeInventoryCrafting(*this, ResultHandle);
+			}
+		}
+		ReconcileEffects();
+	}
 	return bAccepted;
 }
 

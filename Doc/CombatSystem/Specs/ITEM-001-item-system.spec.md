@@ -97,7 +97,7 @@ World ↔ Equipped ↔ Backpack；从 Backpack 移出开始/保留 6 秒休眠�
 
 ### 兼容、版本与迁移
 
-新增 ADR-055，当前发布身份进入 `combat_v2_items_rc1`、ContractVersion=2，新增 ItemsEnabled=true/EconomyEnabled=false 的独立能力字段；保留旧合并字段为废弃兼容字段，不据此宣称已实现经济。Formula/RNG 和旧定义内容保持 v1。GameplayTag schema 升至 2，旧标签不改名；SourceContext/事件 schema 升至 2，新字段为空时表达旧事件，离线旧 JSON 明确补零/空来源；未知未来版本拒绝。HUD 展示 schema 升至 7，日志投影 schema 升至 2，同版本客户端与服务器一起部署。旧 Unit/DataAsset 默认空库存，已有技能行为不变；新增资产纳入 AssetManager 扫描。历史 M8 证据不改写。
+新增 ADR-055，物品扩展当时进入 `combat_v2_items_rc1`、ContractVersion=2，新增 ItemsEnabled=true/EconomyEnabled=false 的独立能力字段；该结论是 ECON-001 启用前的历史基线，当前经济扩展由 ADR-059 迁移到 `combat_v3_economy_rc1`，不改写本 Spec 当时的验收证据。Formula/RNG 和旧定义内容保持 v1。GameplayTag schema 升至 2，旧标签不改名；SourceContext/事件 schema 升至 2，新字段为空时表达旧事件，离线旧 JSON 明确补零/空来源；未知未来版本拒绝。HUD 展示 schema 升至 7，日志投影 schema 升至 2，同版本客户端和服务器一起部署。旧 Unit/DataAsset 默认空库存，已有技能行为不变；新增资产纳入 AssetManager 扫描。历史 M8 证据不改写。
 
 ## 4. 实施计划
 

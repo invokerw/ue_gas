@@ -7,12 +7,29 @@
 #include "Engine/World.h"
 #include "CombatCharacter.h"
 #include "CombatPlayerController.h"
+#include "Combat/Economy/CombatEconomyComponent.h"
+#include "Combat/Economy/CombatEconomyData.h"
+#include "Combat/Economy/CombatShopData.h"
 
 ACombatGameMode::ACombatGameMode()
 {
 	PlayerControllerClass = ACombatPlayerController::StaticClass();
 	// 蓝图 GameMode 可继续用 DefaultPawnClass 选择玩家 Unit；SpawnDefaultPawnAtTransform 会单独返回 Command Pawn。
 	DefaultPawnClass = ACombatUnitCharacter::StaticClass();
+}
+
+void ACombatGameMode::PostLogin(APlayerController* NewPlayer)
+{
+	Super::PostLogin(NewPlayer);
+	ACombatPlayerController* CombatPlayer = Cast<ACombatPlayerController>(NewPlayer);
+	if (!CombatPlayer || !EconomyData || !ShopData) return;
+	FString Error;
+	if (!CombatPlayer->GetCombatEconomyComponent()->InitializeForMatch(
+		EconomyData, ShopData, bEnableEconomyDebugCommands, Error))
+	{
+		UE_LOG(LogCombat, Error, TEXT("EconomyPlayerInitializationFailed Player=%s Error=%s"),
+			*GetNameSafe(CombatPlayer), *Error);
+	}
 }
 
 APawn* ACombatGameMode::SpawnDefaultPawnAtTransform_Implementation(

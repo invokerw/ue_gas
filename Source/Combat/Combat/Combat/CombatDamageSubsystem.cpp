@@ -14,6 +14,8 @@
 #include "Combat/Unit/CombatUnitCharacter.h"
 #include "Combat/Unit/CombatUnitLifecycleComponent.h"
 #include "Combat/Unit/CombatProgressionComponent.h"
+#include "Combat/Economy/CombatEconomyComponent.h"
+#include "CombatPlayerController.h"
 #include "Combat/UI/CombatOverheadWidgetComponent.h"
 
 FCombatDamageResult UCombatDamageSubsystem::DealDamage(const FCombatDamageRequest& Request)
@@ -178,12 +180,25 @@ FCombatDamageResult UCombatDamageSubsystem::DealDamage(const FCombatDamageReques
 		if (UCombatUnitLifecycleComponent* Lifecycle = Request.Target->GetCombatLifecycleComponent())
 		{
 			if (Lifecycle->RequestDeath(Result.Event.Context, Request.Source)
-				&& Request.Source != Request.Target && Request.Target->GetUnitData()
-				&& Request.Target->GetUnitData()->ExperienceReward > 0)
+				&& Request.Source != Request.Target && Request.Target->GetUnitData())
 			{
-				if (UCombatProgressionComponent* Progression = Request.Source->GetCombatProgressionComponent())
+				if (Request.Target->GetUnitData()->ExperienceReward > 0)
 				{
-					Progression->AddExperience(Request.Target->GetUnitData()->ExperienceReward);
+					if (UCombatProgressionComponent* Progression = Request.Source->GetCombatProgressionComponent())
+					{
+						Progression->AddExperience(Request.Target->GetUnitData()->ExperienceReward);
+					}
+				}
+				if (Request.Target->GetUnitData()->GoldReward > 0)
+				{
+					if (ACombatPlayerController* KillerPlayer = Cast<ACombatPlayerController>(
+						Request.Source->GetCommandingPlayerController()))
+					{
+						if (UCombatEconomyComponent* Economy = KillerPlayer->GetCombatEconomyComponent())
+						{
+							Economy->AddGold(Request.Target->GetUnitData()->GoldReward, TEXT("UnitKill"));
+						}
+					}
 				}
 			}
 		}

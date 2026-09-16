@@ -18,11 +18,21 @@ bool UCombatItemData::ValidateRuntime(FString& OutError) const
 		|| QuantityPerUse < 0 || QuantityPerUse > MaxStack || ChargesPerUse < 0 || ChargesPerUse > InitialCharges
 		|| (InitialCharges > 0 && MaxStack != 1) || (QuantityPerUse > 0 && ChargesPerUse > 0)
 		|| (bDestroyWhenChargesEmpty && (InitialCharges == 0 || ChargesPerUse == 0))
+		|| PurchasePrice < 0 || (bPurchasable && PurchasePrice <= 0) || (!Recipe.IsEmpty() && bPurchasable)
+		|| (bRecipeScroll && (!bPurchasable || !Recipe.IsEmpty()))
 		|| !FMath::IsFinite(AuraRadius) || AuraRadius < 0.0f
 		|| (Sharing != ECombatItemSharing::Public && Sharing != ECombatItemSharing::BoundUnit && Sharing != ECombatItemSharing::AlliedTeam))
 	{
 		OutError = TEXT("Invalid item identity, stack, charges or aura radius");
 		return false;
+	}
+	for (const FCombatItemRecipeIngredient& Ingredient : Recipe)
+	{
+		if (Ingredient.Item.IsNull() || Ingredient.Quantity < 1 || Ingredient.Quantity > 99)
+		{
+			OutError = TEXT("Item recipe requires valid components with quantity from 1 to 99");
+			return false;
+		}
 	}
 	const UCombatGameplayAbility* Ability = ActiveAbility ? ActiveAbility->GetDefaultObject<UCombatGameplayAbility>() : nullptr;
 	if (ActiveAbility && (!Ability || !Ability->GetAbilityData() || !Ability->GetAbilityData()->ValidateRuntime(OutError)

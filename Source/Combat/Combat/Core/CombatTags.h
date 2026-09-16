@@ -6,7 +6,7 @@
 namespace CombatTags
 {
 	/** Native GameplayTag 命名与语义 schema 版本；不兼容改名或语义变化时递增。 */
-	inline constexpr int32 SchemaVersion = 2;
+	inline constexpr int32 SchemaVersion = 3;
 
 	/** 物品主动独立于沉默；来源标签在 Spec 授予前写入并随 GAS 复制。 */
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Muted)
@@ -19,6 +19,18 @@ namespace CombatTags
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Failure_Item_Busy)
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Failure_Item_Bound)
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Combat_ItemChanged)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Failure_Economy_Uninitialized)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Failure_Economy_InsufficientGold)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Failure_Economy_Stale)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Failure_Economy_CatalogUnavailable)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Failure_Economy_RecipeInvalid)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Failure_Economy_StashFull)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Failure_Economy_NotSellable)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Combat_GoldChanged)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Combat_ItemPurchased)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Combat_ItemSold)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Combat_ItemCrafted)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Combat_EconomyRequestRejected)
 
 	/** Unit 生命周期、控制、可见性与碰撞状态标签。 */
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Alive)

@@ -1,7 +1,15 @@
 #include "Combat/UI/CombatPlayerHUD.h"
 #include "Combat/UI/CombatHUDWidget.h"
 #include "Combat/UI/CombatLogWidget.h"
+#include "Combat/UI/CombatShopWidget.h"
+#include "Combat/UI/CombatStashWidget.h"
 #include "GameFramework/PlayerController.h"
+
+ACombatPlayerHUD::ACombatPlayerHUD()
+{
+	ShopWidgetClass = UCombatShopWidget::StaticClass();
+	StashWidgetClass = UCombatStashWidget::StaticClass();
+}
 
 void ACombatPlayerHUD::BeginPlay()
 {
@@ -10,12 +18,17 @@ void ACombatPlayerHUD::BeginPlay()
 	if (GetNetMode() == NM_DedicatedServer || !Player || !Player->IsLocalController()) return;
 	if (WidgetClass) CombatWidget = CreateWidget<UCombatHUDWidget>(Player, WidgetClass);
 	if (LogWidgetClass) LogWidget = CreateWidget<UCombatLogWidget>(Player, LogWidgetClass);
+	if (ShopWidgetClass) ShopWidget = CreateWidget<UCombatShopWidget>(Player, ShopWidgetClass);
+	if (StashWidgetClass) StashWidget = CreateWidget<UCombatStashWidget>(Player, StashWidgetClass);
+	if (StashWidget) StashWidget->SetShopWidget(ShopWidget);
 	if (LogWidget) LogWidget->AddToPlayerScreen(20);
+	if (ShopWidget) ShopWidget->AddToPlayerScreen(15);
+	if (StashWidget) StashWidget->AddToPlayerScreen(16);
 	if (CombatWidget)
 	{
 		CombatWidget->AddToPlayerScreen(10);
 	}
-	if (CombatWidget || LogWidget)
+	if (CombatWidget || LogWidget || ShopWidget || StashWidget)
 	{
 		// 让 HUD 先消费自身区域点击，未处理的输入仍交回游戏与原 Enhanced Input 映射。
 		FInputModeGameAndUI Mode;
@@ -27,6 +40,18 @@ void ACombatPlayerHUD::BeginPlay()
 
 void ACombatPlayerHUD::EndPlay(const EEndPlayReason::Type Reason)
 {
+	// 先断开弱互联，再触发两个 Widget 各自的 delegate 清理，避免 teardown 顺序形成旧入口。
+	if (StashWidget) StashWidget->SetShopWidget(nullptr);
+	if (StashWidget)
+	{
+		StashWidget->RemoveFromParent();
+		StashWidget = nullptr;
+	}
+	if (ShopWidget)
+	{
+		ShopWidget->RemoveFromParent();
+		ShopWidget = nullptr;
+	}
 	if (LogWidget)
 	{
 		LogWidget->InitializeForLog(nullptr);

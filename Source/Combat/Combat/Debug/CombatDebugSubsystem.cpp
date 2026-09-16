@@ -1,6 +1,7 @@
 #include "Combat/Debug/CombatDebugSubsystem.h"
 
 #include "Combat/Attributes/CombatAttributeSet.h"
+#include "Combat/Economy/CombatEconomyComponent.h"
 #include "Combat/Attack/CombatAttackComponent.h"
 #include "Combat/Aura/CombatAuraSubsystem.h"
 #include "Combat/Log/CombatEventSubsystem.h"
@@ -14,6 +15,7 @@
 #include "Combat/Thinker/CombatThinkerSubsystem.h"
 #include "Combat/Unit/CombatProgressionComponent.h"
 #include "Combat/Unit/CombatUnitCharacter.h"
+#include "CombatPlayerController.h"
 #include "DrawDebugHelpers.h"
 #include "Engine/NetConnection.h"
 #include "Engine/NetDriver.h"
@@ -139,6 +141,60 @@ namespace CombatDebugConsole
 			UE_LOG(LogCombat, Display, TEXT("CombatDebugAddExperience Target=%s Amount=%d Level=%d Experience=%lld AbilityPoints=%d"),
 				*Target->GetName(), Amount, Progression->GetLevel(),
 				static_cast<long long>(Progression->GetExperience()), Progression->GetUnspentAbilityPoints());
+		}),
+		ECVF_Cheat);
+
+	/** 查找 Demo 金币命令的玩家目标；省略选择器时使用当前 World 首个 Combat PlayerController。 */
+	static ACombatPlayerController* ResolveEconomyTarget(UWorld& World, const FString* TargetSelector)
+	{
+		if (!TargetSelector) return Cast<ACombatPlayerController>(World.GetFirstPlayerController());
+		int32 RequestedId = INDEX_NONE;
+		LexTryParseString(RequestedId, **TargetSelector);
+		for (TActorIterator<ACombatPlayerController> It(&World); It; ++It)
+		{
+			if (It->GetUniqueID() == RequestedId || It->GetName().Equals(*TargetSelector, ESearchCase::IgnoreCase))
+			{
+				return *It;
+			}
+		}
+		return nullptr;
+	}
+
+	/** Demo-only 单一金币设置命令；最终边界和 Revision 仍由经济组件提交。 */
+	static FAutoConsoleCommandWithWorldAndArgs SetGold(
+		TEXT("combat.Debug.SetGold"),
+		TEXT("combat.Debug.SetGold <Amount> [PlayerControllerUniqueId|Name]：设置 Demo 玩家金币（仅开发环境）。"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			int64 Amount = 0;
+			if (!World || Args.Num() < 1 || Args.Num() > 2 || !LexTryParseString(Amount, *Args[0]) || Amount < 0)
+			{
+				UE_LOG(LogCombat, Warning, TEXT("Usage: combat.Debug.SetGold <Amount> [PlayerControllerUniqueId|Name]"));
+				return;
+			}
+			if (World->GetNetMode() == NM_Client)
+			{
+				UE_LOG(LogCombat, Warning, TEXT("combat.Debug.SetGold requires a server or Standalone world"));
+				return;
+			}
+			const FString* TargetSelector = Args.Num() > 1 ? &Args[1] : nullptr;
+			ACombatPlayerController* Target = ResolveEconomyTarget(*World, TargetSelector);
+			UCombatEconomyComponent* Economy = Target ? Target->GetCombatEconomyComponent() : nullptr;
+			if (!Economy || !Economy->AreDebugCommandsEnabled())
+			{
+				UE_LOG(LogCombat, Warning, TEXT("Economy debug command is disabled or target was not found: %s"),
+					TargetSelector ? **TargetSelector : TEXT("<first player>"));
+				return;
+			}
+			FString Error;
+			if (!Economy->SetGoldForDebug(Amount, Error))
+			{
+				UE_LOG(LogCombat, Warning, TEXT("CombatDebugSetGold rejected Target=%s Amount=%lld Error=%s"),
+					*Target->GetName(), Amount, *Error);
+				return;
+			}
+			UE_LOG(LogCombat, Display, TEXT("CombatDebugSetGold Target=%s Amount=%lld Revision=%d"),
+				*Target->GetName(), Amount, Economy->GetEconomyRevision());
 		}),
 		ECVF_Cheat);
 #endif

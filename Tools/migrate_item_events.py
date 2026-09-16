@@ -1,4 +1,4 @@
-"""将 Combat v1 事件 JSON 离线升级到物品契约 v2，保留原记录与因果身份。"""
+"""将 Combat v1/v2 事件 JSON 离线升级到经济契约 v3，保留原记录与因果身份。"""
 import argparse
 import copy
 import json
@@ -13,19 +13,22 @@ def migrate_record(record):
     pascal = 'SchemaVersion' in result
     key = lambda name: name if pascal else name[0].lower() + name[1:]
     version = result.get(key('SchemaVersion'))
-    if type(version) is not int or version not in (1, 2):
+    if type(version) is not int or version not in (1, 2, 3):
         raise ValueError(f'Unsupported event schema: {version!r}')
-    if version == 2:
+    if version == 3:
         return result
-    source = result.setdefault(key('Source'), {})
-    if not isinstance(source, dict):
-        raise ValueError('Event source must be an object')
-    source[key('ItemDefinitionId')] = ''
-    source[key('ItemHandle')] = {key('Key'): {key('Id'): 0, key('Generation'): 0, key('LifeGeneration'): 0}}
-    result[key('ItemAction')] = 'None'
-    result[key('ItemQuantity')] = 0
-    result[key('ItemCharges')] = 0
-    result[key('SchemaVersion')] = 2
+    if version == 1:
+        source = result.setdefault(key('Source'), {})
+        if not isinstance(source, dict):
+            raise ValueError('Event source must be an object')
+        source[key('ItemDefinitionId')] = ''
+        source[key('ItemHandle')] = {key('Key'): {key('Id'): 0, key('Generation'): 0, key('LifeGeneration'): 0}}
+        result[key('ItemAction')] = 'None'
+        result[key('ItemQuantity')] = 0
+        result[key('ItemCharges')] = 0
+    result[key('GoldDelta')] = 0
+    result[key('GoldBalance')] = 0
+    result[key('SchemaVersion')] = 3
     return result
 
 

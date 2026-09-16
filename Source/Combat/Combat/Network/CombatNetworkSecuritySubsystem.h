@@ -4,11 +4,13 @@
 #include "Subsystems/WorldSubsystem.h"
 
 #include "Combat/Network/CombatNetworkTypes.h"
+#include "Combat/Economy/CombatEconomyTypes.h"
 
 #include "CombatNetworkSecuritySubsystem.generated.h"
 
 class ACombatUnitCharacter;
 class APlayerController;
+class UCombatEconomyComponent;
 
 /**
  * 客户端指令 RPC 的服务器安全检查。以指挥玩家的 PlayerController 为键保存请求额度和最近请求 ID，检查单位所有权、正请求 ID、批次数量、估算载荷、重复请求与发送频率。
@@ -25,6 +27,14 @@ public:
 		APlayerController* RequestingController,
 		ACombatUnitCharacter* Unit,
 		const FCombatOrderBatchRequest& Request,
+		FGameplayTag& OutFailureTag,
+		FString& OutDiagnostic);
+
+	/** 与 Order 共用同一连接 token bucket 和重放窗口，校验固定大小经济意图及组件所有权。 */
+	bool ValidateAndConsumeEconomyRequest(
+		APlayerController* RequestingController,
+		UCombatEconomyComponent* Economy,
+		const FCombatEconomyRequest& Request,
 		FGameplayTag& OutFailureTag,
 		FString& OutDiagnostic);
 
@@ -73,6 +83,10 @@ private:
 		const FCombatOrderBatchRequest& Request,
 		FGameplayTag FailureTag,
 		const FString& Diagnostic);
+	void RecordEconomyRejection(APlayerController* RequestingController,
+		const FCombatEconomyRequest& Request, FGameplayTag FailureTag, const FString& Diagnostic);
+	bool ConsumeConnectionBudget(APlayerController* RequestingController, int32 RequestId,
+		FGameplayTag& OutFailureTag, FString& OutDiagnostic);
 	/** 移除已经销毁的连接键。 */
 	void PruneInvalidConnections();
 

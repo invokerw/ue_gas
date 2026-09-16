@@ -102,7 +102,7 @@ struct COMBAT_API FCombatDefinitionRedirect
 struct COMBAT_API FCombatDefinitionRegistry
 {
 	/** 当前 Combat 内容 schema 版本。 */
-	static constexpr int32 CombatContentVersion = 1;
+	static constexpr int32 CombatContentVersion = 2;
 
 	/** 检查源和目标是否合法、旧源是否重复，并拒绝目标仍是另一条旧源的链式映射；目标必须直接存在于 KnownIds。 */
 	static bool ValidateRedirects(
@@ -162,10 +162,13 @@ public:
 
 	/** 当前 C++ 数据结构版本，由代码维护，内容迁移与兼容检查使用。 */
 	UPROPERTY(VisibleDefaultsOnly, BlueprintReadOnly, AssetRegistrySearchable, Category="Combat|Identity", meta=(DisplayName="数据结构版本", ToolTip="当前 Combat 定义的数据结构版本，由代码维护并用于内容兼容与迁移校验。"))
-	int32 SchemaVersion = 1;
+	int32 SchemaVersion = FCombatDefinitionRegistry::CombatContentVersion;
 
 	/** 返回“派生类型固定 PrimaryAssetType + DefinitionName”组成的 ID，供网络、日志、存档和资产查找使用。 */
 	virtual FPrimaryAssetId GetPrimaryAssetId() const override;
+	/** 内容迁移工具唯一写入口：只允许把旧版本提升到当前版本，拒绝降级和未来版本。 */
+	UFUNCTION(BlueprintCallable, Category="Combat|Identity", meta=(DisplayName="升级到当前数据结构版本", ToolTip="供受控内容迁移脚本使用；只允许旧版本升级到当前代码版本。"))
+	bool UpgradeSchemaToCurrent();
 	/** 返回派生定义类型对应的固定 Combat PrimaryAssetType。 */
 	virtual FPrimaryAssetType GetCombatPrimaryAssetType() const;
 
@@ -214,6 +217,10 @@ public:
 	/** 单位死亡时由击杀者获得的经验奖励；0 表示该单位不提供击杀经验。 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Progression", meta=(DisplayName="击杀经验奖励", ToolTip="单位被致死伤害击杀后，实际完成击杀的单位获得的经验点；必须为非负数。", ClampMin="0"))
 	int32 ExperienceReward = 100;
+
+	/** 被该单位实际击杀时授予击杀者所属玩家的单一金币；AI、自杀或无玩家归属不会创建奖励。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Economy", meta=(DisplayName="击杀金币奖励", ToolTip="单位被致死伤害击杀后，实际击杀者的 PlayerController 获得该非负金币；0 表示无奖励。", ClampMin="0"))
+	int64 GoldReward = 0;
 
 	/** 单位生成时使用的队伍；0 为中立，1..254 为有效队伍，255 为无效保留值。 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Unit", meta=(DisplayName="初始队伍", ToolTip="单位生成时使用的战斗队伍；0 表示中立，1 到 254 表示有效队伍，255 表示无效。"))

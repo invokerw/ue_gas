@@ -3,6 +3,7 @@
 #include "GameFramework/PlayerController.h"
 
 #include "Combat/Core/CombatTags.h"
+#include "Combat/Economy/CombatEconomyComponent.h"
 #include "Combat/Log/CombatEventSubsystem.h"
 #include "Combat/Unit/CombatUnitCharacter.h"
 
@@ -41,6 +42,76 @@ bool UCombatNetworkSecuritySubsystem::ValidateAndConsumeOrderRequest(
 		return false;
 	}
 
+	if (!ConsumeConnectionBudget(RequestingController, Request.RequestId, OutFailureTag, OutDiagnostic))
+	{
+		RecordRejection(RequestingController, Unit, Request, OutFailureTag, OutDiagnostic);
+		return false;
+	}
+	++Stats.AcceptedRequests;
+	return true;
+}
+
+bool UCombatNetworkSecuritySubsystem::ValidateAndConsumeEconomyRequest(
+	APlayerController* RequestingController, UCombatEconomyComponent* Economy,
+	const FCombatEconomyRequest& Request, FGameplayTag& OutFailureTag, FString& OutDiagnostic)
+{
+	OutFailureTag = {};
+	OutDiagnostic.Reset();
+	PruneInvalidConnections();
+	if (!RequestingController || !RequestingController->HasAuthority() || !Economy
+		|| Economy->GetOwner() != RequestingController)
+	{
+		OutFailureTag = CombatTags::Failure_Network_Ownership;
+		OutDiagnostic = TEXT("Requesting connection does not own the economy component");
+		RecordEconomyRejection(RequestingController, Request, OutFailureTag, OutDiagnostic);
+		return false;
+	}
+	const bool bCommonPayloadValid = Request.ExpectedEconomyRevision > 0
+		&& Request.ExpectedStashRevision > 0 && Request.CommandBindingGeneration >= 0;
+	bool bActionPayloadValid = false;
+	switch (Request.Action)
+	{
+	case ECombatEconomyAction::Purchase:
+		bActionPayloadValid = Request.ItemDefinitionId.IsValid()
+			&& !Request.ItemHandle.IsValid() && Request.ItemRevision == 0;
+		break;
+	case ECombatEconomyAction::SellStashItem:
+	case ECombatEconomyAction::TransferStashItem:
+		bActionPayloadValid = !Request.ItemDefinitionId.IsValid()
+			&& Request.ItemHandle.IsValid() && Request.ItemRevision > 0;
+		break;
+	case ECombatEconomyAction::TakeAllStashItems:
+		bActionPayloadValid = !Request.ItemDefinitionId.IsValid()
+			&& !Request.ItemHandle.IsValid() && Request.ItemRevision == 0;
+		break;
+	default:
+		break;
+	}
+	if (!bCommonPayloadValid || !bActionPayloadValid)
+	{
+		OutFailureTag = CombatTags::Failure_Network_PayloadTooLarge;
+		OutDiagnostic = TEXT("Economy request contains an invalid action payload or revision");
+		RecordEconomyRejection(RequestingController, Request, OutFailureTag, OutDiagnostic);
+		return false;
+	}
+	if (!ConsumeConnectionBudget(RequestingController, Request.RequestId, OutFailureTag, OutDiagnostic))
+	{
+		RecordEconomyRejection(RequestingController, Request, OutFailureTag, OutDiagnostic);
+		return false;
+	}
+	++Stats.AcceptedRequests;
+	return true;
+}
+
+bool UCombatNetworkSecuritySubsystem::ConsumeConnectionBudget(APlayerController* RequestingController,
+	const int32 RequestId, FGameplayTag& OutFailureTag, FString& OutDiagnostic)
+{
+	if (RequestId <= 0)
+	{
+		OutFailureTag = CombatTags::Failure_Network_InvalidRequestId;
+		OutDiagnostic = TEXT("RequestId must be positive");
+		return false;
+	}
 	FConnectionGuardState& State = ConnectionStates.FindOrAdd(RequestingController);
 	const double Now = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
 	if (!State.bInitialized)
@@ -49,11 +120,10 @@ bool UCombatNetworkSecuritySubsystem::ValidateAndConsumeOrderRequest(
 		State.LastRefillTime = Now;
 		State.bInitialized = true;
 	}
-	if (State.RecentRequestIds.Contains(Request.RequestId))
+	if (State.RecentRequestIds.Contains(RequestId))
 	{
 		OutFailureTag = CombatTags::Failure_Network_DuplicateRequest;
 		OutDiagnostic = TEXT("RequestId is already present in the replay window");
-		RecordRejection(RequestingController, Unit, Request, OutFailureTag, OutDiagnostic);
 		return false;
 	}
 	const double Elapsed = FMath::Max(0.0, Now - State.LastRefillTime);
@@ -64,13 +134,11 @@ bool UCombatNetworkSecuritySubsystem::ValidateAndConsumeOrderRequest(
 	{
 		OutFailureTag = CombatTags::Failure_Network_RateLimited;
 		OutDiagnostic = TEXT("Connection token bucket is empty");
-		RecordRejection(RequestingController, Unit, Request, OutFailureTag, OutDiagnostic);
 		return false;
 	}
 
 	State.Tokens -= 1.0;
-	RememberRequestId(State, Request.RequestId);
-	++Stats.AcceptedRequests;
+	RememberRequestId(State, RequestId);
 	return true;
 }
 
@@ -123,6 +191,27 @@ void UCombatNetworkSecuritySubsystem::RecordRejection(
 		Record.TargetActorId = Unit ? Unit->GetUniqueID() : 0;
 		Record.UnitLifeGeneration = Unit ? Unit->GetLifeGeneration() : 0;
 		Record.RequestedAmount = static_cast<float>(Request.Orders.Num());
+		Record.Diagnostic = FString::Printf(TEXT("RequestId=%d %s"), Request.RequestId, *Diagnostic);
+		Events->Emit(Record);
+	}
+}
+
+void UCombatNetworkSecuritySubsystem::RecordEconomyRejection(APlayerController* RequestingController,
+	const FCombatEconomyRequest& Request, const FGameplayTag FailureTag, const FString& Diagnostic)
+{
+	++Stats.RejectedRequests;
+	Stats.OwnershipRejects += FailureTag == CombatTags::Failure_Network_Ownership ? 1 : 0;
+	Stats.RateLimitRejects += FailureTag == CombatTags::Failure_Network_RateLimited ? 1 : 0;
+	Stats.PayloadRejects += FailureTag == CombatTags::Failure_Network_PayloadTooLarge ? 1 : 0;
+	Stats.ReplayRejects += FailureTag == CombatTags::Failure_Network_DuplicateRequest ? 1 : 0;
+	if (UCombatEventSubsystem* Events = GetWorld() ? GetWorld()->GetSubsystem<UCombatEventSubsystem>() : nullptr)
+	{
+		FCombatLogRecord Record;
+		Record.Context = Events->CreateRootEvent();
+		Record.EventType = CombatTags::Event_Combat_EconomyRequestRejected;
+		Record.FailureTag = FailureTag;
+		Record.SourceActorId = RequestingController ? RequestingController->GetUniqueID() : 0;
+		Record.RequestedAmount = static_cast<float>(Request.Action);
 		Record.Diagnostic = FString::Printf(TEXT("RequestId=%d %s"), Request.RequestId, *Diagnostic);
 		Events->Emit(Record);
 	}

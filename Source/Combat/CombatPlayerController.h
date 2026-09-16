@@ -6,6 +6,7 @@
 #include "GameFramework/PlayerController.h"
 #include "Combat/UI/CombatAbilityAimComponent.h"
 #include "Combat/Network/CombatNetworkTypes.h"
+#include "Combat/Economy/CombatEconomyTypes.h"
 #include "CombatPlayerController.generated.h"
 
 class ACombatUnitCharacter;
@@ -15,6 +16,7 @@ class UInputAction;
 class UInputMappingContext;
 class UEnhancedInputComponent;
 class UCombatLogComponent;
+class UCombatEconomyComponent;
 struct FCombatOrderRequest;
 struct FCombatHUDOwnerView;
 struct FCombatItemView;
@@ -40,6 +42,9 @@ public:
 	/** 返回当前显式主控 Combat Unit；输入不得从 GetPawn 推断该对象。 */
 	UFUNCTION(BlueprintPure, Category="Combat|Command", meta=(DisplayName="获取主控战斗单位", ToolTip="返回由服务器绑定并仅复制给拥有者的主控 Combat Unit。"))
 	ACombatUnitCharacter* GetCommandedUnit() const { return CommandedUnit; }
+	/** 返回跟随连接而非英雄生命的单一金币与储藏处组件。 */
+	UFUNCTION(BlueprintPure, Category="Combat|Economy", meta=(DisplayName="获取战斗经济组件"))
+	UCombatEconomyComponent* GetCombatEconomyComponent() const { return CombatEconomyComponent; }
 
 	/** 返回每次真实绑定变化都单调递增的非零代次。 */
 	UFUNCTION(BlueprintPure, Category="Combat|Command", meta=(DisplayName="获取指挥绑定代次", ToolTip="用于 UI、镜头和本地异步回执淘汰旧绑定。"))
@@ -80,6 +85,24 @@ public:
 	FText GetItemHotkeyText(int32 Slot) const;
 	/** 拾取与放置最终结果，仅用于本地 HUD。 */
 	FText GetItemStatusText() const;
+	/** 本地商店购买入口；返回仅表示请求已发送，最终结果读取 OnEconomyResult。 */
+	UFUNCTION(BlueprintCallable, Category="Combat|Economy", meta=(DisplayName="购买商店物品"))
+	bool PurchaseShopItem(FPrimaryAssetId ItemDefinitionId);
+	/** 本地储藏处出售入口。 */
+	UFUNCTION(BlueprintCallable, Category="Combat|Economy", meta=(DisplayName="出售储藏处物品"))
+	bool SellStashItem(const FCombatItemView& ExpectedItem);
+	/** 本地把一件储藏物品转给当前存活英雄。 */
+	UFUNCTION(BlueprintCallable, Category="Combat|Economy", meta=(DisplayName="取出储藏处物品"))
+	bool TransferStashItem(const FCombatItemView& ExpectedItem);
+	/** 本地请求按槽位顺序尽可能取出全部储藏物品。 */
+	UFUNCTION(BlueprintCallable, Category="Combat|Economy", meta=(DisplayName="全部取出储藏处物品"))
+	bool TakeAllStashItems();
+	/** 服务器业务入口，供可靠 RPC 与自动化共用。 */
+	FCombatEconomyResult ProcessEconomyRequestForConnection(APlayerController* RequestingController,
+		const FCombatEconomyRequest& Request);
+	const FCombatEconomyResult& GetLastEconomyResult() const { return LastEconomyResult; }
+	UPROPERTY(BlueprintAssignable, Category="Combat|Economy", meta=(DisplayName="经济事务结果"))
+	FCombatEconomyResultDelegate OnEconomyResult;
 
 protected:
 	/**
@@ -176,6 +199,9 @@ private:
 	/** 默认子对象记录本连接可见事件；生命周期跟随 Controller，HUD 关闭不停止记录。 */
 	UPROPERTY(VisibleAnywhere, Category="Combat|Log", meta=(DisplayName="战斗记录组件", ToolTip="服务器生成并仅向本连接复制的只读战斗历史。"))
 	TObjectPtr<UCombatLogComponent> CombatLogComponent;
+	/** 玩家级单一金币和六格储藏处，切换或死亡当前英雄时保持不变。 */
+	UPROPERTY(VisibleAnywhere, Category="Combat|Economy", meta=(DisplayName="战斗经济组件"))
+	TObjectPtr<UCombatEconomyComponent> CombatEconomyComponent;
 #if WITH_DEV_AUTOMATION_TESTS
 	friend class FCombatPlayerAttackInputTest;
 	friend class FCombatPlayerAttackInputCancellationTest;
@@ -265,6 +291,11 @@ private:
 	bool bFlushingPressedKeys = false;
 	/** 用当前实际命中和会话号尝试确认一次；保持唯一 SubmitCombatOrder 入口。 */
 	void ConfirmAbilityTarget(const FHitResult& Hit, uint64 Serial);
+	int32 AllocateCombatRequestId();
+	bool SubmitEconomyRequest(FCombatEconomyRequest Request);
+	UFUNCTION(Server, Reliable) void ServerSubmitEconomyRequest(FCombatEconomyRequest Request);
+	UFUNCTION(Client, Reliable) void ClientReceiveEconomyResult(FCombatEconomyResult Result);
+	UPROPERTY(Transient) FCombatEconomyResult LastEconomyResult;
 	/** 向 CommandedUnit 提交替换型 MoveToPoint 批次。 */
 	bool IssueCombatMoveOrder();
 	/** 查询鼠标或触摸命中的有限世界位置。 */

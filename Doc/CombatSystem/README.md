@@ -1,6 +1,6 @@
 # UE GAS Dota-Like Combat 文档索引
 
-> 当前契约：ITEM-001 实现 `combat_v2_items_rc1` 物品扩展；验证与验收见进度台账。M0-M8 的 v1 共 82/82 Task、9/9 里程碑已通过用户验收，历史证据保持冻结。
+> 当前契约：ECON-001 在 ITEM-001 之上实现 `combat_v3_economy_rc1` 经济扩展；本地验证已完成，用户验收仍进行中。M0-M8 的 v1 共 82/82 Task、9/9 里程碑已通过用户验收，历史证据保持冻结。
 > 当前工程：UE 5.8；GameplayAbilities/GameplayTags/GameplayTasks 已接入，Combat 实现位于 `Source/Combat/Combat`。
 > 当前 Post-M8：SAM 服务器权威单位移动与 DEMO-901 卓尔游侠 Demo 均已通过用户验收。
 > 底部 HUD：工程验证已完成，待用户实机复验；状态与远端验证记录见台账 §12.3。
@@ -51,6 +51,7 @@
 | [10-10 服务器权威单位移动改造与验收](10-Architecture/10-10-Server-Authoritative-Movement-Kickoff.md) | PlayerController 指挥、AIController 服务器移动、Command Pawn、Crowd 与 Dedicated Gate 的当前实现和证据 | 单位控制、网络、AI、测试与维护者 |
 | [10-11 头顶 UI：C++ 与蓝图边界](10-Architecture/10-11-Overhead-Blueprint-UI.md) | 展示快照、生命周期、UMG 蓝图维护入口与迁移 | UI、美术、战斗与网络开发 |
 | [10-14 物品系统](10-Architecture/10-14-Item-System.md) | 装备/背包、主动被动、场景拾取、HUD、版本与迁移 | 玩法、内容、网络与 UI 开发 |
+| [10-15 经济、商店与合成](10-Architecture/10-15-Economy-Shop-Crafting.md) | 单一金币、全局商店、储藏处、配方事务、RPC 安全与 Demo 配置 | 玩法、内容、网络与 UI 开发 |
 | [10-12 底部居中 HUD：设计与实现](10-Architecture/10-12-Bottom-HUD-Design.md) | 定稿布局、拥有者快照、Widget Blueprint 与物品接线 | UI、美术、网络开发与验收 |
 | [10-13 技能瞄准与范围指示器](10-Architecture/10-13-Skill-Indicators.md) | 输入会话、三层贴花、Action 参数与训练场 | 输入、技能、UI 与验收 |
 
@@ -105,7 +106,7 @@
 - 理解当前单位控制与联机：`10-Architecture/10-09-Client-Server-Interaction.md` → `10-Architecture/10-07-Order-Movement.md` → `10-Architecture/10-08-Data-Network-Observability.md` → `30-Tooling/30-02-M7-MCP-Diagnostic-Recipe.md` → `00-Project/00-03-Test-Plan.md`。
 - 维护服务器权威移动：`10-Architecture/10-10-Server-Authoritative-Movement-Kickoff.md` → `10-Architecture/10-09-Client-Server-Interaction.md` → `10-Architecture/10-07-Order-Movement.md` → `10-Architecture/10-01-Scope-Architecture.md` → `90-History/90-16-M8-Lifecycle-Audit.md` → `00-Project/00-04-Decisions-Gaps.md` → `00-Project/00-03-Test-Plan.md`。
 - 维护头顶界面：`10-Architecture/10-11-Overhead-Blueprint-UI.md` → `10-Architecture/10-08-Data-Network-Observability.md` → `20-Content/20-03-M8-Public-Extension-Guide.md` → `90-History/90-16-M8-Lifecycle-Audit.md`。
-- 维护底部 HUD：`10-Architecture/10-12-Bottom-HUD-Design.md` → `10-Architecture/10-08-Data-Network-Observability.md` → `00-Project/00-04-Decisions-Gaps.md` 的 ADR-047 → `20-Content/20-03-M8-Public-Extension-Guide.md`。
+- 维护底部 HUD：`10-Architecture/10-12-Bottom-HUD-Design.md` → `10-Architecture/10-14-Item-System.md` → `10-Architecture/10-15-Economy-Shop-Crafting.md` → `10-Architecture/10-08-Data-Network-Observability.md` → `00-Project/00-04-Decisions-Gaps.md` 的 ADR-047。
 - 核对发布状态：`00-Project/00-01-Progress-Tracker.md` → `90-History/90-15-M8-Release-Candidate-Decision.md` → `90-History/90-17-M8-Acceptance.md`。
 
 ## 原章节迁移

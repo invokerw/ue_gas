@@ -136,7 +136,9 @@ class DocsValidationTests(unittest.TestCase):
                                  "--root", str(self.root), "--report", str(report)],
                                 capture_output=True, text=True)
         self.assertEqual(result.returncode, 1, result.stderr)
-        data = json.loads(report.read_text())
+        # validate_docs writes UTF-8 regardless of the host locale; specify it
+        # here so the test is deterministic on GBK and UTF-8 Windows setups.
+        data = json.loads(report.read_text(encoding="utf-8"))
         self.assertEqual(data["schema_version"], 1)
         self.assertFalse(data["passed"])
         self.assertEqual(path.read_bytes(), original)
