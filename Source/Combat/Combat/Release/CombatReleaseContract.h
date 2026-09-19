@@ -17,11 +17,11 @@ struct COMBAT_API FCombatReleaseContract
 
 	/** 发布契约结构自身的版本。 */
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Release", meta=(DisplayName="发布契约版本", ToolTip="发布契约结构自身的版本；修改字段语义时必须递增。"))
-	int32 ContractVersion = 3;
+	int32 ContractVersion = 4;
 
 	/** 当前候选发布的稳定标识。 */
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Release", meta=(DisplayName="候选发布标识", ToolTip="用于日志、验收报告与问题追踪的稳定候选发布标识。"))
-	FName ReleaseId = TEXT("combat_v3_economy_rc1");
+	FName ReleaseId = TEXT("combat_v4_economy_rc1");
 
 	/** Combat PrimaryDataAsset 内容 schema 版本。 */
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Release", meta=(DisplayName="内容版本", ToolTip="Combat PrimaryDataAsset 与 DefinitionId 迁移所使用的内容 schema 版本。"))
@@ -43,9 +43,9 @@ struct COMBAT_API FCombatReleaseContract
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Release", meta=(DisplayName="事件结构版本", ToolTip="CombatLogRecord 事件结构与消费者兼容性版本。"))
 	int32 EventSchemaVersion = 3;
 
-	/** 玩家金币与储藏处 UI 快照的布局版本。 */
-	UPROPERTY(BlueprintReadOnly, Category="Combat|Release", meta=(DisplayName="经济表现版本", ToolTip="金币与六格储藏处拥有者快照的兼容版本。"))
-	int32 EconomyPresentationSchemaVersion = 1;
+	/** 玩家金币与当前主控单位物品栏 UI 快照的布局版本。 */
+	UPROPERTY(BlueprintReadOnly, Category="Combat|Release", meta=(DisplayName="经济表现版本", ToolTip="金币与当前主控单位物品栏拥有者快照的兼容版本。"))
+	int32 EconomyPresentationSchemaVersion = 3;
 
 	/** 唯一商店目录与配方展示的布局版本。 */
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Release", meta=(DisplayName="商店目录版本", ToolTip="基础/升级页、分类和配方目录的兼容版本。"))
@@ -76,8 +76,8 @@ struct COMBAT_API FCombatReleaseContract
 	bool bItemsAndEconomy = false;
 	/** 当前发布包含服务器权威物品、背包、拾取与 HUD。 */
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Release", meta=(DisplayName="物品系统", ToolTip="当前发布提供物品实例、主动被动、装备背包、场景拾取与 HUD。")) bool bItemsEnabled = true;
-	/** 当前发布包含单一金币、全局 UI 商店、储藏处、合成与出售。 */
-	UPROPERTY(BlueprintReadOnly, Category="Combat|Release", meta=(DisplayName="经济系统", ToolTip="当前发布包含单一金币、全局 UI 商店、储藏处、配方合成与出售。")) bool bEconomyEnabled = true;
+	/** 当前发布包含单一金币、全局 UI 商店、库存合成与库存出售。 */
+	UPROPERTY(BlueprintReadOnly, Category="Combat|Release", meta=(DisplayName="经济系统", ToolTip="当前发布包含单一金币、全局 UI 商店、库存配方合成与库存出售。")) bool bEconomyEnabled = true;
 
 	/** 校验本契约是否仍与代码中的冻结版本常量和发布边界一致。 */
 	bool IsSelfConsistent(FString& OutError) const;

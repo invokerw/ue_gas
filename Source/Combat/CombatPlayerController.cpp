@@ -2,6 +2,7 @@
 
 #include "CombatPlayerController.h"
 #include "Combat/Items/CombatWorldItem.h"
+#include "Combat/Items/CombatInventoryComponent.h"
 #include "Combat/Economy/CombatEconomyComponent.h"
 #include "Combat/View/CombatUnitViewComponent.h"
 #include "Combat/UI/CombatAbilityIndicatorGround.h"
@@ -30,7 +31,6 @@
 #include "Combat/UI/CombatHUDWidget.h"
 #include "Combat/UI/CombatLogWidget.h"
 #include "Combat/UI/CombatShopWidget.h"
-#include "Combat/UI/CombatStashWidget.h"
 #include "Combat/Unit/CombatUnitAIController.h"
 #include "Combat/Unit/CombatUnitCharacter.h"
 #include "Combat.h"
@@ -113,6 +113,7 @@ bool ACombatPlayerController::SetCommandedUnitAuthority(ACombatUnitCharacter* Ne
 	AdvanceCommandBindingGeneration();
 	ForceNetUpdate();
 	RefreshCommandBinding();
+	if (CombatEconomyComponent) CombatEconomyComponent->RefreshInventoryProjection();
 
 	UE_LOG(LogCombat, Log,
 		TEXT("SAMCommandBinding Controller=%s OldUnit=%s NewUnit=%s CommandBindingGeneration=%d Success=%s"),
@@ -135,6 +136,7 @@ void ACombatPlayerController::HandleCommandedUnitEndPlay(ACombatUnitCharacter* E
 	AdvanceCommandBindingGeneration();
 	ForceNetUpdate();
 	RefreshCommandBinding();
+	if (CombatEconomyComponent) CombatEconomyComponent->RefreshInventoryProjection();
 }
 
 void ACombatPlayerController::OnPossess(APawn* InPawn)
@@ -183,7 +185,6 @@ void ACombatPlayerController::OnRep_CommandBindingGeneration()
 void ACombatPlayerController::RefreshCommandBinding()
 {
 	if (GetWorld()) GetWorld()->GetTimerManager().ClearTimer(PendingHUDAbilityTimer);
-	PendingDropItem = {};
 	ItemFeedbackRequest = 0;
 	ItemFeedbackText = FText::GetEmpty();
 	if (AbilityAimComponent) AbilityAimComponent->ResetLocalState();
@@ -285,13 +286,11 @@ void ACombatPlayerController::BeginDestinationInput(const FHitResult& Hit)
 {
 	if (GetWorld()) GetWorld()->GetTimerManager().ClearTimer(PendingHUDAbilityTimer);
 	const bool bWasAbilityAiming = AbilityAimComponent && AbilityAimComponent->IsAiming();
-	const bool bWasDroppingItem = PendingDropItem.IsValid();
-	PendingDropItem = {};
 	if (bWasAbilityAiming) AbilityAimComponent->ResetLocalState();
 	CancelAttackTargeting();
 	ResetDestinationInput();
 	// 右键取消消费整个手势，后续 Triggered/Completed 没有可恢复的移动目标。
-	if (bWasAbilityAiming || bWasDroppingItem || IsPointerOverCombatUI()) return;
+	if (bWasAbilityAiming || IsPointerOverCombatUI()) return;
 	if (!Hit.bBlockingHit || Hit.Location.ContainsNaN())
 	{
 		return;
@@ -393,7 +392,6 @@ void ACombatPlayerController::OnTouchReleased()
 
 void ACombatPlayerController::OnAttackTargetingStarted()
 {
-	PendingDropItem = {};
 	if (AbilityAimComponent) AbilityAimComponent->ResetLocalState();
 	ResetDestinationInput();
 	bAttackTargeting = GetReadyCommandedUnit() != nullptr;
@@ -402,16 +400,6 @@ void ACombatPlayerController::OnAttackTargetingStarted()
 
 void ACombatPlayerController::OnAttackTargetConfirmed()
 {
-	if (PendingDropItem.IsValid())
-	{
-		if (IsPointerOverCombatUI()) return;
-		FCombatItemView Item;
-		Item.Handle = PendingDropItem;
-		Item.Revision = PendingDropRevision;
-		if (GetReadyCommandedUnit() && PendingDropBinding == GetCommandBindingGeneration() && PendingDropLife == GetReadyCommandedUnit()->GetLifeGeneration()
-			&& DropInventoryItemAtCursor(Item)) CancelCombatTargeting();
-		return;
-	}
 	if (AbilityAimComponent && AbilityAimComponent->IsAiming())
 	{
 		FHitResult Hit;
@@ -446,7 +434,6 @@ void ACombatPlayerController::CancelAttackTargeting()
 
 void ACombatPlayerController::OnStopCommand()
 {
-	PendingDropItem = {};
 	if (AbilityAimComponent) AbilityAimComponent->ResetLocalState();
 	CancelAttackTargeting();
 	ResetDestinationInput();
@@ -511,31 +498,23 @@ bool ACombatPlayerController::PurchaseShopItem(const FPrimaryAssetId ItemDefinit
 	return SubmitEconomyRequest(MoveTemp(Request));
 }
 
-bool ACombatPlayerController::SellStashItem(const FCombatItemView& ExpectedItem)
+bool ACombatPlayerController::SellInventoryItem(const FCombatItemView& ExpectedItem)
 {
 	if (!IsLocalController() || !CombatEconomyComponent || !ExpectedItem.Handle.IsValid()) return false;
 	FCombatEconomyRequest Request;
-	Request.Action = ECombatEconomyAction::SellStashItem;
+	Request.Action = ECombatEconomyAction::SellInventoryItem;
 	Request.ItemHandle = ExpectedItem.Handle;
 	Request.ItemRevision = ExpectedItem.Revision;
 	return SubmitEconomyRequest(MoveTemp(Request));
 }
 
-bool ACombatPlayerController::TransferStashItem(const FCombatItemView& ExpectedItem)
+bool ACombatPlayerController::ToggleInventoryItemLock(const FCombatItemView& ExpectedItem)
 {
 	if (!IsLocalController() || !CombatEconomyComponent || !ExpectedItem.Handle.IsValid()) return false;
 	FCombatEconomyRequest Request;
-	Request.Action = ECombatEconomyAction::TransferStashItem;
+	Request.Action = ECombatEconomyAction::ToggleInventoryItemLock;
 	Request.ItemHandle = ExpectedItem.Handle;
 	Request.ItemRevision = ExpectedItem.Revision;
-	return SubmitEconomyRequest(MoveTemp(Request));
-}
-
-bool ACombatPlayerController::TakeAllStashItems()
-{
-	if (!IsLocalController() || !CombatEconomyComponent) return false;
-	FCombatEconomyRequest Request;
-	Request.Action = ECombatEconomyAction::TakeAllStashItems;
 	return SubmitEconomyRequest(MoveTemp(Request));
 }
 
@@ -545,7 +524,8 @@ bool ACombatPlayerController::SubmitEconomyRequest(FCombatEconomyRequest Request
 	Request.RequestId = AllocateCombatRequestId();
 	Request.CommandBindingGeneration = CommandBindingGeneration;
 	Request.ExpectedEconomyRevision = CombatEconomyComponent->GetEconomyRevision();
-	Request.ExpectedStashRevision = CombatEconomyComponent->GetStashRevision();
+	// 经济投影在自动合成结束后才广播最终库存修订；不要读取客户端 Unit 组件的旧副本覆盖它。
+	Request.ExpectedInventoryRevision = CombatEconomyComponent->GetInventoryRevision();
 	ServerSubmitEconomyRequest(MoveTemp(Request));
 	return true;
 }
@@ -565,7 +545,7 @@ FCombatEconomyResult ACombatPlayerController::ProcessEconomyRequestForConnection
 	if (CombatEconomyComponent)
 	{
 		Result.EconomyRevision = CombatEconomyComponent->GetEconomyRevision();
-		Result.StashRevision = CombatEconomyComponent->GetStashRevision();
+		Result.InventoryRevision = CombatEconomyComponent->GetInventoryRevision();
 	}
 	UCombatNetworkSecuritySubsystem* Security = GetWorld()
 		? GetWorld()->GetSubsystem<UCombatNetworkSecuritySubsystem>() : nullptr;
@@ -592,22 +572,17 @@ FCombatEconomyResult ACombatPlayerController::ProcessEconomyRequestForConnection
 	{
 	case ECombatEconomyAction::Purchase:
 		Result.bSuccess = CombatEconomyComponent->PurchaseItem(Request.ItemDefinitionId,
-			Request.ExpectedEconomyRevision, Request.ExpectedStashRevision, Result.ItemHandle, Result.FailureTag);
+			Request.ExpectedEconomyRevision, Request.ExpectedInventoryRevision, Result.ItemHandle, Result.FailureTag);
 		break;
-	case ECombatEconomyAction::SellStashItem:
+	case ECombatEconomyAction::SellInventoryItem:
 		Result.ItemHandle = Request.ItemHandle;
-		Result.bSuccess = CombatEconomyComponent->SellStashItem(Request.ItemHandle, Request.ItemRevision,
-			Request.ExpectedEconomyRevision, Request.ExpectedStashRevision, Result.FailureTag);
+		Result.bSuccess = CombatEconomyComponent->SellInventoryItem(Request.ItemHandle, Request.ItemRevision,
+			Request.ExpectedEconomyRevision, Request.ExpectedInventoryRevision, Result.FailureTag);
 		break;
-	case ECombatEconomyAction::TransferStashItem:
+	case ECombatEconomyAction::ToggleInventoryItemLock:
 		Result.ItemHandle = Request.ItemHandle;
-		Result.bSuccess = CombatEconomyComponent->TransferStashItem(Request.ItemHandle, Request.ItemRevision,
-			Request.ExpectedEconomyRevision, Request.ExpectedStashRevision, Result.ItemHandle, Result.FailureTag);
-		Result.MovedItemCount = Result.bSuccess ? 1 : 0;
-		break;
-	case ECombatEconomyAction::TakeAllStashItems:
-		Result.bSuccess = CombatEconomyComponent->TakeAllStashItems(Request.ExpectedEconomyRevision,
-			Request.ExpectedStashRevision, Result.MovedItemCount, Result.FailureTag);
+		Result.bSuccess = CombatEconomyComponent->ToggleInventoryItemLock(Request.ItemHandle, Request.ItemRevision,
+			Request.ExpectedEconomyRevision, Request.ExpectedInventoryRevision, Result.bLocked, Result.FailureTag);
 		break;
 	default:
 		Result.FailureTag = CombatTags::Failure_ActionUnsupported;
@@ -615,7 +590,7 @@ FCombatEconomyResult ACombatPlayerController::ProcessEconomyRequestForConnection
 	}
 	Result.GoldDelta = CombatEconomyComponent->GetGold() - BeforeGold;
 	Result.EconomyRevision = CombatEconomyComponent->GetEconomyRevision();
-	Result.StashRevision = CombatEconomyComponent->GetStashRevision();
+	Result.InventoryRevision = CombatEconomyComponent->GetInventoryRevision();
 	return Result;
 }
 
@@ -656,7 +631,6 @@ void ACombatPlayerController::ActivateCombatAbilitySlotFromHUD(const int32 SlotI
 
 void ACombatPlayerController::ActivateCombatAbilitySlot(const int32 SlotIndex)
 {
-	PendingDropItem = {};
 	CancelAttackTargeting();
 	ResetDestinationInput();
 	AbilityAimComponent->CancelAim();
@@ -740,7 +714,6 @@ void ACombatPlayerController::ConfirmAbilityTarget(const FHitResult& Hit, const 
 void ACombatPlayerController::CancelCombatTargeting()
 {
 	if (!bFlushingPressedKeys && GetWorld()) GetWorld()->GetTimerManager().ClearTimer(PendingHUDAbilityTimer);
-	PendingDropItem = {};
 	for (uint64& Serial : ItemPressSerials) Serial = 0;
 	CancelAttackTargeting();
 	ResetDestinationInput();
@@ -763,8 +736,7 @@ bool ACombatPlayerController::IsPointerOverCombatUI() const
 	const FVector2D Cursor = FSlateApplication::Get().GetCursorPos();
 	return (HUD->GetCombatWidget() && HUD->GetCombatWidget()->IsScreenPositionOverUI(Cursor))
 		|| (HUD->GetLogWidget() && HUD->GetLogWidget()->IsScreenPositionOverUI(Cursor))
-		|| (HUD->GetShopWidget() && HUD->GetShopWidget()->IsScreenPositionOverUI(Cursor))
-		|| (HUD->GetStashWidget() && HUD->GetStashWidget()->IsScreenPositionOverUI(Cursor));
+		|| (HUD->GetShopWidget() && HUD->GetShopWidget()->IsScreenPositionOverUI(Cursor));
 }
 
 bool ACombatPlayerController::IssueCombatMoveOrder()

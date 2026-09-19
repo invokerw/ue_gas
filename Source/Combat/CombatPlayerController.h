@@ -42,7 +42,7 @@ public:
 	/** 返回当前显式主控 Combat Unit；输入不得从 GetPawn 推断该对象。 */
 	UFUNCTION(BlueprintPure, Category="Combat|Command", meta=(DisplayName="获取主控战斗单位", ToolTip="返回由服务器绑定并仅复制给拥有者的主控 Combat Unit。"))
 	ACombatUnitCharacter* GetCommandedUnit() const { return CommandedUnit; }
-	/** 返回跟随连接而非英雄生命的单一金币与储藏处组件。 */
+	/** 返回跟随连接的单一金币与商店事务组件；购买结果交给当前主控单位库存。 */
 	UFUNCTION(BlueprintPure, Category="Combat|Economy", meta=(DisplayName="获取战斗经济组件"))
 	UCombatEconomyComponent* GetCombatEconomyComponent() const { return CombatEconomyComponent; }
 
@@ -75,12 +75,8 @@ public:
 	bool UseInventoryItem(int32 Slot, const FCombatItemView& Expected);
 	/** 请求交换快照中的两槽；不会替换服务器当前指令。 */
 	bool SwapInventoryItems(int32 From, int32 To, const FCombatHUDOwnerView& Expected);
-	/** 选择丢弃落点或把拖拽的精确实例投递到当前鼠标所指地面。 */
-	void BeginDropInventoryItem(const FCombatItemView& Expected);
-	bool DropInventoryItemAtCursor(const FCombatItemView& Expected);
 	/** 拖放使用释放事件的屏幕位置，避免拖拽期间视口鼠标查询失效；仍通过服务器地面/导航复核。 */
 	bool DropInventoryItemAtScreenPosition(const FCombatItemView& Expected, const FVector2D& ScreenPosition);
-	bool IsChoosingItemDrop() const { return PendingDropItem.IsValid(); }
 	/** 从 Enhanced Input 当前映射取得物品热键，不在 HUD 写死物理键。 */
 	FText GetItemHotkeyText(int32 Slot) const;
 	/** 拾取与放置最终结果，仅用于本地 HUD。 */
@@ -88,15 +84,12 @@ public:
 	/** 本地商店购买入口；返回仅表示请求已发送，最终结果读取 OnEconomyResult。 */
 	UFUNCTION(BlueprintCallable, Category="Combat|Economy", meta=(DisplayName="购买商店物品"))
 	bool PurchaseShopItem(FPrimaryAssetId ItemDefinitionId);
-	/** 本地储藏处出售入口。 */
-	UFUNCTION(BlueprintCallable, Category="Combat|Economy", meta=(DisplayName="出售储藏处物品"))
-	bool SellStashItem(const FCombatItemView& ExpectedItem);
-	/** 本地把一件储藏物品转给当前存活英雄。 */
-	UFUNCTION(BlueprintCallable, Category="Combat|Economy", meta=(DisplayName="取出储藏处物品"))
-	bool TransferStashItem(const FCombatItemView& ExpectedItem);
-	/** 本地请求按槽位顺序尽可能取出全部储藏物品。 */
-	UFUNCTION(BlueprintCallable, Category="Combat|Economy", meta=(DisplayName="全部取出储藏处物品"))
-	bool TakeAllStashItems();
+	/** 本地物品栏出售入口；服务器重新校验拥有者、修订、出售资格和退款。 */
+	UFUNCTION(BlueprintCallable, Category="Combat|Economy", meta=(DisplayName="出售物品栏物品", ToolTip="出售精确物品栏实例；金币与清理结果由服务器决定。"))
+	bool SellInventoryItem(const FCombatItemView& ExpectedItem);
+	/** 本地物品栏锁定入口；服务器切换状态，锁定物品不参与合成。 */
+	UFUNCTION(BlueprintCallable, Category="Combat|Economy", meta=(DisplayName="切换物品锁定", ToolTip="锁定或解锁精确物品栏实例；锁定只影响合成与购买抵扣。"))
+	bool ToggleInventoryItemLock(const FCombatItemView& ExpectedItem);
 	/** 服务器业务入口，供可靠 RPC 与自动化共用。 */
 	FCombatEconomyResult ProcessEconomyRequestForConnection(APlayerController* RequestingController,
 		const FCombatEconomyRequest& Request);
@@ -199,10 +192,11 @@ private:
 	/** 默认子对象记录本连接可见事件；生命周期跟随 Controller，HUD 关闭不停止记录。 */
 	UPROPERTY(VisibleAnywhere, Category="Combat|Log", meta=(DisplayName="战斗记录组件", ToolTip="服务器生成并仅向本连接复制的只读战斗历史。"))
 	TObjectPtr<UCombatLogComponent> CombatLogComponent;
-	/** 玩家级单一金币和六格储藏处，切换或死亡当前英雄时保持不变。 */
+	/** 玩家级单一金币和商店事务状态；库存内容仍由当前主控单位权威持有。 */
 	UPROPERTY(VisibleAnywhere, Category="Combat|Economy", meta=(DisplayName="战斗经济组件"))
 	TObjectPtr<UCombatEconomyComponent> CombatEconomyComponent;
 #if WITH_DEV_AUTOMATION_TESTS
+	friend class FCombatPlayerItemDropPathTest;
 	friend class FCombatPlayerAttackInputTest;
 	friend class FCombatPlayerAttackInputCancellationTest;
 	friend class FCombatPlayerAutoCastAbilityInputTest;
@@ -269,7 +263,6 @@ private:
 	void OnItemSlotReleased(int32 Slot);
 	void OnItemInputCanceled(int32 Slot);
 	uint64 ItemPressSerials[6] = {};
-	FCombatItemHandle PendingDropItem;
 	/** 请求提交前登记，兼容 listen server 同栈先收到最终结果。 */
 	void TrackItemRequest(int32 RequestId, const FCombatOrderRequest& Order);
 	UFUNCTION() void HandleItemBatchResult(FCombatOrderBatchResult Result);
@@ -282,9 +275,6 @@ private:
 	bool bItemFeedbackFinal = false;
 	FText ItemFeedbackText;
 	double ItemFeedbackUntil = 0;
-	int32 PendingDropRevision = 0;
-	int32 PendingDropBinding = 0;
-	uint32 PendingDropLife = 0;
 	/** HUD 技能点击等待本帧焦点收尾后执行，避免 FlushPressedKeys 清掉新会话。 */
 	FTimerHandle PendingHUDAbilityTimer;
 	/** FlushPressedKeys 只清理旧输入，不能取消同一焦点切换中已排队的 HUD 技能点击。 */

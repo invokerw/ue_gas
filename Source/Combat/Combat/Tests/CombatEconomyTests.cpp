@@ -5,6 +5,8 @@
 #include "HAL/IConsoleManager.h"
 #include "Misc/AutomationTest.h"
 
+#include "Combat/Ability/CombatAbilitySystemComponent.h"
+#include "Combat/Attributes/CombatAttributeSet.h"
 #include "Combat/Combat/CombatDamageSubsystem.h"
 #include "Combat/Core/CombatTags.h"
 #include "Combat/Data/CombatDefinitionData.h"
@@ -18,7 +20,6 @@
 #include "Combat/Scheduling/CombatSchedulerSubsystem.h"
 #include "Combat/Tests/CombatAutomationWorldFixture.h"
 #include "Combat/UI/CombatShopWidget.h"
-#include "Combat/UI/CombatStashWidget.h"
 #include "Combat/UI/CombatPlayerHUD.h"
 #include "Combat/Unit/CombatUnitCharacter.h"
 #include "CombatPlayerController.h"
@@ -122,7 +123,7 @@ namespace CombatEconomyTests
 		Request.RequestId = RequestId;
 		Request.CommandBindingGeneration = Player.GetCommandBindingGeneration();
 		Request.ExpectedEconomyRevision = Economy.GetEconomyRevision();
-		Request.ExpectedStashRevision = Economy.GetStashRevision();
+		Request.ExpectedInventoryRevision = Economy.GetInventoryRevision();
 		Request.Action = ECombatEconomyAction::Purchase;
 		Request.ItemDefinitionId = ItemId;
 		return Request;
@@ -160,7 +161,7 @@ bool FCombatEconomyRecipePlanTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-/** 单一金币、储藏处交付、自动合成、退款和上限在同一服务器组件闭环。 */
+	/** 单一金币、物品栏直达、自动合成、退款和上限在同一服务器组件闭环。 */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FCombatEconomyTransactionTest,
 	"Combat.Economy.GoldPurchaseCraftSellAndLimits", CombatEconomyTests::Flags)
 bool FCombatEconomyTransactionTest::RunTest(const FString& Parameters)
@@ -171,6 +172,8 @@ bool FCombatEconomyTransactionTest::RunTest(const FString& Parameters)
 	UWorld& World = *Fixture.GetWorld();
 	ACombatPlayerController* Player = World.SpawnActor<ACombatPlayerController>();
 	if (!TestNotNull(TEXT("Player controller"), Player)) return false;
+	ACombatUnitCharacter* Unit = CombatEconomyTests::SpawnUnit(World, Player, TEXT("transaction_unit"));
+	if (!TestNotNull(TEXT("Commanded unit"), Unit)) return false;
 	UCombatEconomyComponent* Economy = Player->GetCombatEconomyComponent();
 	if (!TestNotNull(TEXT("Economy component"), Economy)) return false;
 
@@ -189,19 +192,25 @@ bool FCombatEconomyTransactionTest::RunTest(const FString& Parameters)
 	FGameplayTag Failure;
 	FCombatItemHandle ResultHandle;
 	TestTrue(TEXT("Basic item purchase succeeds"), Economy->PurchaseItem(
-		Branch->GetPrimaryAssetId(), Economy->GetEconomyRevision(), Economy->GetStashRevision(), ResultHandle, Failure));
+		Branch->GetPrimaryAssetId(), Economy->GetEconomyRevision(), Economy->GetInventoryRevision(), ResultHandle, Failure));
 	TestEqual(TEXT("Basic purchase charges one price"), Economy->GetGold(), int64(500));
-	TestEqual(TEXT("Basic purchase enters stash"), Economy->GetStashItemCount(), 1);
+	TestEqual(TEXT("Basic purchase enters the commanded inventory"), Unit->GetCombatInventoryComponent()->GetItemCount(), 1);
+	TestTrue(TEXT("A second purchased component enters inventory"), Economy->PurchaseItem(
+		Branch->GetPrimaryAssetId(), Economy->GetEconomyRevision(), Economy->GetInventoryRevision(), ResultHandle, Failure));
+	TestEqual(TEXT("Second component is charged independently"), Economy->GetGold(), int64(400));
+	TestEqual(TEXT("Entering a purchased component automatically crafts the recipe"), Unit->GetCombatInventoryComponent()->GetItemCount(), 1);
+	const UCombatItemInstance* AutoCrafted = World.GetSubsystem<UCombatItemSubsystem>()->FindItem(ResultHandle);
+	TestTrue(TEXT("Purchase result handle follows automatic craft"), AutoCrafted && AutoCrafted->GetDefinition() == Wand);
 	TestTrue(TEXT("Upgrade purchase consumes owned branch and buys missing leaves"), Economy->PurchaseItem(
-		Blade->GetPrimaryAssetId(), Economy->GetEconomyRevision(), Economy->GetStashRevision(), ResultHandle, Failure));
-	TestEqual(TEXT("Upgrade charges only missing leaves"), Economy->GetGold(), int64(200));
-	TestEqual(TEXT("Nested result replaces its components"), Economy->GetStashItemCount(), 1);
+		Blade->GetPrimaryAssetId(), Economy->GetEconomyRevision(), Economy->GetInventoryRevision(), ResultHandle, Failure));
+	TestEqual(TEXT("Upgrade charges only the missing crystal"), Economy->GetGold(), int64(200));
+	TestEqual(TEXT("Nested result replaces its components in inventory"), Unit->GetCombatInventoryComponent()->GetItemCount(), 1);
 
-	const int32 ResultRevision = Economy->FindStashItemRevision(ResultHandle);
-	TestTrue(TEXT("Fresh purchase receives full refund"), Economy->SellStashItem(
-		ResultHandle, ResultRevision, Economy->GetEconomyRevision(), Economy->GetStashRevision(), Failure));
+	const int32 ResultRevision = Economy->FindInventoryItemRevision(ResultHandle);
+	TestTrue(TEXT("Fresh purchase receives full refund"), Economy->SellInventoryItem(
+		ResultHandle, ResultRevision, Economy->GetEconomyRevision(), Economy->GetInventoryRevision(), Failure));
 	TestEqual(TEXT("Refund restores the complete purchase chain"), Economy->GetGold(), int64(600));
-	TestEqual(TEXT("Sold item leaves stash"), Economy->GetStashItemCount(), 0);
+	TestEqual(TEXT("Sold item leaves inventory"), Unit->GetCombatInventoryComponent()->GetItemCount(), 0);
 	TestTrue(TEXT("Debug command path sets exact gold"), Economy->SetGoldForDebug(5000, Error));
 	TestEqual(TEXT("Debug value is visible"), Economy->GetGold(), int64(5000));
 	TestFalse(TEXT("Level cap rejects debug overflow"), Economy->SetGoldForDebug(100000, Error));
@@ -213,25 +222,51 @@ bool FCombatEconomyTransactionTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("Set balance for delayed refund"), Economy->SetGoldForDebug(100, Error));
 	FCombatItemHandle DelayedRefundHandle;
 	TestTrue(TEXT("Delayed refund purchase succeeds"), Economy->PurchaseItem(
-		Branch->GetPrimaryAssetId(), Economy->GetEconomyRevision(), Economy->GetStashRevision(),
+		Branch->GetPrimaryAssetId(), Economy->GetEconomyRevision(), Economy->GetInventoryRevision(),
 		DelayedRefundHandle, Failure));
 	TestEqual(TEXT("Delayed refund purchase charges price"), Economy->GetGold(), int64(0));
 	const double PurchaseTime = World.GetTimeSeconds();
 	World.TimeSeconds = PurchaseTime + 11.0;
 	TestTrue(TEXT("Temporary world advances beyond refund window"), World.GetTimeSeconds() >= PurchaseTime + 10.0);
-	const int32 DelayedItemRevision = Economy->FindStashItemRevision(DelayedRefundHandle);
-	TestTrue(TEXT("Delayed refund sale succeeds"), Economy->SellStashItem(
-		DelayedRefundHandle, DelayedItemRevision, Economy->GetEconomyRevision(), Economy->GetStashRevision(), Failure));
+	const int32 DelayedItemRevision = Economy->FindInventoryItemRevision(DelayedRefundHandle);
+	TestTrue(TEXT("Delayed refund sale succeeds"), Economy->SellInventoryItem(
+		DelayedRefundHandle, DelayedItemRevision, Economy->GetEconomyRevision(), Economy->GetInventoryRevision(), Failure));
 	TestEqual(TEXT("Delayed sale returns configured half value"), Economy->GetGold(), int64(50));
 	TestTrue(TEXT("Set balance for unsellable item"), Economy->SetGoldForDebug(100, Error));
 	FCombatItemHandle UnsellableHandle;
 	TestTrue(TEXT("Unsellable purchase succeeds"), Economy->PurchaseItem(
-		Unsellable->GetPrimaryAssetId(), Economy->GetEconomyRevision(), Economy->GetStashRevision(),
+		Unsellable->GetPrimaryAssetId(), Economy->GetEconomyRevision(), Economy->GetInventoryRevision(),
 		UnsellableHandle, Failure));
-	const int32 UnsellableRevision = Economy->FindStashItemRevision(UnsellableHandle);
-	TestFalse(TEXT("Unsellable item cannot be sold"), Economy->SellStashItem(
-		UnsellableHandle, UnsellableRevision, Economy->GetEconomyRevision(), Economy->GetStashRevision(), Failure));
+	const int32 UnsellableRevision = Economy->FindInventoryItemRevision(UnsellableHandle);
+	TestFalse(TEXT("Unsellable item cannot be sold"), Economy->SellInventoryItem(
+		UnsellableHandle, UnsellableRevision, Economy->GetEconomyRevision(), Economy->GetInventoryRevision(), Failure));
 	TestEqual(TEXT("Rejected unsellable sale keeps balance"), Economy->GetGold(), int64(0));
+	return true;
+}
+
+/** 购买结果必须直接落入当前主控单位物品栏。 */
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FCombatEconomyPurchaseDirectInventoryTest,
+	"Combat.Economy.PurchaseDirectToInventory", CombatEconomyTests::Flags)
+bool FCombatEconomyPurchaseDirectInventoryTest::RunTest(const FString& Parameters)
+{
+	(void)Parameters;
+	FCombatAutomationWorldFixture Fixture;
+	if (!Fixture.IsValid()) return false;
+	UWorld& World = *Fixture.GetWorld();
+	ACombatPlayerController* Player = World.SpawnActor<ACombatPlayerController>();
+	ACombatUnitCharacter* Unit = CombatEconomyTests::SpawnUnit(World, Player, TEXT("purchase_inventory_red"));
+	if (!TestNotNull(TEXT("Commanded unit exists"), Unit)) return false;
+	UCombatItemData* Leaf = CombatEconomyTests::MakeLeaf(Player, TEXT("purchase_inventory_leaf"), 100);
+	UCombatShopData* Shop = CombatEconomyTests::MakeShop(Player, {Leaf});
+	UCombatEconomyData* Rules = CombatEconomyTests::MakeRules(Player);
+	UCombatEconomyComponent* Economy = Player->GetCombatEconomyComponent();
+	FString Error;
+	if (!TestTrue(TEXT("Direct purchase economy initializes"), Economy->InitializeForMatch(Rules, Shop, false, Error))) return false;
+	FGameplayTag Failure;
+	FCombatItemHandle Purchased;
+	TestTrue(TEXT("Purchase request succeeds"), Economy->PurchaseItem(
+		Leaf->GetPrimaryAssetId(), Economy->GetEconomyRevision(), Economy->GetInventoryRevision(), Purchased, Failure));
+	TestEqual(TEXT("Purchase is delivered to the active inventory"), Unit->GetCombatInventoryComponent()->GetItemCount(), 1);
 	return true;
 }
 
@@ -266,64 +301,124 @@ bool FCombatEconomyPassiveIncomeTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-/** 储藏处单件与全部取出保持实例，容量不足时只移动可容纳的部分。 */
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FCombatEconomyStashTransferTest,
-	"Combat.Economy.StashTransferAndTakeAll", CombatEconomyTests::Flags)
-bool FCombatEconomyStashTransferTest::RunTest(const FString& Parameters)
+/** 锁定物品不会参与自动合成；解锁时立即检测当前库存并恢复可用的合成。 */
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FCombatEconomyInventoryLockSellTest,
+	"Combat.Economy.InventoryLockSellAndCraft", CombatEconomyTests::Flags)
+bool FCombatEconomyInventoryLockSellTest::RunTest(const FString& Parameters)
 {
 	(void)Parameters;
 	FCombatAutomationWorldFixture Fixture;
 	if (!Fixture.IsValid()) return false;
 	UWorld& World = *Fixture.GetWorld();
 	ACombatPlayerController* Player = World.SpawnActor<ACombatPlayerController>();
-	ACombatUnitCharacter* Unit = CombatEconomyTests::SpawnUnit(World, Player, TEXT("stash_transfer_unit"));
+	ACombatUnitCharacter* Unit = CombatEconomyTests::SpawnUnit(World, Player, TEXT("inventory_lock_unit"));
 	if (!TestNotNull(TEXT("Commanded unit"), Unit)) return false;
-	UCombatItemData* Leaf = CombatEconomyTests::MakeLeaf(Player, TEXT("stash_transfer_leaf"), 100);
-	UCombatShopData* Shop = CombatEconomyTests::MakeShop(Player, {Leaf});
+	UCombatItemData* Branch = CombatEconomyTests::MakeLeaf(Player, TEXT("inventory_lock_branch"), 100);
+	UCombatItemData* Wand = CombatEconomyTests::MakeRecipe(Player, TEXT("inventory_lock_wand"), {{Branch, 2}}, 10);
+	// 使用真实护甲被动验证解锁合成会撤销组件效果，并立即启用结果效果。
+	for (UCombatItemData* Definition : {Branch, Wand})
+	{
+		UCombatModifierData* Passive = NewObject<UCombatModifierData>(Definition);
+		Passive->DefinitionName = FName(Definition->DefinitionName.ToString() + TEXT("_armor"));
+		Passive->DispelRule = ECombatModifierDispelRule::NotDispellable;
+		FCombatModifierAttributeChange Change;
+		Change.Attribute = UCombatAttributeSet::GetArmorAttribute();
+		Change.Magnitude = Definition == Branch ? 1.0f : 5.0f;
+		Passive->AttributeChanges.Add(Change);
+		Definition->Passives.AddDefaulted_GetRef().Modifier = Passive;
+	}
+	UCombatShopData* Shop = CombatEconomyTests::MakeShop(Player, {Branch, Wand});
 	UCombatEconomyData* Rules = CombatEconomyTests::MakeRules(Player);
 	UCombatEconomyComponent* Economy = Player->GetCombatEconomyComponent();
 	FString Error;
-	if (!TestTrue(TEXT("Transfer economy initializes"), Economy->InitializeForMatch(Rules, Shop, false, Error))) return false;
+	if (!TestTrue(TEXT("Inventory economy initializes"), Economy->InitializeForMatch(Rules, Shop, false, Error))) return false;
+	const int64 InitialGold = Economy->GetGold();
+	UCombatInventoryComponent* Inventory = Unit->GetCombatInventoryComponent();
+	UCombatAbilitySystemComponent* Asc = Unit->GetCombatAbilitySystemComponent();
+	const float InitialArmor = Asc->GetNumericAttribute(UCombatAttributeSet::GetArmorAttribute());
 
 	FGameplayTag Failure;
-	FCombatItemHandle StashHandle;
-	TestTrue(TEXT("First stash purchase"), Economy->PurchaseItem(Leaf->GetPrimaryAssetId(),
-		Economy->GetEconomyRevision(), Economy->GetStashRevision(), StashHandle, Failure));
-	const int32 StashItemRevision = Economy->FindStashItemRevision(StashHandle);
-	FCombatItemHandle InventoryHandle;
-	TestTrue(TEXT("Single stash transfer"), Economy->TransferStashItem(StashHandle, StashItemRevision,
-		Economy->GetEconomyRevision(), Economy->GetStashRevision(), InventoryHandle, Failure));
-	TestEqual(TEXT("Single transfer empties stash"), Economy->GetStashItemCount(), 0);
-	TestEqual(TEXT("Single transfer preserves one inventory instance"), Unit->GetCombatInventoryComponent()->GetItemCount(), 1);
+	FCombatItemHandle LockedBranch;
+	TestTrue(TEXT("Give first component"), Unit->GetCombatInventoryComponent()->GiveItem(Branch, 1, LockedBranch, Failure));
 	TArray<FCombatItemView> InventoryViews;
 	Unit->GetCombatInventoryComponent()->BuildViews(InventoryViews);
-	const FCombatItemView* TransferredView = InventoryViews.FindByPredicate(
-		[InventoryHandle](const FCombatItemView& View) { return View.Handle == InventoryHandle; });
-	TestTrue(TEXT("Entering an equipped slot applies the existing re-equip wait"),
-		TransferredView && TransferredView->EnabledAt > World.GetTimeSeconds());
+	const FCombatItemView* LockedView = InventoryViews.FindByPredicate(
+		[LockedBranch](const FCombatItemView& View) { return View.Handle == LockedBranch; });
+	TestNotNull(TEXT("First component has a view"), LockedView);
+	if (!LockedView) return false;
+	bool bLocked = false;
+	TestTrue(TEXT("Locking an inventory item succeeds"), Economy->ToggleInventoryItemLock(LockedBranch, LockedView->Revision,
+		Economy->GetEconomyRevision(), Economy->GetInventoryRevision(), bLocked, Failure));
+	TestTrue(TEXT("Item reports locked"), bLocked);
+	InventoryViews.Reset();
+	Unit->GetCombatInventoryComponent()->BuildViews(InventoryViews);
+	LockedView = InventoryViews.FindByPredicate([LockedBranch](const FCombatItemView& View) { return View.Handle == LockedBranch; });
+	TestTrue(TEXT("Lock state is visible in inventory projection"), LockedView && LockedView->bLocked);
+	if (!LockedView) return false;
 
-	for (int32 Index = 0; Index < 7; ++Index)
+	const int32 BeforeIncompleteUnlock = Inventory->GetRevision();
+	TestTrue(TEXT("Unlock succeeds with an incomplete recipe"), Economy->ToggleInventoryItemLock(LockedBranch, LockedView->Revision,
+		Economy->GetEconomyRevision(), Economy->GetInventoryRevision(), bLocked, Failure));
+	TestFalse(TEXT("Incomplete recipe leaves the component unlocked"), bLocked);
+	TestEqual(TEXT("Incomplete recipe keeps the original handle"), Inventory->GetItemAt(0), LockedBranch);
+	TestEqual(TEXT("Incomplete recipe keeps the only component"), Inventory->GetItemCount(), 1);
+	TestEqual(TEXT("Incomplete recipe only advances the unlock revision"), Inventory->GetRevision(), BeforeIncompleteUnlock + 1);
+	TestEqual(TEXT("Incomplete recipe preserves component effects"), Asc->GetNumericAttribute(UCombatAttributeSet::GetArmorAttribute()), InitialArmor + 1.0f);
+	TestTrue(TEXT("Unlocked component is projected without consumption"), Economy->GetEconomyView().InventoryItems.ContainsByPredicate(
+		[LockedBranch](const FCombatItemView& View) { return View.Handle == LockedBranch && !View.bLocked && View.Quantity == 1; }));
+	TestTrue(TEXT("Component can be locked again"), Economy->ToggleInventoryItemLock(LockedBranch, Economy->FindInventoryItemRevision(LockedBranch),
+		Economy->GetEconomyRevision(), Economy->GetInventoryRevision(), bLocked, Failure));
+	TestTrue(TEXT("Relocked component remains protected"), bLocked);
+
+	FCombatItemHandle SecondBranch;
+	TestTrue(TEXT("Give second component"), Unit->GetCombatInventoryComponent()->GiveItem(Branch, 1, SecondBranch, Failure));
+	TestEqual(TEXT("Locked component blocks automatic craft"), Unit->GetCombatInventoryComponent()->GetItemCount(), 2);
+	TestTrue(TEXT("Both component handles remain"), World.GetSubsystem<UCombatItemSubsystem>()->FindItem(LockedBranch)
+		&& World.GetSubsystem<UCombatItemSubsystem>()->FindItem(SecondBranch));
+
+	InventoryViews.Reset();
+	Unit->GetCombatInventoryComponent()->BuildViews(InventoryViews);
+	LockedView = InventoryViews.FindByPredicate([LockedBranch](const FCombatItemView& View) { return View.Handle == LockedBranch; });
+	TestNotNull(TEXT("Locked component remains addressable"), LockedView);
+	if (!LockedView) return false;
+	const int32 BeforeStaleUnlock = Inventory->GetRevision();
+	TestFalse(TEXT("Stale unlock cannot trigger a complete recipe"), Economy->ToggleInventoryItemLock(LockedBranch, LockedView->Revision - 1,
+		Economy->GetEconomyRevision(), Economy->GetInventoryRevision(), bLocked, Failure));
+	TestTrue(TEXT("Stale unlock is rejected by the authority"), Failure == CombatTags::Failure_Economy_Stale);
+	TestEqual(TEXT("Stale unlock does not change inventory revision"), Inventory->GetRevision(), BeforeStaleUnlock);
+	TestEqual(TEXT("Stale unlock keeps both components"), Inventory->GetItemCount(), 2);
+	TestTrue(TEXT("Unlocking checks available recipes"), Economy->ToggleInventoryItemLock(LockedBranch, LockedView->Revision,
+		Economy->GetEconomyRevision(), Economy->GetInventoryRevision(), bLocked, Failure));
+	TestFalse(TEXT("Unlocked state is reported"), bLocked);
+	InventoryViews.Reset();
+	Unit->GetCombatInventoryComponent()->BuildViews(InventoryViews);
+	const bool bHasWand = InventoryViews.ContainsByPredicate([Wand](const FCombatItemView& View)
+		{ return View.Handle.IsValid() && View.DefinitionId == Wand->GetPrimaryAssetId(); });
+	TestTrue(TEXT("Unlock immediately creates the available recipe result"), bHasWand);
+	TestEqual(TEXT("Unlock-triggered craft consumes both components"), Unit->GetCombatInventoryComponent()->GetItemCount(), 1);
+	int32 LiveComponentHandles = 0;
+	for (const FCombatItemHandle Handle : {LockedBranch, SecondBranch})
 	{
-		FCombatItemHandle Given;
-		TestTrue(TEXT("Fill hero inventory"), Unit->GetCombatInventoryComponent()->GiveItem(Leaf, 1, Given, Failure));
+		if (World.GetSubsystem<UCombatItemSubsystem>()->FindItem(Handle)) ++LiveComponentHandles;
 	}
-	FCombatItemHandle FirstQueued;
-	FCombatItemHandle SecondQueued;
-	TestTrue(TEXT("Queue first remaining stash item"), Economy->PurchaseItem(Leaf->GetPrimaryAssetId(),
-		Economy->GetEconomyRevision(), Economy->GetStashRevision(), FirstQueued, Failure));
-	TestTrue(TEXT("Queue second remaining stash item"), Economy->PurchaseItem(Leaf->GetPrimaryAssetId(),
-		Economy->GetEconomyRevision(), Economy->GetStashRevision(), SecondQueued, Failure));
-	int32 Moved = 0;
-	TestTrue(TEXT("Take all succeeds when at least one item moves"), Economy->TakeAllStashItems(
-		Economy->GetEconomyRevision(), Economy->GetStashRevision(), Moved, Failure));
-	TestEqual(TEXT("Take all fills the final hero slot"), Moved, 1);
-	TestEqual(TEXT("One item remains safely in stash"), Economy->GetStashItemCount(), 1);
-	TestEqual(TEXT("Hero inventory reaches nine slots"), Unit->GetCombatInventoryComponent()->GetItemCount(), CombatItems::TotalSlots);
-	const int32 StableStashRevision = Economy->GetStashRevision();
-	TestFalse(TEXT("Full inventory rejects a second take-all"), Economy->TakeAllStashItems(
-		Economy->GetEconomyRevision(), StableStashRevision, Moved, Failure));
-	TestEqual(TEXT("Rejected take-all keeps the stash revision"), Economy->GetStashRevision(), StableStashRevision);
-	TestEqual(TEXT("Rejected take-all loses no item"), Economy->GetStashItemCount(), 1);
+	TestEqual(TEXT("Unlock-triggered craft consumes both component handles"), LiveComponentHandles, 0);
+	TestEqual(TEXT("Unlock and automatic craft spend no gold"), Economy->GetGold(), InitialGold);
+	TestEqual(TEXT("Economy projection uses the final crafted revision"), Economy->GetInventoryRevision(), Inventory->GetRevision());
+	TestTrue(TEXT("Economy projection contains the unlocked result"), Economy->GetEconomyView().InventoryItems.ContainsByPredicate(
+		[Wand](const FCombatItemView& View) { return View.Handle.IsValid() && View.DefinitionId == Wand->GetPrimaryAssetId() && !View.bLocked; }));
+	TestEqual(TEXT("Result passive replaces both component passives immediately"), Asc->GetNumericAttribute(UCombatAttributeSet::GetArmorAttribute()), InitialArmor + 5.0f);
+
+	const FCombatItemView* WandView = InventoryViews.FindByPredicate([Wand](const FCombatItemView& View)
+		{ return View.Handle.IsValid() && View.DefinitionId == Wand->GetPrimaryAssetId(); });
+	TestNotNull(TEXT("Crafted result has a view"), WandView);
+	if (WandView)
+	{
+		const int64 BeforeSell = Economy->GetGold();
+		TestTrue(TEXT("Inventory item can be sold"), Economy->SellInventoryItem(WandView->Handle, WandView->Revision,
+			Economy->GetEconomyRevision(), Economy->GetInventoryRevision(), Failure));
+		TestTrue(TEXT("Selling does not reduce gold"), Economy->GetGold() >= BeforeSell);
+		TestEqual(TEXT("Selling the crafted item removes its passive"), Asc->GetNumericAttribute(UCombatAttributeSet::GetArmorAttribute()), InitialArmor);
+	}
 	return true;
 }
 
@@ -376,7 +471,9 @@ bool FCombatEconomyRpcSecurityTest::RunTest(const FString& Parameters)
 	if (!TestTrue(TEXT("Owner economy initializes"), Owner->GetCombatEconomyComponent()->InitializeForMatch(
 		Rules, Shop, false, Error))
 		|| !TestTrue(TEXT("Other economy initializes"), Other->GetCombatEconomyComponent()->InitializeForMatch(
-		Rules, Shop, false, Error))) return false;
+			Rules, Shop, false, Error))) return false;
+	ACombatUnitCharacter* OwnerUnit = CombatEconomyTests::SpawnUnit(World, Owner, TEXT("rpc_owner_unit"));
+	if (!TestNotNull(TEXT("Owner commanded unit"), OwnerUnit)) return false;
 
 	FCombatEconomyRequest Purchase = CombatEconomyTests::MakePurchaseRequest(
 		*Owner, *Owner->GetCombatEconomyComponent(), Leaf->GetPrimaryAssetId(), 10);
@@ -509,7 +606,7 @@ bool FCombatEconomyDebugCommandTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-/** 原生商店与储藏室分别构造，并保持紧凑节点尺寸和独立生命周期。 */
+	/** 原生商店包含常驻金币入口；运行时只保留商店和库存 HUD。 */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FCombatShopWidgetStructureTest,
 	"Combat.UI.Shop.NativeStructureAndLifecycle", CombatEconomyTests::Flags)
 bool FCombatShopWidgetStructureTest::RunTest(const FString& Parameters)
@@ -528,30 +625,21 @@ bool FCombatShopWidgetStructureTest::RunTest(const FString& Parameters)
 	// 临时 PIE World 没有 LocalPlayer，CreateWidget 会按引擎规则拒绝服务器 Controller；
 	// 这里直接构造原生 Widget，并注入同一只读快照，验证 Slate 结构和关闭/打开几何。
 	UCombatShopWidget* Widget = NewObject<UCombatShopWidget>(GetTransientPackage());
-	UCombatStashWidget* Stash = NewObject<UCombatStashWidget>(GetTransientPackage());
-	if (!TestNotNull(TEXT("Native shop widget"), Widget) || !TestNotNull(TEXT("Native stash widget"), Stash)) return false;
+	if (!TestNotNull(TEXT("Native shop widget"), Widget)) return false;
 	const ACombatPlayerHUD* HUDDefaults = GetDefault<ACombatPlayerHUD>();
 	TestTrue(TEXT("HUD defaults to the native shop class"), HUDDefaults->ShopWidgetClass == UCombatShopWidget::StaticClass());
-	TestTrue(TEXT("HUD defaults to the native stash class"), HUDDefaults->StashWidgetClass == UCombatStashWidget::StaticClass());
 	Widget->DisplayView = Player->GetCombatEconomyComponent()->GetEconomyView();
 	Widget->DisplayShopData = Shop;
-	Stash->DisplayView = Widget->DisplayView;
-	if (!TestTrue(TEXT("Shop widget initializes"), Widget->Initialize())
-		|| !TestTrue(TEXT("Stash widget initializes"), Stash->Initialize())) return false;
+	if (!TestTrue(TEXT("Shop widget initializes"), Widget->Initialize())) return false;
 	TSharedPtr<SWidget> ShopSlate = Widget->TakeWidget();
-	TSharedPtr<SWidget> StashSlate = Stash->TakeWidget();
 	Widget->NativeConstruct();
-	Stash->NativeConstruct();
 	TestTrue(TEXT("Exactly one search input exists"), Widget->SearchBox.IsValid());
 	TestTrue(TEXT("Catalog host exists"), Widget->CatalogBox.IsValid());
 	TestTrue(TEXT("Recipe host exists"), Widget->RecipeBox.IsValid());
+	TestTrue(TEXT("Persistent gold button exists"), Widget->GoldButton.IsValid());
 	TestFalse(TEXT("Recipe panel has no scroll container"), Widget->RecipeScrollBox.IsValid());
 	TestEqual(TEXT("Recipe panel starts with no auxiliary content"), Widget->RecipeBox->NumSlots(), 0);
-	TestTrue(TEXT("Shop and stash have separate Slate roots"), ShopSlate.Get() != StashSlate.Get());
-	TestTrue(TEXT("Stash has gold and take-all controls"), Stash->GoldButton.IsValid() && Stash->TakeAllButton.IsValid());
-	TestEqual(TEXT("Six stash hit targets remain constructed"), Stash->StashHitWidgets.Num(), CombatEconomy::StashSlots);
 	TestEqual(TEXT("Initial shop balance comes from level rules"), Widget->DisplayView.Gold, int64(600));
-	TestEqual(TEXT("Initial stash balance comes from level rules"), Stash->DisplayView.Gold, int64(600));
 	TestEqual(TEXT("Catalog node width is compact"), static_cast<double>(UCombatShopWidget::GetCompactNodeSize().X), 48.0);
 	TestEqual(TEXT("Catalog node height is compact"), static_cast<double>(UCombatShopWidget::GetCompactNodeSize().Y), 34.0);
 	TestEqual(TEXT("Shop layout reference width is 1920"), static_cast<double>(UCombatShopWidget::GetReferenceViewportSize().X), 1920.0);
@@ -562,12 +650,9 @@ bool FCombatShopWidgetStructureTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("Shop top offset is five percent of 1080"), static_cast<double>(UCombatShopWidget::GetPanelTopOffset()), 54.0);
 	TestEqual(TEXT("Catalog region height is fifty-five percent of 1080"), static_cast<double>(UCombatShopWidget::GetFixedRegionHeights().X), 594.0);
 	TestEqual(TEXT("Recipe region height is fourteen percent of 1080 rounded"), static_cast<double>(UCombatShopWidget::GetFixedRegionHeights().Y), 151.0);
-	TestEqual(TEXT("Stash slot width is fixed"), static_cast<double>(UCombatStashWidget::GetCompactSlotSize().X), 42.0);
-	TestEqual(TEXT("Stash slot height is fixed"), static_cast<double>(UCombatStashWidget::GetCompactSlotSize().Y), 32.0);
-	TestEqual(TEXT("Stash action width is fixed"), static_cast<double>(UCombatStashWidget::GetCompactActionSize().X), 112.0);
-	TestEqual(TEXT("Stash action height is fixed"), static_cast<double>(UCombatStashWidget::GetCompactActionSize().Y), 34.0);
-	TestFalse(TEXT("Shop starts closed while stash stays resident"), Widget->IsShopOpen());
+	TestFalse(TEXT("Shop starts closed"), Widget->IsShopOpen());
 	TestEqual(TEXT("Closed main panel is collapsed"), Widget->ShopPanel->GetVisibility(), EVisibility::Collapsed);
+	TestTrue(TEXT("Gold button remains visible while shop is closed"), Widget->GoldButton->GetVisibility().IsVisible());
 	Widget->SetShopOpen(true);
 	TestEqual(TEXT("Open main panel is visible"), Widget->ShopPanel->GetVisibility(), EVisibility::Visible);
 	TSharedPtr<SWidget> RebuiltShopSlate = Widget->RebuildWidget();
@@ -578,21 +663,14 @@ bool FCombatShopWidgetStructureTest::RunTest(const FString& Parameters)
 	Widget->SelectItem(Leaf->GetPrimaryAssetId());
 	TestEqual(TEXT("Leaf selection clears all prior recipe nodes"), Widget->RecipeEntries.Num(), 0);
 	TestEqual(TEXT("Leaf without a recipe leaves the panel blank"), Widget->RecipeBox->NumSlots(), 0);
-	Stash->SetShopWidget(Widget);
-	TestTrue(TEXT("Stash links to shop through a weak UI reference"), Stash->ShopWidget.Get() == Widget);
-	Stash->SetShopWidget(nullptr);
-	TestFalse(TEXT("Stash link can be detached before teardown"), Stash->ShopWidget.IsValid());
 	TestEqual(TEXT("Unowned structure does not bind a server delegate"),
 		Player->GetCombatEconomyComponent()->OnEconomyViewChanged.GetAllObjects().Num(), 0);
 	Widget->NativeDestruct();
-	Stash->NativeDestruct();
 	TestEqual(TEXT("Destruct releases economy subscription"),
 		Player->GetCombatEconomyComponent()->OnEconomyViewChanged.GetAllObjects().Num(), 0);
 	Widget->ReleaseSlateResources(true);
-	Stash->ReleaseSlateResources(true);
 	RebuiltShopSlate.Reset();
 	ShopSlate.Reset();
-	StashSlate.Reset();
 	return true;
 }
 

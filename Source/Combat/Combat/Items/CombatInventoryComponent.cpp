@@ -72,6 +72,7 @@ bool UCombatInventoryComponent::CanMerge(const UCombatItemInstance& Into, const 
 	const double Now = GetWorld()->GetTimeSeconds();
 	return Into.Definition == From.Definition && Into.Definition->MaxStack > 1
 		&& Into.Quantity > 0 && Into.Quantity + From.Quantity <= Into.Definition->MaxStack
+		&& Into.bLocked == From.bLocked
 		&& Into.Charges == From.Charges && !IsCasting(Into)
 		&& Into.GetCooldownRemaining(Now) <= 0.0f && From.GetCooldownRemaining(Now) <= 0.0f
 		&& Into.EnabledAt <= Now && From.EnabledAt <= Now && !From.bNeedsReequipDelay
@@ -612,6 +613,14 @@ void UCombatInventoryComponent::NotifyChanged(UCombatItemInstance* Item, const T
 	}
 	if (Unit->GetCombatUnitViewComponent()) Unit->GetCombatUnitViewComponent()->RefreshHUDOwnerView();
 	Unit->ForceNetUpdate();
+	if (ACombatPlayerController* Player = Cast<ACombatPlayerController>(Unit->GetCommandingPlayerController()))
+	{
+		if (UCombatEconomyComponent* Economy = Player->GetCombatEconomyComponent();
+			Economy && Economy->bInitialized && !Economy->bMutating && !Economy->bEnding)
+		{
+			Economy->RefreshView();
+		}
+	}
 }
 
 void UCombatInventoryComponent::BuildViews(TArray<FCombatItemView>& Out) const
@@ -630,6 +639,7 @@ void UCombatInventoryComponent::BuildViews(TArray<FCombatItemView>& Out) const
 		View.Revision = Item->Revision;
 		View.Quantity = Item->Quantity;
 		View.Charges = Item->Charges;
+		View.bLocked = Item->bLocked;
 		View.CooldownCheckpoint = Item->CooldownCheckpoint;
 		View.CooldownRemaining = Item->CooldownRemaining;
 		View.CooldownDuration = Item->CooldownDuration;

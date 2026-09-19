@@ -1,6 +1,6 @@
 # 物品系统：配置、操作与权威边界
 
-ITEM-001 在 Combat 单 Runtime Module 内增加物品实例、库存、地面拾取物和 HUD。当前物品能力作为 `combat_v3_economy_rc1` 的基础；物品自身规则仍见 [Spec](../Specs/ITEM-001-item-system.spec.md) 与 [进度台账](../00-Project/00-01-Progress-Tracker.md)，经济扩展见 [10-15](10-15-Economy-Shop-Crafting.md) 和 ADR-059。
+ITEM-001 在 Combat 单 Runtime Module 内增加物品实例、库存、地面拾取物和 HUD。当前物品能力作为 `combat_v4_economy_rc1` 的基础；物品自身规则仍见 [Spec](../Specs/ITEM-001-item-system.spec.md) 与 [进度台账](../00-Project/00-01-Progress-Tracker.md)，经济扩展见 [10-15](10-15-Economy-Shop-Crafting.md)、ECON-003 Spec 和 ADR-060。
 
 ## 1. Demo 操作
 
@@ -10,11 +10,11 @@ ITEM-001 在 Combat 单 Runtime Module 内增加物品实例、库存、地面�
 | --- | --- |
 | 右键地面物品 | 发出拾取指令，距离不足时走近，服务器到达后再次校验 |
 | 左键装备栏主动物品，或按 1–6 | 无目标物品立即请求使用；目标物品进入既有技能瞄准流程 |
-| 右键库存槽 | 打开使用、放到地面、移入背包/装备栏菜单 |
+| 右键库存槽 | 打开使用、出售、锁定/解锁菜单；装备物品移入背包使用拖拽，背包物品仍可右键移入装备栏 |
 | 拖到另一格 | 原子交换两格；不会替换正在执行的移动指令 |
-| 拖到场景，或菜单“放到地面…”后左键 | 请求到指定地面位置放下；超距时走近 |
+| 拖到场景 | 仅通过拖拽释放请求到指定地面位置放下；超距时走近，服务器复核导航、距离和 LOS |
 | S、替换指令、死亡或控制转移 | 取消尚未完成的场景交互；旧导航回调不能完成旧事务 |
-| Escape / 右键 | 取消瞄准或放置模式，消费本次鼠标手势 |
+| Escape / 右键 | 取消瞄准并消费本次鼠标手势；右键菜单不创建地面丢弃请求 |
 
 六个装备槽按三列两行显示，下面三个扁槽是背包。悬停显示说明、数量/能量、法力费用和操作提示；槽内显示冷却、重新启用等待、禁用或缺蓝原因。快捷键来自 `IMC_Default` 的 `IA_ItemSlot_1`–`6`，可改键；按下/松开快施复用 Controller 的施法模式。
 
@@ -77,7 +77,7 @@ Owner EndPlay 清理全部持有实例、Spec、被动、光环与等待任务�
 
 Pickup / Drop 进入 Order 状态机，复用 AI 导航、路径跟随、Scheduler 和统一 Targeting；到达后比较物品修订号、归属、共享、距离、LOS 与地面合法性。拾取不预留物品，同步事务先到先得。Swap 是即时事务。活动施法的实例不能离开装备栏。
 
-拥有者快照只复制给当前 owning client，包含九槽、独立 Spec、数量/能量、冷却检查点/速率、等待结束时间与修订号。HUD 使用估计服务器时间绘制倒计时，时间到零不会反向触发 gameplay。异步加载、鼠标按下、菜单和拖放都校验单位、LifeGeneration 与控制绑定代次。
+拥有者快照只复制给当前 owning client，包含九槽、独立 Spec、数量/能量、冷却检查点/速率、等待结束时间与修订号。HUD 使用估计服务器时间绘制倒计时，时间到零不会反向触发 gameplay。异步加载、鼠标按下、右键菜单和拖放都校验单位、LifeGeneration 与控制绑定代次；地面丢弃只从拖拽释放的屏幕落点产生请求。
 
 批量接收回执和最终交互结果分开：接收成功仅表示订单已接受；导航结束后恰好发送一次最终结果。最终回执显式复制生命代次，防止旧生命或旧控制绑定的结果覆盖新 HUD 状态。
 
@@ -87,9 +87,10 @@ Pickup / Drop 进入 Order 状态机，复用 AI 导航、路径跟随、Schedul
 
 | 契约 | 当前值 |
 | --- | --- |
-| ReleaseId / ContractVersion | combat_v3_economy_rc1 / 3 |
+| ReleaseId / ContractVersion | combat_v4_economy_rc1 / 4 |
 | GameplayTag / Combat Event | 3 / 3 |
 | HUD View / 玩家日志投影 | 8 / 3 |
+| Economy Presentation | 3（金币入口 + 当前库存投影） |
 | Content / Formula / RNG | 1 / 1 / 1 |
 | 能力开关 | bItemsEnabled=true，bEconomyEnabled=true；旧 `bItemsAndEconomy=false` |
 

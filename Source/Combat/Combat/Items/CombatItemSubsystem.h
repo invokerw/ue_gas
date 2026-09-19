@@ -10,7 +10,6 @@ class ACombatUnitCharacter;
 class ACombatWorldItem;
 class UCombatInventoryComponent;
 class UCombatEconomyComponent;
-class ACombatPlayerController;
 
 /** 仅服务器登记表持有的物品实例；没有可编辑属性，也不复制 UObject 指针。 */
 UCLASS()
@@ -24,10 +23,10 @@ public:
 	int32 GetQuantity() const { return Quantity; }
 	int32 GetCharges() const { return Charges; }
 	int32 GetSlot() const { return Slot; }
+	/** 返回该实例是否被玩家锁定；锁定只影响合成与购买计划，不阻止出售或丢弃。 */
+	bool IsLocked() const { return bLocked; }
 	ACombatUnitCharacter* GetHolder() const { return Holder.Get(); }
 	ACombatWorldItem* GetWorldActor() const { return WorldActor.Get(); }
-	ACombatPlayerController* GetStashOwner() const { return StashOwner.Get(); }
-	int32 GetStashSlot() const { return StashSlot; }
 	FGameplayAbilitySpecHandle GetAbilityHandle() const { return AbilityHandle; }
 	/** 读取按位置速率推进的冷却余额，暂停世界时不会消耗。 */
 	float GetCooldownRemaining(double Now) const;
@@ -43,8 +42,6 @@ private:
 	UPROPERTY(Transient) TObjectPtr<UCombatItemData> Definition;
 	FCombatItemHandle Handle;
 	TWeakObjectPtr<ACombatUnitCharacter> Holder;
-	/** 储藏处与英雄/地面互斥的玩家级所有者；仅经济组件修改。 */
-	TWeakObjectPtr<ACombatPlayerController> StashOwner;
 	TWeakObjectPtr<ACombatWorldItem> WorldActor;
 	TWeakObjectPtr<ACombatUnitCharacter> BoundUnit;
 	/** 绑定不会因原单位 EndPlay 导致弱引用失效而被清除。 */
@@ -53,8 +50,9 @@ private:
 	int32 Revision = 1;
 	int32 Quantity = 1;
 	int32 Charges = 0;
+	/** 锁定实例不能作为自动合成或商店购买计划的组件；状态只在服务器修改。 */
+	bool bLocked = false;
 	int32 Slot = INDEX_NONE;
-	int32 StashSlot = INDEX_NONE;
 	FGameplayAbilitySpecHandle AbilityHandle;
 	/** 各被动以定义列表下标持有精确句柄；临时禁用时清空。 */
 	TMap<int32, FCombatModifierHandle> PassiveHandles;

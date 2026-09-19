@@ -13,14 +13,15 @@ class UTexture2D;
 class SEditableTextBox;
 class SScrollBox;
 class SVerticalBox;
+class SButton;
 class SWidget;
 struct FSlateBrush;
 
 /**
  * 独立的紧凑全局商店。
  *
- * 商店只展示搜索、基础/升级目录和“结果 → 直接组件”的合成方式；金币与六格
- * 储藏室由 UCombatStashWidget 常驻展示。目录和合成节点只提交稳定物品定义意图，
+ * 商店只展示搜索、基础/升级目录和“结果 → 直接组件”的合成方式；金币按钮常驻右下角。
+ * 目录和合成节点只提交稳定物品定义意图，
  * 价格、组件消费、空间与事务结果仍由服务器权威 Economy 重新计算。
  */
 UCLASS(meta=(DisplayName="战斗商店界面", ToolTip="紧凑全局商店；左键查看配方，右键提交购买意图。"))
@@ -35,6 +36,8 @@ public:
 	bool IsShopOpen() const { return bShopOpen; }
 	/** 打开时刷新目录与配方；关闭只恢复游戏焦点，不清空本地筛选和选择。 */
 	void SetShopOpen(bool bOpen);
+	/** 右下金币按钮使用的幂等开关入口。 */
+	void ToggleShop();
 	/** 目录和配方节点共用的固定外框尺寸，仅用于本地表现和 Automation 断言。 */
 	static FVector2D GetCompactNodeSize();
 	/** 商店布局的设计分辨率；所有面板百分比先在该基准上换算。 */
@@ -99,6 +102,8 @@ private:
 	bool bShopOpen = false;
 
 	TSharedPtr<SWidget> ShopPanel;
+	/** 常驻右下金币入口；商店面板折叠时仍保持可命中。 */
+	TSharedPtr<SButton> GoldButton;
 	TSharedPtr<SEditableTextBox> SearchBox;
 	TSharedPtr<SVerticalBox> CatalogBox;
 	/** 仅用于结构回归；v0.3 完成后应始终为空，证明合成区没有滚动容器。 */

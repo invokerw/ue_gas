@@ -178,6 +178,15 @@
 - UI 与版本：`UCombatShopWidget` 只观察 owner-only 快照并提交意图，包含搜索、基础/升级页、分类网格、配方关系和储藏操作；发布契约迁移为 `combat_v3_economy_rc1` / ContractVersion 3，物品与经济开关分别为 true，旧合并字段保持 false。
 - 验证与回滚：Economy 8/8、Shop UI 1/1、全量 Combat 94/94、资产 31/31 无错误通过；Server/Client Target、Dedicated 双客户端、真实 PIE 和经济 soak 尚未执行。回滚必须成组恢复 Economy/Shop、Controller RPC、安全配置、Demo 资产、版本契约和文档，不能只关闭开关。
 
+### ADR-060：商店直达当前物品栏与锁定合成（2026-09-16，2026-09-19 收敛）
+
+- 状态：已定，用户已完成代码 review 并授权验证后本地提交；对应 `ECON-003`，用户要求下线储藏室运行时入口并将购买结果直接交付当前主控单位物品栏，同时允许删除兼容代码。
+- 选择：`ACombatPlayerHUD` 不创建储藏 Widget；`UCombatShopWidget` 在右下角常驻金币按钮，按钮只负责本地开关商店。购买、库存出售和锁定/解锁均通过 `ACombatPlayerController` 的服务器经济意图进入 `UCombatEconomyComponent`，不新增场景商店 Actor 或第二套物品实例。库存是唯一交易与合成域。
+- 合成与锁定：购买计划和库存自动合成只扫描未锁定实例；锁定状态随唯一实例、`FCombatItemView` 和 owner-only 经济投影复制。锁定只改变状态；解锁完成修订校验后立即检查当前库存，满足配方时在同一请求尾部按稳定优先级合成，无完整配方则只刷新状态。锁定与未锁定堆叠不合并，新的购买/合成结果默认解锁。
+- 物品栏输入：右键菜单只保留使用、出售、锁定/解锁和反向整理；“放到地面”不再是菜单动作，也不保留脚下即时投递 API。地面丢弃只能由拖拽释放的屏幕落点提交，继续走服务器导航、距离、LOS、实例修订和所有权复核。
+- 兼容与版本：不保留旧储藏字段、类、实例所有权或服务端动作；经济表现 schema 升为 3，`ContractVersion=4`、`ReleaseId=combat_v4_economy_rc1` 与物品/经济开关保持开启；客户端/服务器必须同版本。
+- 验证与回滚：全量 Combat 96 项零失败、真实 NullRHI PIE、5 个蓝图编译回读、独立 Dedicated 双客户端各 300 秒/10 轮、64/256 容量、Windows cook 650 包和资产 31 项通过；三 Target 与最终 Gate 证据见 ECON-003 §7。人工视觉、打包部署、更长 soak 与网络损伤未覆盖。回滚需成组恢复上一版客户端/服务器发布，不留下半迁移入口。
+
 ## 3. 本轮查漏补缺摘要
 
 原单体文档对 Damage、Modifier、Scheduler、AttackRecord 和网络权威已有较强约束；本轮新增或显式登记了以下遗漏：
@@ -232,7 +241,7 @@
 | --- | --- | --- | --- | --- |
 | GAP-014 | 已关闭（ADR-036） | Aura 没有 owner/target 生命周期 | 每 World registry、Scheduler Coalesce、统一 Targeting 与普通 child Modifier reconcile；完整规则见 [90-11 §4](../90-History/90-11-M6-Content-Decision.md#4-aura关闭-gap-014-的基线) | 2026-08-26 / EXT-601 |
 | GAP-015 | 明确延期（ADR-041） | Summon/illusion 的 Owner、Team、ASC、Order 权限 | 不属于 v1；发布契约固定 `bSummonsAndIllusions=false`。引入前新增独立 ADR，冻结独立 Unit/ASC、CommandingController 与 gameplay owner、Team 继承和 teardown Gate | post-v1 / 引入召唤物前 |
-| GAP-017 | 部分解除（ADR-049、ADR-055、ADR-059） | 物品、背包、技能点、天赋和经济 | 经验与技能点按 ADR-049 接入成长组件；物品/背包按 ADR-055 进入 v2 基础；经济按 ADR-059 进入 `combat_v3_economy_rc1`。天赋仍延期；旧合并字段保持 false，物品与经济开关分别表达 | post-v1 / v3 |
+| GAP-017 | 部分解除（ADR-049、ADR-055、ADR-059、ADR-060） | 物品、背包、技能点、天赋和经济 | 经验与技能点按 ADR-049 接入成长组件；物品/背包按 ADR-055 进入 v2 基础；经济按 ADR-060 收敛到 `combat_v4_economy_rc1` 的单一库存交易域。天赋仍延期；旧合并字段保持 false，物品与经济开关分别表达 | post-v1 / v4 |
 | GAP-018 | 已关闭（ADR-040） | 目标容量/帧/带宽预算和池化触发阈值 | 预算、采样边界与优化触发规则见 [90-13 §7](../90-History/90-13-M7-Network-Observability-Decision.md#7-容量预算关闭-gap-018-的目标值)；64 Unit/256 Modifier 双客户端 soak 通过，验收证据见 [90-14](../90-History/90-14-M7-Acceptance.md) | 2026-08-27 / PERF-701 |
 | GAP-019 | 已关闭（ADR-039） | Combat Event schema 版本、存档/回放边界 | schema v1、环形诊断与明确不支持的 replay 边界见 [90-13 §6](../90-History/90-13-M7-Network-Observability-Decision.md#6-事件调试和回放边界关闭-gap-019-的目标值) | 2026-08-27 / OBS-701 |
 | GAP-021 | 已关闭（ADR-038） | RPC token bucket、批量命令上限和重复 request id 窗口 | ownership、20/s + 32 burst、8 Order/4096 bytes、128 RequestId 窗口及失败 Tag 见 [90-13 §3](../90-History/90-13-M7-Network-Observability-Decision.md#3-order-rpc-安全基线关闭-gap-021-的目标值) | 2026-08-27 / NET-002 |

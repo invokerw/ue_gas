@@ -23,7 +23,6 @@
 #include "Combat/UI/CombatPlayerHUD.h"
 #include "Combat/UI/CombatLogWidget.h"
 #include "Combat/UI/CombatShopWidget.h"
-#include "Combat/UI/CombatStashWidget.h"
 
 namespace CombatHUD
 {
@@ -182,8 +181,7 @@ void UCombatHUDWidget::NativeTick(const FGeometry& Geometry, float DeltaTime)
 		const ACombatPlayerHUD* HUD = Cast<ACombatPlayerHUD>(Controller->GetHUD());
 		const bool bOverOverlay = HUD
 			&& ((HUD->GetLogWidget() && HUD->GetLogWidget()->IsScreenPositionOverUI(PointerPosition))
-				|| (HUD->GetShopWidget() && HUD->GetShopWidget()->IsScreenPositionOverUI(PointerPosition))
-				|| (HUD->GetStashWidget() && HUD->GetStashWidget()->IsScreenPositionOverUI(PointerPosition)));
+				|| (HUD->GetShopWidget() && HUD->GetShopWidget()->IsScreenPositionOverUI(PointerPosition)));
 		Controller->GetAbilityAimComponent()->SetHoveredSlot(bOverOverlay ? INDEX_NONE : GetHoveredAbilitySlot(PointerPosition));
 	}
 	RefreshAccumulator += DeltaTime;
@@ -384,8 +382,7 @@ void UCombatHUDWidget::RefreshDisplay()
 	if (const ACombatPlayerController* PC = Cast<ACombatPlayerController>(GetOwningPlayer()))
 	{
 		Activity = PC->GetAbilityAimComponent()->GetStatusText().ToString();
-		if (PC->IsChoosingItemDrop()) Activity = TEXT("左键选择物品落点 · 右键或 Esc 取消");
-		else if (Activity.IsEmpty()) Activity = PC->GetItemStatusText().ToString();
+		if (Activity.IsEmpty()) Activity = PC->GetItemStatusText().ToString();
 	}
 	if (!bAlive) Activity = TEXT("已阵亡");
 	else if (Unit.AbilityPhase != ECombatAbilityViewPhase::None && Unit.ActiveAbilityDefinitionId.IsValid())
@@ -496,7 +493,7 @@ FReply UCombatHUDWidget::NativeOnPreviewMouseButtonDown(const FGeometry& Geometr
 	if (Event.GetEffectingButton() == EKeys::RightMouseButton && IsScreenPositionOverUI(Event.GetScreenSpacePosition()))
 	{
 		const ACombatPlayerController* CombatPC = Cast<ACombatPlayerController>(GetOwningPlayer());
-		if (CombatPC && !CombatPC->GetAbilityAimComponent()->IsAiming() && !CombatPC->IsChoosingItemDrop())
+		if (CombatPC && !CombatPC->GetAbilityAimComponent()->IsAiming())
 		{
 			for (UCombatHUDItemSlotWidget* Entry : GetItemWidgets())
 				if (Entry && Entry->GetCachedGeometry().IsUnderLocation(Event.GetScreenSpacePosition())) return FReply::Unhandled();

@@ -67,8 +67,9 @@ void UCombatHUDItemSlotWidget::ShowItem(const FCombatHUDOwnerView& Owner, const 
 		CooldownShade->SetVisibility(Cooldown > 0.0f ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
 		CooldownShade->SetRenderScale(FVector2D(1, Item.CooldownDuration > 0 ? FMath::Clamp(Cooldown / Item.CooldownDuration, 0.0f, 1.0f) : 0));
 	}
-	DetailText = FText::FromString(FString::Printf(TEXT("%s%s\n%s\n%s\n数量 %d%s%s\n%s\n右键：操作菜单 · 拖拽：换槽或放到地面"),
-		*Name.ToString(), Key.IsEmpty() ? TEXT("") : *FString::Printf(TEXT(" [%s]"), *Key.ToString()),
+	const FString LockText = Item.bLocked ? TEXT("\n已锁定（不参与合成）") : TEXT("");
+	DetailText = FText::FromString(FString::Printf(TEXT("%s%s%s\n%s\n%s\n数量 %d%s%s\n%s\n右键：操作菜单 · 拖拽：换槽或放到地面"),
+		*Name.ToString(), Key.IsEmpty() ? TEXT("") : *FString::Printf(TEXT(" [%s]"), *Key.ToString()), *LockText,
 		Data ? *Data->Description.ToString() : TEXT("定义加载中"), Item.AbilityHandle.IsValid() ? TEXT("主动：左键或快捷键使用") : TEXT("被动：装备时生效"),
 		Item.Quantity, Item.Charges > 0 ? *FString::Printf(TEXT(" · 充能 %d"), Item.Charges) : TEXT(""),
 		Item.ManaCost > 0 ? *FString::Printf(TEXT(" · 法力 %.0f"), Item.ManaCost) : TEXT(""),
@@ -150,15 +151,22 @@ void UCombatHUDItemSlotWidget::OpenItemMenu()
 	const UCombatItemData* Definition = Cast<UCombatItemData>(UAssetManager::Get().GetPrimaryAssetObject(Frozen.Items[From].DefinitionId));
 	if (CombatItems::IsEquipped(From) && Frozen.Items[From].AbilityHandle.IsValid())
 		Menu.AddMenuEntry(NSLOCTEXT("CombatItems", "Use", "使用"), FText::GetEmpty(), FSlateIcon(), FUIAction(FExecuteAction::CreateLambda([=]() { if (Current()) WeakPC->UseInventoryItem(From, Frozen.Items[From]); })));
-	if (Definition && Definition->bCanDrop)
-		Menu.AddMenuEntry(NSLOCTEXT("CombatItems", "Drop", "放到地面…"), FText::GetEmpty(), FSlateIcon(), FUIAction(FExecuteAction::CreateLambda([=]() { if (Current()) WeakPC->BeginDropInventoryItem(Frozen.Items[From]); })));
+	if (Definition && Definition->bSellable)
+		Menu.AddMenuEntry(NSLOCTEXT("CombatItems", "Sell", "出售"), FText::GetEmpty(), FSlateIcon(), FUIAction(FExecuteAction::CreateLambda([=]() { if (Current()) WeakPC->SellInventoryItem(Frozen.Items[From]); })));
+	Menu.AddMenuEntry(Frozen.Items[From].bLocked
+		? NSLOCTEXT("CombatItems", "Unlock", "解锁")
+		: NSLOCTEXT("CombatItems", "Lock", "锁定"), FText::GetEmpty(), FSlateIcon(),
+		FUIAction(FExecuteAction::CreateLambda([=]() { if (Current()) WeakPC->ToggleInventoryItemLock(Frozen.Items[From]); })));
 	const bool bEquipped = CombatItems::IsEquipped(From);
-	for (int32 To = bEquipped ? 6 : 0; To < (bEquipped ? 9 : 6); ++To)
+	if (!bEquipped)
 	{
-		if (bEquipped && (!Definition || !Definition->bCanEnterBackpack)) break;
-		if (!Frozen.Items.IsValidIndex(To) || Frozen.Items[To].Handle.IsValid()) continue;
-		Menu.AddMenuEntry(FText::FromString(bEquipped ? TEXT("移入背包") : TEXT("移入装备栏")), FText::GetEmpty(), FSlateIcon(), FUIAction(FExecuteAction::CreateLambda([=]() { if (Current()) WeakPC->SwapInventoryItems(From, To, Frozen); })));
-		break;
+		for (int32 To = 0; To < CombatItems::EquippedSlots; ++To)
+		{
+			if (!Frozen.Items.IsValidIndex(To) || Frozen.Items[To].Handle.IsValid()) continue;
+			Menu.AddMenuEntry(NSLOCTEXT("CombatItems", "MoveToEquipment", "移入装备栏"), FText::GetEmpty(), FSlateIcon(),
+				FUIAction(FExecuteAction::CreateLambda([=]() { if (Current()) WeakPC->SwapInventoryItems(From, To, Frozen); })));
+			break;
+		}
 	}
 	FSlateApplication::Get().PushMenu(TakeWidget(), FWidgetPath(), Menu.MakeWidget(), FSlateApplication::Get().GetCursorPos(), FPopupTransitionEffect(FPopupTransitionEffect::ContextMenu));
 }

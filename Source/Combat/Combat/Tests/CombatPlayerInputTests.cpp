@@ -8,6 +8,8 @@
 #include "Engine/World.h"
 #include "InputMappingContext.h"
 #include "Misc/AutomationTest.h"
+#include "Misc/FileHelper.h"
+#include "Misc/Paths.h"
 
 #include "Combat/Ability/CombatAbilitySystemComponent.h"
 #include "Combat/Attributes/CombatAttributeSet.h"
@@ -18,6 +20,8 @@
 #include "Combat/Scheduling/CombatSchedulerSubsystem.h"
 #include "Combat/Tests/CombatAutomationWorldFixture.h"
 #include "Combat/UI/CombatAbilityIndicatorGround.h"
+#include "Combat/Items/CombatInventoryComponent.h"
+#include "Combat/Items/CombatItemData.h"
 #include "Combat/Unit/CombatUnitCharacter.h"
 #include "Combat/Unit/CombatUnitLifecycleComponent.h"
 #include "Combat/View/CombatUnitViewComponent.h"
@@ -124,6 +128,66 @@ bool FCombatPlayerAttackInputTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("Out-of-range target enters server chase"), Orders->GetCurrentState(), ECombatOrderState::Chasing);
 	TestFalse(TEXT("Chase gesture cannot become drag move"), PC->bDestinationInputActive);
 	TestEqual(TEXT("Chase resolves clicked target position"), Orders->GetCurrentMoveGoal(), FarEnemy->GetActorLocation());
+	return true;
+}
+
+/** 右键菜单不再提供放地面旁路，拖拽屏幕落点入口必须保留。 */
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FCombatPlayerItemDropPathTest,
+	"Combat.Input.ItemDrop.RightClickMenuRemovedAndDragRetained",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FCombatPlayerItemDropPathTest::RunTest(const FString& Parameters)
+{
+	(void)Parameters;
+	using namespace CombatPlayerInputTests;
+	const FString SlotSourcePath = FPaths::ConvertRelativePathToFull(FPaths::ProjectDir(),
+		TEXT("Source/Combat/Combat/UI/CombatHUDItemSlotWidget.cpp"));
+	const FString InputSourcePath = FPaths::ConvertRelativePathToFull(FPaths::ProjectDir(),
+		TEXT("Source/Combat/Combat/Items/CombatItemInput.cpp"));
+	const FString HUDSourcePath = FPaths::ConvertRelativePathToFull(FPaths::ProjectDir(),
+		TEXT("Source/Combat/Combat/UI/CombatHUDWidget.cpp"));
+	const FString ControllerHeaderPath = FPaths::ConvertRelativePathToFull(FPaths::ProjectDir(),
+		TEXT("Source/Combat/CombatPlayerController.h"));
+	FString SlotSource, InputSource, HUDSource, ControllerHeader;
+	if (!TestTrue(TEXT("Item slot source is available for the menu contract scan"),
+		FFileHelper::LoadFileToString(SlotSource, *SlotSourcePath))) return false;
+	if (!TestTrue(TEXT("Item input source is available for the drag contract scan"),
+		FFileHelper::LoadFileToString(InputSource, *InputSourcePath))) return false;
+	if (!TestTrue(TEXT("HUD source is available for the drag route scan"),
+		FFileHelper::LoadFileToString(HUDSource, *HUDSourcePath))) return false;
+	if (!TestTrue(TEXT("Player controller header is available for the input contract scan"),
+		FFileHelper::LoadFileToString(ControllerHeader, *ControllerHeaderPath))) return false;
+	TestFalse(TEXT("Right-click menu has no ground-drop entry"), SlotSource.Contains(
+		TEXT("AddMenuEntry(NSLOCTEXT(\"CombatItems\", \"Drop\", \"放到地面\")")));
+	TestFalse(TEXT("Right-click immediate drop API is removed from the controller"),
+		ControllerHeader.Contains(TEXT("BeginDropInventoryItem")));
+	TestFalse(TEXT("Near-feet drop helper is removed from item input"), InputSource.Contains(TEXT("BuildDropLocationNearFeet")));
+	TestFalse(TEXT("Near-feet drop constant is removed from item input"), InputSource.Contains(TEXT("DropNearFeetDistance")));
+	TestTrue(TEXT("Screen-position drag drop path remains"), InputSource.Contains(TEXT("DropInventoryItemAtScreenPosition")));
+	TestTrue(TEXT("HUD drag release still routes to screen-position drop"), HUDSource.Contains(TEXT("DropInventoryItemAtScreenPosition")));
+
+	FCombatAutomationWorldFixture Fixture;
+	if (!Fixture.IsValid()) return false;
+	UWorld& World = *Fixture.GetWorld();
+	ACombatPlayerController* PC = World.SpawnActor<ACombatPlayerController>();
+	ACombatUnitCharacter* Unit = SpawnUnit(World, FVector(100.0f, 200.0f, 0.0f), 1);
+	if (!PC || !Unit || !PC->SetCommandedUnitAuthority(Unit)) return false;
+	PC->SetAsLocalPlayerController();
+	UCombatItemData* Data = NewObject<UCombatItemData>(Unit);
+	Data->DefinitionName = TEXT("input_drop");
+	Data->bCanDrop = true;
+	FCombatItemHandle Handle;
+	FGameplayTag Failure;
+	if (!TestTrue(TEXT("Drop item enters inventory"), Unit->GetCombatInventoryComponent()->GiveItem(Data, 1, Handle, Failure))) return false;
+	const FCombatHUDOwnerView View = Unit->GetCombatUnitViewComponent()->GetHUDOwnerView();
+	if (!TestEqual(TEXT("Inventory snapshot has dropped item"), View.Items.Num(), CombatItems::TotalSlots)) return false;
+	const FCombatItemView* Item = View.Items.FindByPredicate([Handle](const FCombatItemView& Entry) { return Entry.Handle == Handle; });
+	if (!TestNotNull(TEXT("Drop item snapshot exists"), Item)) return false;
+	const int32 Before = PC->NextCombatOrderRequestId;
+	TestFalse(TEXT("Invalid drag screen position is rejected locally"),
+		PC->DropInventoryItemAtScreenPosition(*Item, FVector2D(-1.0f, -1.0f)));
+	TestEqual(TEXT("Rejected drag does not submit an order"), PC->NextCombatOrderRequestId, Before);
+	TestEqual(TEXT("Rejected drag keeps the item"), Unit->GetCombatInventoryComponent()->GetItemAt(0), Handle);
 	return true;
 }
 

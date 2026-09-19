@@ -24,7 +24,6 @@ namespace CombatTags
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Failure_Economy_Stale)
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Failure_Economy_CatalogUnavailable)
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Failure_Economy_RecipeInvalid)
-	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Failure_Economy_StashFull)
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Failure_Economy_NotSellable)
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Combat_GoldChanged)
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Combat_ItemPurchased)

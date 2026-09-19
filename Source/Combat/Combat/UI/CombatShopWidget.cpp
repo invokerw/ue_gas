@@ -220,10 +220,28 @@ TSharedRef<SWidget> UCombatShopWidget::RebuildWidget()
 								SAssignNew(RecipeBox, SVerticalBox)
 							]
 						]
+						]
 					]
 				]
 			]
-		];
+		+ SOverlay::Slot().HAlign(HAlign_Right).VAlign(VAlign_Bottom).Padding(FMargin(0.0f, 0.0f, 28.0f, 28.0f))
+		[
+			SAssignNew(GoldButton, SButton)
+			.ContentPadding(FMargin(10.0f, 5.0f))
+			.ButtonColorAndOpacity(CombatShopUI::GoldColor)
+			.Text_Lambda([this]()
+			{
+				return FText::FromString(FString::Printf(TEXT("金币 %lld"),
+					static_cast<long long>(DisplayView.Gold)));
+			})
+			.ToolTipText(NSLOCTEXT("CombatShop", "GoldButtonTip", "打开或关闭商店"))
+			.OnClicked_Lambda([this]()
+			{
+				ToggleShop();
+				return FReply::Handled();
+			})
+		]
+		;
 
 	ShopPanel = PanelBorder;
 	// 属性绑定要等下一次 Slate 布局才会求值；同步当前状态可避免首帧闪现，也不会在重建时误关已打开商店。
@@ -251,6 +269,7 @@ void UCombatShopWidget::ReleaseSlateResources(const bool bReleaseChildren)
 {
 	Super::ReleaseSlateResources(bReleaseChildren);
 	ShopPanel.Reset();
+	GoldButton.Reset();
 	SearchBox.Reset();
 	CatalogBox.Reset();
 	RecipeScrollBox.Reset();
@@ -351,7 +370,7 @@ void UCombatShopWidget::RefreshFromEconomy()
 int32 UCombatShopWidget::CountOwned(const FPrimaryAssetId& DefinitionId) const
 {
 	int32 Owned = 0;
-	for (const FCombatItemView& View : DisplayView.StashItems)
+	for (const FCombatItemView& View : DisplayView.InventoryItems)
 		if (View.Handle.IsValid() && View.DefinitionId == DefinitionId) Owned += View.Quantity;
 	return Owned;
 }
@@ -597,6 +616,11 @@ void UCombatShopWidget::SetShopOpen(const bool bOpen)
 	}
 }
 
+void UCombatShopWidget::ToggleShop()
+{
+	SetShopOpen(!bShopOpen);
+}
+
 FReply UCombatShopWidget::NativeOnPreviewMouseButtonDown(const FGeometry& Geometry, const FPointerEvent& Event)
 {
 	(void)Geometry;
@@ -642,6 +666,9 @@ FReply UCombatShopWidget::NativeOnPreviewKeyDown(const FGeometry& Geometry, cons
 
 bool UCombatShopWidget::IsScreenPositionOverUI(const FVector2D Position) const
 {
-	return IsVisible() && bShopOpen && ShopPanel && ShopPanel->GetVisibility().IsVisible()
+	if (!IsVisible()) return false;
+	if (GoldButton && GoldButton->GetVisibility().IsVisible()
+		&& GoldButton->GetCachedGeometry().IsUnderLocation(Position)) return true;
+	return bShopOpen && ShopPanel && ShopPanel->GetVisibility().IsVisible()
 		&& ShopPanel->GetCachedGeometry().IsUnderLocation(Position);
 }

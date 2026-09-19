@@ -6,11 +6,11 @@ Combat 当前位于 `Combat` 单 Runtime Module 中，不是独立插件或独�
 
 ## 当前基线
 
-- 当前发布契约：`combat_v3_economy_rc1`，Contract 为 3，物品与经济开关分别开启，GameplayTag/Event 为 3，经济目录/表现 schema 为 1；Content/Formula/RNG 保持 1。物品与经济验证状态见 ITEM-001/ECON-001 台账。
+- 当前发布契约：`combat_v4_economy_rc1`，Contract 为 4，物品与经济开关分别开启，GameplayTag/Event 为 3，经济目录 schema 为 1、表现 schema 为 3；Content/Formula/RNG 保持当前冻结值。物品与经济验证状态见 ITEM-001/ECON-003 台账。
 - 权威模型：服务器结算；客户端 TargetData 仅作为请求，目标、资源和结果由服务器复核。
 - M0-M8 共 82 个 Task 已完成并通过用户验收；最近一次发布 Gate 记录为 `Combat.*` 40/40、Editor/Server/Client 构建、资产校验和 Dedicated 双客户端容量场景通过。
 - M8 之后增加了卓尔游侠远程攻击 Demo、头顶资源/状态/施法条、伤害治疗跳字，以及底部居中的英雄、技能、Buff HUD。C++ 提供只读数据，Widget Blueprint 维护布局和视觉；等级经验与技能加点已接入服务器权威成长组件，六格装备与三格背包已接入物品主动、被动、场景交互和权威投影。
-- 完整 gameplay 预测回滚、跨进程确定性 Replay、召唤物/幻象仍未接入；商店与经济已在 ECON-001 落地，真实 Dedicated/PIE 经济流程仍待专项验收。
+- 完整 gameplay 预测回滚、跨进程确定性 Replay、召唤物/幻象仍未接入；ECON-003 单一库存交易、锁定合成和出售已通过用户代码 review，NullRHI PIE、独立 Dedicated 双客户端 300 秒经济 soak、Windows cook 与资产校验通过，验证边界见 ECON-003 Spec。
 
 以上测试数字是已归档的最近验收证据，不自动代表任意工作区修改已经重新验证。实时任务状态以 [开发进度台账](Doc/CombatSystem/00-Project/00-01-Progress-Tracker.md) 为准。
 
@@ -123,10 +123,21 @@ python Tools/ue_environment.py check --require dedicated --json
 
 日志和进程摘要写入 `Saved/UEEnvironment/Dedicated/`。脚本只清理本次启动的 UE 进程。
 
+ECON-003 的经济闭环与物品争抢需要分别运行：
+
+```powershell
+& .\Tools\RunDedicated.ps1 -InstalledEditor -Economy
+& .\Tools\RunDedicated.ps1 -InstalledEditor -Items -TimeoutSeconds 120
+```
+
+`-InstalledEditor` 明确选择安装版 Editor，以独立 `-server`/`-game` 进程运行网络场景；它不代表已运行打包可执行文件。`-Economy` 让每端约每 30 秒执行买入、锁定、解锁合成和出售，持续 300 秒，默认超时 390 秒，日志位于 `Saved/UEEnvironment/Dedicated-Installed-Economy/`。`-Items` 同时验证 64 Unit/256 Modifier 容量，日志位于 `Saved/UEEnvironment/Dedicated-Installed/`；因物品争抢会切换主控单位，两种场景不能同时启用。省略 `-InstalledEditor` 时使用源码 Editor。
+
 需要构建 Server/Client Target 时，使用源码版 UE：
 
 ```powershell
 & "<UE_SOURCE_ROOT>\Engine\Build\BatchFiles\Build.bat" ue_gasEditor Win64 Development "<REPO>\ue_gas.uproject" -WaitMutex
+& "<UE_SOURCE_ROOT>\Engine\Build\BatchFiles\Build.bat" ue_gasServer Win64 Development "<REPO>\ue_gas.uproject" -WaitMutex
+& "<UE_SOURCE_ROOT>\Engine\Build\BatchFiles\Build.bat" ue_gasClient Win64 Development "<REPO>\ue_gas.uproject" -WaitMutex
 ```
 
 普通 Editor、Automation 和资产校验使用下载版 UE：
@@ -143,7 +154,7 @@ python Tools/ue_environment.py check --require dedicated --json
   -Report="<REPO>\Saved\CombatValidation\CombatAssetReport.json"
 ```
 
-上面的源码引擎 Build 命令只用于需要 Dedicated Server 的测试准备；日常打开项目不需要源码引擎。Dedicated Server + 两客户端 smoke 仍通过 `Tools/RunDedicated.ps1` 使用源码版 UE。
+上面的源码引擎 Build 命令用于源码 Editor 或 Server/Client Target 的测试准备；日常打开项目不需要源码引擎。Dedicated Server + 两客户端 smoke 通过 `Tools/RunDedicated.ps1` 选择对应 Editor。
 
 上面的 `<UE_SOURCE_ROOT>` 和 `<UE_INSTALLED_ROOT>` 只是命令中的说明占位符；实际路径以 `.env` 中的两个编辑器文件位置为准。Dedicated Server/Client Target 需要支持该 Target 的源码引擎。详细环境边界见 [M1 环境决策](Doc/CombatSystem/90-History/90-02-M1-Environment-Decision.md)，完整测试分层见 [测试计划](Doc/CombatSystem/00-Project/00-03-Test-Plan.md)。
 

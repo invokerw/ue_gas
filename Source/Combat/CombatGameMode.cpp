@@ -10,6 +10,9 @@
 #include "Combat/Economy/CombatEconomyComponent.h"
 #include "Combat/Economy/CombatEconomyData.h"
 #include "Combat/Economy/CombatShopData.h"
+#include "Combat/Tests/CombatEconomyNetworkScenario.h"
+#include "EngineUtils.h"
+#include "Misc/Parse.h"
 
 ACombatGameMode::ACombatGameMode()
 {
@@ -29,6 +32,24 @@ void ACombatGameMode::PostLogin(APlayerController* NewPlayer)
 	{
 		UE_LOG(LogCombat, Error, TEXT("EconomyPlayerInitializationFailed Player=%s Error=%s"),
 			*GetNameSafe(CombatPlayer), *Error);
+	}
+	if (FParse::Param(FCommandLine::Get(), TEXT("CombatEconomySmoke")) && GetWorld())
+	{
+		CombatPlayer->GetCombatEconomyComponent()->AddGold(5000, FName(TEXT("EconomySmokeFixture")));
+		bool bScenarioExists = false;
+		for (TActorIterator<ACombatEconomyNetworkScenario> It(GetWorld()); It; ++It)
+		{
+			bScenarioExists = true;
+			break;
+		}
+		if (!bScenarioExists)
+		{
+			if (ACombatEconomyNetworkScenario* Scenario = GetWorld()->SpawnActor<ACombatEconomyNetworkScenario>())
+			{
+				Scenario->SetReplicates(true);
+				Scenario->bAlwaysRelevant = true;
+			}
+		}
 	}
 }
 

@@ -67,22 +67,18 @@ bool UCombatNetworkSecuritySubsystem::ValidateAndConsumeEconomyRequest(
 		return false;
 	}
 	const bool bCommonPayloadValid = Request.ExpectedEconomyRevision > 0
-		&& Request.ExpectedStashRevision > 0 && Request.CommandBindingGeneration >= 0;
+		&& Request.CommandBindingGeneration >= 0;
 	bool bActionPayloadValid = false;
 	switch (Request.Action)
 	{
 	case ECombatEconomyAction::Purchase:
-		bActionPayloadValid = Request.ItemDefinitionId.IsValid()
+		bActionPayloadValid = Request.ExpectedInventoryRevision > 0 && Request.ItemDefinitionId.IsValid()
 			&& !Request.ItemHandle.IsValid() && Request.ItemRevision == 0;
 		break;
-	case ECombatEconomyAction::SellStashItem:
-	case ECombatEconomyAction::TransferStashItem:
-		bActionPayloadValid = !Request.ItemDefinitionId.IsValid()
+	case ECombatEconomyAction::SellInventoryItem:
+	case ECombatEconomyAction::ToggleInventoryItemLock:
+		bActionPayloadValid = Request.ExpectedInventoryRevision > 0 && !Request.ItemDefinitionId.IsValid()
 			&& Request.ItemHandle.IsValid() && Request.ItemRevision > 0;
-		break;
-	case ECombatEconomyAction::TakeAllStashItems:
-		bActionPayloadValid = !Request.ItemDefinitionId.IsValid()
-			&& !Request.ItemHandle.IsValid() && Request.ItemRevision == 0;
 		break;
 	default:
 		break;

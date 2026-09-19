@@ -120,6 +120,7 @@ bool FCombatM8ReleaseContractTest::RunTest(const FString& Parameters)
 	TestFalse(TEXT("Items and economy are deferred after v1"), Contract.bItemsAndEconomy);
 	TestTrue(TEXT("Items are enabled in contract v2"), Contract.bItemsEnabled);
 	TestTrue(TEXT("Economy is enabled in contract v3"), Contract.bEconomyEnabled);
+	TestEqual(TEXT("Economy presentation uses the inventory-only schema"), Contract.EconomyPresentationSchemaVersion, 3);
 
 	FCombatReleaseContract Drifted = Contract;
 	++Drifted.EventSchemaVersion;

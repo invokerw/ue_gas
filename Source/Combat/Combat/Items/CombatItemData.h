@@ -62,7 +62,7 @@ public:
 	/** 是否允许作为商店可直接购买的叶子；升级物品通过购买目标补齐组件，不直接使用本字段价格。 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Economy", meta=(DisplayName="允许直接购买", ToolTip="启用后该无配方物品可直接购买且购买价格必须大于 0；旧物品默认关闭。"))
 	bool bPurchasable = false;
-	/** 是否允许通过玩家储藏处出售。 */
+	/** 是否允许从玩家物品栏出售。 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Economy", meta=(DisplayName="允许出售", ToolTip="启用后该物品可按当前关卡退款/折价规则出售；旧物品默认关闭。"))
 	bool bSellable = false;
 	/** 标记该叶子只表达配方成本，不提供装备效果。 */

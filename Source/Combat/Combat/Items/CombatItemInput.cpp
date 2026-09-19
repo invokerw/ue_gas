@@ -10,10 +10,10 @@
 #include "Engine/LocalPlayer.h"
 #include "InputAction.h"
 #include "Blueprint/SlateBlueprintLibrary.h"
-#include "Framework/Application/SlateApplication.h"
 #include "Combat/UI/CombatPlayerHUD.h"
 #include "Combat/UI/CombatHUDWidget.h"
 #include "Combat/UI/CombatLogWidget.h"
+#include "Combat/UI/CombatShopWidget.h"
 
 bool ACombatPlayerController::UseInventoryItem(int32 Slot, const FCombatItemView& Expected)
 {
@@ -59,31 +59,13 @@ bool ACombatPlayerController::SwapInventoryItems(int32 From, int32 To, const FCo
 	return SubmitCombatOrder(Order);
 }
 
-void ACombatPlayerController::BeginDropInventoryItem(const FCombatItemView& Expected)
-{
-	CancelCombatTargeting();
-	ACombatUnitCharacter* Unit = GetReadyCommandedUnit();
-	if (!Unit || !IsLocalController() || !Expected.Handle.IsValid()) return;
-	const auto View = Unit->GetCombatUnitViewComponent()->GetHUDOwnerView();
-	if (!View.Items.ContainsByPredicate([&Expected](const auto& Item) { return Item.Handle == Expected.Handle && Item.Revision == Expected.Revision; })) return;
-	PendingDropItem = Expected.Handle;
-	PendingDropRevision = Expected.Revision;
-	PendingDropBinding = GetCommandBindingGeneration();
-	PendingDropLife = Unit->GetLifeGeneration();
-	CurrentMouseCursor = EMouseCursor::Crosshairs;
-}
-
-bool ACombatPlayerController::DropInventoryItemAtCursor(const FCombatItemView& Expected)
-{
-	return FSlateApplication::IsInitialized() && DropInventoryItemAtScreenPosition(Expected, FSlateApplication::Get().GetCursorPos());
-}
-
 bool ACombatPlayerController::DropInventoryItemAtScreenPosition(const FCombatItemView& Expected, const FVector2D& ScreenPosition)
 {
 	if (!GetReadyCommandedUnit() || !IsLocalController() || !Expected.Handle.IsValid()) return false;
 	const ACombatPlayerHUD* HUD = Cast<ACombatPlayerHUD>(GetHUD());
 	if (HUD && ((HUD->GetCombatWidget() && HUD->GetCombatWidget()->IsScreenPositionOverUI(ScreenPosition))
-		|| (HUD->GetLogWidget() && HUD->GetLogWidget()->IsScreenPositionOverUI(ScreenPosition)))) return false;
+		|| (HUD->GetLogWidget() && HUD->GetLogWidget()->IsScreenPositionOverUI(ScreenPosition))
+		|| (HUD->GetShopWidget() && HUD->GetShopWidget()->IsScreenPositionOverUI(ScreenPosition)))) return false;
 	FVector2D Pixel, Logical;
 	USlateBlueprintLibrary::AbsoluteToViewport(this, ScreenPosition, Pixel, Logical);
 	int32 Width = 0, Height = 0;

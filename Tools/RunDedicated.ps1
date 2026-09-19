@@ -1,17 +1,21 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
     [int]$Port = 7859,
     [int]$TimeoutSeconds = 90,
     [string]$PythonExe = 'python',
     [switch]$Items,
+    [switch]$Economy,
     [switch]$InstalledEditor
 )
 
 $ErrorActionPreference = 'Stop'
+if ($Items -and $Economy) { throw '物品争抢会切换主控单位；请分别运行 -Items 和 -Economy。' }
+if ($Economy -and -not $PSBoundParameters.ContainsKey('TimeoutSeconds')) { $TimeoutSeconds = 390 }
 $dedicatedRepoRoot = Split-Path $PSScriptRoot -Parent
 $dedicatedProjectFile = Join-Path $dedicatedRepoRoot 'ue_gas.uproject'
 $dedicatedEnvironmentTool = Join-Path $PSScriptRoot 'ue_environment.py'
 $dedicatedOutputRoot = Join-Path $dedicatedRepoRoot $(if ($InstalledEditor) { 'Saved/UEEnvironment/Dedicated-Installed' } else { 'Saved/UEEnvironment/Dedicated' })
+if ($Economy) { $dedicatedOutputRoot += '-Economy' }
 $dedicatedServerLog = Join-Path $dedicatedOutputRoot 'DedicatedServer.log'
 $dedicatedProcesses = @()
 
@@ -38,6 +42,7 @@ $dedicatedCommonArgs = @(
     '-CombatHUDSmoke', '-CombatSAMMovementSmoke', '-ini:Engine:[ConsoleVariables]:t.MaxFPS=120'
 )
 if ($Items) { $dedicatedCommonArgs += '-CombatItemsSmoke' }
+if ($Economy) { $dedicatedCommonArgs += '-CombatEconomySmoke'; $dedicatedCommonArgs += '-CombatEconomySoak' }
 
 function Quote-DedicatedArgument([string]$Value) {
     return '"' + $Value.Replace('"', '\"') + '"'
@@ -48,8 +53,9 @@ try {
     $dedicatedServerArgs = @(
         (Quote-DedicatedArgument $dedicatedProjectFile),
         '/Game/Combat/Tests/L_CombatTest?game=/Game/Combat/Demo/Framework/BP_CombatDemoGameMode.BP_CombatDemoGameMode_C',
-        '-server', "-port=$Port", '-CombatM7CapacitySmoke', '-ModelContextProtocolPort=8041'
+        '-server', "-port=$Port", '-ModelContextProtocolPort=8040'
     ) + $dedicatedCommonArgs + @("-AbsLog=$(Quote-DedicatedArgument $dedicatedServerLog)")
+    if (-not $Economy) { $dedicatedServerArgs += '-CombatM7CapacitySmoke' }
     $dedicatedServer = Start-Process -FilePath $dedicatedEngineExe -ArgumentList $dedicatedServerArgs -WindowStyle Hidden -PassThru
     $dedicatedProcesses += $dedicatedServer
 
@@ -70,6 +76,7 @@ try {
             (Quote-DedicatedArgument $dedicatedProjectFile),
             "127.0.0.1:$Port", '-game', "-ModelContextProtocolPort=$([int](8040 + $dedicatedIndex))"
         ) + $dedicatedCommonArgs + @("-AbsLog=$(Quote-DedicatedArgument $dedicatedClientLog)")
+        if ($Economy) { $dedicatedClientArgs += "-CombatEconomyReport=DedicatedClient$dedicatedIndex" }
         $dedicatedProcesses += Start-Process -FilePath $dedicatedEngineExe -ArgumentList $dedicatedClientArgs -WindowStyle Hidden -PassThru
     }
     $dedicatedProcesses.Id | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $dedicatedOutputRoot 'DedicatedProcessIds.json')
@@ -81,11 +88,12 @@ try {
         $dedicatedReports = foreach ($dedicatedLogPath in $dedicatedLogs) {
             if ((Test-Path -LiteralPath $dedicatedLogPath) -and
                 ((Get-Item -LiteralPath $dedicatedLogPath).LastWriteTimeUtc -ge $dedicatedRunStartedUtc)) {
-                Get-Content -LiteralPath $dedicatedLogPath | Where-Object { $_ -match 'HUDNetworkSnapshot|SAMCollisionServerResult|M7ScenarioReady|ItemNetworkSmoke|ItemNetworkContention|M7Performance' }
+                Get-Content -LiteralPath $dedicatedLogPath | Where-Object { $_ -match 'HUDNetworkSnapshot|SAMCollisionServerResult|M7ScenarioReady|ItemNetworkSmoke|ItemNetworkContention|EconomyNetworkSmoke|EconomyNetworkCycle|M7Performance' }
             }
         }
         $dedicatedFinished = @($dedicatedReports | Where-Object { $_ -match 'HUDNetworkSnapshot' }).Count -ge 3
         if ($Items) { $dedicatedFinished = $dedicatedFinished -and @($dedicatedReports | Where-Object { $_ -match 'ItemNetworkSmoke' }).Count -ge 3 }
+        if ($Economy) { $dedicatedFinished = $dedicatedFinished -and @($dedicatedReports | Where-Object { $_ -match 'EconomyNetworkSmoke' }).Count -ge 2 }
     } until ($dedicatedFinished -or (Get-Date) -gt $dedicatedDeadline)
     $dedicatedReports | Set-Content -LiteralPath (Join-Path $dedicatedOutputRoot 'DedicatedSummary.txt')
     $dedicatedReports
@@ -94,6 +102,9 @@ try {
     if ($Items -and (@($dedicatedReports | Where-Object { $_ -match 'ItemNetworkContention.*Outcome=Won' }).Count -ne 1 -or
                     @($dedicatedReports | Where-Object { $_ -match 'ItemNetworkContention.*Outcome=Lost' }).Count -ne 1)) {
         throw '物品竞争必须恰好产生一个胜者和一个失败回执'
+    }
+    if ($Economy -and @($dedicatedReports | Where-Object { $_ -match 'EconomyNetworkSmoke.*Result=Pass' }).Count -ne 2) {
+        throw '经济联机 soak 没有产生通过结果'
     }
 }
 finally {

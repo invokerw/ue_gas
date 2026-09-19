@@ -28,6 +28,7 @@ struct COMBAT_API FCombatItemView
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Item", meta=(DisplayName="修订", ToolTip="请求提交时原样携带，服务器拒绝已变化的实例。")) int32 Revision = 0;
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Item", meta=(DisplayName="数量", ToolTip="实例中的实际物品数量。")) int32 Quantity = 0;
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Item", meta=(DisplayName="能量", ToolTip="剩余能量；不用能量的物品为 0。")) int32 Charges = 0;
+	UPROPERTY(BlueprintReadOnly, Category="Combat|Item", meta=(DisplayName="已锁定", ToolTip="锁定物品不会被自动合成或商店购买计划消费；解锁仍需服务器确认。")) bool bLocked = false;
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Item", meta=(DisplayName="冷却检查点", ToolTip="剩余冷却数值对应的服务器时间，单位秒。")) double CooldownCheckpoint = 0.0;
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Item", meta=(DisplayName="检查点剩余冷却", ToolTip="按正常速度计量的剩余秒数；显示时减去经过时间乘冷却速率。")) float CooldownRemaining = 0.0f;
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Item", meta=(DisplayName="冷却总量", ToolTip="本次提交后冻结的正常速度冷却秒数。")) float CooldownDuration = 0.0f;
