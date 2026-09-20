@@ -1,6 +1,7 @@
 # 00-01 开发进度台账
 
-> 最后更新：2026-09-19
+> 最后更新：2026-09-20
+> 相机实现（2026-09-20）：用户已完成 CAM-001 设计与 CAM-002 实现 review，并授权本地 Git 提交。无需抓取键的边缘自动平移与 Space 按住跟随/松开停留已接入；Editor、完整 Combat 101 项、Demo 输入资产、PIE 与独立双客户端验证通过。自动场景使用合成边缘样本，未额外执行物理输入自动验证，详见 [CAM-002](../Specs/CAM-002-edge-pan-follow.spec.md)。
 > ECON-003 已完成（2026-09-19）：用户已完成代码 review 并授权验证后本地提交。v0.8 在删除储藏兼容入口、精简物品右键菜单和解锁即时合成后，完成 Editor/Server/Client 三 Target、NullRHI PIE、5 个蓝图编译回读、独立 Dedicated 双客户端各 300 秒/10 轮/48 回执（0 失败、0 重试）、64 Unit/256 Modifier 容量、Windows cook 650 包、资产 31 项和完整 Combat 96 项（94 success + 2 success with warnings、0 failed），文档、差异和 delivery Gate 通过。人工视觉、打包部署和更长 soak 未覆盖，见 [ECON-003](../Specs/ECON-003-direct-inventory-shop-lock.spec.md) 与 ADR-060。
 > 紧凑商店与独立储藏室（2026-09-16）：ECON-002 v0.3 已通过用户验收并获准本地提交；在 1920×1080 百分比布局上，合成固定区已移除滚轮、标题、价格、提示、说明和交易文字，只显示配方节点图，无选择或无配方时留白。DebugGame Editor 与 Development 后缀模块构建、v0.3 UI 1/1、完整 `Combat.` 94/94 通过；Codex 未取得可回读的真实 PIE 日志，当前打开的 Editor 仍需重启后载入新模块，见 [ECON-002](../Specs/ECON-002-compact-shop-stash-ui.spec.md)。
 > 经济商店合成（2026-09-15）：ECON-001 继续上一会话完成并转为待用户验收；单一金币、关卡 EconomyData/ShopData、六格储藏处、递归配方购买/出售、共享 RPC 安全、Demo 资产和 Native Shop Widget 已落地。安装版 UE 5.8.2 Editor 构建、Economy 8/8、Shop UI 1/1、全量 `Combat.` 94/94、资产 31/31 无错误、迁移工具/文档校验和 delivery Gate 通过；Server/Client Target、Dedicated 双客户端、真实 PIE 几何/输入、经济 soak/perf 未执行。F0 GO、F1 APPROVED、F2 PASS、Push-Ready READY；用户验收 `IN_PROGRESS`，见 [ECON-001](../Specs/ECON-001-money-shop-crafting.spec.md)、[10-15](../10-Architecture/10-15-Economy-Shop-Crafting.md) 和 ADR-059。
@@ -308,6 +309,15 @@ HUD-ABILITY-CLICK-001/002 追加验收状态：`用户已验收`（2026-09-14）
 | --- | --- | --- | --- |
 | ATTR-001 | DOTA2 风格 Strength/Agility/Intelligence、主属性、GAS 派生属性、全量 owner-only HUD 快照 | 已验收 | `CombatAttributeSet.*`、`CombatUnitCharacter.*`、`CombatHUDView.*` 与 `CombatHUDWidget.cpp` 已落地；三围公式、动态 GE、旧资产默认值、HUD 快照、全量 `Combat.` 85/85、资产 29/29 与 Dedicated Schema=8 Pass。2026-09-15 用户确认“验收完成，提交吧”，授权本地 Git 提交。 |
 
+## 12.10 Post-M8：Dota 风格相机
+
+> 状态：设计与实现均已验收（2026-09-20），用户已授权本地提交。普通视角移动采用屏幕边缘自动平移，不增加抓取键；Space 按住跟随、松开停留。具体运行证据与未覆盖项见 CAM-002。
+
+| Task | 内容 | 状态 | 证据 |
+| --- | --- | --- | --- |
+| CAM-001 | Dota Edge Pan 与 Space 跟随设计 | 已验收 | 用户 2026-09-20 明确 review 完成并要求实施；[CAM-001 Spec](../Specs/CAM-001-dota-camera-research.spec.md) 保留调研证据，运行实现转 CAM-002 |
+| CAM-002 | 本地边缘滚屏、Space 跟随、生命周期/视口门控与 Demo 输入配置 | 已验收 | 用户 2026-09-20 确认“review完成，提交吧”；[10-16 当前行为](../10-Architecture/10-16-Dota-Camera-Movement.md)、[CAM-002 Spec](../Specs/CAM-002-edge-pan-follow.spec.md)；Editor、101 Automation（0 failed）、31 资产、蓝图冷回读、PIE、独立双客户端相机/HUD/SAM/容量通过；授权本地提交，不推送 |
+
 ## 13. 用户验收记录
 
 | 里程碑 | 提交验收日期 | 用户结论 | 修正要求 | 最终验收日期 | 下一阶段授权 |
@@ -327,6 +337,7 @@ HUD-ABILITY-CLICK-001/002 追加验收状态：`用户已验收`（2026-09-14）
 | HUD-LOG-001 | 2026-09-12 | 已验收 | 追加顶部栏拖动，由 HUD-LOG-002 实现 | 2026-09-13 | 用户授权本地提交 |
 | HUD-LOG-002 | 2026-09-12 | 已验收 | 无 | 2026-09-13 | 用户授权本地提交 |
 | ATTR-001 | 2026-09-15 | 已验收 | 删除冗余初始化重算；只读盘点确认现有 5 个 UnitData 无需数据迁移 | 2026-09-15 | 用户确认“验收完成，提交吧”，授权本地提交 |
+| CAM-002 | 2026-09-20 | 已验收 | 无追加修正 | 2026-09-20 | 用户确认“review完成，提交吧”，授权本地提交 |
 
 ## 14. 更新日志
 
@@ -417,10 +428,13 @@ HUD-ABILITY-CLICK-001/002 追加验收状态：`用户已验收`（2026-09-14）
 | 2026-09-16 | 用户确认 ECON-002 v0.3 验收成功并授权本地提交；同步 Spec、当前状态和验收日期，保留 Codex 未取得可回读真实 PIE 日志的证据边界，不新增运行时验证结论 | post-M8 紧凑商店与储藏室 / ECON-002 / 用户验收 |
 | 2026-09-16 | 完成 ECON-003 本地实现：商店直达库存、金币按钮、出售/锁定 RPC、锁定过滤自动合成和经济表现 schema 2；DebugGame 21 actions、经济 8 success + 1 warning、UI 1/1、Release 1/1、全量 `Combat.` 93 success + 2 warnings / 0 failed。真实 PIE/Dedicated/cook/soak 未执行，转为待用户验收 | post-M8 经济商店直达库存 / ECON-003 / ADR-060 |
 | 2026-09-18 | 完成 ECON-003 v0.3 收敛：删除储藏兼容类、字段、实例所有权、RPC、清理和 HUD 表现，库存成为唯一交易/合成域；升级 v4/schema 3。24-action DebugGame、经济 8 + 1 warning、UI 1/1、Release 3/3、完整 `Combat.` 93 + 2 warnings / 0 failed、文档 80/405、delivery Gate 通过；PIE/Dedicated/cook/soak 未执行，转为待用户验收 | post-M8 经济单一库存交易域 / ECON-003 / ADR-060 |
+| 2026-09-18 | 根据用户复核修订 CAM-001：确认 Dota 常规移动采用 Edge Pan，移除本项目 Camera Grip/中键拖拽入口，保留按住 Space 跟随/松开冻结；同步 10-16、Spec v0.2、索引和台账；未修改运行时代码或资产 | post-M8 相机 / CAM-001 |
 | 2026-09-18 | 完成 ECON-003 v0.5 右键输入优化：移除装备物品“移入背包”菜单项，保留背包到装备栏入口；“放到地面”通过当前主控单位胶囊脚下 + 48 cm 朝向偏移直接提交 DropItem，删除待选落点状态，保留拖拽屏幕落点。安装版 UE 5.8 Development 23 actions、Input 8/8、Items 10/10、全量 Combat 94 success + 2 warnings / 0 failed / 96 total、文档 80/405、delivery 39 changed files 通过；PIE/Dedicated/cook/soak 未执行，转为待用户验收 | post-M8 经济物品右键 / ECON-003 / ADR-060 |
 | 2026-09-19 | 根据用户复核完成 ECON-003 v0.6：解锁在服务器修订校验后立即检查当前库存；完整配方复用稳定合成并即时协调被动/光环与 owner-only 投影，材料不足只解锁，旧修订请求无副作用。安装版 UE 5.8 Development 11 actions、解锁 Green、经济 9 项（8 success + 1 warning）、全量 Combat 94 success + 2 warnings / 0 failed / 96 total 通过；PIE/Dedicated/cook/soak 未执行，转为待用户验收 | post-M8 经济解锁合成 / ECON-003 / ADR-060 |
 | 2026-09-19 | 根据用户复核完成 ECON-003 v0.7：移除右键菜单“放到地面”、脚下即时投递 Controller/API/helper/常量，保留拖拽屏幕落点入口；输入专项 Red 4 failures → Green 1/1，`Combat.Input.` 8/8、`Combat.Items.` 10/10、全量 Combat 94 success + 2 warnings / 0 failed / 96 total；安装版 UE 5.8 Development 实现构建 23 actions、测试断言增量 2 actions 均通过，delivery Gate 通过；PIE/Dedicated/cook/soak 未执行，转为待用户验收 | post-M8 经济物品右键 / ECON-003 / ADR-060 |
 | 2026-09-19 | 用户完成代码 review 并要求执行运行矩阵后本地提交；ECON-003 v0.8 补齐 NullRHI PIE、5 个蓝图编译回读、Dedicated 双客户端各 300 秒/10 轮/48 回执、64/256 容量与物品争抢、Windows cook 650 包、资产 31 项和全量 Combat 96 项，全部零失败；验证器仅对零金币变化的旧修订拒绝等待复制后有限重试，最终两端重试均为 0。三 Target 和 delivery 最终状态见 Spec §7；不推送，保留独立 CAM-001 工作区差异 | post-M8 经济运行验证 / ECON-003 v0.8 / 用户 review 完成 |
+| 2026-09-20 | 用户完成 CAM-001 review 并授权实施。CAM-002 接入 EdgePan/FollowHeld，移除无条件跟随，保存 Space Action 与 Demo 映射；101 Automation、31 资产、PIE 和独立双客户端相机/HUD/SAM/容量通过。已贴边时 Space 接管缺陷通过重武装逻辑修复；设计已验收，实现待物理输入/手感复核 | post-M8 相机 / CAM-001 已验收 / CAM-002 待验收 |
+| 2026-09-20 | 用户确认 CAM-002 review 完成并要求提交；同步 Spec、专题与台账为已验收，保留已执行测试和合成输入覆盖边界，授权本地 Git 提交，不推送 | post-M8 相机 / CAM-002 已验收 |
 
 ## 15. 更新规则
 

@@ -5,6 +5,7 @@ param(
     [string]$PythonExe = 'python',
     [switch]$Items,
     [switch]$Economy,
+    [switch]$Camera,
     [switch]$InstalledEditor
 )
 
@@ -16,6 +17,7 @@ $dedicatedProjectFile = Join-Path $dedicatedRepoRoot 'ue_gas.uproject'
 $dedicatedEnvironmentTool = Join-Path $PSScriptRoot 'ue_environment.py'
 $dedicatedOutputRoot = Join-Path $dedicatedRepoRoot $(if ($InstalledEditor) { 'Saved/UEEnvironment/Dedicated-Installed' } else { 'Saved/UEEnvironment/Dedicated' })
 if ($Economy) { $dedicatedOutputRoot += '-Economy' }
+if ($Camera) { $dedicatedOutputRoot += '-Camera' }
 $dedicatedServerLog = Join-Path $dedicatedOutputRoot 'DedicatedServer.log'
 $dedicatedProcesses = @()
 
@@ -42,6 +44,7 @@ $dedicatedCommonArgs = @(
     '-CombatHUDSmoke', '-CombatSAMMovementSmoke', '-ini:Engine:[ConsoleVariables]:t.MaxFPS=120'
 )
 if ($Items) { $dedicatedCommonArgs += '-CombatItemsSmoke' }
+if ($Camera) { $dedicatedCommonArgs += '-CombatCameraSmoke' }
 if ($Economy) { $dedicatedCommonArgs += '-CombatEconomySmoke'; $dedicatedCommonArgs += '-CombatEconomySoak' }
 
 function Quote-DedicatedArgument([string]$Value) {
@@ -77,6 +80,7 @@ try {
             "127.0.0.1:$Port", '-game', "-ModelContextProtocolPort=$([int](8040 + $dedicatedIndex))"
         ) + $dedicatedCommonArgs + @("-AbsLog=$(Quote-DedicatedArgument $dedicatedClientLog)")
         if ($Economy) { $dedicatedClientArgs += "-CombatEconomyReport=DedicatedClient$dedicatedIndex" }
+        if ($Camera) { $dedicatedClientArgs += "-CombatCameraClientIndex=$dedicatedIndex" }
         $dedicatedProcesses += Start-Process -FilePath $dedicatedEngineExe -ArgumentList $dedicatedClientArgs -WindowStyle Hidden -PassThru
     }
     $dedicatedProcesses.Id | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $dedicatedOutputRoot 'DedicatedProcessIds.json')
@@ -88,12 +92,13 @@ try {
         $dedicatedReports = foreach ($dedicatedLogPath in $dedicatedLogs) {
             if ((Test-Path -LiteralPath $dedicatedLogPath) -and
                 ((Get-Item -LiteralPath $dedicatedLogPath).LastWriteTimeUtc -ge $dedicatedRunStartedUtc)) {
-                Get-Content -LiteralPath $dedicatedLogPath | Where-Object { $_ -match 'HUDNetworkSnapshot|SAMCollisionServerResult|M7ScenarioReady|ItemNetworkSmoke|ItemNetworkContention|EconomyNetworkSmoke|EconomyNetworkCycle|M7Performance' }
+                Get-Content -LiteralPath $dedicatedLogPath | Where-Object { $_ -match 'CameraNetworkSmoke|HUDNetworkSnapshot|SAMCollisionServerResult|M7ScenarioReady|ItemNetworkSmoke|ItemNetworkContention|EconomyNetworkSmoke|EconomyNetworkCycle|M7Performance' }
             }
         }
         $dedicatedFinished = @($dedicatedReports | Where-Object { $_ -match 'HUDNetworkSnapshot' }).Count -ge 3
         if ($Items) { $dedicatedFinished = $dedicatedFinished -and @($dedicatedReports | Where-Object { $_ -match 'ItemNetworkSmoke' }).Count -ge 3 }
         if ($Economy) { $dedicatedFinished = $dedicatedFinished -and @($dedicatedReports | Where-Object { $_ -match 'EconomyNetworkSmoke' }).Count -ge 2 }
+        if ($Camera) { $dedicatedFinished = $dedicatedFinished -and @($dedicatedReports | Where-Object { $_ -match 'CameraNetworkSmoke' }).Count -ge 3 }
     } until ($dedicatedFinished -or (Get-Date) -gt $dedicatedDeadline)
     $dedicatedReports | Set-Content -LiteralPath (Join-Path $dedicatedOutputRoot 'DedicatedSummary.txt')
     $dedicatedReports

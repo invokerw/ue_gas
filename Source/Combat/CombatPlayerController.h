@@ -36,6 +36,8 @@ public:
 	ACombatPlayerController();
 
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+	/** 在 Enhanced Input 本帧处理完后更新本地镜头；不提交任何单位命令。 */
+	virtual void PlayerTick(float DeltaTime) override;
 	/** 引擎因视口失焦冲刷按键时废弃旧瞄准与手势，防止恢复焦点后误确认。 */
 	virtual void FlushPressedKeys() override;
 
@@ -103,6 +105,7 @@ protected:
 	 * 正常出生必须由 GameMode 先建立 CommandedUnit，再只把 Command Pawn 交给 Possess。
 	 */
 	virtual void OnPossess(APawn* InPawn) override;
+	virtual void OnUnPossess() override;
 
 	/** Controller teardown 时取消旧 Unit Order、清除 Owner 并提升绑定代次。 */
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
@@ -154,6 +157,10 @@ protected:
 	UPROPERTY(EditAnywhere, Category="Input", meta=(DisplayName="触摸目的地输入", ToolTip="触摸地面时提交 MoveToPoint Order。"))
 	TObjectPtr<UInputAction> SetDestinationTouchAction;
 
+	/** 仅在按住期间跟随主控单位；具体键位由 Demo IMC 配置为 Space。 */
+	UPROPERTY(EditAnywhere, Category="Input|Camera", meta=(DisplayName="临时跟随输入", ToolTip="Boolean Enhanced Input Action：按住跟随、松开停留。空值禁用跟随键；边缘滚屏仍可用。"))
+	TObjectPtr<UInputAction> CameraFollowAction;
+
 	/** 进入普攻选敌模式的输入；具体按键由映射上下文决定，默认 A。 */
 	UPROPERTY(EditAnywhere, Category="Input|Combat", meta=(DisplayName="普攻选敌输入", ToolTip="开始选择普通攻击目标；在输入映射中配置按键，Demo 默认 A。为空时禁用此输入。"))
 	TObjectPtr<UInputAction> AttackTargetAction;
@@ -202,7 +209,22 @@ private:
 	friend class FCombatPlayerAutoCastAbilityInputTest;
 	friend class FCombatAbilityAimInputTest;
 	friend class FCombatAbilityUnitAimTest;
+	friend class FCombatCameraInputTest;
 #endif
+	/** 以当前 Pawn/就绪目标/绑定代次幂等刷新，补齐客户端复制先后不确定的情况。 */
+	void RefreshLocalCameraBinding();
+	/** 采样视口绝对位置、焦点和 UI 捕获，再只调用一次相机更新。 */
+	void UpdateLocalCamera(float DeltaSeconds);
+	/** 检查当前本地视口是否接受世界相机输入；控制台与应用失焦都拒绝。 */
+	bool IsCameraViewportFocused() const;
+	/** 三种 Enhanced Input 事件使用同一 Action，释放只结束保存的按住号。 */
+	void BindCameraActions(UEnhancedInputComponent& EnhancedInputComponent);
+	void OnCameraFollowStarted();
+	void OnCameraFollowReleased();
+	/** 清理旧 Pawn 的本地会话和保存的释放号；不清理战斗命令。 */
+	void ResetLocalCameraInput();
+	TWeakObjectPtr<ACombatCharacter> LocalCameraPawn;
+	uint64 CameraFollowPressSerial = 0;
 
 	/** 指针或代次任一复制到达时刷新 Command Pawn 跟随目标。 */
 	void RefreshCommandBinding();

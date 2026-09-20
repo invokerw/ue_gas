@@ -187,6 +187,14 @@
 - 兼容与版本：不保留旧储藏字段、类、实例所有权或服务端动作；经济表现 schema 升为 3，`ContractVersion=4`、`ReleaseId=combat_v4_economy_rc1` 与物品/经济开关保持开启；客户端/服务器必须同版本。
 - 验证与回滚：全量 Combat 96 项零失败、真实 NullRHI PIE、5 个蓝图编译回读、独立 Dedicated 双客户端各 300 秒/10 轮、64/256 容量、Windows cook 650 包和资产 31 项通过；三 Target 与最终 Gate 证据见 ECON-003 §7。人工视觉、打包部署、更长 soak 与网络损伤未覆盖。回滚需成组恢复上一版客户端/服务器发布，不留下半迁移入口。
 
+### ADR-061：本地边缘滚屏与按住跟随（2026-09-20）
+
+- 状态：accepted；用户已 review CAM-001 v0.2，并授权 CAM-002 实现。
+  - 选择：复用 Command Pawn；普通视角仅靠鼠标贴视口边缘平移，Space 使用可配置 Enhanced Input Action 临时跟随就绪的 `CommandedUnit`。边缘滚屏接管后旧 Space 按住不恢复；松开/取消停留。已经贴边时新按 Space 可以进入跟随，原边缘等到移出后重新武装。默认阈值短边 2.5%、速度 1800 cm/s、立即停止、跟随 12/s、保持绑定高度、矩形边界默认关闭。
+- 权限与生命周期：只在本地 Controller 更新，不发送相机 RPC、不写 Unit Transform；保留 `SetReplicateMovement(false)`。绑定按目标/代次去重，失焦/Owner 未就绪/teardown 清理；相机配置为本地蓝图属性，不进入战斗版本 schema。
+- 迁移与回滚：新增 Demo Follow Action/Space 映射/Controller 引用；旧蓝图无引用只禁用 Space。撤销相机增量与这三个资产即可恢复旧跟随。
+- 验证与边界：[CAM-002](../Specs/CAM-002-edge-pan-follow.spec.md) 覆盖自由锚点、边缘方向/帧率、跟随/释放、输入冲突、绑定与网络隔离；[10-16](../10-Architecture/10-16-Dota-Camera-Movement.md) 维护实际行为。Camera Grip、缩放和观战不在本轮范围。
+
 ## 3. 本轮查漏补缺摘要
 
 原单体文档对 Damage、Modifier、Scheduler、AttackRecord 和网络权威已有较强约束；本轮新增或显式登记了以下遗漏：

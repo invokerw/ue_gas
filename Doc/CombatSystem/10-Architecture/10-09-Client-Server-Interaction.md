@@ -69,7 +69,9 @@ owning client 调用 `ACombatUnitCharacter::ServerIssueOrderBatch`。服务器�
 - HUD 左键请求在本地排到下一帧执行，以等待 `GameAndUI` 焦点切换可能触发的 `FlushPressedKeys` 完成；右键取消后下一次技能点击不会被焦点冲刷撤销。排队请求仍走同一个 Controller 入口，显式取消、换绑、Stop、失焦和 EndPlay 会使其失效，不产生额外 Order。
 - 未处于技能瞄准且未命中 UI 时，右键/触摸按下命中地面立即提交 `MoveToPoint`。拖动以 0.20 秒最短间隔、25 cm 目标变化阈值重发，松开时读取最终落点并按距离阈值补发；进入 HUD/日志后清除该移动手势。
 
-所有操作统一使用 Enhanced Input。`/Game/Combat/Demo/Input/IMC_Default` 保留右键、触摸与 Q/W/E/R 的原映射，并增加以下默认映射：
+相机只更新本地 Command Pawn：鼠标贴视口边缘自动平移，无抓取键；Space 按住跟随主控 Unit，松开冻结。Controller 在输入处理后检测边缘，HUD/日志/商店、拖放、技能/攻击瞄准和失焦阻止误滚屏。相机不发送 Order 或 RPC，细节见 [10-16 视角移动](10-16-Dota-Camera-Movement.md)。
+
+按键操作统一使用 Enhanced Input，边缘滚屏直接读取视口位置。`/Game/Combat/Demo/Input/IMC_Default` 保留右键、触摸与 Q/W/E/R 的原映射，并包含以下默认映射：
 
 | 默认输入 | Input Action | Controller 默认属性 |
 | --- | --- | --- |
@@ -77,6 +79,7 @@ owning client 调用 `ACombatUnitCharacter::ServerIssueOrderBatch`。服务器�
 | 左键（确认攻击/技能目标） | `IA_ConfirmAttackTarget` | `ConfirmAttackTargetAction` |
 | Escape（取消攻击/技能瞄准） | `IA_CancelAttackTarget` | `CancelAttackTargetAction` |
 | S | `IA_StopCommand` | `StopCommandAction` |
+| Space（按住跟随，松开停留） | `IA_CameraFollow` | `CameraFollowAction`（Input/Camera） |
 
 四个 Action 位于同一 Input 目录，类型为 Boolean；`BP_CombatDemoPlayerController` 的 `Input|Combat` 默认属性引用对应资产，原生 Controller 只绑定它们的 `Started` 事件。改键在 Mapping Context 中完成；新增的 Action 引用留空时禁用对应操作，没有固定物理键兜底。迁移说明见 ADR-046。
 

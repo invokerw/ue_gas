@@ -8,6 +8,9 @@
 #include "Combat/UI/CombatAbilityIndicatorGround.h"
 
 #include "Engine/LocalPlayer.h"
+#include "Engine/GameViewportClient.h"
+#include "Engine/Console.h"
+#include "UnrealClient.h"
 #include "Engine/World.h"
 #include "Framework/Application/SlateApplication.h"
 #include "EnhancedInputComponent.h"
@@ -162,6 +165,7 @@ void ACombatPlayerController::OnPossess(APawn* InPawn)
 
 void ACombatPlayerController::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+	ResetLocalCameraInput();
 	CancelCombatTargeting();
 	CancelAttackTargeting();
 	ResetDestinationInput();
@@ -190,11 +194,94 @@ void ACombatPlayerController::RefreshCommandBinding()
 	if (AbilityAimComponent) AbilityAimComponent->ResetLocalState();
 	CancelAttackTargeting();
 	ResetDestinationInput();
-	if (ACombatCharacter* CommandPawn = Cast<ACombatCharacter>(GetPawn()))
+	RefreshLocalCameraBinding();
+}
+
+void ACombatPlayerController::OnUnPossess()
+{
+	ResetLocalCameraInput();
+	LocalCameraPawn.Reset();
+	Super::OnUnPossess();
+}
+
+void ACombatPlayerController::PlayerTick(const float DeltaTime)
+{
+	Super::PlayerTick(DeltaTime);
+	UpdateLocalCamera(DeltaTime);
+}
+
+void ACombatPlayerController::RefreshLocalCameraBinding()
+{
+	if (!IsLocalController() || GetNetMode() == NM_DedicatedServer) return;
+	ACombatCharacter* Camera = Cast<ACombatCharacter>(GetPawn());
+	if (LocalCameraPawn.Get() != Camera)
 	{
-		// Unit Owner 可能比 CommandedUnit 晚到；相机可以先安全观察，输入仍由 GetReadyCommandedUnit 阻止。
-		CommandPawn->SetFollowTarget(CommandedUnit);
+		ResetLocalCameraInput();
+		LocalCameraPawn = Camera;
 	}
+	if (Camera) Camera->SetFollowTarget(GetReadyCommandedUnit(), CommandBindingGeneration);
+}
+
+bool ACombatPlayerController::IsCameraViewportFocused() const
+{
+	const ULocalPlayer* LP = GetLocalPlayer();
+	const UGameViewportClient* Client = LP ? LP->ViewportClient : nullptr;
+	return IsLocalController() && GetNetMode() != NM_DedicatedServer && Client && Client->Viewport
+		&& Client->Viewport->HasFocus() && FSlateApplication::IsInitialized() && FSlateApplication::Get().IsActive()
+		&& (!Client->ViewportConsole || Client->ViewportConsole->ConsoleState == NAME_None);
+}
+
+void ACombatPlayerController::UpdateLocalCamera(const float DeltaSeconds)
+{
+	if (!IsLocalController() || GetNetMode() == NM_DedicatedServer) return;
+	RefreshLocalCameraBinding();
+	ACombatCharacter* Camera = LocalCameraPawn.Get();
+	if (!Camera) return;
+	if (!IsCameraViewportFocused()) { ResetLocalCameraInput(); return; }
+	const ULocalPlayer* LP = GetLocalPlayer();
+	const FViewport* Viewport = LP->ViewportClient->Viewport;
+	float MouseX = 0, MouseY = 0;
+	int32 Width = 0, Height = 0;
+	GetViewportSize(Width, Height);
+	const FVector2D FullSize(Width, Height);
+	const bool bValidMouse = GetMousePosition(MouseX, MouseY);
+	FVector2D Cursor(MouseX, MouseY);
+	const bool bUIBlocked = IsPointerOverCombatUI() || FSlateApplication::Get().IsDragDropping()
+		|| (FSlateApplication::Get().HasAnyMouseCaptor() && !Viewport->HasMouseCapture());
+	const bool bAllowEdge = bValidMouse && !bUIBlocked && !bIsTouch && !bAttackTargeting
+		&& !(AbilityAimComponent && AbilityAimComponent->IsAiming());
+	Cursor -= FullSize * FVector2D(LP->Origin);
+	const FVector2D LocalSize = FullSize * FVector2D(LP->Size);
+	const bool bInside = bValidMouse && Cursor.X >= 0 && Cursor.Y >= 0 && Cursor.X <= LocalSize.X && Cursor.Y <= LocalSize.Y;
+	Camera->UpdateCamera(DeltaSeconds, bAllowEdge && bInside ? Camera->GetEdgePanInput(Cursor, LocalSize) : FVector2D::ZeroVector,
+		bAllowEdge && bInside);
+}
+
+void ACombatPlayerController::ResetLocalCameraInput()
+{
+	if (ACombatCharacter* Camera = LocalCameraPawn.Get()) Camera->ResetCameraInput();
+	CameraFollowPressSerial = 0;
+}
+
+void ACombatPlayerController::BindCameraActions(UEnhancedInputComponent& EnhancedInputComponent)
+{
+	if (!CameraFollowAction) return;
+	EnhancedInputComponent.BindAction(CameraFollowAction, ETriggerEvent::Started, this, &ACombatPlayerController::OnCameraFollowStarted);
+	EnhancedInputComponent.BindAction(CameraFollowAction, ETriggerEvent::Completed, this, &ACombatPlayerController::OnCameraFollowReleased);
+	EnhancedInputComponent.BindAction(CameraFollowAction, ETriggerEvent::Canceled, this, &ACombatPlayerController::OnCameraFollowReleased);
+}
+
+void ACombatPlayerController::OnCameraFollowStarted()
+{
+	if (CameraFollowPressSerial != 0 || !IsCameraViewportFocused()) return;
+	RefreshLocalCameraBinding();
+	if (ACombatCharacter* Camera = LocalCameraPawn.Get()) CameraFollowPressSerial = Camera->BeginCameraFollow();
+}
+
+void ACombatPlayerController::OnCameraFollowReleased()
+{
+	if (ACombatCharacter* Camera = LocalCameraPawn.Get()) Camera->EndCameraFollow(CameraFollowPressSerial);
+	CameraFollowPressSerial = 0;
 }
 
 void ACombatPlayerController::AdvanceCommandBindingGeneration()
@@ -251,6 +338,7 @@ void ACombatPlayerController::SetupInputComponent()
 		EnhancedInputComponent->BindAction(SlotActions[Slot], ETriggerEvent::Canceled, this, &ACombatPlayerController::OnAbilityInputCanceled, Slot);
 	}
 	BindCombatCommandActions(*EnhancedInputComponent);
+	BindCameraActions(*EnhancedInputComponent);
 	for (int32 Slot = 0; Slot < FMath::Min(6, ItemSlotActions.Num()); ++Slot)
 	{
 		if (!ItemSlotActions[Slot]) continue;
@@ -723,6 +811,7 @@ void ACombatPlayerController::CancelCombatTargeting()
 
 void ACombatPlayerController::FlushPressedKeys()
 {
+	ResetLocalCameraInput();
 	bFlushingPressedKeys = true;
 	CancelCombatTargeting();
 	bFlushingPressedKeys = false;

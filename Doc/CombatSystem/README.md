@@ -54,6 +54,7 @@
 | [10-15 经济、商店与合成](10-Architecture/10-15-Economy-Shop-Crafting.md) | 单一金币、全局商店、库存配方事务、RPC 安全与 Demo 配置 | 玩法、内容、网络与 UI 开发 |
 | [10-12 底部居中 HUD：设计与实现](10-Architecture/10-12-Bottom-HUD-Design.md) | 定稿布局、拥有者快照、Widget Blueprint 与物品接线 | UI、美术、网络开发与验收 |
 | [10-13 技能瞄准与范围指示器](10-Architecture/10-13-Skill-Indicators.md) | 输入会话、三层贴花、Action 参数与训练场 | 输入、技能、UI 与验收 |
+| [10-16 Dota 风格视角移动](10-Architecture/10-16-Dota-Camera-Movement.md) | 屏幕边缘自动平移、按住 Space 跟随主控单位、输入冲突与实现验收 | 输入、相机、单位控制与 UI 开发 |
 
 ### 20-Content：技能与扩展
 
@@ -86,6 +87,8 @@
 | [DOC-006 Combat 任务路由与复盘 Skill](Specs/DOC-006-combat-task-router.spec.md) | 主 Skill 选择、证据化自评和受控流程调优 | 需求提出者、开发者、自动化 Agent |
 | [DOC-007 远端 HUD 与文档体系合并](Specs/DOC-007-remote-hud-doc-merge.spec.md) | HUD 提交的集成、目录冲突处理与验证来源 | 维护者、审查者 |
 | [DEMO-901 卓尔游侠 Demo 流程](Specs/DEMO-901-drow-ranger-flow.spec.md) | 英雄资产迁移、远程普攻、霜冻之箭、AutoCast HUD 与完整验证 | 内容、技能、UI 与验收人员 |
+| [CAM-001 Dota 风格相机调研](Specs/CAM-001-dota-camera-research.spec.md) | Dota 参考行为、边缘滚屏/Space 跟随设计、实现落点与验证矩阵 | 相机、输入、单位控制与评审人员 |
+| [CAM-002 边缘滚屏与 Space 跟随](Specs/CAM-002-edge-pan-follow.spec.md) | 本地相机实现、Demo 输入资产、自动化/PIE/双客户端验证 | 相机、输入与验收人员 |
 
 冻结与发布文档位于 `90-History`，只保存当时的决策和验收证据：
 
@@ -107,6 +110,7 @@
 - 维护服务器权威移动：`10-Architecture/10-10-Server-Authoritative-Movement-Kickoff.md` → `10-Architecture/10-09-Client-Server-Interaction.md` → `10-Architecture/10-07-Order-Movement.md` → `10-Architecture/10-01-Scope-Architecture.md` → `90-History/90-16-M8-Lifecycle-Audit.md` → `00-Project/00-04-Decisions-Gaps.md` → `00-Project/00-03-Test-Plan.md`。
 - 维护头顶界面：`10-Architecture/10-11-Overhead-Blueprint-UI.md` → `10-Architecture/10-08-Data-Network-Observability.md` → `20-Content/20-03-M8-Public-Extension-Guide.md` → `90-History/90-16-M8-Lifecycle-Audit.md`。
 - 维护底部 HUD：`10-Architecture/10-12-Bottom-HUD-Design.md` → `10-Architecture/10-14-Item-System.md` → `10-Architecture/10-15-Economy-Shop-Crafting.md` → `10-Architecture/10-08-Data-Network-Observability.md` → `00-Project/00-04-Decisions-Gaps.md` 的 ADR-047。
+- 维护相机与视角输入：`10-Architecture/10-16-Dota-Camera-Movement.md` → `10-Architecture/10-10-Server-Authoritative-Movement-Kickoff.md` → `10-Architecture/10-09-Client-Server-Interaction.md` → `Specs/CAM-002-edge-pan-follow.spec.md`（设计历史见 CAM-001）。
 - 核对发布状态：`00-Project/00-01-Progress-Tracker.md` → `90-History/90-15-M8-Release-Candidate-Decision.md` → `90-History/90-17-M8-Acceptance.md`。
 
 ## 原章节迁移
