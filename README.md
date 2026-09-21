@@ -33,6 +33,10 @@ Demo 操作：右键点敌方单位持续普攻，超出范围时自动追击；
 
 技能指示器训练场：打开 `/Game/Combat/Demo/Indicators/L_CombatIndicators`，Q/W/E/R 分别体验单位、圆形、直线和自身技能。目标技能默认按键瞄准、左键确认，Escape/右键取消；琥珀虚线表示超距，确认后由服务器追近。Controller 可切换按下/松开快施。配置见 [10-13 技能指示器](Doc/CombatSystem/10-Architecture/10-13-Skill-Indicators.md)。
 
+StateTree AI 演示：打开 `/Game/Combat/Demo/AI/L_CombatAI`，服务器自主单位在导航就绪后追近并攻击木桩。PIE 中选中演示场实例可点击 **AI 返回起点 / AI 攻击靶子**。阶段 A 提供显式 Move/Attack/Cast、单命令写入者、攻击边界切换和玩家接管；Profile、树接线与后续阶段边界见 [20-04 配置指南](Doc/CombatSystem/20-Content/20-04-StateTree-AI-Guide.md)。
+
+阶段 B 角色演示：`/Game/Combat/Demo/AI/Roles/L_CombatAI_Roles` 提供宽视野入口和清晰目标标识，野怪自动感知、追击后归位，小兵交战后继续路线；复用 Guard/Engage/Return/Lane/Patrol StateTree 节点与子树。当前证据与验收状态见 [AI-003](Doc/CombatSystem/Specs/AI-003-statetree-roles.spec.md)。
+
 视角操作：鼠标贴近游戏视口边缘自动平移，无需抓取键；按住 **Space** 跟随主控单位，松开停留。跟随中重新贴边会由滚屏接管，需松开重按 Space 才恢复跟随。UI、瞄准和失焦会阻止误滚屏。参数与验证边界见 [10-16 视角移动](Doc/CombatSystem/10-Architecture/10-16-Dota-Camera-Movement.md)。
 
 以上按键统一通过 `/Game/Combat/Demo/Input/IMC_Default` 映射到 Input Action；可在该资产中改键。普攻选敌、确认、取消和停止的 Action 引用配置在 `BP_CombatDemoPlayerController` 的 `Input|Combat` 默认属性中，Space 跟随引用配置在 `Input|Camera`；边缘滚屏直接检测视口位置，不需要 Action。
@@ -48,8 +52,8 @@ Demo 操作：右键点敌方单位持续普攻，超出范围时自动追击；
 ## 运行时主链路
 
 ```text
-客户端输入 / AI 意图
-  -> Order RPC 安全检查
+客户端输入 -> Order RPC 安全检查
+服务器 StateTree -> Brain 控制代次与单写入者检查
   -> OrderComponent（Move / Attack / Cast / Stop / Pickup / Drop；Swap 即时事务）
   -> Targeting 服务器复核
   -> Ability / AttackRecord
@@ -66,6 +70,7 @@ Demo 操作：右键点敌方单位持续普攻，超出范围时自动追击；
 | 路径 | 内容 |
 | --- | --- |
 | `Source/Combat/Combat/Ability` | ASC、GameplayAbility 基类、AbilityTask 与 EffectContext |
+| `Source/Combat/Combat/AI` | 服务器 StateTree 宿主、Profile/Schema、跨状态工作区与 Order Bridge |
 | `Source/Combat/Combat/Combat` | Damage、Heal、Transaction 和 Effect 工具 |
 | `Source/Combat/Combat/Modifiers` | ActiveGE/Runtime 映射、Hook、叠层、周期和驱散 |
 | `Source/Combat/Combat/Order`、`Attack` | 指令状态机、追击、AttackRecord、法球和普攻时序 |

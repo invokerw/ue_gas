@@ -14,6 +14,7 @@
 #include "CombatDefinitionData.generated.h"
 
 class UCombatAbilitySet;
+class UCombatAIProfileData;
 class UCombatItemData;
 class UCombatGameplayAbility;
 class UCombatModifierRuntime;
@@ -202,6 +203,8 @@ class COMBAT_API UCombatUnitData : public UCombatDefinitionData
 	GENERATED_BODY()
 
 public:
+	/** 可选服务器自主决策；为空时维持原有玩家/脚本命令模式。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|AI", meta=(DisplayName="AI 决策配置", ToolTip="可选 StateTree AI Profile；空值不启用自主决策。玩家指挥的单位默认保持手动模式，须显式恢复自主决策。")) TObjectPtr<UCombatAIProfileData> AIProfile;
 	/** 单位生成时写入 AttributeSet；Health/Mana 同时初始化为各自最大值。 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Unit", meta=(DisplayName="基础战斗属性", ToolTip="服务器初始化单位时写入 Combat AttributeSet 的基础属性集合；展开后可配置生命、攻击、移速等数值。"))
 	FCombatUnitBaseStats BaseStats;

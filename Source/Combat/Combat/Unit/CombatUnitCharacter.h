@@ -10,6 +10,7 @@
 #include "CombatUnitCharacter.generated.h"
 
 class UCombatAbilitySystemComponent;
+class UCombatAIBrainComponent;
 class UCombatAttackComponent;
 class UCombatAttributeSet;
 class UCombatModifierComponent;
@@ -71,6 +72,8 @@ public:
 	UCombatAttackComponent* GetCombatAttackComponent() const { return CombatAttackComponent; }
 	/** 返回按提交顺序执行移动、施法和普攻指令的组件。 */
 	UCombatOrderComponent* GetCombatOrderComponent() const { return CombatOrderComponent; }
+	/** 返回服务器自主行为宿主；旧单位无 Profile 时组件保持停止。 */
+	UCombatAIBrainComponent* GetCombatAIBrainComponent() const { return CombatAIBrainComponent; }
 	/** 返回水平/垂直强制位移通道组件。 */
 	UCombatMotionComponent* GetCombatMotionComponent() const { return CombatMotionComponent; }
 	/** 返回向界面提供生命、法力、施法进度和可见效果快照的复制组件。 */
@@ -236,6 +239,8 @@ protected:
 	ECombatAscReplicationPolicy AscReplicationPolicy = ECombatAscReplicationPolicy::Automatic;
 	/** 成功初始化后缓存 DefinitionId，阻止不同定义重复写入同一 Unit。 */
 	FPrimaryAssetId InitializedUnitDefinitionId;
+	/** 本地 StateTree 宿主，不复制决策工作区；客户端只消费普通战斗复制。 */
+	UPROPERTY(VisibleAnywhere, Category="Combat|AI", meta=(DisplayName="AI 决策宿主", ToolTip="服务器的 StateTree Brain；无 Profile 时不启动。")) TObjectPtr<UCombatAIBrainComponent> CombatAIBrainComponent;
 
 	/** 服务器权威并复制的当前战斗队伍。 */
 	UPROPERTY(EditAnywhere, ReplicatedUsing=OnRep_TeamId, BlueprintReadOnly, Category="Combat|Team")

@@ -6,11 +6,14 @@ param(
     [switch]$Items,
     [switch]$Economy,
     [switch]$Camera,
+    [switch]$AI,
+    [switch]$AIRoles,
     [switch]$InstalledEditor
 )
 
 $ErrorActionPreference = 'Stop'
 if ($Items -and $Economy) { throw '物品争抢会切换主控单位；请分别运行 -Items 和 -Economy。' }
+if ($AIRoles -and ($AI -or $Items -or $Economy -or $Camera)) { throw '角色演示使用独立地图，请单独运行 -AIRoles。' }
 if ($Economy -and -not $PSBoundParameters.ContainsKey('TimeoutSeconds')) { $TimeoutSeconds = 390 }
 $dedicatedRepoRoot = Split-Path $PSScriptRoot -Parent
 $dedicatedProjectFile = Join-Path $dedicatedRepoRoot 'ue_gas.uproject'
@@ -18,6 +21,8 @@ $dedicatedEnvironmentTool = Join-Path $PSScriptRoot 'ue_environment.py'
 $dedicatedOutputRoot = Join-Path $dedicatedRepoRoot $(if ($InstalledEditor) { 'Saved/UEEnvironment/Dedicated-Installed' } else { 'Saved/UEEnvironment/Dedicated' })
 if ($Economy) { $dedicatedOutputRoot += '-Economy' }
 if ($Camera) { $dedicatedOutputRoot += '-Camera' }
+if ($AI) { $dedicatedOutputRoot += '-AI' }
+if ($AIRoles) { $dedicatedOutputRoot += '-AIRoles' }
 $dedicatedServerLog = Join-Path $dedicatedOutputRoot 'DedicatedServer.log'
 $dedicatedProcesses = @()
 
@@ -41,10 +46,14 @@ $dedicatedEngineExe = if ($InstalledEditor) { [string]$dedicatedEnvironment.inst
 New-Item -ItemType Directory -Path $dedicatedOutputRoot -Force | Out-Null
 $dedicatedCommonArgs = @(
     '-unattended', '-NoSplash', '-NullRHI', '-NoSound', '-NoP4',
-    '-CombatHUDSmoke', '-CombatSAMMovementSmoke', '-ini:Engine:[ConsoleVariables]:t.MaxFPS=120'
+    '-ini:Engine:[ConsoleVariables]:t.MaxFPS=120'
 )
+# 角色地图有独立的行为/复制断言；HUD/SAM 在默认或 -AI 的既有场景中单独回归。
+if (-not $AIRoles) { $dedicatedCommonArgs += @('-CombatHUDSmoke', '-CombatSAMMovementSmoke') }
 if ($Items) { $dedicatedCommonArgs += '-CombatItemsSmoke' }
 if ($Camera) { $dedicatedCommonArgs += '-CombatCameraSmoke' }
+if ($AI) { $dedicatedCommonArgs += '-CombatAISmoke' }
+if ($AIRoles) { $dedicatedCommonArgs += '-CombatAIRolesSmoke' }
 if ($Economy) { $dedicatedCommonArgs += '-CombatEconomySmoke'; $dedicatedCommonArgs += '-CombatEconomySoak' }
 
 function Quote-DedicatedArgument([string]$Value) {
@@ -53,12 +62,14 @@ function Quote-DedicatedArgument([string]$Value) {
 
 try {
     $dedicatedRunStartedUtc = [DateTime]::UtcNow
+    $dedicatedMap = if ($AIRoles) { '/Game/Combat/Demo/AI/Roles/L_CombatAI_Roles' } else { '/Game/Combat/Tests/L_CombatTest?game=/Game/Combat/Demo/Framework/BP_CombatDemoGameMode.BP_CombatDemoGameMode_C' }
     $dedicatedServerArgs = @(
         (Quote-DedicatedArgument $dedicatedProjectFile),
-        '/Game/Combat/Tests/L_CombatTest?game=/Game/Combat/Demo/Framework/BP_CombatDemoGameMode.BP_CombatDemoGameMode_C',
+        $dedicatedMap,
         '-server', "-port=$Port", '-ModelContextProtocolPort=8040'
     ) + $dedicatedCommonArgs + @("-AbsLog=$(Quote-DedicatedArgument $dedicatedServerLog)")
-    if (-not $Economy) { $dedicatedServerArgs += '-CombatM7CapacitySmoke' }
+    # AI 演示会额外生成两个单位，不能叠在固定 64/256 的旧容量样本里；容量回归另跑默认模式。
+    if (-not $Economy -and -not $AI -and -not $AIRoles) { $dedicatedServerArgs += '-CombatM7CapacitySmoke' }
     $dedicatedServer = Start-Process -FilePath $dedicatedEngineExe -ArgumentList $dedicatedServerArgs -WindowStyle Hidden -PassThru
     $dedicatedProcesses += $dedicatedServer
 
@@ -92,18 +103,23 @@ try {
         $dedicatedReports = foreach ($dedicatedLogPath in $dedicatedLogs) {
             if ((Test-Path -LiteralPath $dedicatedLogPath) -and
                 ((Get-Item -LiteralPath $dedicatedLogPath).LastWriteTimeUtc -ge $dedicatedRunStartedUtc)) {
-                Get-Content -LiteralPath $dedicatedLogPath | Where-Object { $_ -match 'CameraNetworkSmoke|HUDNetworkSnapshot|SAMCollisionServerResult|M7ScenarioReady|ItemNetworkSmoke|ItemNetworkContention|EconomyNetworkSmoke|EconomyNetworkCycle|M7Performance' }
+                Get-Content -LiteralPath $dedicatedLogPath | Where-Object { $_ -match 'AIRolesNetworkSmoke|AINetworkSmoke|CameraNetworkSmoke|HUDNetworkSnapshot|SAMCollisionServerResult|M7ScenarioReady|ItemNetworkSmoke|ItemNetworkContention|EconomyNetworkSmoke|EconomyNetworkCycle|M7Performance' }
             }
         }
-        $dedicatedFinished = @($dedicatedReports | Where-Object { $_ -match 'HUDNetworkSnapshot' }).Count -ge 3
+        $dedicatedFinished = if ($AIRoles) {
+            @($dedicatedReports | Where-Object { $_ -match 'AIRolesNetworkSmoke' }).Count -ge 3
+        } else {
+            @($dedicatedReports | Where-Object { $_ -match 'HUDNetworkSnapshot' }).Count -ge 3
+        }
         if ($Items) { $dedicatedFinished = $dedicatedFinished -and @($dedicatedReports | Where-Object { $_ -match 'ItemNetworkSmoke' }).Count -ge 3 }
         if ($Economy) { $dedicatedFinished = $dedicatedFinished -and @($dedicatedReports | Where-Object { $_ -match 'EconomyNetworkSmoke' }).Count -ge 2 }
         if ($Camera) { $dedicatedFinished = $dedicatedFinished -and @($dedicatedReports | Where-Object { $_ -match 'CameraNetworkSmoke' }).Count -ge 3 }
+        if ($AI) { $dedicatedFinished = $dedicatedFinished -and @($dedicatedReports | Where-Object { $_ -match 'AINetworkSmoke' }).Count -ge 3 }
     } until ($dedicatedFinished -or (Get-Date) -gt $dedicatedDeadline)
     $dedicatedReports | Set-Content -LiteralPath (Join-Path $dedicatedOutputRoot 'DedicatedSummary.txt')
     $dedicatedReports
-    if (-not $dedicatedFinished) { throw 'HUD 或物品联机快照等待超时' }
-    if (@($dedicatedReports | Where-Object { $_ -match 'Result=Fail|Budget=Fail|CapacityFixture=Invalid' }).Count -gt 0) { throw 'HUD、物品、移动或容量联机检查失败' }
+    if (-not $dedicatedFinished) { throw '所选 HUD、物品、经济、相机或 AI 联机快照等待超时' }
+    if (@($dedicatedReports | Where-Object { $_ -match 'Result=Fail|Budget=Fail|CapacityFixture=Invalid' }).Count -gt 0) { throw '所选联机行为或容量检查失败' }
     if ($Items -and (@($dedicatedReports | Where-Object { $_ -match 'ItemNetworkContention.*Outcome=Won' }).Count -ne 1 -or
                     @($dedicatedReports | Where-Object { $_ -match 'ItemNetworkContention.*Outcome=Lost' }).Count -ne 1)) {
         throw '物品竞争必须恰好产生一个胜者和一个失败回执'

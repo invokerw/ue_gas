@@ -18,6 +18,8 @@ public class Combat : ModuleRules
 			"InputCore",
 			"EnhancedInput",
 			"AIModule",
+			"StateTreeModule",
+			"GameplayStateTreeModule",
 			"NavigationSystem",
 			"GameplayAbilities",
 			"GameplayTags",
@@ -32,6 +34,11 @@ public class Combat : ModuleRules
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[] { });
+		if (Target.bBuildEditor)
+		{
+			// 树资产构建和编译只在编辑器使用，Server/Client 不链接编辑器模块。
+			PrivateDependencyModuleNames.AddRange(new string[] { "StateTreeEditorModule", "PropertyBindingUtils", "UnrealEd" });
+		}
 
 		PublicIncludePaths.AddRange(new string[] {
 			"Combat"

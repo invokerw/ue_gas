@@ -25,9 +25,9 @@
 
 ## 2. 当前工程基线
 
-截至 2026-09-02，仓库基线为：
+截至 2026-09-20，仓库基线为（验证与验收以实时台账为准）：
 
-- `ue_gas.uproject` 关联 UE 5.8，并启用 GameplayAbilities、StateTree 以及 Editor/MCP 辅助插件；StateTree 仅保留为可选引擎能力，不再被项目源码依赖。
+- `ue_gas.uproject` 关联 UE 5.8，并启用 GameplayAbilities、StateTree 以及 Editor/MCP 辅助插件；AI-002 已接入 `StateTreeModule` / `GameplayStateTreeModule`，Unit 的可选 AI Profile 启用服务器 Brain。阶段 A 配置见 [20-04](../20-Content/20-04-StateTree-AI-Guide.md)。
 - `Source/Combat/Combat.Build.cs` 已接入 GameplayAbilities、GameplayTags、GameplayTasks、导航、网络、Niagara 和 UMG/Slate 等运行时依赖。
 - Combat 已在 `Source/Combat/Combat` 落地，包含 ASC、AttributeSet、Ability、Modifier、Damage/Heal、Order、Attack、Projectile、Thinker、Aura、Motion、网络 View、UI、调试、资产校验和 Automation。
 - 当前仍保持单 Runtime Module；`ue_gasEditor`、`ue_gasServer`、`ue_gasClient` Target 均存在。Server/Client Target 的源码引擎要求见 [90-02 M1 环境决策](../90-History/90-02-M1-Environment-Decision.md)。
@@ -69,6 +69,7 @@ UE MCP 是效率与准确性工具，不是新的权威数据源：
 
 ```text
 Source/Combat/Combat
+  AI/
   Ability/
   Attack/
   Attributes/
@@ -104,7 +105,7 @@ Source/Combat/Combat
 "GameplayTasks"
 ```
 
-`ue_gas.uproject` 已启用 GameplayAbilities；运行时同时使用 `AIModule`、`NavigationSystem`、`StateTree`、`GameplayStateTree`、`Niagara`、`UMG`、`Slate` 和 `SlateCore`。
+`ue_gas.uproject` 已启用 GameplayAbilities；运行时同时使用 `AIModule`、`NavigationSystem`、`StateTreeModule`、`GameplayStateTreeModule`、`Niagara`、`UMG`、`Slate` 和 `SlateCore`。树编译器的 `StateTreeEditorModule` / `PropertyBindingUtils` 与 `UnrealEd` 仅在 Editor Target 引入。
 
 第一版保持单 Runtime Module；只有当编译时间、依赖方向或独立自动化测试确实受阻时再拆 Combat Runtime/Developer 模块。
 
@@ -114,6 +115,7 @@ Source/Combat/Combat
 | --- | --- | --- |
 | 战斗单位 | `ACombatUnitCharacter` | `IAbilitySystemInterface`、ASC、属性、队伍、攻击和指令组件 |
 | 单位导航控制器 | `ACombatUnitAIController` | 仅服务器 Possess Combat Unit，持有 PathFollowing 与唯一 Detour Crowd steering |
+| AI 决策宿主 | `UCombatAIBrainComponent` | 服务器 StateTree、类型化 Scope/意图/回执和单写入者 Order Bridge；不维护第二套战斗属性 |
 | 玩家指挥控制器 | `ACombatPlayerController` | Possess Command Pawn，维护 owner-only CommandedUnit/BindingGeneration 并提交 Order |
 | 命令 Pawn | `ACombatCharacter` | 无 Combat 组件和碰撞的连接/相机载体，只在本地跟随 CommandedUnit |
 | ASC | `UCombatAbilitySystemComponent` | GAS 激活、标签查询、冷却/消耗查询和 ActorInfo 初始化 |
@@ -139,6 +141,7 @@ Source/Combat/Combat
 | Modifier | `UCombatModifierData` | GE/Runtime 类、优先级、叠层、驱散、状态、Think、motion |
 | Projectile | `UCombatProjectileData` | 类型、速度、宽度、距离、碰撞、命中策略、Cue |
 | AbilitySet | `UCombatAbilitySet` | Ability 类和初始等级列表，不保存运行时 SpecHandle |
+| AI Profile | `UCombatAIProfileData` | 编译根树、准备有效期和攻击边界持有期限；旧 UnitData 空 Profile 默认关闭 |
 | Damage/Heal | `FCombatDamageRequest` / `FCombatHealRequest` | 请求参数和来源上下文；只在服务器事务中使用 |
 | 来源身份 | `FCombatSourceContext` | DirectSourceType，以及 Ability/Modifier/Projectile DefinitionId 因果链 |
 | Ability Action | `FCombatAbilityAction` | Damage、Heal、ApplyModifier、Projectile、Thinker、Event |

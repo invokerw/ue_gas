@@ -55,6 +55,7 @@
 | [10-12 底部居中 HUD：设计与实现](10-Architecture/10-12-Bottom-HUD-Design.md) | 定稿布局、拥有者快照、Widget Blueprint 与物品接线 | UI、美术、网络开发与验收 |
 | [10-13 技能瞄准与范围指示器](10-Architecture/10-13-Skill-Indicators.md) | 输入会话、三层贴花、Action 参数与训练场 | 输入、技能、UI 与验收 |
 | [10-16 Dota 风格视角移动](10-Architecture/10-16-Dota-Camera-Movement.md) | 屏幕边缘自动平移、按住 Space 跟随主控单位、输入冲突与实现验收 | 输入、相机、单位控制与 UI 开发 |
+| [10-17 StateTree 通用 AI 决策系统设计](10-Architecture/10-17-StateTree-AI-Decision-System.md) | 已接受的 0.2 总体方案；阶段 A 已验收，其余感知、角色、Utility 和容量按阶段验证 | AI、玩法、内容、测试与架构评审 |
 
 ### 20-Content：技能与扩展
 
@@ -63,6 +64,7 @@
 | [20-01 示例技能](20-Content/20-01-Example-Skills.md) | 七个纵向切片与可玩卓尔游侠霜冻之箭 Demo 的落地方式 | 技能开发与验收 |
 | [20-02 M6 技能模板检查表](20-Content/20-02-M6-Skill-Template-Checklist.md) | 技能旁路、身份、时序、清理、中文说明和自动化检查 | 技能开发 |
 | [20-03 公共扩展与迁移指南](20-Content/20-03-M8-Public-Extension-Guide.md) | 新技能、DataAsset、蓝图事件和版本迁移入口 | 内容开发与维护者 |
+| [20-04 StateTree AI 配置与接入](20-Content/20-04-StateTree-AI-Guide.md) | 阶段 A/B 演示地图、Profile、显式职责、感知角色节点、控制接管和诊断 | AI、玩法与内容开发 |
 
 ### 30-Tooling：工具与诊断
 
@@ -89,6 +91,9 @@
 | [DEMO-901 卓尔游侠 Demo 流程](Specs/DEMO-901-drow-ranger-flow.spec.md) | 英雄资产迁移、远程普攻、霜冻之箭、AutoCast HUD 与完整验证 | 内容、技能、UI 与验收人员 |
 | [CAM-001 Dota 风格相机调研](Specs/CAM-001-dota-camera-research.spec.md) | Dota 参考行为、边缘滚屏/Space 跟随设计、实现落点与验证矩阵 | 相机、输入、单位控制与评审人员 |
 | [CAM-002 边缘滚屏与 Space 跟随](Specs/CAM-002-edge-pan-follow.spec.md) | 本地相机实现、Demo 输入资产、自动化/PIE/双客户端验证 | 相机、输入与验收人员 |
+| [AI-001 StateTree AI 设计文档](Specs/AI-001-statetree-ai-design.spec.md) | 通用 StateTree 决策方案的文档任务、事实依据、审查与验证边界 | AI、玩法与架构评审人员 |
+| [AI-002 StateTree 阶段 A 实现](Specs/AI-002-statetree-runtime.spec.md) | 已验收的运行时、Order 协议、生命周期、资产和分层验证证据 | AI、玩法与测试 |
+| [AI-003 StateTree 阶段 B 角色](Specs/AI-003-statetree-roles.spec.md) | 感知/记忆、守点归位与路线职责、角色演示及分层验证 | AI、玩法、内容与测试 |
 
 冻结与发布文档位于 `90-History`，只保存当时的决策和验收证据：
 
@@ -111,6 +116,7 @@
 - 维护头顶界面：`10-Architecture/10-11-Overhead-Blueprint-UI.md` → `10-Architecture/10-08-Data-Network-Observability.md` → `20-Content/20-03-M8-Public-Extension-Guide.md` → `90-History/90-16-M8-Lifecycle-Audit.md`。
 - 维护底部 HUD：`10-Architecture/10-12-Bottom-HUD-Design.md` → `10-Architecture/10-14-Item-System.md` → `10-Architecture/10-15-Economy-Shop-Crafting.md` → `10-Architecture/10-08-Data-Network-Observability.md` → `00-Project/00-04-Decisions-Gaps.md` 的 ADR-047。
 - 维护相机与视角输入：`10-Architecture/10-16-Dota-Camera-Movement.md` → `10-Architecture/10-10-Server-Authoritative-Movement-Kickoff.md` → `10-Architecture/10-09-Client-Server-Interaction.md` → `Specs/CAM-002-edge-pan-follow.spec.md`（设计历史见 CAM-001）。
+- 开发 StateTree AI：`20-Content/20-04-StateTree-AI-Guide.md` → `10-Architecture/10-17-StateTree-AI-Decision-System.md` → `10-Architecture/10-07-Order-Movement.md` → `Specs/AI-002-statetree-runtime.spec.md` → `Specs/AI-003-statetree-roles.spec.md`；阶段 A 使用显式目标，阶段 B 增加感知、角色职责和独立演示，Utility/容量仍按总体方案后续实施。
 - 核对发布状态：`00-Project/00-01-Progress-Tracker.md` → `90-History/90-15-M8-Release-Candidate-Decision.md` → `90-History/90-17-M8-Acceptance.md`。
 
 ## 原章节迁移

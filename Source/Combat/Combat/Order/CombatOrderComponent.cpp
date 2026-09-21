@@ -1,4 +1,5 @@
 #include "Combat/Order/CombatOrderComponent.h"
+#include "Combat/AI/CombatAIBrainComponent.h"
 
 #include "AIController.h"
 #include "Components/CapsuleComponent.h"
@@ -38,6 +39,28 @@ namespace CombatItemOrderResult
 	}
 }
 
+namespace CombatOrderLog
+{
+	/** 以快照记录转换；Emit 同步通知观察者，因此终态日志不能依赖仍挂在组件上的旧当前项。 */
+	void Emit(const UCombatOrderComponent& Component, const FCombatQueuedOrder& Order, const ECombatOrderState State,
+		const FGameplayTag FailureTag, const FString& Diagnostic)
+	{
+		auto* Events = Component.GetWorld() ? Component.GetWorld()->GetSubsystem<UCombatEventSubsystem>() : nullptr;
+		const auto* Unit = Cast<ACombatUnitCharacter>(Component.GetOwner());
+		if (!Events || !Unit) return;
+		FCombatLogRecord Record;
+		Record.Context = Events->CreateRootEvent();
+		Record.EventType = CombatTags::Event_Combat_OrderStateChanged;
+		Record.FailureTag = FailureTag;
+		Record.SourceActorId = Unit->GetUniqueID();
+		Record.TargetActorId = Order.Request.TargetUnit ? Order.Request.TargetUnit->GetUniqueID() : 0;
+		Record.UnitLifeGeneration = Unit->GetLifeGeneration();
+		Record.Diagnostic = FString::Printf(TEXT("Order=%s Type=%d State=%d %s"),
+			*Order.Handle.ToString(), static_cast<int32>(Order.Request.Type), static_cast<int32>(State), *Diagnostic);
+		Events->Emit(Record);
+	}
+}
+
 UCombatOrderComponent::UCombatOrderComponent()
 {
 	PrimaryComponentTick.bCanEverTick = false;
@@ -46,6 +69,29 @@ UCombatOrderComponent::UCombatOrderComponent()
 FCombatOrderResult UCombatOrderComponent::IssueOrder(
 	const FCombatOrderRequest& Request,
 	const bool bQueue)
+{
+	return IssueOrderInternal(Request, bQueue, nullptr);
+}
+
+FCombatOrderResult UCombatOrderComponent::IssueAutonomousOrder(const FCombatOrderRequest& Request,
+	const UCombatAIBrainComponent* Source, const uint64 ControlEpoch)
+{
+	auto* Unit = GetOwnerUnit();
+	if (!Unit || Source != Unit->GetCombatAIBrainComponent() || !Source || !Source->CanSubmit(ControlEpoch)
+		|| CurrentOrder.IsSet() || !PendingOrders.IsEmpty() || Request.Type == ECombatOrderType::Stop
+		|| Request.Type == ECombatOrderType::SwapItems || Request.Type == ECombatOrderType::PickupItem || Request.Type == ECombatOrderType::DropItem)
+	{
+		FCombatOrderResult Result;
+		Result.State = ECombatOrderState::Failed;
+		Result.FailureTag = CombatTags::Order_Failure_InvalidRequest;
+		Result.Diagnostic = TEXT("Autonomous submission has stale authority, occupied writer or unsupported action");
+		return Result;
+	}
+	return IssueOrderInternal(Request, false, Source);
+}
+
+FCombatOrderResult UCombatOrderComponent::IssueOrderInternal(const FCombatOrderRequest& Request, const bool bQueue,
+	const UCombatAIBrainComponent* Source)
 {
 	FCombatOrderResult Result;
 	CombatItemOrderResult::SetCorrelation(Result, Request);
@@ -57,13 +103,22 @@ FCombatOrderResult UCombatOrderComponent::IssueOrder(
 		return Result;
 	}
 	EnsureRuntimeBindings();
-	const FCombatOperationResult Validation = ValidateOrderRequest(Request);
+	auto* Brain = Unit->GetCombatAIBrainComponent();
+	const FCombatOperationResult Validation = (Source || (Brain && Brain->IsAutonomous()))
+		? PreflightAIOrder(Request) : ValidateOrderRequest(Request);
 	if (!Validation.bSuccess)
 	{
 		Result.FailureTag = Validation.FailureTag;
 		Result.Diagnostic = Validation.Diagnostic;
 		return Result;
 	}
+	if (bQueue && Request.Type != ECombatOrderType::Stop && Request.Type != ECombatOrderType::SwapItems && PendingOrders.Num() >= MaxQueuedOrders)
+	{
+		Result.FailureTag = CombatTags::Order_Failure_QueueFull;
+		return Result;
+	}
+	// 换槽是独立库存事务，维持现有“不替换动作”契约；其他合法外部命令先撤销自主权。
+	if (!Source && Brain && Request.Type != ECombatOrderType::SwapItems) Brain->SuspendForManualCommand();
 	if (Request.Type == ECombatOrderType::Stop)
 	{
 		StopAllOrders(CombatTags::Order_Failure_Cancelled);
@@ -106,9 +161,43 @@ FCombatOrderResult UCombatOrderComponent::IssueOrder(
 
 void UCombatOrderComponent::StopAllOrders(const FGameplayTag Reason)
 {
+	if (auto* Unit = GetOwnerUnit(); Unit && Unit->GetCombatAIBrainComponent()) Unit->GetCombatAIBrainComponent()->SuspendForManualCommand();
 	AdvanceGenerationAndCancel(
 		Reason.IsValid() ? Reason : CombatTags::Order_Failure_Cancelled.GetTag(),
 		true);
+}
+
+FCombatOperationResult UCombatOrderComponent::PreflightAIOrder(const FCombatOrderRequest& Request) const
+{
+	const auto Payload = ValidateOrderRequest(Request);
+	if (!Payload.bSuccess) return Payload;
+	auto* Unit = GetOwnerUnit();
+	auto* Targeting = GetWorld()->GetSubsystem<UCombatTargetingSubsystem>();
+	if (!Unit->HasAuthority() || !Targeting) return FCombatOperationResult::Failure(CombatTags::Failure_Authority);
+	if (Request.Type == ECombatOrderType::CastNoTarget || Request.Type == ECombatOrderType::CastPoint || Request.Type == ECombatOrderType::CastTarget)
+	{
+		auto* ASC = Unit->GetCombatAbilitySystemComponent();
+		const auto* Data = ASC->GetCombatAbilityData(Request.AbilitySpecHandle);
+		const auto* Spec = ASC->FindAbilitySpecFromHandle(Request.AbilitySpecHandle);
+		if (!Data || !Spec) return FCombatOperationResult::Failure(CombatTags::Order_Failure_AbilityRejected, TEXT("Ability is not granted"));
+		FGameplayTag Failure;
+		if (!ASC->PreflightCombatAbility(Request.AbilitySpecHandle, *Data, Spec->Level, Failure)) return FCombatOperationResult::Failure(Failure);
+		FCombatAbilityTargetData Target;
+		Target.TargetActor = Request.TargetUnit; Target.TargetLocation = Request.TargetLocation; Target.bHasTargetLocation = Request.bHasTargetLocation;
+		const auto Validation = Targeting->ValidateAbilityTarget(Unit, Data->BehaviorTags, Data->TargetingRules, Target);
+		if (!Validation.bValid && Validation.FailureTag != CombatTags::Failure_Target_OutOfRange)
+			return FCombatOperationResult::Failure(Validation.FailureTag, Validation.Diagnostic);
+	}
+	else if (Request.Type == ECombatOrderType::AttackTarget || Request.Type == ECombatOrderType::MoveToUnit)
+	{
+		FCombatTargetingRules Rules;
+		Rules.TargetTeamTag = Request.Type == ECombatOrderType::AttackTarget ? CombatTags::TargetTeam_Enemy.GetTag() : CombatTags::TargetTeam_Both.GetTag();
+		Rules.CastRange = MAX_flt;
+		Rules.bAllowSelf = Request.Type == ECombatOrderType::MoveToUnit;
+		const auto Validation = Targeting->ValidateUnitTarget(Unit, Request.TargetUnit, Rules);
+		if (!Validation.bValid) return FCombatOperationResult::Failure(Validation.FailureTag, Validation.Diagnostic);
+	}
+	return FCombatOperationResult::Success();
 }
 
 void UCombatOrderComponent::PumpCurrentOrder()
@@ -292,6 +381,80 @@ void UCombatOrderComponent::PumpCurrentOrder()
 			continue;
 		}
 	}
+}
+
+bool UCombatOrderComponent::CancelCurrentOrderIfMatches(const FCombatOrderHandle Expected, const FGameplayTag Reason)
+{
+	const auto* Unit = GetOwnerUnit();
+	if (!Unit || !Unit->HasAuthority() || !Expected.IsValid() || GetCurrentOrderHandle() != Expected) return false;
+	CompleteCurrentOrder(false, Reason.IsValid() ? Reason : CombatTags::Order_Failure_Cancelled.GetTag(),
+		TEXT("Matched order cancelled"), true);
+	return true;
+}
+
+FCombatExecutionBoundaryTicket UCombatOrderComponent::RequestExecutionBoundary(const FCombatOrderHandle Expected, const float HoldSeconds)
+{
+	auto* Unit = GetOwnerUnit();
+	if (!Unit || !Unit->HasAuthority() || !CurrentOrder.IsSet() || CurrentOrder->Handle != Expected
+		|| CurrentOrder->Request.Type != ECombatOrderType::AttackTarget || !FMath::IsFinite(HoldSeconds) || HoldSeconds <= 0)
+		return {};
+	if (ExecutionBoundary.IsValid()) return ExecutionBoundary;
+	ExecutionBoundary = { NextBoundarySerial++, Expected };
+	BoundaryHoldSeconds = FMath::Clamp(HoldSeconds, 0.01f, 5.0f);
+	if (!Unit->GetCombatAttackComponent()->GetCurrentWindupHandle().IsValid()) MakeExecutionBoundaryReady();
+	return ExecutionBoundary;
+}
+
+bool UCombatOrderComponent::IsExecutionBoundaryReady(const FCombatExecutionBoundaryTicket Ticket) const
+{
+	const auto* Unit = GetOwnerUnit();
+	return Ticket.IsValid() && ExecutionBoundary == Ticket && bBoundaryReady && Unit && Unit->HasAuthority()
+		&& GetCurrentOrderHandle() == Ticket.Order && Unit->GetLifeState() == ECombatLifeState::Alive
+		&& !Unit->GetCombatAttackComponent()->GetCurrentWindupHandle().IsValid();
+}
+
+bool UCombatOrderComponent::ReleaseExecutionBoundary(const FCombatExecutionBoundaryTicket Ticket)
+{
+	if (!Ticket.IsValid() || !(ExecutionBoundary == Ticket)) return false;
+	ClearExecutionBoundary();
+	if (GetCurrentOrderHandle() == Ticket.Order)
+	{
+		// 不能把仍在保护中的前摇当作完成；未 Ready 的撤销只移除请求。
+		if (auto* Unit = GetOwnerUnit(); Unit && !Unit->GetCombatAttackComponent()->GetCurrentWindupHandle().IsValid())
+		{
+			TransitionTo(ECombatOrderState::Validating);
+			PumpCurrentOrder();
+		}
+	}
+	return true;
+}
+
+void UCombatOrderComponent::MakeExecutionBoundaryReady()
+{
+	if (!ExecutionBoundary.IsValid() || bBoundaryReady || GetCurrentOrderHandle() != ExecutionBoundary.Order) return;
+	auto* Scheduler = GetWorld() ? GetWorld()->GetSubsystem<UCombatSchedulerSubsystem>() : nullptr;
+	const auto Ticket = ExecutionBoundary;
+	if (Scheduler)
+	{
+		BoundaryTimeout = Scheduler->ScheduleOnce(this, BoundaryHoldSeconds, 0,
+			FCombatScheduledDelegate::CreateWeakLambda(this, [this, Ticket](const FCombatScheduledTickContext&)
+			{
+				if (!(ExecutionBoundary == Ticket)) return;
+				UE_LOG(LogTemp, Verbose, TEXT("AIExecutionBoundaryTimeout Unit=%s Serial=%llu"), *GetNameSafe(GetOwner()), Ticket.Serial);
+				ReleaseExecutionBoundary(Ticket);
+			}));
+	}
+	if (!BoundaryTimeout.IsValid()) { ClearExecutionBoundary(); return; }
+	bBoundaryReady = true;
+	ExecutionBoundaryReadyDelegate.Broadcast(Ticket);
+}
+
+void UCombatOrderComponent::ClearExecutionBoundary()
+{
+	if (auto* Scheduler = GetWorld() ? GetWorld()->GetSubsystem<UCombatSchedulerSubsystem>() : nullptr) Scheduler->Cancel(BoundaryTimeout);
+	BoundaryTimeout = {};
+	ExecutionBoundary = {};
+	bBoundaryReady = false;
 }
 
 void UCombatOrderComponent::RefreshControllerBinding()
@@ -586,25 +749,30 @@ bool UCombatOrderComponent::BeginNextOrder()
 void UCombatOrderComponent::CompleteCurrentOrder(
 	const bool bSuccess,
 	const FGameplayTag FailureTag,
-	const FString& Diagnostic)
+	const FString& Diagnostic, const bool bCancelled)
 {
 	if (!CurrentOrder.IsSet())
 	{
 		return;
 	}
 	const FCombatOrderHandle Handle = CurrentOrder->Handle;
-	const FCombatOrderRequest FinishedRequest = CurrentOrder->Request;
-	CancelCurrentAsync(FailureTag);
-	TransitionTo(bSuccess ? ECombatOrderState::Completed : ECombatOrderState::Failed, FailureTag, Diagnostic);
+	const FCombatQueuedOrder Finished = *CurrentOrder;
+	const auto TerminalState = bCancelled ? ECombatOrderState::Cancelled : (bSuccess ? ECombatOrderState::Completed : ECombatOrderState::Failed);
+	// 取消技能/前摇及日志都会同步广播。先摘除旧项，再阻止新队列起动，避免旧清理重复终结或覆盖回调提交的命令。
+	CurrentOrder.Reset();
+	CurrentState = ECombatOrderState::Idle;
+	{
+		TGuardValue<bool> CancelGuard(bPumping, true);
+		CancelCurrentAsync(FailureTag, Handle);
+		CombatOrderLog::Emit(*this, Finished, TerminalState, FailureTag, Diagnostic);
+	}
 	FCombatOrderResult Result;
 	Result.bSuccess = bSuccess;
 	Result.Handle = Handle;
-	Result.State = CurrentState;
+	Result.State = TerminalState;
 	Result.FailureTag = FailureTag;
 	Result.Diagnostic = Diagnostic;
-	CombatItemOrderResult::SetCorrelation(Result, FinishedRequest);
-	CurrentOrder.Reset();
-	CurrentState = ECombatOrderState::Idle;
+	CombatItemOrderResult::SetCorrelation(Result, Finished.Request);
 	OrderFinishedDelegate.Broadcast(Result);
 	if (!bPumping)
 	{
@@ -620,10 +788,13 @@ void UCombatOrderComponent::AdvanceGenerationAndCancel(
 	const TArray<FCombatQueuedOrder> CancelledQueue = PendingOrders;
 	++OrderGeneration;
 	if (OrderGeneration == 0) { OrderGeneration = 1; }
-	CancelCurrentAsync(Reason);
 	PendingOrders.Reset();
 	CurrentOrder.Reset();
 	CurrentState = ECombatOrderState::Idle;
+	{
+		TGuardValue<bool> CancelGuard(bPumping, true);
+		CancelCurrentAsync(Reason, Previous.IsSet() ? Previous->Handle : FCombatOrderHandle());
+	}
 	if (bBroadcastCurrent && Previous.IsSet())
 	{
 		FCombatOrderResult Result;
@@ -647,8 +818,9 @@ void UCombatOrderComponent::AdvanceGenerationAndCancel(
 	}
 }
 
-void UCombatOrderComponent::CancelCurrentAsync(const FGameplayTag Reason)
+void UCombatOrderComponent::CancelCurrentAsync(const FGameplayTag Reason, const FCombatOrderHandle CancelledHandle)
 {
+	ClearExecutionBoundary();
 	CancelFacingAsync();
 	CancelMovementAsync();
 	ACombatUnitCharacter* Unit = GetOwnerUnit();
@@ -658,9 +830,9 @@ void UCombatOrderComponent::CancelCurrentAsync(const FGameplayTag Reason)
 	{
 		Unit->GetCombatAbilitySystemComponent()->CancelAbilityHandle(AbilityToCancel);
 	}
-	if (Unit && CurrentOrder.IsSet())
+	if (Unit && CancelledHandle.IsValid())
 	{
-		Unit->GetCombatAttackComponent()->CancelWindupForOrder(CurrentOrder->Handle, Reason);
+		Unit->GetCombatAttackComponent()->CancelWindupForOrder(CancelledHandle, Reason);
 	}
 }
 
@@ -977,8 +1149,9 @@ bool UCombatOrderComponent::StartNavigationMove(const bool bChasing)
 			EnsureChaseSchedule();
 			return true;
 		}
-		TransitionTo(ECombatOrderState::Validating);
-		PumpCurrentOrder();
+		// 导航投影的到达半径可能覆盖原目标尚未满足的 gameplay 距离。
+		// 此处常处于 Pump 栈内，递归 Pump 会被抑制并永远没有 Move 回调，必须有界重试。
+		ScheduleMoveRetry(CombatTags::Order_Failure_PathFailed, TEXT("Navigation already at projected goal but gameplay destination not reached"));
 		return true;
 	}
 	const FAIRequestID MoveRequestId = RequestResult.MoveId;
@@ -1164,6 +1337,9 @@ void UCombatOrderComponent::StartCurrentAttack()
 	{
 		return;
 	}
+	// 统一起手屏障：Pump、Ready、状态恢复、追击回调全部经过这里。
+	if (ExecutionBoundary.IsValid() && !Unit->GetCombatAttackComponent()->GetCurrentWindupHandle().IsValid()) MakeExecutionBoundaryReady();
+	if (bBoundaryReady && ExecutionBoundary.Order == CurrentOrder->Handle) return;
 	TransitionTo(ECombatOrderState::StartingAttack);
 	const FCombatAttackResult Result = Unit->GetCombatAttackComponent()->StartMeleeAttack(
 		CurrentOrder->Request.TargetUnit, CurrentOrder->Handle);
@@ -1233,6 +1409,7 @@ void UCombatOrderComponent::HandleAttackLaunched(
 		return;
 	}
 	TransitionTo(ECombatOrderState::WaitingAttackReady);
+	MakeExecutionBoundaryReady();
 }
 
 void UCombatOrderComponent::HandleAttackReady(const FCombatOrderHandle OrderHandle)
@@ -1370,21 +1547,5 @@ void UCombatOrderComponent::TransitionTo(
 		return;
 	}
 	CurrentState = NewState;
-	UCombatEventSubsystem* Events = GetWorld() ? GetWorld()->GetSubsystem<UCombatEventSubsystem>() : nullptr;
-	ACombatUnitCharacter* Unit = GetOwnerUnit();
-	if (!Events || !Unit || !CurrentOrder.IsSet())
-	{
-		return;
-	}
-	FCombatLogRecord Record;
-	Record.Context = Events->CreateRootEvent();
-	Record.EventType = CombatTags::Event_Combat_OrderStateChanged;
-	Record.FailureTag = FailureTag;
-	Record.SourceActorId = Unit->GetUniqueID();
-	Record.TargetActorId = CurrentOrder->Request.TargetUnit ? CurrentOrder->Request.TargetUnit->GetUniqueID() : 0;
-	Record.UnitLifeGeneration = Unit->GetLifeGeneration();
-	Record.Diagnostic = FString::Printf(TEXT("Order=%s Type=%d State=%d %s"),
-		*CurrentOrder->Handle.ToString(), static_cast<int32>(CurrentOrder->Request.Type),
-		static_cast<int32>(NewState), *Diagnostic);
-	Events->Emit(Record);
+	if (CurrentOrder.IsSet()) CombatOrderLog::Emit(*this, *CurrentOrder, NewState, FailureTag, Diagnostic);
 }

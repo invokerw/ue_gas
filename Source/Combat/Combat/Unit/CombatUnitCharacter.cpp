@@ -1,4 +1,5 @@
 #include "Combat/Unit/CombatUnitCharacter.h"
+#include "Combat/AI/CombatAIBrainComponent.h"
 #include "Combat/Items/CombatItemData.h"
 
 #include "Combat/Ability/CombatAbilitySystemComponent.h"
@@ -48,6 +49,7 @@ ACombatUnitCharacter::ACombatUnitCharacter(const FObjectInitializer& ObjectIniti
 	CombatRegenerationComponent = CreateDefaultSubobject<UCombatRegenerationComponent>(TEXT("CombatRegeneration"));
 	CombatAttackComponent = CreateDefaultSubobject<UCombatAttackComponent>(TEXT("CombatAttack"));
 	CombatOrderComponent = CreateDefaultSubobject<UCombatOrderComponent>(TEXT("CombatOrders"));
+	CombatAIBrainComponent = CreateDefaultSubobject<UCombatAIBrainComponent>(TEXT("CombatAIBrain"));
 	CombatMotionComponent = CreateDefaultSubobject<UCombatMotionComponent>(TEXT("CombatMotion"));
 	CombatUnitViewComponent = CreateDefaultSubobject<UCombatUnitViewComponent>(TEXT("CombatUnitView"));
 	CombatInventoryComponent = CreateDefaultSubobject<UCombatInventoryComponent>(TEXT("CombatInventory"));
@@ -99,6 +101,7 @@ bool ACombatUnitCharacter::SetCommandingPlayerController(APlayerController* NewC
 	}
 	CommandingPlayerController = NewController;
 	SetOwner(NewController);
+	if (NewController && CombatAIBrainComponent) CombatAIBrainComponent->SuspendForManualCommand();
 	// Owner 只建立 RPC/ASC owning connection；移动 RemoteRole 保持 SimulatedProxy。
 	RefreshCombatReplicationPolicy();
 	RefreshAbilityActorInfo();
@@ -467,6 +470,7 @@ bool ACombatUnitCharacter::InitializeFromUnitData(UCombatUnitData* InUnitData)
 		}
 	}
 	InitializedUnitDefinitionId = RequestedId;
+	if (CombatAIBrainComponent) CombatAIBrainComponent->ConfigureProfile(InUnitData->AIProfile);
 	// 动态 Spawn 的最小 World 可能在 BeginPlay 后才具备最终 Authority/Owner；初始化结束再应用一次产品策略。
 	RefreshCombatReplicationPolicy();
 	if (CombatUnitViewComponent)
@@ -552,6 +556,11 @@ void ACombatUnitCharacter::NotifyControllerChanged()
 		CombatOrderComponent->RefreshControllerBinding();
 	}
 	RefreshServerMovementState();
+	if (CombatAIBrainComponent)
+	{
+		CombatAIBrainComponent->StopLogic(TEXT("Navigation controller changed"));
+		CombatAIBrainComponent->RefreshReadiness();
+	}
 }
 
 void ACombatUnitCharacter::BeginPlay()
@@ -582,6 +591,7 @@ void ACombatUnitCharacter::BeginPlay()
 
 void ACombatUnitCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+	if (CombatAIBrainComponent) CombatAIBrainComponent->StopLogic(TEXT("Unit EndPlay"));
 	// 必须在 ASC ActorInfo 和 ModifierComponent 清理之前释放物品授予与精确效果。
 	if (CombatInventoryComponent) CombatInventoryComponent->ClearInventory();
 	if (HasAuthority())

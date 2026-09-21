@@ -10,6 +10,18 @@
 
 class ACombatUnitCharacter;
 
+/** 持续攻击的一次交接请求；序号与完整命令身份共同防止旧 Ready/释放影响新动作。仅在服务器使用。 */
+struct COMBAT_API FCombatExecutionBoundaryTicket
+{
+	uint64 Serial = 0;
+	FCombatOrderHandle Order;
+	bool IsValid() const { return Serial != 0 && Order.IsValid(); }
+	bool operator==(const FCombatExecutionBoundaryTicket& Other) const { return Serial == Other.Serial && Order == Other.Order; }
+};
+
+/** 通知只表示有待处理事实；监听者应唤醒决策，不得在广播中推进树或立即下单。 */
+DECLARE_MULTICAST_DELEGATE_OneParam(FOnCombatExecutionBoundaryReady, FCombatExecutionBoundaryTicket);
+
 /** 客户端或 AI 可请求的单位命令类型；客户端只表达意图，指令组件在服务器验证并执行。 */
 UENUM(BlueprintType)
 enum class ECombatOrderType : uint8

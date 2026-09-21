@@ -279,7 +279,7 @@ bool FCombatAbilityGrantLifecycleTest::RunTest(const FString& Parameters)
 	Data->IntrinsicModifier = Intrinsic;
 	CombatAbilityTests::AddSpecial(*Data, TEXT("mana_cost"), 0.0f);
 	CombatAbilityTests::AddSpecial(*Data, TEXT("cooldown"), 0.0f);
-	GetMutableDefault<UCombatSelfHealAbility>()->AbilityData = Data;
+	TGuardValue<TObjectPtr<UCombatAbilityData>> RestoreDefaults(GetMutableDefault<UCombatSelfHealAbility>()->AbilityData, Data);
 
 	FGameplayAbilitySpecHandle Handle;
 	FGameplayTag FailureTag;
@@ -375,6 +375,8 @@ bool FCombatAbilitySelfHealTest::RunTest(const FString& Parameters)
 
 	UCombatAbilitySystemComponent* FirstAsc = First->GetCombatAbilitySystemComponent();
 	UCombatAbilitySystemComponent* SecondAsc = Second->GetCombatAbilitySystemComponent();
+	// CDO 不能持有已销毁测试 World 的 Data；后续真实 PIE 切图会验证 GC 引用闭包。
+	TGuardValue<TObjectPtr<UCombatAbilityData>> RestoreDefaults(GetMutableDefault<UCombatSelfHealAbility>()->AbilityData, Data);
 	const FGameplayAbilitySpecHandle FirstHandle = CombatAbilityTests::GrantAbility<UCombatSelfHealAbility>(*FirstAsc, *Data);
 	const FGameplayAbilitySpecHandle SecondHandle = CombatAbilityTests::GrantAbility<UCombatSelfHealAbility>(*SecondAsc, *Data);
 	UCombatAbilitySystemComponent* LowManaAsc = LowMana->GetCombatAbilitySystemComponent();
@@ -467,6 +469,7 @@ bool FCombatAbilityDamageAoeTest::RunTest(const FString& Parameters)
 	DamageAction.MagnitudeKey = TEXT("damage");
 	DamageAction.DamageType = ECombatDamageType::Magical;
 	UnitDamage->Actions.Add(DamageAction);
+	TGuardValue<TObjectPtr<UCombatAbilityData>> RestoreDamage(GetMutableDefault<UCombatUnitDamageAbility>()->AbilityData, UnitDamage);
 	const FGameplayAbilitySpecHandle UnitDamageHandle =
 		CombatAbilityTests::GrantAbility<UCombatUnitDamageAbility>(*Asc, *UnitDamage);
 	TestTrue(TEXT("Unit damage ability is granted"), UnitDamageHandle.IsValid());
@@ -512,6 +515,7 @@ bool FCombatAbilityDamageAoeTest::RunTest(const FString& Parameters)
 	AoeAction.RadiusKey = TEXT("radius");
 	AoeAction.DamageType = ECombatDamageType::Pure;
 	PointAoe->Actions.Add(AoeAction);
+	TGuardValue<TObjectPtr<UCombatAbilityData>> RestoreAoe(GetMutableDefault<UCombatPointAoeAbility>()->AbilityData, PointAoe);
 	const FGameplayAbilitySpecHandle PointAoeHandle =
 		CombatAbilityTests::GrantAbility<UCombatPointAoeAbility>(*Asc, *PointAoe);
 	TestTrue(TEXT("Point AoE ability is granted"), PointAoeHandle.IsValid());
@@ -559,6 +563,7 @@ bool FCombatAbilityChannelTest::RunTest(const FString& Parameters)
 	Data->BehaviorTags.AddTag(CombatTags::Ability_Behavior_Channelled);
 	Data->ChannelDuration = 3.0f;
 	Data->ChannelInterval = 1.0f;
+	TGuardValue<TObjectPtr<UCombatAbilityData>> RestoreChannel(GetMutableDefault<UCombatChannelProbeAbility>()->AbilityData, Data);
 	const FGameplayAbilitySpecHandle Handle =
 		CombatAbilityTests::GrantAbility<UCombatChannelProbeAbility>(*Asc, *Data);
 	TestTrue(TEXT("Channel ability is granted"), Handle.IsValid());

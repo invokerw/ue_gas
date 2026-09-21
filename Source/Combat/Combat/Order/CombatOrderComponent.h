@@ -13,6 +13,7 @@
 class AAIController;
 class AController;
 class ACombatUnitCharacter;
+class UCombatAIBrainComponent;
 class UEnvQuery;
 class UEnvQueryInstanceBlueprintWrapper;
 class UPathFollowingComponent;
@@ -32,6 +33,10 @@ public:
 	UCombatOrderComponent();
 	/** 物品输入在接收时与到达时共用身份校验，旅行期间不预占地面实例。 */
 	FCombatOperationResult ValidateItemOrder(const FCombatOrderRequest& Request) const;
+	/** AI 准备/消费和手动夺权前共用的只读业务预检；允许合法的远距离目标交给 Order 追击。 */
+	FCombatOperationResult PreflightAIOrder(const FCombatOrderRequest& Request) const;
+	/** 仅所属 Brain 的有效 epoch 可提交，不排队；当前有其他命令时拒绝，避免抢走未交接控制。 */
+	FCombatOrderResult IssueAutonomousOrder(const FCombatOrderRequest& Request, const UCombatAIBrainComponent* Source, uint64 ControlEpoch);
 
 	/**
 	 * 在服务器验证并接收一条命令。bQueue=false 先取消当前项和全部排队项，再执行新命令；true 追加到队尾且受容量限制。
@@ -44,6 +49,15 @@ public:
 	/** 停止当前异步移动、技能或攻击前摇，提升命令代次并清空队列；仅当前正在执行的命令收到取消通知，空 Reason 使用默认取消标签。 */
 	UFUNCTION(BlueprintCallable, Category="Combat|Order", meta=(DisplayName="停止全部战斗命令", ToolTip="停止当前异步移动、技能或攻击前摇，提升命令代次并清空队列；仅当前正在执行的命令收到取消通知，空 Reason 使用默认取消标签。"))
 	void StopAllOrders(UPARAM(DisplayName="停止原因") FGameplayTag Reason);
+	/** 原子匹配当前完整句柄后取消；不提升命令代次、不清空 FIFO。旧 Task 清理只能使用此入口。 */
+	bool CancelCurrentOrderIfMatches(FCombatOrderHandle Expected, FGameplayTag Reason);
+	/** 为当前持续攻击申请交接；前摇保护到 Launch，Ready 后最多保持 HoldSeconds 游戏秒，重复请求返回原票据。 */
+	FCombatExecutionBoundaryTicket RequestExecutionBoundary(FCombatOrderHandle Expected, float HoldSeconds);
+	/** 只读复核当前票据仍 Ready，且没有重新进入前摇；迟到唤醒必须重新查询。 */
+	bool IsExecutionBoundaryReady(FCombatExecutionBoundaryTicket Ticket) const;
+	/** Keep/放弃请求时释放原票据并继续原命令；重复释放和旧句柄无副作用。 */
+	bool ReleaseExecutionBoundary(FCombatExecutionBoundaryTicket Ticket);
+	FOnCombatExecutionBoundaryReady& OnExecutionBoundaryReady() { return ExecutionBoundaryReadyDelegate; }
 	/** 处理当前队首直到需要等待异步结果或队列为空；重入调用直接返回，后续由外层循环或回调继续。 */
 	void PumpCurrentOrder();
 	/** Controller 变化后幂等解绑旧 PathFollowing 并绑定新实例。 */
@@ -115,6 +129,8 @@ protected:
 	virtual void BeginPlay() override;
 
 private:
+	/** 统一接收入口；Source 为空表示玩家/脚本请求，经预检后进入 Manual。 */
+	FCombatOrderResult IssueOrderInternal(const FCombatOrderRequest& Request, bool bQueue, const UCombatAIBrainComponent* Source);
 	/** 返回组件所属 Combat Unit。 */
 	ACombatUnitCharacter* GetOwnerUnit() const;
 	/** 只解析服务器 ACombatUnitAIController 上的 PathFollowing；其他 Controller 一律拒绝。 */
@@ -128,11 +144,15 @@ private:
 	/** 从 FIFO 取出下一项并进入 Validating。 */
 	bool BeginNextOrder();
 	/** 停止当前异步行为、形成最终结果并清空当前项，广播后继续队列；委托回调可以提交新命令，重入由 Pump 保护。 */
-	void CompleteCurrentOrder(bool bSuccess, FGameplayTag FailureTag, const FString& Diagnostic);
+	void CompleteCurrentOrder(bool bSuccess, FGameplayTag FailureTag, const FString& Diagnostic, bool bCancelled = false);
+	/** 在前摇结束或尚未起手时持有边界；超时调度失败则立即撤销，避免永久停打。 */
+	void MakeExecutionBoundaryReady();
+	/** 清理票据及 Scheduler，不启动新攻击；供所有退出路径共用。 */
+	void ClearExecutionBoundary();
 	/** 先提升命令代次使导航、技能和攻击旧回调失效，再取消当前异步行为并清空队列；可选只为当前项广播取消。 */
 	void AdvanceGenerationAndCancel(FGameplayTag Reason, bool bBroadcastCurrent);
-	/** 取消 EQS、Move、追击、转身复核、Ability 和 attack windup。 */
-	void CancelCurrentAsync(FGameplayTag Reason);
+	/** 当前项已摘除且 Pump 暂停时清理旧异步资源；攻击只取消传入的完整身份，不能读取重入产生的新当前项。 */
+	void CancelCurrentAsync(FGameplayTag Reason, FCombatOrderHandle CancelledHandle);
 	/** 仅取消 EQS/Move/追击，不改变当前队列项。 */
 	void CancelMovementAsync();
 	/** 以水平胶囊边缘距离判断当前位置是否达到当前命令要求；纯移动使用完成容差，施法和攻击使用各自范围。 */
@@ -227,4 +247,11 @@ private:
 	FGameplayAbilitySpecHandle ActiveAbilitySpecHandle;
 	/** 每个结束结果的观察者。 */
 	FOnCombatOrderFinished OrderFinishedDelegate;
+	/** 同一时间至多一张票据，deadline 只从 Ready 起计算。 */
+	FCombatExecutionBoundaryTicket ExecutionBoundary;
+	uint64 NextBoundarySerial = 1;
+	float BoundaryHoldSeconds = 0.25f;
+	bool bBoundaryReady = false;
+	FCombatScheduleHandle BoundaryTimeout;
+	FOnCombatExecutionBoundaryReady ExecutionBoundaryReadyDelegate;
 };

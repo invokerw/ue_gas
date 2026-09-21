@@ -1,6 +1,8 @@
 # 00-01 开发进度台账
 
-> 最后更新：2026-09-20
+> 最后更新：2026-09-21
+> StateTree AI 阶段 B（2026-09-21）：[AI-003](../Specs/AI-003-statetree-roles.spec.md) 已完成 F0 GO、F1 APPROVED 0.1、F2 PASS 和 Push-Ready READY；角色 StateTree、感知/记忆、守点归位、巡线恢复、独立演示、NavMesh 构建命令及验证均完成。最终三 Target 构建、`Combat.AI` 20/20、完整 `Combat.` 121/121、角色资产 37/37（0 error/0 warning）、Role PIE、Dedicated 双客户端和角色地图 Windows cook 通过。2026-09-21 用户确认 B 阶段验收完成；Utility/EQS、完整迷雾、AI 容量、长 soak、网络损伤和打包 exe 未执行，阶段 A 结论保留，C/D 未开始。
+> StateTree AI（2026-09-21）：用户明确确认 [AI-002](../Specs/AI-002-statetree-runtime.spec.md) 阶段 A 验收成功；AI-001 设计与阶段 A 实现均已验收。Brain/Schema/Profile、Order Bridge、手动接管和生命周期、独立演示地图已接入；2026-09-20 最终三 Target、Combat 112 项（0 失败）、32 资产、真实 PIE、AI Dedicated 双客户端、独立原 64/256 容量及 AI 地图 Windows cook 656 包通过。F0 GO、F1 APPROVED、F2 PASS、Push-Ready READY；打包启动、网络损伤、AI 容量/长 soak 仍未覆盖，GAP-028 保留 B/C/D，后续阶段未开始，见 [配置指南](../20-Content/20-04-StateTree-AI-Guide.md)。
 > 相机实现（2026-09-20）：用户已完成 CAM-001 设计与 CAM-002 实现 review，并授权本地 Git 提交。无需抓取键的边缘自动平移与 Space 按住跟随/松开停留已接入；Editor、完整 Combat 101 项、Demo 输入资产、PIE 与独立双客户端验证通过。自动场景使用合成边缘样本，未额外执行物理输入自动验证，详见 [CAM-002](../Specs/CAM-002-edge-pan-follow.spec.md)。
 > ECON-003 已完成（2026-09-19）：用户已完成代码 review 并授权验证后本地提交。v0.8 在删除储藏兼容入口、精简物品右键菜单和解锁即时合成后，完成 Editor/Server/Client 三 Target、NullRHI PIE、5 个蓝图编译回读、独立 Dedicated 双客户端各 300 秒/10 轮/48 回执（0 失败、0 重试）、64 Unit/256 Modifier 容量、Windows cook 650 包、资产 31 项和完整 Combat 96 项（94 success + 2 success with warnings、0 failed），文档、差异和 delivery Gate 通过。人工视觉、打包部署和更长 soak 未覆盖，见 [ECON-003](../Specs/ECON-003-direct-inventory-shop-lock.spec.md) 与 ADR-060。
 > 紧凑商店与独立储藏室（2026-09-16）：ECON-002 v0.3 已通过用户验收并获准本地提交；在 1920×1080 百分比布局上，合成固定区已移除滚轮、标题、价格、提示、说明和交易文字，只显示配方节点图，无选择或无配方时留白。DebugGame Editor 与 Development 后缀模块构建、v0.3 UI 1/1、完整 `Combat.` 94/94 通过；Codex 未取得可回读的真实 PIE 日志，当前打开的 Editor 仍需重启后载入新模块，见 [ECON-002](../Specs/ECON-002-compact-shop-stash-ui.spec.md)。
@@ -318,6 +320,13 @@ HUD-ABILITY-CLICK-001/002 追加验收状态：`用户已验收`（2026-09-14）
 | CAM-001 | Dota Edge Pan 与 Space 跟随设计 | 已验收 | 用户 2026-09-20 明确 review 完成并要求实施；[CAM-001 Spec](../Specs/CAM-001-dota-camera-research.spec.md) 保留调研证据，运行实现转 CAM-002 |
 | CAM-002 | 本地边缘滚屏、Space 跟随、生命周期/视口门控与 Demo 输入配置 | 已验收 | 用户 2026-09-20 确认“review完成，提交吧”；[10-16 当前行为](../10-Architecture/10-16-Dota-Camera-Movement.md)、[CAM-002 Spec](../Specs/CAM-002-edge-pan-follow.spec.md)；Editor、101 Automation（0 failed）、31 资产、蓝图冷回读、PIE、独立双客户端相机/HUD/SAM/容量通过；授权本地提交，不推送 |
 
+## 12.11 Post-M8：StateTree AI 决策系统
+
+| Task | 需求名称 | 状态 | 完成证据/备注 |
+| --- | --- | --- | --- |
+| AI-001 | 基于 StateTree 的通用 AI 决策系统设计文档 | 已验收 | 用户确认 0.2 review 完成并授权开工；[设计](../10-Architecture/10-17-StateTree-AI-Decision-System.md) 与 [文档 Spec](../Specs/AI-001-statetree-ai-design.spec.md) 保留原文档证据，ADR-062 accepted；实现由 AI-002 承接 |
+| AI-002 | StateTree 阶段 A：运行时、Order Bridge 与演示 | 已验收 | 2026-09-21 用户确认验收成功；Brain/Schema/Profile、意图/回执、匹配取消/攻击边界、手动接管及生命周期已接入。最终三 Target、Combat 112 项、32 资产、真实 PIE、AI Dedicated 双客户端、独立原容量与 AI 地图 cook 通过；见 [Spec](../Specs/AI-002-statetree-runtime.spec.md) 和 [配置指南](../20-Content/20-04-StateTree-AI-Guide.md)。B/C/D 未开始 |
+
 ## 13. 用户验收记录
 
 | 里程碑 | 提交验收日期 | 用户结论 | 修正要求 | 最终验收日期 | 下一阶段授权 |
@@ -435,6 +444,13 @@ HUD-ABILITY-CLICK-001/002 追加验收状态：`用户已验收`（2026-09-14）
 | 2026-09-19 | 用户完成代码 review 并要求执行运行矩阵后本地提交；ECON-003 v0.8 补齐 NullRHI PIE、5 个蓝图编译回读、Dedicated 双客户端各 300 秒/10 轮/48 回执、64/256 容量与物品争抢、Windows cook 650 包、资产 31 项和全量 Combat 96 项，全部零失败；验证器仅对零金币变化的旧修订拒绝等待复制后有限重试，最终两端重试均为 0。三 Target 和 delivery 最终状态见 Spec §7；不推送，保留独立 CAM-001 工作区差异 | post-M8 经济运行验证 / ECON-003 v0.8 / 用户 review 完成 |
 | 2026-09-20 | 用户完成 CAM-001 review 并授权实施。CAM-002 接入 EdgePan/FollowHeld，移除无条件跟随，保存 Space Action 与 Demo 映射；101 Automation、31 资产、PIE 和独立双客户端相机/HUD/SAM/容量通过。已贴边时 Space 接管缺陷通过重武装逻辑修复；设计已验收，实现待物理输入/手感复核 | post-M8 相机 / CAM-001 已验收 / CAM-002 待验收 |
 | 2026-09-20 | 用户确认 CAM-002 review 完成并要求提交；同步 Spec、专题与台账为已验收，保留已执行测试和合成输入覆盖边界，授权本地 Git 提交，不推送 | post-M8 相机 / CAM-002 已验收 |
+| 2026-09-20 | 启动 AI-001：按用户要求编写通用 StateTree AI 设计，已完成文档任务入口与计划审查；运行时与资产实现另行立项 | post-M8 AI 设计 / AI-001 |
+| 2026-09-20 | 完成 AI-001 设计文档与对抗复核：核对 UE 5.8.2 原生 StateTree 机制，明确同步终态缓存、按句柄取消、单写入者、控制接管与感知限制；文档校验 83 篇/436 本地链接零错误，diff 与 delivery Gate 通过。仅五份 Markdown 变化，未改代码/资产，待用户评审 | post-M8 AI 设计 / AI-001 待验收 / ADR-062 proposed |
+| 2026-09-20 | 用户 review 后要求补齐 AI-001；0.2 纠正事件/完成转移的优先级描述，补充跨状态意图与完成凭证、普攻边界交接及超时协议、最小野怪接线和 Utility 实验性准入。重新通过 preflight/plan/build/delivery、83 篇/436 本地链接与差异检查；只修订原五份 Markdown，运行时与资产仍待实现 | post-M8 AI 设计 / AI-001 v0.2 待验收 / GAP-028 保持开放 |
+| 2026-09-20 | 用户确认 AI-001 review 完成并授权实施；AI-002 阶段 A 完成原生 StateTree、Order Bridge、控制/生命周期与独立演示。修正取消/日志重入、事件唤醒和导航投影挂起并固化回归；最终三 Target、Combat 112 项、资产 32 项、真实 PIE、AI Dedicated 双客户端、单独原 64/256 容量及 AI 地图 Windows cook 656 包通过。F2 PASS、Push-Ready READY，未提交推送；人工画面、打包启动和 AI 容量/长 soak 留待后续 | post-M8 AI / AI-001 已验收 / AI-002 待验收 / ADR-063 |
+| 2026-09-21 | 用户确认 AI-002 阶段 A 验收成功；同步 Spec、设计状态和台账，指南补充 AI 自生目标与出生点原木桩的区分。UE MCP 的 PIE/ASC 采样证明原木桩维持 500、AI 目标 468→340，未修改场景布局或复制链路。仅验收文档回写，不新增原矩阵通过结论，B/C/D 未开始 | post-M8 AI / AI-002 已验收 / GAP-028 分阶段处理 |
+| 2026-09-21 | 完成 AI-003 阶段 B：感知/记忆、Guard/Engage/Return、Lane/Patrol、角色资产与独立地图；三 Target、`Combat.AI` 20/20、完整 `Combat.` 121/121、37 资产 0/0、Role PIE、Dedicated 双客户端、NavMesh 构建与 Windows cook 通过，F2 PASS、Push-Ready READY；用户确认 B 阶段验收完成 | post-M8 AI / AI-003 已验收 / ADR-064 |
+| 2026-09-21 | 用户明确“验收完成，提交吧”，授权将已验收的 AI 设计和 A/B 实现创建本地 Git 提交；同步验收状态与交付结果，复核文档、差异和 LFS 资产，不新增 UE 运行验证结论 | post-M8 AI / AI-001–003 已验收 / 本地提交授权 |
 
 ## 15. 更新规则
 

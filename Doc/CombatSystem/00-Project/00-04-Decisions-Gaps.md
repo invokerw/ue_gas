@@ -195,6 +195,27 @@
 - 迁移与回滚：新增 Demo Follow Action/Space 映射/Controller 引用；旧蓝图无引用只禁用 Space。撤销相机增量与这三个资产即可恢复旧跟随。
 - 验证与边界：[CAM-002](../Specs/CAM-002-edge-pan-follow.spec.md) 覆盖自由锚点、边缘方向/帧率、跟随/释放、输入冲突、绑定与网络隔离；[10-16](../10-Architecture/10-16-Dota-Camera-Movement.md) 维护实际行为。Camera Grip、缩放和观战不在本轮范围。
 
+### ADR-062：StateTree 通用 AI 决策架构（2026-09-20）
+
+- 状态：accepted；2026-09-20 用户确认 review 完成并要求开始工作，接受 AI-001 v0.2。阶段 A 运行时授权与实施记录见 AI-002；后续阶段仍分别验证。
+- 上下文：现有 Combat AIController 只承担导航/Crowd，Order 已统一移动、追击、持续普攻与施法；工程启用 StateTree 插件，但尚未建立通用自主决策层。
+- 选择：以 Unit 上的服务器 `UStateTreeComponent` 派生 Brain 和自定义 Schema 运行唯一 StateTree；通过类型化知识 Context、Profile、Linked Asset、原生条件/效用评分/任务组合角色行为。C++ 提供数据服务和执行适配，不建立替代 StateTree 的行为状态机。
+- 执行边界：每条活动路径只有一个命令写入任务；Order Bridge 处理语义去重、提交前回执监听、同步终态缓存、动作占用和按句柄取消。玩家/脚本合法接管先撤销 AI 资格，旧 Task 退出不得停止新控制者命令。
+- 时序与数据：AI gameplay 轮询/等待使用 Combat Scheduler，StateTree 原生 Scheduled Tick 负责处理已发布信息；属性、命中、资源、移动和战斗结算继续沿用公共权威系统。知识只使用被允许观察的信息，完整迷雾与大规模查询另有接入门。
+- 0.2 补充：事件仲裁与完成转移分阶段处理，普通重评不得跳过完成记账；PreparedIntent/完成凭证在类型化工作区跨状态交接；拟新增按 Order 句柄匹配的边界票据，为 StateTree 保留有界重评机会，仍由原 Attack/Scheduler 管理攻击时钟。Consideration 为实验性 API，阶段 C 通过版本与 Target/cook 准入后才启用 Utility Profile。
+- 备选与未选择原因：不采用前次咨询提出的轻量状态机；用户已选定 StateTree。Behavior Tree/Blackboard 和另一套行为框架不与 StateTree 并行承载同一单位决策。
+- 影响与迁移：本文不修改现有契约。后续实现另建 feature Spec，审查 `StateTreeModule`/`GameplayStateTreeModule` 依赖、Profile PrimaryAsset、Native Tag、Order 条件取消/边界交接和控制入口；旧单位无 Profile 默认不启用自主 AI。
+- 验证与回滚：设计和未来测试矩阵见 [10-17](../10-Architecture/10-17-StateTree-AI-Decision-System.md)，文档证据见 [AI-001](../Specs/AI-001-statetree-ai-design.spec.md)。本次只回滚文档增量；运行时需要阶段性的 Automation、资产、Dedicated 与容量证据，尚未执行。
+
+### ADR-063：StateTree 阶段 A 的兼容接入（2026-09-20）
+
+- 状态：accepted；2026-09-21 用户明确确认 AI-002 阶段 A 验收成功，后续 B/C/D 尚未开始。
+- 决策：按 [AI-002](../Specs/AI-002-statetree-runtime.spec.md) 实施 Brain/Schema、类型化工作区与 Order Bridge；增加按 Handle 取消和攻击边界票据。StateTree 是行为编排主体，战斗执行仍走 Order/ASC/Attack。
+- 数据与版本：新增 `CombatAIProfile` 定义类型、本地 schema 1 和 UnitData 可选 Profile；空值保留既有行为。树 Wake 使用类型化本地事件载荷，不新增网络 GameplayTag/Event schema；保持 `combat_v4_economy_rc1`、Contract 4、Tag/Event 3。
+- 控制与时序：服务器运行；合法手动命令经预检才撤销 AI，旧 epoch 只能清理自己完整 Handle；独立换槽事务维持原动作，不触发接管。所有等待和边界超时走 Combat Scheduler。完成凭证在普通重评前消费，死亡/撤权是同步清理屏障。取消前摘除旧当前项，允许同步回调提交新命令而不被旧清理覆盖。
+- 迁移与回滚：新 Profile 类型纳入 AssetManager，编辑器树构建器按 WITH_EDITOR 隔离；旧资产无需迁移。移除 Profile 即禁用自主行为，代码/配置/新资产可增量回退，不覆盖既有用户修改。
+- 验证：三 Target、完整 Automation、真实树资产编译保存回读、PIE 和 Dedicated 双客户端；状态和实测以 AI-002/台账为准，不借用历史通过结果。
+
 ## 3. 本轮查漏补缺摘要
 
 原单体文档对 Damage、Modifier、Scheduler、AttackRecord 和网络权威已有较强约束；本轮新增或显式登记了以下遗漏：
@@ -257,6 +278,16 @@
 | GAP-025 | 已关闭 | 暂停、global/custom time dilation 语义 | `UCombatSchedulerSubsystem` 使用 World game time；real-time UI 不进入 Scheduler；时序/catch-up/budget/teardown 自动化通过 | 2026-08-24 / FND-007 |
 | GAP-026 | 已关闭 | 直接 Possess Demo 允许 owning client 参与单位移动，客户端 Pawn 解穿透可产生服务器未认可的视觉位移 | ADR-043 已落地：服务器 Combat AIController + Command Pawn + 全客户端 SimulatedProxy + 单一 Detour Crowd；三档 Dedicated 双客户端对撞、RPC、64/256 容量和 teardown Gate 见 [10-10](../10-Architecture/10-10-Server-Authoritative-Movement-Kickoff.md) | 2026-09-02 / SAM-008 |
 | GAP-027 | 待处理 | 交互式 Editor 内运行既有完整 Automation 后切地图，部分技能测试的 CDO 持有临时 AbilityData，导致测试 World 无法 GC | HUD-LOG-001 验证时发现；引用链指向 Default__CombatSelfHealAbility、CombatMeatHookAbility 等既有测试配置，不含日志组件。当前以独立进程执行全量 Automation、干净 Editor 执行 PIE 隔离；后续为修改 CDO 的测试增加作用域恢复。证据 `Saved/CombatLog/Editor-UI.log` 的 World Memory Leaks 引用链 | 后续测试设施维护 |
+| GAP-028 | 分阶段处理（ADR-062/063） | 阶段 A 的宿主、意图/回执和 Order 交接已实现并于 2026-09-21 通过用户验收，阶段 B 的自动感知、角色模板、独立地图和分层验证已完成，证据见 AI-002/AI-003；Utility、完整权威可见性和 AI 容量仍未实现或验证 | [配置指南](../20-Content/20-04-StateTree-AI-Guide.md) 区分当前 API 与 [10-17](../10-Architecture/10-17-StateTree-AI-Decision-System.md) 的后续方案；范围/LOS 不等于迷雾，历史 Combat 容量不等于 AI 容量 | A/B 运行证据独立归档；C 通过 Utility 准入与容量门，未完成前不关闭总缺口 |
+
+### ADR-064：阶段 B 的事实快照与角色职责（2026-09-21）
+
+- 状态：accepted（用户授权继续，AI-003 F1 0.1 本地批准；实现和验收结果见 Spec）。
+- 选择：Brain 唯一持有 Scheduler 感知与有界知识记忆，范围/LOS 通过公共 Targeting；受击只为已被感知许可的来源增加威胁。服务器职责输入限定为锚点、有限路线及循环规则，StateTree 的有序条件和 Linked Asset 决定 Guard/Engage/Return/Route 分支。
+- 接口：Profile 增量字段默认关闭，旧本地版本 1 可直接加载；新 SetAssignment 为本地服务器 API。PreparedIntent/Receipt 保存操作及取消原因，路线/归位提交以匹配回执和真实到达为准。不新增 RPC、Native Tag 或 Combat Event 字段，release/Contract/Content 版本不变。
+- 接线细化：10-17 §15.4 的 Leash 强制归位在阶段 B 由 Execute 的事件 Tick 精确取消并保留原因，经过 Resolve 记录返回请求，再由条件进入 ReturnHome；仍可中断前摇，但使用统一完成出口，避免事件转移废弃同帧终态。C++ 不选择行为分支，也不建立替代 StateTree 的层级状态机。
+- 兼容与回滚：旧显式目标树和阶段 A 场景保留；新角色资产位于 AI/Roles。移除新 Profile 即关闭自动感知；不得整体回滚仍未提交的 A 差异。
+- 验证：AI-003 已完成隐藏信息/旧生命/确定排序/归位锁定/路线恢复/三次失败退避/接管与清理的专用覆盖；`Combat.AI` 20/20、完整 `Combat.` 121/121、37 资产 0/0、角色 PIE、Dedicated 双客户端、NavMesh 构建和 Windows cook 均通过。完整迷雾、空间索引与 AI 容量仍属于后续阶段，GAP-028 不关闭。
 
 ## 7. 模板适配风险
 

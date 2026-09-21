@@ -51,8 +51,19 @@ OnAttackCycleReady(OrderHandle)
 - Stop：永远提升 generation，取消当前 EQS/Move/Ability/Attack，清空 pending。
 - 每个异步回调同时比较 OrderHandle、具体请求 Handle 和 Unit life generation。
 - 旧 generation、未知请求或已完成 Order 的回调只记录调试信息，不改变状态。
+- 导航认为已到投影点、但 Combat 距离仍未满足时，使用 Scheduler 有界重试；不能在 Pump 内递归调用被重入保护忽略的 Pump 后永久等待。重试耗尽返回失败回执。
 
 Order 结果使用结构化 `FCombatOrderResult`：Success、Cancelled、TargetInvalid、OutOfRange、Blocked、PathFailed、AbilityRejected、UnitStateBlocked 等稳定 FailureTag。
+
+### 2.1 StateTree 接入（AI-002）
+
+AI 使用 `IssueAutonomousOrder(Request, SourceBrain, ControlEpoch)`，复核本单位 Brain、服务器权限、当前控制代次和单写入者，禁止排队。`PreflightAIOrder` 复用 ASC/Targeting 业务校验；合法外部动作才使 Brain 进入 Manual，首次追加命令接管后保留玩家 FIFO，非法请求不撤权。换槽是即时库存事务，不接管当前动作。恢复自主权必须显式调用 Brain 的 `ResumeAutonomous`。
+
+`CancelCurrentOrderIfMatches(ExpectedHandle, Reason)` 只结束匹配的当前项，保留后继队列和 generation。取消技能/前摇也可能同步广播，因此先摘除旧项并暂缓队列起动，清理使用快照句柄；回调新提交的命令不能被旧清理覆盖，旧项只完成一次。
+
+持续普攻通过 `RequestExecutionBoundary` / `IsExecutionBoundaryReady` / `ReleaseExecutionBoundary` 交接。票据包含完整 Order 和独立序号，前摇保护至 Launch；Ready 后统一阻止下一次起手，但原 AttackReady 时钟继续。Keep 释放后仍是原 Order，Switch 精确取消；Scheduler 期限从 Ready 开始，超时或安排失败自动撤销持有。已发射弹体仍独立结算，不因边界交接取消。
+
+StateTree 的完成回执、重评和生命周期接线见 [20-04](../20-Content/20-04-StateTree-AI-Guide.md)。以上不增加客户端 RPC 或复制载荷。
 
 ## 3. 当前 Order 状态机
 

@@ -3,6 +3,7 @@
 #include "GameFramework/CharacterMovementComponent.h"
 
 #include "Combat/Ability/CombatAbilitySystemComponent.h"
+#include "Combat/AI/CombatAIBrainComponent.h"
 #include "Combat/Attack/CombatAttackComponent.h"
 #include "Combat/Attributes/CombatAttributeSet.h"
 #include "Combat/Core/CombatTags.h"
@@ -37,6 +38,7 @@ bool UCombatUnitLifecycleComponent::RequestDeath(
 
 	// Dying 是同步清理屏障：先阻止新玩法，再取消所有本生命代次的活动行为。
 	Unit->SetLifeStateFromLifecycle(ECombatLifeState::Dying);
+	if (auto* Brain = Unit->GetCombatAIBrainComponent()) Brain->StopLogic(TEXT("Owner death"));
 	// Order 先提升 generation 并清空 Ability/Attack 观察状态，使随后取消产生的回调只能成为旧回调。
 	if (UCombatOrderComponent* Orders = Unit->GetCombatOrderComponent())
 	{
@@ -143,6 +145,7 @@ bool UCombatUnitLifecycleComponent::RespawnAtLocation(const FVector NewLocation)
 
 	EmitLifecycleLog(Context, true, nullptr);
 	RespawnedDelegate.Broadcast(Unit, Context);
+	if (auto* Brain = Unit->GetCombatAIBrainComponent()) Brain->RefreshReadiness();
 	Unit->ForceNetUpdate();
 	return true;
 }
