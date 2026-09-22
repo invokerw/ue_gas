@@ -180,6 +180,8 @@ FCombatOperationResult UCombatOrderComponent::PreflightAIOrder(const FCombatOrde
 		const auto* Data = ASC->GetCombatAbilityData(Request.AbilitySpecHandle);
 		const auto* Spec = ASC->FindAbilitySpecFromHandle(Request.AbilitySpecHandle);
 		if (!Data || !Spec) return FCombatOperationResult::Failure(CombatTags::Order_Failure_AbilityRejected, TEXT("Ability is not granted"));
+		if (ASC->IsCombatAbilityStateBlocked(Request.AbilitySpecHandle))
+			return FCombatOperationResult::Failure(CombatTags::Failure_Ability_UnitStateBlocked, TEXT("Unit state blocks ability"));
 		FGameplayTag Failure;
 		if (!ASC->PreflightCombatAbility(Request.AbilitySpecHandle, *Data, Spec->Level, Failure)) return FCombatOperationResult::Failure(Failure);
 		FCombatAbilityTargetData Target;

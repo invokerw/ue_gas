@@ -11,11 +11,13 @@ enum class ECombatAIRoleOperation : uint8
 	Explicit UMETA(DisplayName="显式命令"),
 	Attack UMETA(DisplayName="已知目标攻击"),
 	Home UMETA(DisplayName="职责归位"),
-	Route UMETA(DisplayName="路线航点")
+	Route UMETA(DisplayName="路线航点"),
+	Cast UMETA(DisplayName="战术施法"),
+	Reposition UMETA(DisplayName="战术站位")
 };
 
 /** 角色任务精确取消自己的 Order 时保留的本地原因，不新增 Combat 网络事件。 */
-enum class ECombatAIRoleStopReason : uint8 { None, AssignmentChanged, LostPerception, LeashExceeded, EngageOpportunity };
+enum class ECombatAIRoleStopReason : uint8 { None, AssignmentChanged, LostPerception, LeashExceeded, EngageOpportunity, TacticalSwitch };
 
 /** 服务器提供的空间职责；空路线表示守点，循环只控制成功到点后的游标。 */
 USTRUCT(BlueprintType)

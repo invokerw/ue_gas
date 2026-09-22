@@ -1,5 +1,6 @@
 #include "Combat/AI/CombatAIStateTreeSchema.h"
 #include "Combat/AI/CombatAIStateTreeTasks.h"
+#include "Combat/AI/CombatAITacticalTasks.h"
 #include "Combat/Unit/CombatUnitCharacter.h"
 #include "StateTreeConditionBase.h"
 
@@ -14,7 +15,9 @@ UCombatAIStateTreeSchema::UCombatAIStateTreeSchema()
 
 bool UCombatAIStateTreeSchema::IsStructAllowed(const UScriptStruct* Struct) const
 {
-	return Struct && (Struct->IsChildOf(FCombatAITaskBase::StaticStruct()) || Struct->IsChildOf(FStateTreeConditionCommonBase::StaticStruct()));
+	return Struct && (Struct->IsChildOf(FCombatAITaskBase::StaticStruct())
+		|| Struct->IsChildOf(FStateTreeConditionCommonBase::StaticStruct())
+		|| Struct->IsChildOf(FCombatAITacticalConsideration::StaticStruct()));
 }
 
 bool UCombatAIStateTreeSchema::IsExternalItemAllowed(const UStruct& Struct) const

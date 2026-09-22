@@ -1,8 +1,9 @@
 # 00-01 开发进度台账
 
-> 最后更新：2026-09-21
-> StateTree AI 阶段 B（2026-09-21）：[AI-003](../Specs/AI-003-statetree-roles.spec.md) 已完成 F0 GO、F1 APPROVED 0.1、F2 PASS 和 Push-Ready READY；角色 StateTree、感知/记忆、守点归位、巡线恢复、独立演示、NavMesh 构建命令及验证均完成。最终三 Target 构建、`Combat.AI` 20/20、完整 `Combat.` 121/121、角色资产 37/37（0 error/0 warning）、Role PIE、Dedicated 双客户端和角色地图 Windows cook 通过。2026-09-21 用户确认 B 阶段验收完成；Utility/EQS、完整迷雾、AI 容量、长 soak、网络损伤和打包 exe 未执行，阶段 A 结论保留，C/D 未开始。
-> StateTree AI（2026-09-21）：用户明确确认 [AI-002](../Specs/AI-002-statetree-runtime.spec.md) 阶段 A 验收成功；AI-001 设计与阶段 A 实现均已验收。Brain/Schema/Profile、Order Bridge、手动接管和生命周期、独立演示地图已接入；2026-09-20 最终三 Target、Combat 112 项（0 失败）、32 资产、真实 PIE、AI Dedicated 双客户端、独立原 64/256 容量及 AI 地图 Windows cook 656 包通过。F0 GO、F1 APPROVED、F2 PASS、Push-Ready READY；打包启动、网络损伤、AI 容量/长 soak 仍未覆盖，GAP-028 保留 B/C/D，后续阶段未开始，见 [配置指南](../20-Content/20-04-StateTree-AI-Guide.md)。
+> 最后更新：2026-09-22
+> StateTree AI 阶段 C（2026-09-22）：[AI-004](../Specs/AI-004-statetree-tactics-capacity.spec.md) 已完成 F0 GO、F1 APPROVED 0.2、F2 PASS 和 Push-Ready READY，并于 2026-09-22 通过用户验收。v2 Utility/Consideration、只读技能候选、EQS 战术站位、World 查询预算与 Hero/Ranged 演示已落地；三 Target、战术 21/21、AI 42/42、完整 Combat 143/143、42 资产、PIE、Dedicated 双客户端、Windows cook 和 64/128/256 AI 容量均通过。
+> StateTree AI 阶段 B（2026-09-21）：[AI-003](../Specs/AI-003-statetree-roles.spec.md) 已完成 F0 GO、F1 APPROVED 0.1、F2 PASS 和 Push-Ready READY；角色 StateTree、感知/记忆、守点归位、巡线恢复、独立演示、NavMesh 构建命令及验证均完成。最终三 Target 构建、`Combat.AI` 20/20、完整 `Combat.` 121/121、角色资产 37/37（0 error/0 warning）、Role PIE、Dedicated 双客户端和角色地图 Windows cook 通过。2026-09-21 用户确认 B 阶段验收完成；Utility/EQS 与 AI 容量不属于 B 的通过范围，现由已验收的 AI-004 提供独立证据；完整迷雾、长 soak、网络损伤和打包 exe 仍未覆盖，阶段 A/B 历史结论保留，D 未开始。
+> StateTree AI（2026-09-21）：用户明确确认 [AI-002](../Specs/AI-002-statetree-runtime.spec.md) 阶段 A 验收成功；AI-001 设计与阶段 A 实现均已验收。Brain/Schema/Profile、Order Bridge、手动接管和生命周期、独立演示地图已接入；2026-09-20 最终三 Target、Combat 112 项（0 失败）、32 资产、真实 PIE、AI Dedicated 双客户端、独立原 64/256 容量及 AI 地图 Windows cook 656 包通过。F0 GO、F1 APPROVED、F2 PASS、Push-Ready READY；这里记录的是阶段 A 当时的验证边界，阶段 B 已另行验收，阶段 C 当前见 AI-004，GAP-028 继续保留完整迷雾、长 soak 等后续范围。
 > 相机实现（2026-09-20）：用户已完成 CAM-001 设计与 CAM-002 实现 review，并授权本地 Git 提交。无需抓取键的边缘自动平移与 Space 按住跟随/松开停留已接入；Editor、完整 Combat 101 项、Demo 输入资产、PIE 与独立双客户端验证通过。自动场景使用合成边缘样本，未额外执行物理输入自动验证，详见 [CAM-002](../Specs/CAM-002-edge-pan-follow.spec.md)。
 > ECON-003 已完成（2026-09-19）：用户已完成代码 review 并授权验证后本地提交。v0.8 在删除储藏兼容入口、精简物品右键菜单和解锁即时合成后，完成 Editor/Server/Client 三 Target、NullRHI PIE、5 个蓝图编译回读、独立 Dedicated 双客户端各 300 秒/10 轮/48 回执（0 失败、0 重试）、64 Unit/256 Modifier 容量、Windows cook 650 包、资产 31 项和完整 Combat 96 项（94 success + 2 success with warnings、0 failed），文档、差异和 delivery Gate 通过。人工视觉、打包部署和更长 soak 未覆盖，见 [ECON-003](../Specs/ECON-003-direct-inventory-shop-lock.spec.md) 与 ADR-060。
 > 紧凑商店与独立储藏室（2026-09-16）：ECON-002 v0.3 已通过用户验收并获准本地提交；在 1920×1080 百分比布局上，合成固定区已移除滚轮、标题、价格、提示、说明和交易文字，只显示配方节点图，无选择或无配方时留白。DebugGame Editor 与 Development 后缀模块构建、v0.3 UI 1/1、完整 `Combat.` 94/94 通过；Codex 未取得可回读的真实 PIE 日志，当前打开的 Editor 仍需重启后载入新模块，见 [ECON-002](../Specs/ECON-002-compact-shop-stash-ui.spec.md)。
@@ -325,7 +326,9 @@ HUD-ABILITY-CLICK-001/002 追加验收状态：`用户已验收`（2026-09-14）
 | Task | 需求名称 | 状态 | 完成证据/备注 |
 | --- | --- | --- | --- |
 | AI-001 | 基于 StateTree 的通用 AI 决策系统设计文档 | 已验收 | 用户确认 0.2 review 完成并授权开工；[设计](../10-Architecture/10-17-StateTree-AI-Decision-System.md) 与 [文档 Spec](../Specs/AI-001-statetree-ai-design.spec.md) 保留原文档证据，ADR-062 accepted；实现由 AI-002 承接 |
-| AI-002 | StateTree 阶段 A：运行时、Order Bridge 与演示 | 已验收 | 2026-09-21 用户确认验收成功；Brain/Schema/Profile、意图/回执、匹配取消/攻击边界、手动接管及生命周期已接入。最终三 Target、Combat 112 项、32 资产、真实 PIE、AI Dedicated 双客户端、独立原容量与 AI 地图 cook 通过；见 [Spec](../Specs/AI-002-statetree-runtime.spec.md) 和 [配置指南](../20-Content/20-04-StateTree-AI-Guide.md)。B/C/D 未开始 |
+| AI-002 | StateTree 阶段 A：运行时、Order Bridge 与演示 | 已验收 | 2026-09-21 用户确认验收成功；Brain/Schema/Profile、意图/回执、匹配取消/攻击边界、手动接管及生命周期已接入。最终三 Target、Combat 112 项、32 资产、真实 PIE、AI Dedicated 双客户端、独立原容量与 AI 地图 cook 通过；见 [Spec](../Specs/AI-002-statetree-runtime.spec.md) 和 [配置指南](../20-Content/20-04-StateTree-AI-Guide.md)。B 已验收，C 见 AI-004，D 未开始 |
+| AI-003 | StateTree 阶段 B：感知、角色复用与演示 | 已验收 | 2026-09-21 用户确认验收并授权本地提交；`Combat.AI` 20/20、完整 `Combat.` 121/121、角色资产、PIE、Dedicated 与 cook 通过，见 [Spec](../Specs/AI-003-statetree-roles.spec.md) |
+| AI-004 | StateTree 阶段 C：Utility、技能、EQS 与容量 | 已验收 | F0 GO、F1 APPROVED 0.2、F2 PASS、Push-Ready READY；三 Target、战术 21/21、AI 42/42、完整 Combat 143/143、42 资产、PIE、Dedicated、cook 和 64/128/256 容量通过。2026-09-22 用户确认验收完成并授权本地提交，见 [Spec](../Specs/AI-004-statetree-tactics-capacity.spec.md) |
 
 ## 13. 用户验收记录
 
@@ -451,6 +454,8 @@ HUD-ABILITY-CLICK-001/002 追加验收状态：`用户已验收`（2026-09-14）
 | 2026-09-21 | 用户确认 AI-002 阶段 A 验收成功；同步 Spec、设计状态和台账，指南补充 AI 自生目标与出生点原木桩的区分。UE MCP 的 PIE/ASC 采样证明原木桩维持 500、AI 目标 468→340，未修改场景布局或复制链路。仅验收文档回写，不新增原矩阵通过结论，B/C/D 未开始 | post-M8 AI / AI-002 已验收 / GAP-028 分阶段处理 |
 | 2026-09-21 | 完成 AI-003 阶段 B：感知/记忆、Guard/Engage/Return、Lane/Patrol、角色资产与独立地图；三 Target、`Combat.AI` 20/20、完整 `Combat.` 121/121、37 资产 0/0、Role PIE、Dedicated 双客户端、NavMesh 构建与 Windows cook 通过，F2 PASS、Push-Ready READY；用户确认 B 阶段验收完成 | post-M8 AI / AI-003 已验收 / ADR-064 |
 | 2026-09-21 | 用户明确“验收完成，提交吧”，授权将已验收的 AI 设计和 A/B 实现创建本地 Git 提交；同步验收状态与交付结果，复核文档、差异和 LFS 资产，不新增 UE 运行验证结论 | post-M8 AI / AI-001–003 已验收 / 本地提交授权 |
+| 2026-09-22 | 完成 AI-004 阶段 C 本地交付：v2 HardSelect + Utility、只读技能候选、EQS 站位、World 预算和 Hero/Ranged 演示落地；F2 修正并复验后，三 Target、战术 21/21、AI 42/42、完整 Combat 143/143、42 资产 0/0、冷回读、PIE、Dedicated 双客户端、Windows cook 680 包及 64/128/256 容量通过。F2 PASS、Push-Ready READY，状态为 READY_FOR_REVIEW；未提交、未推送，尚未写为用户已验收 | post-M8 AI / AI-004 待用户 review / ADR-065 / GAP-028 分阶段处理 |
+| 2026-09-22 | 用户确认 AI-004 阶段 C 验收完成并要求提交；同步 Spec、当前状态、ADR/Gap 与现行指南，复核文档、交付 Gate、差异范围和 LFS 资产，不新增 UE 运行验证结论；授权本地 Git 提交，不推送 | post-M8 AI / AI-004 已验收 / 本地提交授权 |
 
 ## 15. 更新规则
 

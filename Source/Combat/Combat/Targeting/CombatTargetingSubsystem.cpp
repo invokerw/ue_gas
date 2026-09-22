@@ -229,6 +229,26 @@ FCombatTargetValidationResult UCombatTargetingSubsystem::ValidatePointTarget(
 	return Success(TargetLocation);
 }
 
+FCombatTargetValidationResult UCombatTargetingSubsystem::ValidateUnitForRadiusQuery(
+	ACombatUnitCharacter* Source,
+	ACombatUnitCharacter* Target,
+	const FVector Center,
+	const float Radius,
+	const FCombatTargetingRules& Rules) const
+{
+	using namespace CombatTargetingPrivate;
+	if (!Target || Center.ContainsNaN() || !FMath::IsFinite(Radius) || Radius < 0.0f)
+	{
+		return Failure(CombatTags::Failure_Target_Invalid, TEXT("Radius query input is invalid"));
+	}
+	const float TargetRadius = Target->GetCapsuleComponent()->GetScaledCapsuleRadius();
+	if (FVector::Dist2D(Center, Target->GetActorLocation()) > Radius + TargetRadius)
+	{
+		return Failure(CombatTags::Failure_Target_OutOfRange, TEXT("Target is outside radius query"));
+	}
+	return ValidateUnitTargetInternal(Source, Target, Rules, false);
+}
+
 TArray<ACombatUnitCharacter*> UCombatTargetingSubsystem::QueryUnitsInRadius(
 	ACombatUnitCharacter* Source,
 	const FVector Center,
@@ -248,12 +268,7 @@ TArray<ACombatUnitCharacter*> UCombatTargetingSubsystem::QueryUnitsInRadius(
 		{
 			continue;
 		}
-		const float CandidateRadius = Candidate->GetCapsuleComponent()->GetScaledCapsuleRadius();
-		if (FVector::Dist2D(Center, Candidate->GetActorLocation()) > Radius + CandidateRadius)
-		{
-			continue;
-		}
-		if (ValidateUnitTargetInternal(Source, Candidate, Rules, false).bValid)
+		if (ValidateUnitForRadiusQuery(Source, Candidate, Center, Radius, Rules).bValid)
 		{
 			Seen.Add(Candidate);
 			Result.Add(Candidate);

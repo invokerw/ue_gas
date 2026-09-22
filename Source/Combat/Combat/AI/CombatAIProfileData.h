@@ -2,9 +2,11 @@
 
 #include "Combat/Data/CombatDefinitionData.h"
 #include "Combat/AI/CombatAIRoleTypes.h"
+#include "Combat/AI/CombatAITacticalTypes.h"
 #include "CombatAIProfileData.generated.h"
 
 class UStateTree;
+class UEnvQuery;
 
 /** 自主行为定义；StateTree 负责角色编排，可选感知仅发布知识。旧资产默认不启用感知。 */
 UCLASS(BlueprintType, meta=(DisplayName="战斗 AI 配置", ToolTip="配置 StateTree、动作协议和可选范围/LOS 感知；不生成或授予技能。"))
@@ -13,10 +15,21 @@ class COMBAT_API UCombatAIProfileData : public UCombatDefinitionData
 	GENERATED_BODY()
 public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="AI", meta=(DisplayName="根决策树", ToolTip="必须是已编译的 Combat AI Schema StateTree；为空时无法启动。")) TObjectPtr<UStateTree> RootTree;
-	UPROPERTY(VisibleAnywhere, Category="AI", meta=(DisplayName="AI 配置版本", ToolTip="本地 AI 配置格式版本，当前只支持 1；不替代 Combat 内容版本。")) int32 AIProfileVersion = 1;
+	UPROPERTY(VisibleAnywhere, Category="AI", meta=(DisplayName="AI 配置版本", ToolTip="本地 AI 配置格式版本；1 保持阶段 A/B 行为，2 才允许显式启用战术；不替代 Combat 内容版本。")) int32 AIProfileVersion = 1;
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="AI|Tactics", meta=(DisplayName="启用战术决策", ToolTip="仅 AI 配置版本 2 生效；版本 1 会忽略此字段并继续使用原有有序 StateTree。")) bool bEnableTactics = false;
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="AI|Tactics", meta=(DisplayName="观察等待效用", ToolTip="没有更高合法分支时的基础效用，范围 0 到 1。", ClampMin="0", ClampMax="1")) float GuardUtility = 0.1f;
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="AI|Tactics", meta=(DisplayName="普通攻击效用", ToolTip="存在合法已知敌人时的基础效用，范围 0 到 1。", ClampMin="0", ClampMax="1")) float AttackUtility = 0.35f;
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="AI|Tactics", meta=(DisplayName="战术站位效用", ToolTip="满足站位条件且已有合法查询配置时的基础效用，范围 0 到 1。", ClampMin="0", ClampMax="1")) float RepositionUtility = 0.45f;
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="AI|Tactics", meta=(DisplayName="动作最短保持", ToolTip="普通战术分支允许切换前至少保持的游戏秒数，范围 0 到 30；硬失效、死亡和接管不受限制。", Units="s", ClampMin="0", ClampMax="30")) float ActionMinHoldSeconds = 0.2f;
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="AI|Tactics", meta=(DisplayName="动作切换分差", ToolTip="挑战分支必须严格超过当前效用的差值，范围 0 到 1；仅控制普通重评。", ClampMin="0", ClampMax="1")) float ActionSwitchMargin = 0.05f;
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="AI|Tactics", meta=(DisplayName="技能用途规则", ToolTip="仅显式启用的 v2 战术配置使用；每个 CombatAbility DefinitionId 唯一，且只会解析本单位已经授予的主动技能。", TitleProperty="AbilityDefinitionId")) TArray<FCombatAIAbilityUsageRule> AbilityUsageRules;
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="AI|Tactics|Positioning", meta=(DisplayName="战术站位查询", ToolTip="可选的服务器 EQS；配置后必须同时设置触发距离并启用感知。查询只选择位置，最终移动仍走公共 Move Order。")) TObjectPtr<UEnvQuery> TacticalLocationQuery;
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="AI|Tactics|Positioning", meta=(DisplayName="站位触发距离", ToolTip="当前已知目标进入该 XY 距离时允许战术站位，范围 0 到 10000 厘米；0 表示关闭，且查询必须为空。", Units="cm", ClampMin="0", ClampMax="10000")) float RepositionTriggerDistance = 0.0f;
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="AI|Tactics|Positioning", meta=(DisplayName="查询预算重试", ToolTip="World EQS 启动配额不足时的最短重试秒数，范围 0.01 到 1；实际延迟会按单位身份和连续延期稳定错峰，最长增加八倍本值。", Units="s", ClampMin="0.01", ClampMax="1")) float TacticalQueryRetrySeconds = 0.05f;
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="AI", meta=(DisplayName="准备结果有效期", ToolTip="从准备成功起到消费的最长游戏秒数，必须大于 0；过期后形成失败凭证。", Units="s", ClampMin="0.01")) float IntentLifetime = 1.0f;
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="AI", meta=(DisplayName="攻击边界等待上限", ToolTip="从前摇结束且边界 Ready 起最多保持的游戏秒数，范围 0.01 到 5；超时继续原攻击。", Units="s", ClampMin="0.01", ClampMax="5")) float BoundaryHoldSeconds = 0.25f;
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="AI|Perception", meta=(DisplayName="启用自主感知", ToolTip="默认关闭，保留阶段 A 显式命令行为；角色树需开启并提供合法职责。")) bool bEnablePerception = false;
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="AI|Perception", meta=(DisplayName="预算延期重试", ToolTip="World 感知配额不足时的最短重试秒数，范围 0.01 到 1；实际延迟会稳定错峰，延期期间不执行全量扫描。", Units="s", ClampMin="0.01", ClampMax="1")) float PerceptionBudgetRetrySeconds = 0.05f;
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="AI|Perception", meta=(DisplayName="感知与记忆", ToolTip="仅启用自主感知时使用；公共 Targeting 的范围/LOS 模型，不是完整迷雾。", EditCondition="bEnablePerception")) FCombatAIPerceptionConfig Perception;
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="AI|Targets", meta=(DisplayName="定义优先级", ToolTip="按单位定义配置候选优先级；未列出的定义为 0。不得重复，最多 64 条。", TitleProperty="Definition")) TArray<FCombatAITargetPriority> TargetPriorities;
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="AI|Targets", meta=(DisplayName="距离权重", ToolTip="同优先级按 Threat×威胁权重减去距离厘米×本权重排序，必须有限非负。", ClampMin="0", ClampMax="100")) float DistanceWeight = 0.01f;
@@ -32,6 +45,8 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="AI|Recovery", meta=(DisplayName="失败退避秒数", ToolTip="失败后等待的游戏秒数，范围 0.05 到 10；普通感知或受击不能跳过。", Units="s", ClampMin="0.05", ClampMax="10")) float RetryDelay = 0.5f;
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="AI|Duty", meta=(DisplayName="到点停留秒数", ToolTip="路线到点后的游戏秒数，范围 0.05 到 10，防止重合航点形成同步忙循环；由 Scheduler 驱动。", Units="s", ClampMin="0.05", ClampMax="10")) float RoutePause = 0.2f;
 	virtual FPrimaryAssetType GetCombatPrimaryAssetType() const override;
+	/** 只有显式 v2 配置可进入 Utility/技能/EQS 路径；旧 v1 资产始终返回 false。 */
+	bool IsTacticsEnabled() const { return AIProfileVersion == 2 && bEnableTactics; }
 	/** Runtime 与编辑器共用预检，拒绝错误 Schema、未编译树和非有限参数。 */
 	bool ValidateRuntime(FString& Diagnostic) const;
 #if WITH_EDITOR

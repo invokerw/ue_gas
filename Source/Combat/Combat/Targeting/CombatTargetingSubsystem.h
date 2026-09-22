@@ -44,6 +44,13 @@ public:
 		UPARAM(DisplayName="目标位置") FVector TargetLocation,
 		UPARAM(DisplayName="目标规则") const FCombatTargetingRules& Rules) const;
 
+	/**
+	 * 复核一个单位是否仍属于指定 XY 范围查询，复用范围枚举完全相同的阵营、生命、状态、LOS 与可见性规则。
+	 * 该入口不枚举 World，供已知来源的事件复核使用。
+	 */
+	FCombatTargetValidationResult ValidateUnitForRadiusQuery(ACombatUnitCharacter* Source,
+		ACombatUnitCharacter* Target, FVector Center, float Radius, const FCombatTargetingRules& Rules) const;
+
 	/** 枚举当前 World 中与 XY 圆形范围相交的单位，计入目标胶囊半径，复用状态/阵营/视线规则并按 Actor ID 排序。跳过来源施法距离限制；权威命中须在服务器调用。 */
 	UFUNCTION(BlueprintCallable, Category="Combat|Targeting", meta=(DisplayName="查询半径内战斗单位", ToolTip="枚举当前 World 中与 XY 圆形范围相交的单位，计入目标胶囊半径，复用状态/阵营/视线规则并按 Actor ID 排序。跳过来源施法距离限制；权威命中须在服务器调用。"))
 	TArray<ACombatUnitCharacter*> QueryUnitsInRadius(

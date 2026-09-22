@@ -37,6 +37,8 @@ StateTree AI 演示：打开 `/Game/Combat/Demo/AI/L_CombatAI`，服务器自主
 
 阶段 B 角色演示：`/Game/Combat/Demo/AI/Roles/L_CombatAI_Roles` 提供宽视野入口和清晰目标标识，野怪自动感知、追击后归位，小兵交战后继续路线；复用 Guard/Engage/Return/Lane/Patrol StateTree 节点与子树。当前证据与验收状态见 [AI-003](Doc/CombatSystem/Specs/AI-003-statetree-roles.spec.md)。
 
+阶段 C 战术演示：`/Game/Combat/Demo/AI/Tactics/L_CombatAI_Tactics` 使用显式 v2 Profile 展示最高效用战术选择。Hero Bot 会在合法攻击边界从持续普攻切换到主动治疗，Ranged Guard 通过服务器 EQS 选择站位后仍由公共 Move Order 移动；World 预算限制并错峰感知/EQS，旧 v1 Profile 保持阶段 A/B 时序。AI-004 已完成三 Target、专项/全量自动化、资产冷回读、PIE、Dedicated 双客户端、cook 和 64/128/256 容量验证，并于 2026-09-22 通过用户验收；配置和边界见 [20-04](Doc/CombatSystem/20-Content/20-04-StateTree-AI-Guide.md) 与 [AI-004 Spec](Doc/CombatSystem/Specs/AI-004-statetree-tactics-capacity.spec.md)。
+
 视角操作：鼠标贴近游戏视口边缘自动平移，无需抓取键；按住 **Space** 跟随主控单位，松开停留。跟随中重新贴边会由滚屏接管，需松开重按 Space 才恢复跟随。UI、瞄准和失焦会阻止误滚屏。参数与验证边界见 [10-16 视角移动](Doc/CombatSystem/10-Architecture/10-16-Dota-Camera-Movement.md)。
 
 以上按键统一通过 `/Game/Combat/Demo/Input/IMC_Default` 映射到 Input Action；可在该资产中改键。普攻选敌、确认、取消和停止的 Action 引用配置在 `BP_CombatDemoPlayerController` 的 `Input|Combat` 默认属性中，Space 跟随引用配置在 `Input|Camera`；边缘滚屏直接检测视口位置，不需要 Action。

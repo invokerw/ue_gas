@@ -1,12 +1,12 @@
 # 20-04 StateTree AI 配置与接入
 
-> 阶段 A、阶段 B 均已验收；阶段 B 的感知和通用角色实现、分层验证与验收证据见 [AI-003 Spec](../Specs/AI-003-statetree-roles.spec.md) 与 [进度台账](../00-Project/00-01-Progress-Tracker.md)。完整设计见 [10-17](../10-Architecture/10-17-StateTree-AI-Decision-System.md)，Utility/EQS 等 C/D 节点仍未实现。
+> 阶段 A、阶段 B 均于 2026-09-21 通过用户验收，阶段 C 于 2026-09-22 通过用户验收。阶段 B 证据见 [AI-003 Spec](../Specs/AI-003-statetree-roles.spec.md)，阶段 C 的 Utility/EQS/容量证据见 [AI-004 Spec](../Specs/AI-004-statetree-tactics-capacity.spec.md)；D 阶段仍未开始。完整设计见 [10-17](../10-Architecture/10-17-StateTree-AI-Decision-System.md)。
 
 ## 1. 本阶段提供什么
 
 单位已有 `UCombatAIBrainComponent`，它在服务器运行原生 StateTree，通过公共 Order 执行显式 Move、Attack、Cast。树决定准备、执行、完成记账和等待的顺序；Brain 提供跨状态数据和生命周期管理，没有另建行为层级状态机。已有 `ACombatUnitAIController` 继续负责导航与 Crowd。
 
-阶段 B 新增可选范围/LOS 感知、有限记忆、野怪归位和小兵/巡逻路线职责，见 §7。阶段 A Profile 保持默认关闭感知，仍由调用方提供明确目标；无 Profile 的旧单位维持原行为。自动挑选技能、EQS 和 Utility 尚未实现。
+阶段 B 新增可选范围/LOS 感知、有限记忆、野怪归位和小兵/巡逻路线职责，见 §7。阶段 C 为显式 v2 Profile 增加 HardSelect + Utility、只读主动技能候选、EQS 战术站位和 World 查询预算，见 §8。阶段 A/B 的 v1 Profile 绕过新增预算并保持原时序；无 Profile 的旧单位维持原行为。
 
 ## 2. 打开可玩演示
 
@@ -40,6 +40,12 @@
 | `RootTree` | 必填 | 已编译、使用 Combat AI Schema 的 StateTree |
 | `IntentLifetime` | 1 秒 | 从 Prepare 到 Execute 消费的期限；不是动作超时 |
 | `BoundaryHoldSeconds` | 0.25 秒 | Attack 边界 Ready 后允许交接的最长时间；范围 0.01–5 秒 |
+| `bEnableTactics` | false | 仅版本 2 可启用；版本 1 忽略战术字段 |
+| `Guard/Attack/RepositionUtility` | 0.1 / 0.35 / 0.45 | 合法战术分支的基础效用；最终分数限制在 `[0,1]` |
+| `ActionMinHoldSeconds` / `ActionSwitchMargin` | 0.2 秒 / 0.05 | 普通重评的最短保持和严格超越分差；不阻塞死亡、接管等硬失效 |
+| `AbilityUsageRules` | 空 | 只解析本单位已授予的主动技能；用途、目标策略、法力保留和边界偏好不改变 Ability 真值 |
+| `TacticalLocationQuery` / `RepositionTriggerDistance` | 空 / 0 | 可选服务器 EQS 与过近触发距离；结果只生成精确 Move 意图 |
+| `PerceptionBudgetRetrySeconds` / `TacticalQueryRetrySeconds` | 0.05 秒 / 0.05 秒 | World 配额不足后的有界稳定错峰；不阻塞清理、回执或攻击边界 |
 
 新 Profile 放在 `/Game/Combat/Definitions/AI` 或 `/Game/Combat/Demo/AI`，均已加入 AssetManager 扫描及 AlwaysCook。Profile 继承 `UCombatDefinitionData`，必须保留项目当前 Content schema。根树和 Linked Asset 通过资产硬引用进入 cook 闭包。
 
@@ -84,16 +90,16 @@ Prepare/Execute 的 `ConsumerSlot` 必须相同，默认 `Action`。不要把前
 
 Execute 消费准备结果一次。回执独立于动作实例，在动作退出后仍由 Resolve 确认一次；同帧目标变化不能跳过旧动作完成记账。同步完成也有回执，委托回调只记录事实并唤醒，不递归推进树。
 
-阶段 A 的内容校验刻意限制可编排结构：
+内容校验刻意限制可编排结构：
 
-- Schema 仅允许 Combat 原生 AI Tasks 和获准的通用条件；不允许蓝图 Task、Global Task 或 Evaluator。
+- Schema 仅允许 Combat 原生 AI Tasks、获准的通用条件，以及阶段 C 的项目原生 Consideration；不允许蓝图 Task、Global Task 或 Evaluator。
 - 任一活动父子路径至多一个 DecisionScope，Prepare/Execute/Resolve 合计至多一个，命令阶段必须有 Scope。
 - 协议 Task 必须启用；临时停用内容应禁用整个分支，不能单独禁用 Scope 破坏交接。
 - 复用使用 Linked Asset；当前不开放树内 Linked/Subtree 路由或动态 Linked Override。
 - 只使用完成转移；不开放 OnTick、OnEvent 条件跳转或延迟转移。事件用于唤醒节点，由节点读取持久事实。
 - Linked Asset 引用不能成环，深度上限 16。运行时 Bridge 仍有单写入者检查，防止不合规节点重复下单。
 
-阶段 B 角色任务继承这些准备/执行/确认协议；不要用蓝图直接调用 MoveTo、TryActivateAbility 或伤害接口来绕过执行链路。
+阶段 B 角色任务和阶段 C 战术任务都继承这些准备/执行/确认协议；不要用蓝图直接调用 MoveTo、TryActivateAbility 或伤害接口来绕过执行链路。
 
 ## 5. 切换、接管与生命周期
 
@@ -123,7 +129,7 @@ UnrealEditor <项目> -run=Cook -TargetPlatform=Windows -Map=/Game/Combat/Demo/A
 
 演示地图须明确加入 cook 的 `-Map` 参数或项目打包地图列表；Profile 的 AlwaysCook 只保证其引用的树，不会反向包含演示地图和场景蓝图。
 
-`Combat.AI.PIE.PlayableArena` 使用保存后的阶段 A 地图启动真实 PIE；阶段 B 为 `Combat.AI.PIE.RolesArena`。同步 World 测试用于边界时序，不能替代真实帧调度。`-AI` 和 `-AIRoles` 不叠加固定的旧 64/256 容量样本；不带这些开关另跑原容量回归。AI 容量、网络损伤、长时间 AI soak 和 C/D 不在阶段 B 的通过结论内。
+`Combat.AI.PIE.PlayableArena` 使用保存后的阶段 A 地图启动真实 PIE；阶段 B 为 `Combat.AI.PIE.RolesArena`，阶段 C 为 `Combat.AI.PIE.TacticsArena`。同步 World 测试用于边界时序，不能替代真实帧调度。`-AI`、`-AIRoles` 和 `-AITactics` 不叠加固定的旧 64/256 容量样本；不带这些开关另跑原容量回归。网络损伤、长时间 AI soak 和 D 不在阶段 C 的通过结论内。
 
 ## 7. 阶段 B：自动感知与通用角色
 
@@ -162,7 +168,7 @@ Brain->ConfigureProfile(RoleProfile);
 
 新增 Profile 配置：感知默认关闭；角色开启后默认半径 800 cm，交战/空闲采样 0.2/0.8 秒，记忆 3 秒，候选 16 / 记忆 32。候选经公共 Targeting 后按定义优先级、`Threat × ThreatWeight − DistanceCm × DistanceWeight`、Actor ID 排序；未配置定义优先级为 0。最短保持/换目标分差用于合法选择点，最小野怪不在持续攻击中普通换敌。受击威胁只从当时仍可见的已知来源更新，未知/隐藏来源不会变成全知追踪目标。
 
-敌人丢失后不更新其 LastSeenPosition、生命或属性；当前 Actor 跟踪命令在下一次采样事件中取消。检测受采样间隔与 Scheduler 延期限制，**范围/LOS 不等于战争迷雾**，要求 `RequireVisible` 的 Profile 会被拒绝。查询目前复用 World 枚举，大规模空间索引和容量证据留阶段 C。
+敌人丢失后不更新其 LastSeenPosition、生命或属性；当前 Actor 跟踪命令在下一次采样事件中取消。检测受采样间隔与 Scheduler 延期限制，**范围/LOS 不等于战争迷雾**，要求 `RequireVisible` 的 Profile 会被拒绝。查询目前仍复用 World 枚举；阶段 C 已增加执行前配额和 64/128/256 容量证据，本轮未触发公共空间索引，真实复杂地图若超预算需另立任务。
 
 默认职责边界 1200 cm、交战上限 20 秒、到达复核容差 80 cm。Home 途中普通索敌和受击不换单；只有匹配成功回执且实际 XY 到达才清返回请求。Route 中断不前进游标，终点非循环路线等待，循环路线保留最近成功航点为职责锚点。停留至少 0.05 秒，重合航点不会在一次 Tick 内无限循环。
 
@@ -180,3 +186,44 @@ UnrealEditor <项目> -run=Cook -TargetPlatform=Windows -Map=/Game/Combat/Demo/A
 ```
 
 角色地图是从 World Partition 模板生成的；在首次 Dedicated/cook 前必须运行 `CombatNavigationBuild`，它会解除编辑器载入锁、同步生成并保存 NavMesh，再用原生投影回读确认不是空网格。角色专用 Dedicated 使用新地图，服务器验证自动命中、归位和航点完成，两个客户端独立验证 Brain 未运行、位移和木桩 Health 复制。`-AIRoles` 与其他专项开关分开执行；当前证据和未执行项以 AI-003 为准。
+
+## 8. 阶段 C：Utility、技能与战术站位
+
+新演示入口为 **`/Game/Combat/Demo/AI/Tactics/L_CombatAI_Tactics`**：
+
+- **Hero Bot** 持续普攻后在合法 Attack Boundary 重新检查已授予的自我治疗候选、效用分差与中断偏好，再切换到公共 Cast Order。候选评估本身不会激活、扣费或开始冷却。
+- **Ranged Guard** 在目标过近时申请服务器 EQS，选定点后通过公共 Move Order 改变站位；技能目标不消费该点。
+- 客户端只观察既有移动、ASC 和 View 复制；Brain、Utility、知识与查询预算只在服务器运行。
+
+| 资产 | 组合与作用 |
+| --- | --- |
+| `ST_AI_Tactical` | `WaitAssignment → HardSelect(Blocked / Retry / Return / TacticalSelect)`；战术子层以最高 Utility 选择 Cast/Reposition/Attack/Guard |
+| `DA_AI_HeroTactics` / `DA_AI_HeroAbilitySet` | v2 Hero Profile 与已授予治疗技能；规则通过 DefinitionId 匹配当前 AbilitySpec |
+| `DA_AI_RangedGuard` / `EQS_AI_TargetOutside` | v2 远程守卫 Profile 与战术位置查询；站位点只用于 Reposition |
+| `BP_AI_HeroUnit` / `BP_AI_RangedUnit` | 独立示例单位，不改写已有卓尔游侠和角色 Demo |
+| `BP_AI_TacticsArena` / `BP_AI_TacticsGameMode` / `BP_AI_TacticsPlayerController` / `L_CombatAI_Tactics` | 演示生成、宽视野入口、联机 smoke 与地图 |
+
+技能规则只允许 `Self`、`CurrentEnemy` 和 `CurrentEnemyLocation` 三种目标策略，并必须匹配 Ability 的真实目标模式。`TacticalLocation` 枚举值为旧序列化兼容保留，但在编辑器隐藏且配置校验拒绝；战术 EQS 只服务 Reposition。冷却、资源、沉默、满血治疗、目标生命和库存修订仍由 `PreflightAIOrder`/ASC/Order 复核，AI 不缓存第二套真值。
+
+每只单位最多一个战术查询。工作区同时核对 QueryId、QueryGeneration、运行/控制/自身生命、Scope、职责修订、查询模板和目标生命；退出、换 Profile、接管、死亡与 EndPlay 先使身份失效，再 Abort 查询并 exactly-once 结算 World token。预算拒绝只通过 Combat Scheduler 延后下一次尝试，不补发过期工作；v1 Profile 不进入这条预算路径。
+
+首次创建/重建和验证：
+
+```text
+UnrealEditor <项目> -run=CombatAIAssets -Tactics -Unattended -NullRHI
+UnrealEditor <项目> -run=pythonscript -script="<仓库>/Tools/setup_ai_tactics.py" -Unattended -NullRHI
+UnrealEditor <项目> -run=CombatNavigationBuild -Map=/Game/Combat/Demo/AI/Tactics/L_CombatAI_Tactics -Unattended -NullRHI
+UnrealEditor <项目> -ExecCmds="Automation RunTests Combat.AI.Tactics;Quit" -TestExit="Automation Test Queue Empty"
+Tools/RunDedicated.ps1 -InstalledEditor -AITactics -TimeoutSeconds 120
+UnrealEditor <项目> -run=Cook -TargetPlatform=Windows -Map=/Game/Combat/Demo/AI/Tactics/L_CombatAI_Tactics -Unattended -NullRHI
+```
+
+AI-004 最终证据为战术 21/21、AI 42/42、完整 Combat 143/143、42 资产 0 error/0 warning、冷回读 1/1、Tactics PIE 1/1、Dedicated 双客户端和 Windows cook 通过。容量档位如下，格式均为 Requests/Granted/Deferred：
+
+| 单位数 | 感知 | EQS | 峰值在途 | EQS P95/P99 | 命令数 |
+| ---: | --- | --- | ---: | ---: | ---: |
+| 64 | 92/92/0 | 78/64/14 | 6 | 50/50 ms | 64 |
+| 128 | 281/281/0 | 304/128/176 | 7 | 50/50 ms | 128 |
+| 256 | 1246/957/289 | 1361/256/1105 | 6 | 50/50 ms | 256 |
+
+这些是当前自动化场景的准入证据，不是所有地图的性能承诺。AI-004 已于 2026-09-22 通过用户验收；人工视觉/手感、网络损伤、长时间 soak 和打包可执行文件启动仍未执行。

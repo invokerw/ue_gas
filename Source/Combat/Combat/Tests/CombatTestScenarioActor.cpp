@@ -3,6 +3,7 @@
 #include "Combat/Tests/CombatCameraNetworkScenario.h"
 #include "Combat/Tests/CombatAINetworkScenario.h"
 #include "Combat/Tests/CombatAIRoleNetworkScenario.h"
+#include "Combat/Tests/CombatAITacticalNetworkScenario.h"
 
 #include "Combat/Ability/CombatAbilitySystemComponent.h"
 #include "Combat/Ability/CombatGameplayAbility.h"
@@ -57,6 +58,8 @@ void ACombatTestScenarioActor::BeginPlay()
 	Super::BeginPlay();
 	if (FParse::Param(FCommandLine::Get(), TEXT("CombatAIRolesSmoke")))
 		GetWorld()->SpawnActor<ACombatAIRoleNetworkScenario>();
+	if (FParse::Param(FCommandLine::Get(), TEXT("CombatAITacticsSmoke")))
+		GetWorld()->SpawnActor<ACombatAITacticalNetworkScenario>();
 	if (FParse::Param(FCommandLine::Get(), TEXT("CombatAISmoke")))
 		GetWorld()->SpawnActor<ACombatAINetworkScenario>();
 	if (FParse::Param(FCommandLine::Get(), TEXT("CombatCameraSmoke")))

@@ -1,5 +1,6 @@
 #include "Combat/AI/CombatAIBrainComponent.h"
 #include "Combat/AI/CombatAIProfileData.h"
+#include "Combat/AI/CombatAIWorldSubsystem.h"
 #include "Combat/Core/CombatTags.h"
 #include "Combat/Log/CombatEventSubsystem.h"
 #include "Combat/Order/CombatOrderComponent.h"
@@ -24,6 +25,8 @@ namespace CombatAIRoleBrain
 bool UCombatAIBrainComponent::SetAssignment(const FCombatAIAssignment& NewAssignment)
 {
 	if (GetNetMode() == NM_Client || !GetOwner() || !GetOwner()->HasAuthority() || bEnding || !NewAssignment.IsValid()) return false;
+	// 职责修订先使旧查询失效并精确撤销，避免旧目标点进入新职责的 PreparedIntent。
+	ClearTacticalLocationQuery();
 	Assignment = NewAssignment;
 	bHasAssignment = true;
 	++Context.ObjectiveRevision;
@@ -31,6 +34,7 @@ bool UCombatAIBrainComponent::SetAssignment(const FCombatAIAssignment& NewAssign
 	LastReachedRouteIndex = INDEX_NONE;
 	bReturnRequested = bRetryPending = false;
 	Failures.Reset();
+	RepositionFailureAssignmentRevision = RepositionFailureSnapshotRevision = 0;
 	SelectedTarget.Reset(); SelectedTargetLife = 0;
 	Wake();
 	return true;
@@ -39,10 +43,19 @@ bool UCombatAIBrainComponent::SetAssignment(const FCombatAIAssignment& NewAssign
 void UCombatAIBrainComponent::StartPerception()
 {
 	if (!Profile || !Profile->bEnablePerception || !CanSubmit(ControlEpoch)) return;
-	SampleKnowledge();
 	if (Profile->Perception.bObserveDamageThreat)
 		PerceptionBinding = GetWorld()->GetSubsystem<UCombatEventSubsystem>()->OnRecord().AddUObject(this, &ThisClass::ObserveThreat);
-	SchedulePerception();
+	if (Profile->IsTacticsEnabled())
+	{
+		SchedulePerception(UCombatAIWorldSubsystem::ComputeStableInitialDelay(
+			Context.Unit->GetUniqueID(), Profile->Perception.IdleInterval));
+	}
+	else
+	{
+		// v1 阶段 B 在启动时同步发布首份知识；阶段 C 的预算不能改变旧资产的可观察时序。
+		SampleKnowledge();
+		SchedulePerception();
+	}
 }
 
 void UCombatAIBrainComponent::ClearPerception()
@@ -52,6 +65,7 @@ void UCombatAIBrainComponent::ClearPerception()
 	if (auto* Scheduler = GetWorld() ? GetWorld()->GetSubsystem<UCombatSchedulerSubsystem>() : nullptr) Scheduler->Cancel(PerceptionSchedule);
 	PerceptionSchedule = {};
 	Knowledge = {};
+	PerceptionBudgetDeferrals = 0;
 	SelectedTarget.Reset(); SelectedTargetLife = 0;
 	RoleStopReason = ECombatAIRoleStopReason::None;
 	bReturnRequested = bRetryPending = false;
@@ -60,20 +74,34 @@ void UCombatAIBrainComponent::ClearPerception()
 	LastReachedRouteIndex = INDEX_NONE;
 }
 
-void UCombatAIBrainComponent::SchedulePerception()
+void UCombatAIBrainComponent::SchedulePerception(const float DelayOverride)
 {
 	if (!Profile || !Profile->bEnablePerception || !CanSubmit(ControlEpoch)) return;
 	auto* Scheduler = GetWorld()->GetSubsystem<UCombatSchedulerSubsystem>();
 	const float Interval = ActionActivation && ActionIntent.Operation == ECombatAIRoleOperation::Attack
 		? Profile->Perception.ActiveInterval : Profile->Perception.IdleInterval;
+	const float Delay = DelayOverride >= 0.0f ? DelayOverride : Interval;
 	const uint64 Epoch = ControlEpoch;
 	const uint32 Life = Context.Unit->GetLifeGeneration();
 	const auto Ticket = MakeShared<FCombatScheduleHandle>();
-	*Ticket = Scheduler->ScheduleOnce(this, Interval, 0, FCombatScheduledDelegate::CreateWeakLambda(this,
+	*Ticket = Scheduler->ScheduleOnce(this, Delay, 0, FCombatScheduledDelegate::CreateWeakLambda(this,
 		[this, Epoch, Life, Ticket](const FCombatScheduledTickContext&)
 		{
 			if (!CanSubmit(Epoch) || Context.Unit->GetLifeGeneration() != Life || !(PerceptionSchedule == *Ticket)) return;
 			PerceptionSchedule = {};
+			if (Profile->IsTacticsEnabled())
+			{
+				auto* Budget = GetWorld()->GetSubsystem<UCombatAIWorldSubsystem>();
+				if (!Budget || !Budget->TryAcquirePerception())
+				{
+					++PerceptionBudgetDeferrals;
+					const float Spread = UCombatAIWorldSubsystem::ComputeStableInitialDelay(
+						Context.Unit->GetUniqueID() ^ PerceptionBudgetDeferrals, Profile->PerceptionBudgetRetrySeconds * 8.0f);
+					SchedulePerception(Profile->PerceptionBudgetRetrySeconds + Spread);
+					return;
+				}
+			}
+			PerceptionBudgetDeferrals = 0;
 			SampleKnowledge();
 			Wake();
 			SchedulePerception();
@@ -151,9 +179,9 @@ void UCombatAIBrainComponent::ObserveThreat(const FCombatLogRecord& Record)
 	auto* Memory = Knowledge.Memories.FindByPredicate([&](const auto& Item)
 		{ return Item.bVisible && Item.StableId == static_cast<uint32>(Record.SourceActorId); });
 	if (!Memory || !Memory->Unit.IsValid()) return;
-	const auto Seen = GetWorld()->GetSubsystem<UCombatTargetingSubsystem>()->QueryUnitsInRadius(Context.Unit,
-		Context.Unit->GetActorLocation(), Profile->Perception.Radius, CombatAIRoleBrain::Rules(*Profile));
-	if (!Seen.Contains(Memory->Unit.Get()) || Memory->Unit->GetLifeGeneration() != Memory->Life) return;
+	const auto Validation = GetWorld()->GetSubsystem<UCombatTargetingSubsystem>()->ValidateUnitForRadiusQuery(Context.Unit,
+		Memory->Unit.Get(), Context.Unit->GetActorLocation(), Profile->Perception.Radius, CombatAIRoleBrain::Rules(*Profile));
+	if (!Validation.bValid || Memory->Unit->GetLifeGeneration() != Memory->Life) return;
 	Memory->Threat = FMath::Min(10000.0f, Memory->Threat + Record.AppliedAmount);
 	// 下一次采样发布完整排序；事件不递归推进树，也不替换正执行的归位 Order。
 	Wake();
@@ -253,9 +281,12 @@ bool UCombatAIBrainComponent::ResolveRoleReceipt()
 			const FGameplayTag Failure = Completed.Result.FailureTag;
 			const bool bTargetEnded = Failure == CombatTags::Order_Failure_TargetInvalid || Failure.MatchesTag(CombatTags::Failure_Target_Invalid.GetTag().RequestDirectParent());
 			bFailure = !Completed.Result.bSuccess && !bInterrupted && !bTargetEnded;
-			if (!bFailure && (Profile->bReturnAfterCombat || Completed.StopReason == ECombatAIRoleStopReason::LeashExceeded || NeedsReturn())) bReturnRequested = true;
-			// 排除已结束身份，防止 Order 比下一次感知更早获知死亡时立即重试同一失效快照。
-			Knowledge.Candidates.RemoveAll([&](const auto& Item) { return Item.Unit == SelectedTarget && Item.Life == SelectedTargetLife; });
+			if (Completed.StopReason != ECombatAIRoleStopReason::TacticalSwitch)
+			{
+				if (!bFailure && (Profile->bReturnAfterCombat || Completed.StopReason == ECombatAIRoleStopReason::LeashExceeded || NeedsReturn())) bReturnRequested = true;
+				// 排除已结束身份，防止 Order 比下一次感知更早获知死亡时立即重试同一失效快照。
+				Knowledge.Candidates.RemoveAll([&](const auto& Item) { return Item.Unit == SelectedTarget && Item.Life == SelectedTargetLife; });
+			}
 		}
 		else if (!bInterrupted)
 		{

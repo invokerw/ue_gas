@@ -166,6 +166,7 @@ FCombatAIDecisionScope UCombatAIBrainComponent::BeginDecisionScope()
 void UCombatAIBrainComponent::EndDecisionScope(const FCombatAIDecisionScope Expected)
 {
 	if (!(Expected == Scope) || !Expected.IsValid()) return;
+	ClearTacticalLocationQuery();
 	EndAction(ActionActivation);
 	Prepared = {};
 	Receipt = {};
@@ -338,6 +339,8 @@ void UCombatAIBrainComponent::EndAction(const uint64 Activation)
 	ActionOrder = {};
 	ActionIntent = {};
 	Boundary = {};
+	ActiveTacticalAction = ECombatAITacticalAction::Guard;
+	TacticalActionStartedAt = 0.0;
 	if (!bWasTerminal && Context.Unit) Context.Unit->GetCombatOrderComponent()->CancelCurrentOrderIfMatches(OldOrder, CombatTags::Order_Failure_Cancelled);
 }
 
@@ -380,6 +383,7 @@ void UCombatAIBrainComponent::EndWait(const uint64 Activation)
 
 void UCombatAIBrainComponent::ClearRuntime()
 {
+	ClearTacticalLocationQuery();
 	ClearPerception();
 	EndAction(ActionActivation);
 	if (Context.Unit)
@@ -392,6 +396,8 @@ void UCombatAIBrainComponent::ClearRuntime()
 	if (auto* Scheduler = GetWorld() ? GetWorld()->GetSubsystem<UCombatSchedulerSubsystem>() : nullptr) Scheduler->CancelAllForOwner(this);
 	Waits.Reset(); CompletedWaits.Reset();
 	Scope = {}; Prepared = {}; Receipt = {}; Boundary = {};
+	TacticalSnapshot = {};
+	RepositionFailureAssignmentRevision = RepositionFailureSnapshotRevision = 0;
 	SynchronousResults.Reset();
 	bSubmitting = false;
 	bWakeQueued = false;

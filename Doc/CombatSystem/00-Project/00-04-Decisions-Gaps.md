@@ -278,7 +278,7 @@
 | GAP-025 | 已关闭 | 暂停、global/custom time dilation 语义 | `UCombatSchedulerSubsystem` 使用 World game time；real-time UI 不进入 Scheduler；时序/catch-up/budget/teardown 自动化通过 | 2026-08-24 / FND-007 |
 | GAP-026 | 已关闭 | 直接 Possess Demo 允许 owning client 参与单位移动，客户端 Pawn 解穿透可产生服务器未认可的视觉位移 | ADR-043 已落地：服务器 Combat AIController + Command Pawn + 全客户端 SimulatedProxy + 单一 Detour Crowd；三档 Dedicated 双客户端对撞、RPC、64/256 容量和 teardown Gate 见 [10-10](../10-Architecture/10-10-Server-Authoritative-Movement-Kickoff.md) | 2026-09-02 / SAM-008 |
 | GAP-027 | 待处理 | 交互式 Editor 内运行既有完整 Automation 后切地图，部分技能测试的 CDO 持有临时 AbilityData，导致测试 World 无法 GC | HUD-LOG-001 验证时发现；引用链指向 Default__CombatSelfHealAbility、CombatMeatHookAbility 等既有测试配置，不含日志组件。当前以独立进程执行全量 Automation、干净 Editor 执行 PIE 隔离；后续为修改 CDO 的测试增加作用域恢复。证据 `Saved/CombatLog/Editor-UI.log` 的 World Memory Leaks 引用链 | 后续测试设施维护 |
-| GAP-028 | 分阶段处理（ADR-062/063） | 阶段 A 的宿主、意图/回执和 Order 交接已实现并于 2026-09-21 通过用户验收，阶段 B 的自动感知、角色模板、独立地图和分层验证已完成，证据见 AI-002/AI-003；Utility、完整权威可见性和 AI 容量仍未实现或验证 | [配置指南](../20-Content/20-04-StateTree-AI-Guide.md) 区分当前 API 与 [10-17](../10-Architecture/10-17-StateTree-AI-Decision-System.md) 的后续方案；范围/LOS 不等于迷雾，历史 Combat 容量不等于 AI 容量 | A/B 运行证据独立归档；C 通过 Utility 准入与容量门，未完成前不关闭总缺口 |
+| GAP-028 | 分阶段处理（ADR-062～065） | 阶段 A/B/C 已验收；阶段 C 的 v2 Utility、技能候选、EQS、World 预算、独立演示与 64/128/256 AI 容量证据见 AI-002～004。完整权威可见性、可选公共空间索引、长时间 AI soak、网络损伤和 D 阶段遭遇扩展仍未实现或验证 | [配置指南](../20-Content/20-04-StateTree-AI-Guide.md) 区分当前 API 与 [10-17](../10-Architecture/10-17-StateTree-AI-Decision-System.md) 的后续方案；范围/LOS 不等于迷雾。本轮容量未触发空间索引升级，真实复杂地图若超预算再独立评审公共 Targeting | A/B/C 证据独立归档；总缺口保留到可见性/D 阶段与长期容量边界另行决策 |
 
 ### ADR-064：阶段 B 的事实快照与角色职责（2026-09-21）
 
@@ -288,6 +288,15 @@
 - 接线细化：10-17 §15.4 的 Leash 强制归位在阶段 B 由 Execute 的事件 Tick 精确取消并保留原因，经过 Resolve 记录返回请求，再由条件进入 ReturnHome；仍可中断前摇，但使用统一完成出口，避免事件转移废弃同帧终态。C++ 不选择行为分支，也不建立替代 StateTree 的层级状态机。
 - 兼容与回滚：旧显式目标树和阶段 A 场景保留；新角色资产位于 AI/Roles。移除新 Profile 即关闭自动感知；不得整体回滚仍未提交的 A 差异。
 - 验证：AI-003 已完成隐藏信息/旧生命/确定排序/归位锁定/路线恢复/三次失败退避/接管与清理的专用覆盖；`Combat.AI` 20/20、完整 `Combat.` 121/121、37 资产 0/0、角色 PIE、Dedicated 双客户端、NavMesh 构建和 Windows cook 均通过。完整迷雾、空间索引与 AI 容量仍属于后续阶段，GAP-028 不关闭。
+
+### ADR-065：阶段 C 的 v2 战术决策与 World 查询预算（2026-09-22）
+
+- 状态：accepted（AI-004 F1 0.2 本地批准，F2 PASS、Push-Ready READY；2026-09-22 用户确认阶段 C 验收完成）。
+- 选择：仅 `AIProfileVersion=2` 且显式启用战术的 Profile 使用最高效用选择。根树先按顺序处理 Blocked、Retry 和 Return，再进入 `TrySelectChildrenWithHighestUtility` 的 Cast/Reposition/Attack/Guard；硬职责不会被高分战术穿透。v1 Profile 绕过新增 World 预算，保持阶段 A/B 的同步首次感知与既有周期。
+- 技能与执行边界：候选只枚举本单位已授予的主动 AbilitySpec，并调用 `PreflightAIOrder` 读取公共合法性；评分不激活、不扣费、不开始冷却，也不复制伤害/范围真值。保留的 `TacticalLocation` 目标策略隐藏且由校验拒绝，EQS 只服务 Reposition。持续 Attack 只在规则允许时申请既有边界票据，Ready 后重新核对候选、分差和 `InterruptPreference`；真正提交仍只有 Brain 的 `IssueAutonomousOrder`。
+- 查询、权限与生命周期：Utility、感知、EQS 与 Order 提交只在服务器运行。每个战术查询同时持有 QueryId、QueryGeneration、运行/控制/生命、Scope、职责和目标生命身份；Scope 退出、换 Profile、接管、死亡、EndPlay/World teardown 先使身份失效，再精确 Abort，并以 World token exactly-once 结算。感知/EQS 在执行前申请 World 配额，生命周期清理、回执和攻击边界不受普通预算阻塞。
+- 迁移与回滚：不修改 Release、Contract、Content、GameplayTag 或 Combat Event schema；旧 v1 与 A/B 资产不迁移。移除 `/Game/Combat/Demo/AI/Tactics` 的 v2 Profile/地图即可停用新路径。Consideration 仍为 UE 实验性 API，每次引擎升级重跑三 Target/cook 准入。
+- 验证：AI-004 最终战术 21/21、AI 42/42、完整 Combat 143/143；Editor/Server/Client 三 Target、42 资产、冷回读、Tactics PIE、Dedicated 双客户端和 Windows cook 通过。64/128/256 档的感知与 EQS 请求/执行/延期、峰值在途、p95/p99 和命令数均已记录，当前未触发公共空间索引扩展；详见 [AI-004](../Specs/AI-004-statetree-tactics-capacity.spec.md)。
 
 ## 7. 模板适配风险
 

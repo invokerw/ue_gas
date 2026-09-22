@@ -2,10 +2,45 @@
 
 #include "Components/StateTreeComponent.h"
 #include "Combat/AI/CombatAITypes.h"
+#include "Combat/AI/CombatAITacticalTypes.h"
 #include "CombatAIBrainComponent.generated.h"
 
 class UCombatAIProfileData;
+class UEnvQuery;
+struct FEnvQueryResult;
 struct FCombatLogRecord;
+
+/** 一次战术 EQS 的完整本地身份；QueryId 为空时表示正在等待 World 启动配额。 */
+struct FCombatAITacticalQueryWork
+{
+	FCombatAIDecisionScope Scope;
+	uint64 Token = 0;
+	uint64 Generation = 0;
+	uint64 Activation = 0;
+	uint64 AssignmentRevision = 0;
+	uint64 SnapshotRevision = 0;
+	FName ConsumerSlot;
+	uint32 SelfLife = 0;
+	TWeakObjectPtr<ACombatUnitCharacter> Target;
+	uint32 TargetLife = 0;
+	TWeakObjectPtr<UEnvQuery> QueryTemplate;
+	double StartedAt = 0.0;
+	int32 QueryId = INDEX_NONE;
+	uint32 BudgetDeferrals = 0;
+
+	bool IsValid() const { return Generation != 0 && Activation != 0 && Scope.IsValid(); }
+	bool HasEngineQuery() const { return QueryId != INDEX_NONE; }
+};
+
+/** EQS 回调只写入此邮箱；StateTree 的下一安全回合才准备公共 Move Order。 */
+struct FCombatAITacticalQueryInbox
+{
+	FCombatAITacticalQueryWork Identity;
+	FVector Location = FVector::ZeroVector;
+	FString Diagnostic;
+	bool bReady = false;
+	bool bSuccess = false;
+};
 
 /**
  * 单位服务器上的唯一 StateTree 宿主和 Order Bridge。观察、准备和回执各自有明确所有者；不保存第二套战斗属性。
@@ -81,6 +116,30 @@ public:
 	bool HasPerceptionSchedule() const { return PerceptionSchedule.IsValid(); }
 	bool HasPerceptionSubscription() const { return PerceptionBinding.IsValid(); }
 	const UCombatAIProfileData* GetProfile() const { return Profile; }
+	/** 重建当前合法技能候选快照；只调用公共预检，不激活技能、不扣费、不提交 Order。 */
+	bool EvaluateTacticalCandidates();
+	const FCombatAITacticalSnapshot& GetTacticalSnapshot() const { return TacticalSnapshot; }
+	/** 供 StateTree Condition/Consideration 读取本轮已发布事实，不触发重新评估。 */
+	bool IsTacticalActionAvailable(ECombatAITacticalAction Action) const;
+	float GetTacticalActionScore(ECombatAITacticalAction Action) const;
+	/** 将已发布候选或已知目标冻结到现有 PreparedIntent 协议。 */
+	bool PrepareTacticalOrder(ECombatAITacticalAction Action, FName Slot, uint64 Producer);
+	/** 消费战术准备并记录活动行为起点，保持单一 Order 写入者。 */
+	bool BeginTacticalAction(FCombatAIDecisionScope Expected, FName ConsumerSlot, uint64 Activation,
+		ECombatAITacticalAction Action);
+	/** 战术执行安全回合；Cast 等待公共终态，Attack 额外处理普通边界切换。 */
+	EStateTreeRunStatus PollTacticalAction(uint64 Activation);
+	/** 按准备操作选择通用或角色回执记账。 */
+	bool ResolveTacticalReceipt();
+	/** 启动或等待一次预算化战术站位查询；同一单位不允许第二个在途查询。 */
+	bool BeginTacticalLocationQuery(FCombatAIDecisionScope Expected, FName ConsumerSlot, uint64 Activation);
+	/** 在 StateTree 安全回合消费查询邮箱，并把成功点冻结成精确 MoveToPoint 意图。 */
+	EStateTreeRunStatus PollTacticalLocationQuery(uint64 Activation);
+	/** 查询任务异常退出时只取消匹配激活，不影响后继查询。 */
+	void CancelTacticalLocationQuery(uint64 Activation);
+	/** EQS Context 只读取当前查询冻结且生命仍匹配的目标。 */
+	ACombatUnitCharacter* GetTacticalQueryTarget() const;
+	int32 GetActiveTacticalQueryCount() const { return TacticalQuery.HasEngineQuery() ? 1 : 0; }
 	/** 下列查询只提供事实，StateTree 的进入条件负责选择行为分支。 */
 	bool NeedsReturn() const;
 	bool CanEngageKnownTarget() const;
@@ -110,6 +169,9 @@ protected:
 	/** Profile 在单位初始化结束才注入，跳过引擎对构造阶段空引用的警告。 */
 	virtual void ValidateStateTreeReference() override {}
 private:
+#if WITH_DEV_AUTOMATION_TESTS
+	friend class FCombatAITacticalEQSStaleCallbackIsolationTest;
+#endif
 	/** 在启动和提交时复核服务器、Alive、已初始化 ASC 与导航控制器。 */
 	bool IsReady() const;
 	bool IsScopeCurrent(FCombatAIDecisionScope Expected) const;
@@ -124,7 +186,8 @@ private:
 	/** 启停 Brain 唯一感知服务；仅发布事实，不下命令。 */
 	void StartPerception();
 	void ClearPerception();
-	void SchedulePerception();
+	/** 安排下一次感知；非负覆盖值用于首次错峰或预算延期。 */
+	void SchedulePerception(float DelayOverride = -1.0f);
 	void SampleKnowledge();
 	/** 只接受已知且当时仍可观察的来源；不把诊断事件当作全知目标提供者。 */
 	void ObserveThreat(const FCombatLogRecord& Record);
@@ -132,6 +195,12 @@ private:
 	FVector GetDutyAnchor() const;
 	/** 从排序后的合法快照选择，返回值只在下一次采样/清理前有效。 */
 	const FCombatAIKnownTarget* SelectKnownTarget() const;
+	bool IsTacticalQueryCurrent(const FCombatAITacticalQueryWork& Identity) const;
+	bool TryStartTacticalLocationQuery(uint64 ExpectedGeneration);
+	void ScheduleTacticalLocationQueryRetry(uint64 ExpectedGeneration);
+	void OnTacticalLocationQueryFinished(TSharedPtr<FEnvQueryResult> Result, uint64 ExpectedGeneration);
+	void ClearTacticalLocationQuery();
+	void PublishTacticalLocationQueryFailure(const FCombatAITacticalQueryWork& Identity, const FString& Diagnostic);
 
 	UPROPERTY(Transient) TObjectPtr<UCombatAIProfileData> Profile;
 	UPROPERTY(Transient) FCombatAIContext Context;
@@ -162,6 +231,17 @@ private:
 	TSet<uint64> CompletedWaits;
 	FCombatAIAssignment Assignment;
 	FCombatAIKnowledgeSnapshot Knowledge;
+	FCombatAITacticalSnapshot TacticalSnapshot;
+	uint64 NextTacticalRevision = 0;
+	uint64 NextTacticalQueryGeneration = 0;
+	FCombatAITacticalQueryWork TacticalQuery;
+	FCombatAITacticalQueryInbox TacticalQueryInbox;
+	FCombatScheduleHandle TacticalQueryRetrySchedule;
+	/** 同一职责/知识快照的查询失败只尝试一次，等待下一次真实观察后再进入站位分支。 */
+	uint64 RepositionFailureAssignmentRevision = 0;
+	uint64 RepositionFailureSnapshotRevision = 0;
+	ECombatAITacticalAction ActiveTacticalAction = ECombatAITacticalAction::Guard;
+	double TacticalActionStartedAt = 0.0;
 	bool bHasAssignment = false;
 	bool bReturnRequested = false;
 	bool bRetryPending = false;
@@ -177,4 +257,5 @@ private:
 	uint64 HomeCommitCount = 0, RouteCommitCount = 0;
 	FCombatScheduleHandle PerceptionSchedule;
 	FDelegateHandle PerceptionBinding;
+	uint32 PerceptionBudgetDeferrals = 0;
 };

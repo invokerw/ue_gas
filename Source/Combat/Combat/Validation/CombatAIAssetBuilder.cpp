@@ -5,7 +5,11 @@
 #include "Combat/AI/CombatAIStateTreeSchema.h"
 #include "Combat/AI/CombatAIStateTreeTasks.h"
 #include "Combat/AI/CombatAIRoleTasks.h"
+#include "Combat/AI/CombatAITacticalTasks.h"
+#include "Combat/AI/CombatAITacticalTargetContext.h"
 #include "AssetRegistry/AssetRegistryModule.h"
+#include "EnvironmentQuery/EnvQuery.h"
+#include "EnvironmentQuery/EnvQueryOption.h"
 #include "StateTree.h"
 #include "StateTreeCompiler.h"
 #include "StateTreeCompilerLog.h"
@@ -95,6 +99,104 @@ namespace CombatAIAssetBuilder
 		Args.SaveFlags = SAVE_NoError;
 		const FString Filename = FPackageName::LongPackageNameToFilename(Asset->GetOutermost()->GetName(), FPackageName::GetAssetPackageExtension());
 		return UPackage::SavePackage(Asset->GetOutermost(), Asset, *Filename, Args);
+	}
+	/** 只保存已经注册的资产；用于一次性补齐早期阶段 C 生成物，不重复发送 AssetCreated。 */
+	bool SaveExisting(UObject* Asset)
+	{
+		if (!Asset) return false;
+		Asset->MarkPackageDirty();
+		FSavePackageArgs Args;
+		Args.TopLevelFlags = RF_Public | RF_Standalone;
+		Args.SaveFlags = SAVE_NoError;
+		const FString Filename = FPackageName::LongPackageNameToFilename(
+			Asset->GetOutermost()->GetName(), FPackageName::GetAssetPackageExtension());
+		return UPackage::SavePackage(Asset->GetOutermost(), Asset, *Filename, Args);
+	}
+	/** 填充阶段 C 根树；硬职责选择包住最后的 Utility 分支，所有结果重新回到硬选择点。 */
+	UStateTree* PopulateTacticalRootTree(UStateTree& Tree)
+	{
+		auto& Root = Initialize(Tree)->AddRootState();
+		Root.AddTask<FCombatAIDecisionScopeTask>();
+		auto& Initial = Root.AddChildState(TEXT("等待合法职责"));
+		Initial.AddTask<FCombatAIRoleWaitTask>().GetInstanceData().Wait = ECombatAIRoleWait::Assignment;
+		auto& HardSelect = Root.AddChildState(TEXT("硬优先级选择"));
+
+		auto& Blocked = HardSelect.AddChildState(TEXT("故障超限等待新职责"));
+		Blocked.AddEnterCondition<FCombatAIRoleCondition>().GetInstanceData().Fact = ECombatAIRoleFact::RetryBlocked;
+		Blocked.AddTask<FCombatAIRoleWaitTask>().GetInstanceData().Wait = ECombatAIRoleWait::NewAssignment;
+		auto& Retry = HardSelect.AddChildState(TEXT("有界故障退避"));
+		Retry.AddEnterCondition<FCombatAIRoleCondition>().GetInstanceData().Fact = ECombatAIRoleFact::RetryPending;
+		Retry.AddTask<FCombatAIRoleWaitTask>().GetInstanceData().Wait = ECombatAIRoleWait::Retry;
+
+		auto& Return = HardSelect.AddChildState(TEXT("优先归位"));
+		Return.AddEnterCondition<FCombatAIRoleCondition>().GetInstanceData().Fact = ECombatAIRoleFact::NeedReturn;
+		auto& ReturnPrepare = Return.AddChildState(TEXT("准备归位意图"));
+		auto& ReturnPrepareData = ReturnPrepare.AddTask<FCombatAIPrepareRoleTask>().GetInstanceData();
+		ReturnPrepareData.Operation = ECombatAIRoleOperation::Home;
+		ReturnPrepareData.ConsumerSlot = TEXT("TacticalHome");
+		auto& ReturnExecute = Return.AddChildState(TEXT("执行归位命令"));
+		ReturnExecute.AddTask<FCombatAIExecuteRoleTask>().GetInstanceData().ConsumerSlot = TEXT("TacticalHome");
+		auto& ReturnResolve = Return.AddChildState(TEXT("确认归位结果"));
+		ReturnResolve.AddTask<FCombatAIResolveRoleTask>();
+		ReturnPrepare.AddTransition(EStateTreeTransitionTrigger::OnStateSucceeded,
+			EStateTreeTransitionType::GotoState, &ReturnExecute);
+		ReturnPrepare.AddTransition(EStateTreeTransitionTrigger::OnStateFailed,
+			EStateTreeTransitionType::GotoState, &ReturnResolve);
+		ReturnExecute.AddTransition(EStateTreeTransitionTrigger::OnStateCompleted,
+			EStateTreeTransitionType::GotoState, &ReturnResolve);
+		ReturnResolve.AddTransition(EStateTreeTransitionTrigger::OnStateCompleted,
+			EStateTreeTransitionType::GotoState, &HardSelect);
+
+		auto& Tactical = HardSelect.AddChildState(TEXT("战术效用选择"));
+		auto& Evaluate = Tactical.AddChildState(TEXT("发布战术候选"));
+		Evaluate.AddTask<FCombatAIEvaluateTacticsTask>();
+		auto& Select = Tactical.AddChildState(TEXT("最高效用战术选择"));
+		Select.SelectionBehavior = EStateTreeStateSelectionBehavior::TrySelectChildrenWithHighestUtility;
+		auto& Execute = Tactical.AddChildState(TEXT("执行战术命令"));
+		auto& ExecuteData = Execute.AddTask<FCombatAIExecuteTacticalTask>().GetInstanceData();
+		ExecuteData.ConsumerSlot = TEXT("TacticalAction");
+		auto& Resolve = Tactical.AddChildState(TEXT("确认战术结果"));
+		Resolve.AddTask<FCombatAIResolveTacticalTask>();
+
+		const auto AddAction = [&](const TCHAR* NameValue, const ECombatAITacticalAction Action)
+		{
+			auto& Branch = Select.AddChildState(NameValue);
+			Branch.AddEnterCondition<FCombatAITacticalCondition>().GetInstanceData().Action = Action;
+			Branch.AddConsideration<FCombatAITacticalConsideration>().GetInstanceData().Action = Action;
+			auto& Prepare = Branch.AddChildState(TEXT("准备战术意图"));
+			auto& PrepareData = Action == ECombatAITacticalAction::Reposition
+				? Prepare.AddTask<FCombatAIQueryTacticalLocationTask>().GetInstanceData()
+				: Prepare.AddTask<FCombatAIPrepareTacticalTask>().GetInstanceData();
+			PrepareData.Action = Action;
+			PrepareData.ConsumerSlot = TEXT("TacticalAction");
+			Prepare.AddTransition(EStateTreeTransitionTrigger::OnStateSucceeded,
+				EStateTreeTransitionType::GotoState, &Execute);
+			Prepare.AddTransition(EStateTreeTransitionTrigger::OnStateFailed,
+				EStateTreeTransitionType::GotoState, &Resolve);
+		};
+		AddAction(TEXT("主动施法"), ECombatAITacticalAction::Cast);
+		AddAction(TEXT("战术站位"), ECombatAITacticalAction::Reposition);
+		AddAction(TEXT("普通攻击"), ECombatAITacticalAction::Attack);
+		auto& Guard = Select.AddChildState(TEXT("观察等待"));
+		Guard.AddEnterCondition<FCombatAITacticalCondition>().GetInstanceData().Action = ECombatAITacticalAction::Guard;
+		Guard.AddConsideration<FCombatAITacticalConsideration>().GetInstanceData().Action = ECombatAITacticalAction::Guard;
+		Guard.AddTask<FCombatAIRoleWaitTask>().GetInstanceData().Wait = ECombatAIRoleWait::Decision;
+
+		Initial.AddTransition(EStateTreeTransitionTrigger::OnStateSucceeded,
+			EStateTreeTransitionType::GotoState, &HardSelect);
+		Blocked.AddTransition(EStateTreeTransitionTrigger::OnStateSucceeded,
+			EStateTreeTransitionType::GotoState, &HardSelect);
+		Retry.AddTransition(EStateTreeTransitionTrigger::OnStateSucceeded,
+			EStateTreeTransitionType::GotoState, &HardSelect);
+		Evaluate.AddTransition(EStateTreeTransitionTrigger::OnStateCompleted,
+			EStateTreeTransitionType::GotoState, &Select);
+		Execute.AddTransition(EStateTreeTransitionTrigger::OnStateCompleted,
+			EStateTreeTransitionType::GotoState, &Resolve);
+		Resolve.AddTransition(EStateTreeTransitionTrigger::OnStateCompleted,
+			EStateTreeTransitionType::GotoState, &HardSelect);
+		Guard.AddTransition(EStateTreeTransitionTrigger::OnStateCompleted,
+			EStateTreeTransitionType::GotoState, &HardSelect);
+		return Compile(&Tree);
 	}
 }
 
@@ -209,6 +311,30 @@ UStateTree* FCombatAIAssetBuilder::BuildRoleRootTree(UObject* Outer, UStateTree*
 	return CombatAIAssetBuilder::Compile(Tree);
 }
 
+UStateTree* FCombatAIAssetBuilder::BuildTacticalRootTree(UObject* Outer, FName Name)
+{
+	auto* Tree = NewObject<UStateTree>(Outer, Name);
+	return CombatAIAssetBuilder::PopulateTacticalRootTree(*Tree);
+}
+
+bool FCombatAIAssetBuilder::RebuildTacticalRootTree(UStateTree* Tree)
+{
+	return Tree && CombatAIAssetBuilder::PopulateTacticalRootTree(*Tree) != nullptr;
+}
+
+UEnvQuery* FCombatAIAssetBuilder::BuildTacticalLocationQuery(UObject* Outer, const float TargetDistance, FName Name)
+{
+	if (!Outer || !FMath::IsFinite(TargetDistance) || TargetDistance <= 0.0f) return nullptr;
+	auto* Query = NewObject<UEnvQuery>(Outer, Name);
+	Query->bStripFromClientBuilds = true;
+	auto* Option = NewObject<UEnvQueryOption>(Query);
+	auto* Generator = NewObject<UCombatAITacticalLocationGenerator>(Option);
+	Generator->Distance = TargetDistance;
+	Option->Generator = Generator;
+	Query->GetOptionsMutable().Add(Option);
+	return Query;
+}
+
 bool FCombatAIAssetBuilder::ValidateRootTree(const UStateTree* Tree, FString& Diagnostic)
 {
 	const auto* Data = Tree ? Cast<UStateTreeEditorData>(Tree->EditorData) : nullptr;
@@ -226,6 +352,77 @@ UCombatAIAssetsCommandlet::UCombatAIAssetsCommandlet() { IsClient = false; IsSer
 int32 UCombatAIAssetsCommandlet::Main(const FString& Params)
 {
 #if WITH_EDITOR
+	if (FParse::Param(*Params, TEXT("Tactics")))
+	{
+		const FString Folder = TEXT("/Game/Combat/Demo/AI/Tactics/");
+		const FString TreePackage = Folder + TEXT("ST_AI_Tactical");
+		auto* Tree = LoadObject<UStateTree>(nullptr, *(TreePackage + TEXT(".ST_AI_Tactical")));
+		if (!Tree)
+		{
+			Tree = FCombatAIAssetBuilder::BuildTacticalRootTree(CreatePackage(*TreePackage), TEXT("ST_AI_Tactical"));
+			if (!CombatAIAssetBuilder::Save(Tree)) return 1;
+		}
+		else if (!FCombatAIAssetBuilder::RebuildTacticalRootTree(Tree) || !CombatAIAssetBuilder::SaveExisting(Tree))
+		{
+			return 1;
+		}
+		const FString QueryPackage = Folder + TEXT("EQS_AI_TargetOutside");
+		auto* Query = LoadObject<UEnvQuery>(nullptr, *(QueryPackage + TEXT(".EQS_AI_TargetOutside")));
+		if (!Query)
+		{
+			Query = FCombatAIAssetBuilder::BuildTacticalLocationQuery(
+				CreatePackage(*QueryPackage), 600.0f, TEXT("EQS_AI_TargetOutside"));
+			if (!CombatAIAssetBuilder::Save(Query)) return 1;
+		}
+
+		const auto Profile = [&](const TCHAR* AssetName, const TCHAR* Identity, const bool bPositioning)
+		{
+			const FString Package = Folder + AssetName;
+			auto* Result = LoadObject<UCombatAIProfileData>(nullptr, *(Package + TEXT(".") + AssetName));
+			if (!Result)
+			{
+				Result = NewObject<UCombatAIProfileData>(CreatePackage(*Package), FName(AssetName));
+				Result->DefinitionName = FName(Identity);
+				Result->RootTree = Tree;
+				Result->AIProfileVersion = 2;
+				Result->bEnableTactics = true;
+				Result->bEnablePerception = true;
+				Result->Perception.Radius = 900.0f;
+				Result->Perception.ActiveInterval = 0.2f;
+				Result->Perception.IdleInterval = 0.8f;
+				Result->bReturnAfterCombat = false;
+				if (bPositioning)
+				{
+					Result->TacticalLocationQuery = Query;
+					Result->RepositionTriggerDistance = 350.0f;
+					Result->RepositionUtility = 0.8f;
+				}
+				if (!CombatAIAssetBuilder::Save(Result)) return static_cast<UCombatAIProfileData*>(nullptr);
+			}
+			return Result;
+		};
+		auto* Hero = Profile(TEXT("DA_AI_HeroTactics"), TEXT("ai_hero_tactics"), false);
+		auto* Ranged = Profile(TEXT("DA_AI_RangedGuard"), TEXT("ai_ranged_guard"), true);
+		if (!Hero || !Ranged) return 1;
+		// 首批命令行资产在 Hero AbilitySet 完成前生成；只为空规则补一次，保留后续作者调整。
+		if (Hero->AbilityUsageRules.IsEmpty())
+		{
+			FCombatAIAbilityUsageRule Rule;
+			Rule.AbilityDefinitionId = FPrimaryAssetId(TEXT("CombatAbility"), TEXT("indicator_heal"));
+			Rule.IntentRole = ECombatAIAbilityIntentRole::Heal;
+			Rule.TargetPolicy = ECombatAIAbilityTargetPolicy::Self;
+			Rule.BaseUtility = 0.15f;
+			Rule.InterruptPreference = ECombatAIInterruptPreference::AttackBoundary;
+			Hero->AbilityUsageRules.Add(Rule);
+			if (!CombatAIAssetBuilder::SaveExisting(Hero)) return 1;
+		}
+		FString HeroDiagnostic, RangedDiagnostic;
+		const bool bValid = Hero->ValidateRuntime(HeroDiagnostic) && Ranged->ValidateRuntime(RangedDiagnostic);
+		UE_LOG(LogTemp, Display, TEXT("AITacticsAssetsReadback Result=%s Hero=%s Ranged=%s Tree=%s Query=%s HeroDetail=%s RangedDetail=%s"),
+			bValid ? TEXT("Pass") : TEXT("Fail"), *Hero->GetPathName(), *Ranged->GetPathName(), *Tree->GetPathName(),
+			*Query->GetPathName(), *HeroDiagnostic, *RangedDiagnostic);
+		return bValid ? 0 : 1;
+	}
 	if (FParse::Param(*Params, TEXT("Roles")))
 	{
 		const FString Roles = TEXT("/Game/Combat/Demo/AI/Roles/");

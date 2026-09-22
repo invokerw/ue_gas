@@ -5,6 +5,7 @@
 #include "CombatAIAssetBuilder.generated.h"
 
 class UStateTree;
+class UEnvQuery;
 enum class ECombatAIRoleOperation : uint8;
 
 #if WITH_EDITOR
@@ -21,6 +22,12 @@ struct COMBAT_API FCombatAIAssetBuilder
 	static UStateTree* BuildGuardTree(UObject* Outer, FName Name = NAME_None);
 	/** 构建有序条件根树；Duty 可为空，其余子树共享父 Scope。 */
 	static UStateTree* BuildRoleRootTree(UObject* Outer, UStateTree* Home, UStateTree* Engage, UStateTree* Duty, UStateTree* Guard, FName Name = NAME_None);
+	/** 构建 WaitAssignment → HardSelect(Blocked/Retry/Return/Tactical) 的真实战术树。 */
+	static UStateTree* BuildTacticalRootTree(UObject* Outer, FName Name = NAME_None);
+	/** 在原资产对象上重新生成并编译战术树，保持 Profile 引用不变；供受控命令行升级生成资产。 */
+	static bool RebuildTacticalRootTree(UStateTree* Tree);
+	/** 构建目标外侧单点的服务器战术 EQS；返回点仍须交给公共 Move Order。 */
+	static UEnvQuery* BuildTacticalLocationQuery(UObject* Outer, float TargetDistance, FName Name = NAME_None);
 	/** 遍历实际活动路径及链接资产，拒绝并行写入、缺失 Scope、轮询转移和引擎 Delay。 */
 	static bool ValidateRootTree(const UStateTree* Tree, FString& Diagnostic);
 };

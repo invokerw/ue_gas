@@ -1,13 +1,13 @@
 # 10-17 StateTree 通用 AI 决策系统设计
 
-> 文档修订：0.2（2026-09-20）。补齐转移仲裁、跨状态准备结果、动作边界交接、最小野怪资产示例与 Utility 版本准入。
+> 文档修订：0.2（2026-09-20）；2026-09-22 同步阶段 C 落地状态与容量证据，不改变用户已接受的设计基线。
 
-> 状态：0.2 设计已由用户评审接受；AI-002 阶段 A 与 AI-003 阶段 B 均于 2026-09-21 通过用户验收。C/D 未开始，本文不将计划等同于通过。
-> 日期：2026-09-20；设计任务：[AI-001](../Specs/AI-001-statetree-ai-design.spec.md)；实现任务：[AI-002](../Specs/AI-002-statetree-runtime.spec.md)；决策：ADR-062 / ADR-063。
+> 状态：0.2 设计已由用户评审接受；AI-002 阶段 A 与 AI-003 阶段 B 均于 2026-09-21 通过用户验收，AI-004 阶段 C 于 2026-09-22 通过用户验收；D 未开始，本文不将计划或本地 Gate 等同于用户验收。
+> 日期：2026-09-20；状态同步：2026-09-22；设计任务：[AI-001](../Specs/AI-001-statetree-ai-design.spec.md)；实现任务：[AI-002](../Specs/AI-002-statetree-runtime.spec.md)、[AI-003](../Specs/AI-003-statetree-roles.spec.md)、[AI-004](../Specs/AI-004-statetree-tactics-capacity.spec.md)；决策：ADR-062～065。
 > 技术方向：用户明确选用 Unreal StateTree。StateTree 是唯一行为编排框架，C++ 提供节点、数据服务和 Combat 适配，不另建行为状态机。
 > 事实基线：设计时的 Combat 源码、Epic UE 5.8 文档、本机安装版 UE **5.8.2 / CL 56702186** 的 StateTree 源码。本文描述完整目标架构；已落地名称、当前编排限制和资产入口以 [20-04 配置指南](../20-Content/20-04-StateTree-AI-Guide.md) 为准，其余示例仍为拟新增内容。
 
-阶段 A 已映射为 `UCombatAIBrainComponent`、`UCombatAIStateTreeSchema`、`UCombatAIProfileData` 和 Scope/Prepare/Execute/Resolve/Wait 原生节点，保留显式 Objective 树。阶段 B 增加可选范围/LOS 感知、职责输入与 PrepareRole/ExecuteRole/ResolveRole/RoleWait/RoleCondition，资产位于 `/Game/Combat/Demo/AI/Roles`。技能评分、Utility、EQS、动态 Linked Override 和大规模 AI 预算仍属后续内容。
+阶段 A 已映射为 `UCombatAIBrainComponent`、`UCombatAIStateTreeSchema`、`UCombatAIProfileData` 和 Scope/Prepare/Execute/Resolve/Wait 原生节点，保留显式 Objective 树。阶段 B 增加可选范围/LOS 感知、职责输入与 PrepareRole/ExecuteRole/ResolveRole/RoleWait/RoleCondition，资产位于 `/Game/Combat/Demo/AI/Roles`。阶段 C 增加显式 v2 Profile、HardSelect + Utility、只读技能候选、EQS 站位和 World 查询预算，资产位于 `/Game/Combat/Demo/AI/Tactics`；动态 Linked Override、完整权威可见性与 D 阶段遭遇扩展仍属后续内容。
 
 ## 1. 设计目标与适用范围
 
@@ -35,7 +35,7 @@
 | [Targeting](../../../Source/Combat/Combat/Targeting/CombatTargetingSubsystem.cpp) 的范围查询枚举 World 单位；非 None 的 VisibilityPolicy 当前被拒绝 | 首版可以复用基础范围/LOS；大规模扫描与完整可见性必须有明确接入工作 |
 | [uproject](../../../ue_gas.uproject) 启用 StateTree/GameplayStateTree；AI-002 已在 [Build.cs](../../../Source/Combat/Combat.Build.cs) 加入对应运行时模块 | 编辑器编译器依赖单独隔离；跨 Target 结果按 AI-002 实测记录 |
 
-AI-002 已补齐最小 Profile、显式 Objective、来源仲裁和 Task 生命周期适配；阶段 A 的 Context 是 `FCombatAIContext`，工作区与 Bridge 由 Brain 内部持有。完整知识快照、自动感知和下文其他角色服务仍是后续扩展。
+AI-002 已补齐最小 Profile、显式 Objective、来源仲裁和 Task 生命周期适配；阶段 A 的 Context 是 `FCombatAIContext`，工作区与 Bridge 由 Brain 内部持有。AI-003 已补齐知识快照、自动感知和角色职责，AI-004 已补齐 v2 战术、技能候选、EQS 与查询预算；完整权威可见性和 D 阶段遭遇服务仍是后续扩展。
 
 ## 3. 总体结构与职责
 
@@ -256,7 +256,7 @@ Linked Asset 的 Global Tasks 随对应执行帧工作，不能重复注册整�
 
 **版本边界：** `FStateTreeConsiderationBase` 在本机 UE 5.8.2 头文件及 [官方 API](https://dev.epicgames.com/documentation/unreal-engine/API/Plugins/StateTreeModule/FStateTreeConsiderationBase) 中仍标为实验性，不能把 Consideration 的接口稳定性当成保证。评分公式、归一化和同分规则写成无引擎执行上下文依赖的纯函数，Consideration 仅负责读输入并调用，降低升级时的迁移范围。
 
-阶段 A/B 使用 StateTree 原生有序选择和进入条件。阶段 C 先记录安装版与源码版的实际版本/CL，完成 Consideration 编译、选择结果、Linked Asset 参数、cook 及三个 Target 的兼容验证，才启用 Utility Profile。准入失败时继续使用明确的 StateTree 有序战术树或延期该 Profile，不在 C++ 偷换另一套行为决策器。每次引擎升级重新执行该门，实验性资产变更需要迁移记录。
+阶段 A/B 使用 StateTree 原生有序选择和进入条件。AI-004 已在安装版 UE 5.8.2 / CL 56702186 与源码版 UE 5.8.2 / CL 0（Compatible CL 55116800）完成 Consideration 编译、选择结果、Linked Asset、三个 Target 与 Windows cook 准入；只有显式 v2 Profile 才启用 Utility，v1 继续走有序树。准入失败时仍应拒绝或延期该 Profile，不在 C++ 偷换另一套行为决策器。每次引擎升级重新执行该门，实验性资产变更需要迁移记录。
 
 ## 7. 感知、目标选择与空间决策
 
@@ -286,7 +286,7 @@ CurrentTarget 包含弱 Actor 身份和 LifeGeneration；Actor 原地重生不�
 
 EQS 用于选择“站哪里”：撤退点、射程内位置、绕开危险区域的位置。它返回候选点/评分，最终移动仍由 Move Order 执行，并重新校验导航与职责约束。[EQS 官方概览](https://dev.epicgames.com/documentation/unreal-engine/environment-query-system-overview-in-unreal-engine)
 
-查询保存 QueryId、QueryGeneration、发起时目标/生命/运行代次及 SnapshotRevision；完成时确认仍是所需查询。战术上下文变化后旧结果失效，不能把过期点写入新目标。每只单位限制在途查询数量。
+查询同时保存 QueryId、QueryGeneration、发起时的运行/控制/自身生命、Scope、职责修订、目标弱引用/生命及 SnapshotRevision；完成时确认仍是同一引擎查询与同一业务查询。Task Exit、Scope 结束、换 Profile、接管、死亡、EndPlay 和 World teardown 先使工作区身份失效，再精确 Abort；World token 只结算一次。战术上下文变化后旧结果不能写入新目标，每只单位最多一个在途查询。
 
 若 AI 已用战术 EQS 选定点，该单位的现有 `MoveDestinationQuery` 应为空，避免 Order 再次查询后改变落点语义。需要两阶段修正时必须另定义契约，不能隐式叠加两个 EQS 选择器。
 
@@ -548,7 +548,17 @@ sequenceDiagram
 - 冷却未到、目标未变、职责未变的帧不重新求路；移动容差和目标变化阈值避免细小位置波动触发新命令。
 - 合并可重复信息，保留最终回执与关键资格变化；World 预算只组织 AI 查询，不阻塞战斗前摇/释放等已有 Scheduler 工作。
 
-**当前 QueryUnitsInRadius 的全 World 枚举是明确的扩展瓶颈。** 截断结果数组不能减少枚举和此前已执行的校验成本。先用现有接口验证正确性，再通过容量数据决定在 Targeting 公共层增加空间候选索引/有界查询入口；AI 不能用优化为由另写 Team/生命/LOS 规则。64、128、256 单位作为建议测试梯度，不能把历史 64 Unit Combat 测试写成 StateTree AI 的容量结果。
+**当前 QueryUnitsInRadius 的全 World 枚举是明确的扩展瓶颈。** 截断结果数组不能减少枚举和此前已执行的校验成本。AI-004 先以 World 配额、执行前限流和稳定错峰保持边界，AI 不能用优化为由另写 Team/生命/LOS 规则；本轮 64/128/256 专项均通过，因此没有扩展公共 Targeting 索引。该结论只覆盖当前自动化场景，真实复杂地图若超预算必须以新 Spec/ADR 评审公共空间索引。
+
+AI-004 最终容量证据（格式均为 Requests/Granted/Deferred）：
+
+| 单位数 | 感知 | EQS | 峰值在途 | EQS P95/P99 | 命令数 |
+| ---: | --- | --- | ---: | ---: | ---: |
+| 64 | 92/92/0 | 78/64/14 | 6 | 50/50 ms | 64 |
+| 128 | 281/281/0 | 304/128/176 | 7 | 50/50 ms | 128 |
+| 256 | 1246/957/289 | 1361/256/1105 | 6 | 50/50 ms | 256 |
+
+报告位于 `Saved/AI-004/Reports/Tactics-F2-R5/index.json`；这是本地工作区证据路径，不纳入版本控制。
 
 ### 14.2 调试信息
 
@@ -655,7 +665,7 @@ ST_NeutralCamp_Minimal
 
 本示例将**职责超限**配置为允许打断攻击前摇的强制归位原因：Brain 发布该职责事实，Attack 的高优先级事件转移退出自身动作并进入 RequestReturn，由这个同步 Task 记录返回请求，再到 GoalSelect；新的普通敌人不能抵消它。失去感知属于目标跟踪资格失效，Attack Task 在合法事件 Tick 中请求取消精确旧 Order，保留取消原因，消费回执后经 ResolveCombat 决定返回请求；不另配同一事件直接跳状态，不继续读取隐藏 Actor 的新位置。若动作已经有终态，先由 ResolveCombat 根据当前职责/已知事实处理，不重复取消或跳过凭证。真正死亡/撤权仍由宿主同步停止。
 
-示例不做交战中的普通换敌，也不插入施法，因此不需要演示 §8.5 的普通攻击交接；阶段 C 的英雄示例必须补测该协议。Guard 产生的首次索敌、Attack 的持续执行、MoveHome 的一次完成、失败退避和超限等待都必须在同一 Demo 中可观察。
+阶段 B 示例不做交战中的普通换敌，也不插入施法，因此不需要演示 §8.5 的普通攻击交接；AI-004 的 Hero 示例已补测“发射后边界切 Cast、Ready 后候选失效 Keep、偏好禁止切换、超时/迟到通知 exactly-once”。Guard 产生的首次索敌、Attack 的持续执行、MoveHome 的一次完成、失败退避和超限等待仍在阶段 B Demo 中可观察。
 
 资产验收至少回读五条轨迹：Guard→PrepareAttack→Attack；目标终结→ResolveCombat→PrepareHome→MoveHome→CommitHome；归位中受击仍保持 MoveHome；重复路径失败→RetryDelay→超限 WaitForObjective；死亡/玩家接管使全部动作、Scope、准备数据和订阅失效。轨迹中记录 Order 提交数、凭证确认序号和路线/返回请求变更，不能只凭角色看起来移动正常判定通过。
 
@@ -669,10 +679,12 @@ ST_NeutralCamp_Minimal
 | --- | --- | --- |
 | A：运行与执行闭环 | Brain/Schema/Context、最小 Profile 装配、PreparedIntent/完成凭证、StateTree 根树、Move/Attack/Cast/Wait 节点、Order Bridge、按句柄取消与边界交接、服务器启动/停止 | 同步回执、跨状态交接、同帧仲裁、事件唤醒、保护窗口/下一次起手、接管、死亡/teardown 自动化与最小可玩场景 |
 | B：通用角色复用 | 感知/记忆、完整 Profile、候选排序、Patrol/Guard/Lane/Return 子树、§15.4 野怪与小兵配置 | 两种角色共享节点/子树，按接线轨迹验证归位/失败/恢复路线/目标切换，资产校验通过 |
-| C：战术与容量 | 通过版本准入的 StateTree Utility、技能用途、EQS、查询预算与必要空间索引、英雄/远程守卫示例 | §6.3 的实验性 API 三 Target/cook 准入、技能保护/失败恢复、查询过期、多单位性能和 Dedicated 证据 |
+| C：战术与容量 | 通过版本准入的 StateTree Utility、技能用途、EQS、查询预算与按数据决定的必要空间索引、英雄/远程守卫示例 | §6.3 的实验性 API 三 Target/cook 准入、技能保护/失败恢复、查询过期、多单位性能和 Dedicated 证据 |
 | D：遭遇扩展 | Boss 阶段/招式配置、任务或队伍目标提供者、可选完整可见性接入 | 对应专项契约与独立验收；不自动扩大召唤物/经济等发布范围 |
 
 必须显式补齐的接口和决策：
+
+AI-002～004 已完成下列 1～4、7～8 项及第 6 项的范围/LOS、预算和三档容量部分；完整权威可见性与真实复杂地图触发后的可选空间索引仍保持开放。
 
 1. **Order 条件取消**：比较完整句柄、取消当前动作且不影响新控制者；重入/重复取消与 FIFO 关系需要实现测试。
 2. **提交来源仲裁**：在已通过安全和业务预检的服务器入口接入 AI 撤权；明确玩家追加命令、Stop 和恢复自主的产品语义。
@@ -720,9 +732,9 @@ ST_NeutralCamp_Minimal
 
 已选技术方向：StateTree 原生编排、Unit 上的唯一服务器 Brain、类型化 Context、Linked Asset 复用、单命令写入者、统一 Order Bridge、Combat Scheduler 负责 gameplay 等待。
 
-用户已接受 0.2 设计并授权开始实施。阶段 A 采用有效手动命令接管、显式恢复的语义；首期角色、归位期间重新接战规则、评分与反应延迟参数、Boss 阶段中断规则将在对应后续阶段按本方案实施和验证。
+用户已接受 0.2 设计并授权实施。阶段 A/B/C 已通过用户验收；阶段 C 的评分、技能/EQS 战术、查询预算、Hero/Ranged 示例和容量矩阵均已完成本地 Gate。Boss 阶段中断、团队目标与可选完整可见性仍留 D 或独立任务。
 
-实现必须验证：跨引擎 Target 的 StateTree 机制、任务重选/完成传播、准备意图和完成凭证、同步回执缓存、按句柄取消、执行边界交接、事件队列压力、权限交接和容量；Utility 还需实验性 API 准入。文档 Gate 通过只代表文档可供评审，不代表这些运行结果已经通过。
+实现必须验证：跨引擎 Target 的 StateTree 机制、任务重选/完成传播、准备意图和完成凭证、同步回执缓存、按句柄取消、执行边界交接、事件队列压力、权限交接和容量；Utility 还需实验性 API 准入。A/B/C 的实际运行结论分别以 AI-002/003/004 Spec 为准；本文的设计状态或文档 Gate 本身不替代那些证据，也不代表 D 已完成。
 
 ### 18.2 官方资料
 
@@ -750,6 +762,6 @@ ST_NeutralCamp_Minimal
 | `StateTree/Source/StateTreeModule/Public/StateTreeConsiderationBase.h` | Consideration 明确标注实验性，API 可能变化 |
 | `StateTree/Source/StateTreeEditorModule/Private/StateTreeEditorData.cpp`、`StateTreeCompiler.cpp` | 绑定源必须在可访问执行路径中；不能直接绑定前一兄弟状态的 Task Instance Data |
 
-项目源码另核对 `CombatAttackComponent.cpp` 的真实发射/AttackReady 事件，以及 `CombatOrderComponent.cpp` 的 HandleAttackLaunched/HandleAttackReady：目前发射后等待 ready，ready 后直接 Pump，尚无本文提出的执行边界交接。新增接口必须在后续实现中验证，本文不把设计名称作为已有 API。
+项目源码另核对 `CombatAttackComponent.cpp` 的真实发射/AttackReady 事件，以及 `CombatOrderComponent.cpp` 的 HandleAttackLaunched/HandleAttackReady。AI-002 已接入按完整 OrderHandle 匹配的边界票据、Ready 保持与 Scheduler 超时；AI-004 在 Ready 后再次复核候选、效用分差和 `InterruptPreference`，再选择 Keep 或精确取消旧攻击，重复/迟到通知不会形成第二个终结入口。
 
 项目权威与生命周期约束继续遵守 [10-01](10-01-Scope-Architecture.md)、[10-02](10-02-Scheduler-Transactions.md)、[10-03](10-03-Ability-Targeting-Blueprint.md)、[10-07](10-07-Order-Movement.md)、[公开扩展指南](../20-Content/20-03-M8-Public-Extension-Guide.md) 与 [生命周期审计](../90-History/90-16-M8-Lifecycle-Audit.md)。
