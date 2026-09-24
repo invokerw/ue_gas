@@ -72,6 +72,8 @@ void UCombatLogComponent::HandleRecord(const FCombatLogRecord& Record, const FCo
 	APlayerController* Player = Cast<APlayerController>(GetOwner());
 	if (!Player || !Player->HasAuthority() || !FMath::IsFinite(Record.AppliedAmount)
 		|| !FMath::IsFinite(Record.ServerTime) || Record.AppliedAmount < 0.0f) return;
+	const bool bOwnerScoped = ResourceChange.OwningPlayerId != 0;
+	if (bOwnerScoped && ResourceChange.OwningPlayerId != static_cast<int32>(Player->GetUniqueID())) return;
 	FCombatLogEntry Entry;
 	if (!CombatLogPresentation::Classify(Record.EventType, Entry.Category)) return;
 	if (Record.EventType == CombatTags::Event_Combat_ItemChanged
@@ -79,9 +81,11 @@ void UCombatLogComponent::HandleRecord(const FCombatLogRecord& Record, const FCo
 	if (Entry.Category == ECombatLogCategory::Healing && Record.AppliedAmount <= KINDA_SMALL_NUMBER) return;
 	ACombatUnitCharacter* Source = FindUnit(Record.SourceActorId);
 	ACombatUnitCharacter* Target = FindUnit(Record.TargetActorId);
-	if ((!Source && Record.SourceActorId != 0) || (!Target && Record.TargetActorId != 0)) return;
-	if (!Source && !Target) return;
-	if (GetNetMode() != NM_Standalone)
+	// Owner-scoped resource/inventory records may outlive their hero. Their frozen
+	// presentation data remains valid even when the Unit endpoint has already ended.
+	if (!bOwnerScoped && ((!Source && Record.SourceActorId != 0) || (!Target && Record.TargetActorId != 0))) return;
+	if (!bOwnerScoped && !Source && !Target) return;
+	if (!bOwnerScoped && GetNetMode() != NM_Standalone)
 	{
 		const AActor* ViewTarget = Player->GetViewTarget();
 		const FVector ViewLocation = Player->GetFocalLocation();
@@ -96,7 +100,7 @@ void UCombatLogComponent::HandleRecord(const FCombatLogRecord& Record, const FCo
 	Entry.TargetActorId = Record.TargetActorId;
 	Entry.SourceDefinitionId = CombatLogIdentity::ResolveDefinition(Source);
 	Entry.TargetDefinitionId = CombatLogIdentity::ResolveDefinition(Target);
-	Entry.bSourceHero = Source && Source->GetCommandingPlayerController();
+	Entry.bSourceHero = bOwnerScoped || (Source && Source->GetCommandingPlayerController());
 	Entry.bTargetHero = Target && Target->GetCommandingPlayerController();
 	Entry.EffectDefinitionId = Entry.Category == ECombatLogCategory::Status ? Record.Source.ModifierDefinitionId : Record.Source.AbilityDefinitionId;
 	if (!Entry.EffectDefinitionId.IsValid()) Entry.EffectDefinitionId = Record.Source.ModifierDefinitionId;

@@ -1,6 +1,8 @@
 # 物品系统：配置、操作与权威边界
 
-ITEM-001 在 Combat 单 Runtime Module 内增加物品实例、库存、地面拾取物和 HUD。当前物品能力作为 `combat_v4_economy_rc1` 的基础；物品自身规则仍见 [Spec](../Specs/ITEM-001-item-system.spec.md) 与 [进度台账](../00-Project/00-01-Progress-Tracker.md)，经济扩展见 [10-15](10-15-Economy-Shop-Crafting.md)、ECON-003 Spec 和 ADR-060。
+ITEM-001 在 Combat 单 Runtime Module 内增加物品实例、库存、地面拾取物和 HUD。当前物品能力作为 `combat_v4_economy_rc1` 的基础；物品自身规则仍见 [Spec](../Specs/ITEM-001-item-system.spec.md) 与 [进度台账](../00-Project/00-01-Progress-Tracker.md)，经济扩展见 [10-15](10-15-Economy-Shop-Crafting.md)、ECON-003 Spec、RES-001 和 ADR-060/066。
+
+物品实例、槽位、`Holder`、库存修订与装备效果始终属于英雄；金币及其他战略资源不属于物品库存，而由玩家的 `UCombatEconomyComponent` 账本持有。英雄切换只替换当前库存投影，不迁移物品，也不清空玩家资源。
 
 ## 1. Demo 操作
 
@@ -90,7 +92,7 @@ Pickup / Drop 进入 Order 状态机，复用 AI 导航、路径跟随、Schedul
 | ReleaseId / ContractVersion | combat_v4_economy_rc1 / 4 |
 | GameplayTag / Combat Event | 3 / 3 |
 | HUD View / 玩家日志投影 | 8 / 3 |
-| Economy Presentation | 3（金币入口 + 当前库存投影） |
+| Economy Presentation | 3（玩家金币入口 + 当前英雄库存投影） |
 | Content / Formula / RNG | 1 / 1 / 1 |
 | 能力开关 | bItemsEnabled=true，bEconomyEnabled=true；旧 `bItemsAndEconomy=false` |
 

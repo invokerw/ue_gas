@@ -1,27 +1,38 @@
 # 经济、商店与物品合成：运行时入口与配置
 
-ECON-003 在 ECON-001/002 的唯一物品实例和商店目录之上，将购买与出售收敛到当前主控单位物品栏。当前实现与验收证据以 [ECON-003 Spec](../Specs/ECON-003-direct-inventory-shop-lock.spec.md) 和 [进度台账](../00-Project/00-01-Progress-Tracker.md) 为准；运行时只有库存交易域。
+ECON-003 在 ECON-001/002 的唯一物品实例和商店目录之上，将购买与出售收敛到当前主控单位物品栏。当前实现与验收证据以 [ECON-003 Spec](../Specs/ECON-003-direct-inventory-shop-lock.spec.md) 和 [进度台账](../00-Project/00-01-Progress-Tracker.md) 为准；运行时只有库存交易域。资源与库存的所有权在 [RES-001](../Specs/RES-001-player-resource-ownership.spec.md) 中进一步明确：金币及未来战略资源属于玩家，物品实例和库存槽仍属于英雄。
 
 ## 1. 权威边界
 
 - `ACombatGameMode` 选择 `UCombatEconomyData` 与唯一 `UCombatShopData`；服务器初始化时校验并冻结本局规则。
-- `ACombatPlayerController` 持有 `UCombatEconomyComponent`。金币、经济修订和当前主控单位物品栏投影只在服务器侧有权威来源，客户端只接收 owner-only `FCombatEconomyView`。
+- `ACombatPlayerController` 持有 `UCombatEconomyComponent`。金币及未来战略资源的权威账本属于玩家连接；当前主控英雄的库存实例、`Holder` 和槽位仍由英雄 `UCombatInventoryComponent` 持有。客户端继续接收 owner-only `FCombatEconomyView` 兼容聚合，同时可通过 `GetPlayerResourceView()` / `GetHeroInventoryView()` 读取分域投影。
 - `UCombatShopData` 是目录、页面、分类、价格和递归配方的唯一来源。客户端搜索和展示不能改变服务器购买计划。
-- 英雄六装备/三背包组成唯一活动交易和合成域；购买直接消费未锁定库存组件并把结果写回库存。锁定实例不参与购买抵扣或自动合成。
+- 英雄六装备/三背包组成唯一活动交易和合成域；购买直接消费未锁定库存组件并把结果写回该英雄库存。锁定实例不参与购买抵扣或自动合成，切换英雄只切换当前库存投影，不转移物品实例。
+
+### 1.1 资源与库存所有权
+
+| 数据 | 权威宿主 | 英雄切换时 | 视图/日志边界 |
+| --- | --- | --- | --- |
+| 金币及未来战略资源 | `ACombatPlayerController` → `UCombatEconomyComponent` | 余额和资源修订保持不变；旧英雄的合法延迟奖励仍记入同一玩家 | `FCombatPlayerResourceView`；纯余额变化保留服务器诊断事件，不进入战斗 UI 日志 |
+| 物品实例、槽位、`Holder`、库存修订、锁定/装备效果 | `ACombatUnitCharacter` → `UCombatInventoryComponent` | 不迁移；当前 HUD 只投影新主控英雄 | `FCombatHeroInventoryView`；实例仍由英雄持有，库存事件可按稳定玩家 recipient 投影 |
+
+`CommandingPlayerController` 是短暂的输入/网络绑定，不再作为资源归属依据。单位被解绑后仍可保留稳定资源 owner，直到玩家 Controller teardown；这允许延迟奖励正确落账，同时不改变库存的英雄归属。
 
 ## 2. 事务与生命周期
 
 购买请求携带 `RequestId`、绑定代次、经济/库存修订和稳定 DefinitionId。服务器先做权限、限频、重放、修订、存活主控单位和空间检查，再生成购买计划；缺失叶子按递归价格收费，消费、生成最终实例、余额和修订在同一经济变更中提交。失败不会扣金币或吞组件。
 
-出售和锁定使用精确实例 Handle/Revision；解锁通过相同的服务器修订校验后，立即检查当前库存并复用稳定合成，只有完整配方才消费组件。配置的全额退款窗口和其后的折扣值由 `EconomyData` 冻结。死亡不扣金币，复活不重置余额，控制单位切换不迁移经济状态。World teardown 先关闭入口，再停止被动收入 Scheduler 并注销组件。
+出售和锁定使用精确实例 Handle/Revision；解锁通过相同的服务器修订校验后，立即检查当前库存并复用稳定合成，只有完整配方才消费组件。配置的全额退款窗口和其后的折扣值由 `EconomyData` 冻结。死亡不扣金币，复活不重置余额，控制单位切换不迁移玩家资源，也不搬动物品实例。World teardown 先关闭入口，再停止被动收入 Scheduler 并注销组件；PlayerController teardown 额外清理单位上的稳定资源 owner。
 
 被动金币按 Scheduler 提供的绝对 World Game Time 计算累计值，避免 Tick 间隔或临时测试时间源造成重复/漏发。击杀奖励、调试设置金币、购买和出售都通过同一余额修订与结构化事件入口。
+
+`Event.Combat.GoldChanged` 继续写入 `UCombatEventSubsystem` 的服务器环形诊断记录，但 `CombatLogPresentation::Classify` 不把它转换成玩家战斗记录。购买、出售、合成和英雄库存变化仍按既有物品类别与 owner-only recipient 投影；资源可观测性与战斗 UI 展示因此相互独立。
 
 ## 3. 商店 UI 与 Demo 资产
 
 `ACombatPlayerHUD` 当前只创建 `UCombatShopWidget`（以及底部 HUD/战斗记录）。商店根节点右下角常驻金币按钮，商店面板初始关闭；按钮在关闭/打开状态都可点击并开关面板，命中区域阻止世界点击穿透。商店只观察 owner-only Economy View，其中拥有数来自 `InventoryItems`。
 
-商店打开后显示搜索、基础/升级页、两列分类目录和下方固定配方区。目录、结果和直接组件都使用 48×34 横向节点；优先显示物品 Icon，缺失时回退 Glyph/名称。左键选择节点并查看其配方，右键只向 owning Controller 提交稳定 DefinitionId 的购买意图；成功结果直接进入当前库存并在顶层事务结束后自动合成。无配方时清除旧节点并留白。配方区不构造滚动容器，只保留结果节点、箭头、直接组件和连接符；Escape 只关闭商店并恢复游戏焦点。Slate 重建保持当前开关状态，Widget 重建/销毁时释放 Brush 引用并解绑经济委托。
+商店打开后显示搜索、基础/升级页、两列分类目录和下方固定配方区。目录、结果和直接组件都使用 48×34 横向节点；优先显示物品 Icon，缺失时回退 Glyph/名称。左键选择节点并查看其配方，右键只向 owning Controller 提交稳定 DefinitionId 的购买意图；成功结果直接进入当前英雄库存并在顶层事务结束后自动合成。无配方时清除旧节点并留白。配方区不构造滚动容器，只保留结果节点、箭头、直接组件和连接符；Escape 只关闭商店并恢复游戏焦点。Slate 重建保持当前开关状态，Widget 重建/销毁时释放 Brush 引用并解绑经济委托。金币按钮读取玩家资源域，库存槽读取英雄库存域。
 
 ECON-002 v0.2 以 1920×1080 为布局基准，不从参考截图读取绝对像素：商店内容宽由 v0.1 的 760 按 60% 缩为 456（屏宽 23.75%），右上锚定，顶部间距为屏高 5% 的 54，内容高按屏高 78% 四舍五入为 842。物品区固定为屏高 55% 的 594并保留滚动，合成区固定为屏高 14% 四舍五入后的 151；v0.3 将合成区改为无滚动的固定裁切区域，两区仍不会互相挤压，右边距保持 28。
 
@@ -42,4 +53,4 @@ Demo 资产仍位于 `/Game/Combat/Demo/Economy` 和 `/Game/Combat/Demo/UI`，�
 
 ## 5. 版本与回滚
 
-发布契约为 `ContractVersion=4`、`ReleaseId=combat_v4_economy_rc1`、物品与经济开关分别为 true，旧合并字段保持 false；`EconomyPresentationSchemaVersion=3` 表示金币按钮与库存投影契约。回滚必须成组恢复 Economy/Shop 源码、Item 扩展、Controller RPC、配置和文档，并同时回退客户端/服务器版本；不得只关闭开关而留下可写经济入口。
+发布契约为 `ContractVersion=4`、`ReleaseId=combat_v4_economy_rc1`、物品与经济开关分别为 true，旧合并字段保持 false；`EconomyPresentationSchemaVersion=3` 和核心 `EventSchemaVersion=3` 保持不变，分域 API 与展示 recipient 不新增客户端 wire 字段。回滚必须成组恢复 Economy/Shop 源码、Item 扩展、Controller RPC、配置和文档，并同时回退客户端/服务器版本；不得只关闭开关而留下可写经济入口。

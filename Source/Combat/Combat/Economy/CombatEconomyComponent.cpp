@@ -40,7 +40,25 @@ UCombatItemSubsystem* UCombatEconomyComponent::GetItems() const
 
 void UCombatEconomyComponent::RefreshInventoryProjection()
 {
-	if (bInitialized && !bEnding) RefreshView();
+	if (bInitialized && !bEnding) RefreshView(false, true);
+}
+
+FCombatPlayerResourceView UCombatEconomyComponent::GetPlayerResourceView() const
+{
+	FCombatPlayerResourceView View;
+	View.Gold = ReplicatedView.Gold;
+	View.GoldCap = ReplicatedView.GoldCap;
+	View.PassiveGoldPerMinute = ReplicatedView.PassiveGoldPerMinute;
+	View.ResourceRevision = ReplicatedView.EconomyRevision;
+	return View;
+}
+
+FCombatHeroInventoryView UCombatEconomyComponent::GetHeroInventoryView() const
+{
+	FCombatHeroInventoryView View;
+	View.InventoryRevision = ReplicatedView.InventoryRevision;
+	View.Items = ReplicatedView.InventoryItems;
+	return View;
 }
 
 void UCombatEconomyComponent::AdvanceRevision(int32& Revision)
@@ -89,7 +107,7 @@ bool UCombatEconomyComponent::InitializeForMatch(UCombatEconomyData* EconomyData
 	ReplicatedView.EconomyRevision = 1;
 	PassiveOriginTime = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
 	CreditedPassiveGold = 0;
-	RefreshView();
+	RefreshView(true, true);
 	StartPassiveIncome();
 	return true;
 }
@@ -133,7 +151,7 @@ bool UCombatEconomyComponent::AddGold(const int64 Amount, const FName Reason)
 	ReplicatedView.Gold += Applied;
 	AdvanceEconomyRevision();
 	EmitEconomyEvent(CombatTags::Event_Combat_GoldChanged, {}, Reason, PreviousGold);
-	RefreshView();
+	RefreshView(true, false);
 	return true;
 }
 
@@ -166,7 +184,7 @@ bool UCombatEconomyComponent::SetGoldForDebug(const int64 Amount, FString& OutEr
 		ReplicatedView.Gold = Amount;
 		AdvanceEconomyRevision();
 		EmitEconomyEvent(CombatTags::Event_Combat_GoldChanged, {}, TEXT("DebugCommand"), PreviousGold);
-		RefreshView();
+		RefreshView(true, false);
 	}
 	return true;
 #endif
@@ -472,7 +490,7 @@ bool UCombatEconomyComponent::PurchaseItem(const FPrimaryAssetId& ItemDefinition
 	{
 		EmitEconomyEvent(CombatTags::Event_Combat_ItemCrafted, PurchasedSource, TEXT("Crafted"), ReplicatedView.Gold);
 	}
-	RefreshView();
+	RefreshView(true, true);
 	return true;
 }
 
@@ -678,7 +696,7 @@ void UCombatEconomyComponent::StabilizeInventoryCrafting(UCombatInventoryCompone
 		}
 	}
 	// 自动合成会在库存修订上产生额外变化；退出事务保护后立即刷新给 HUD/RPC 使用的投影。
-	RefreshView();
+	RefreshView(false, true);
 }
 
 bool UCombatEconomyComponent::SellInventoryItem(const FCombatItemHandle ItemHandle,
@@ -739,7 +757,7 @@ bool UCombatEconomyComponent::SellInventoryItem(const FCombatItemHandle ItemHand
 	AdvanceEconomyRevision();
 	EmitEconomyEvent(CombatTags::Event_Combat_ItemSold, SoldSource, TEXT("SoldInventory"), PreviousGold);
 	Inventory->ReconcileEffects();
-	RefreshView();
+	RefreshView(true, true);
 	return true;
 }
 
@@ -775,7 +793,7 @@ bool UCombatEconomyComponent::ToggleInventoryItemLock(const FCombatItemHandle It
 	}
 	else
 	{
-		RefreshView();
+		RefreshView(false, true);
 	}
 	return true;
 }
@@ -788,7 +806,7 @@ int32 UCombatEconomyComponent::FindInventoryItemRevision(const FCombatItemHandle
 		&& Inventory->Slots.IsValidIndex(Item->Slot) && Inventory->Slots[Item->Slot] == Handle ? Item->Revision : 0;
 }
 
-void UCombatEconomyComponent::RefreshView()
+void UCombatEconomyComponent::RefreshView(const bool bResourceChanged, const bool bInventoryChanged)
 {
 	ReplicatedView.InventoryItems.Reset();
 	ReplicatedView.InventoryItems.SetNum(CombatItems::TotalSlots);
@@ -800,11 +818,16 @@ void UCombatEconomyComponent::RefreshView()
 	}
 	if (ACombatPlayerController* Player = GetCombatPlayer()) Player->ForceNetUpdate();
 	OnEconomyViewChanged.Broadcast();
+	if (bResourceChanged) OnPlayerResourceViewChanged.Broadcast();
+	if (bInventoryChanged) OnHeroInventoryViewChanged.Broadcast();
 }
 
 void UCombatEconomyComponent::OnRep_EconomyView()
 {
 	OnEconomyViewChanged.Broadcast();
+	// Replication does not expose field-level dirty information; conservatively notify both projections.
+	OnPlayerResourceViewChanged.Broadcast();
+	OnHeroInventoryViewChanged.Broadcast();
 }
 
 void UCombatEconomyComponent::EmitEconomyEvent(const FGameplayTag EventType,
@@ -812,6 +835,7 @@ void UCombatEconomyComponent::EmitEconomyEvent(const FGameplayTag EventType,
 {
 	UCombatEventSubsystem* Events = GetWorld() ? GetWorld()->GetSubsystem<UCombatEventSubsystem>() : nullptr;
 	if (!Events) return;
+	const ACombatPlayerController* Player = GetCombatPlayer();
 	FCombatLogRecord Record;
 	Record.Context = Events->CreateRootEvent();
 	Record.EventType = EventType;
@@ -819,8 +843,12 @@ void UCombatEconomyComponent::EmitEconomyEvent(const FGameplayTag EventType,
 	Record.ItemAction = Action;
 	Record.GoldDelta = ReplicatedView.Gold - PreviousGold;
 	Record.GoldBalance = ReplicatedView.Gold;
-	if (const ACombatUnitCharacter* Unit = GetCombatPlayer() ? GetCombatPlayer()->GetCommandedUnit() : nullptr)
+	// Gold and other player resources have no hero endpoint. Inventory transactions retain
+	// the current hero endpoint for attribution, while their recipient remains the player.
+	if (EventType != CombatTags::Event_Combat_GoldChanged
+		&& Player && Player->GetCommandedUnit())
 	{
+		const ACombatUnitCharacter* Unit = Player->GetCommandedUnit();
 		Record.SourceActorId = Unit->GetUniqueID();
 		Record.TargetActorId = Unit->GetUniqueID();
 		Record.UnitLifeGeneration = Unit->GetLifeGeneration();
@@ -828,7 +856,9 @@ void UCombatEconomyComponent::EmitEconomyEvent(const FGameplayTag EventType,
 	Record.Diagnostic = FString::Printf(TEXT("Action=%s GoldDelta=%lld Gold=%lld EconomyRevision=%d InventoryRevision=%d"),
 		*Action.ToString(), static_cast<long long>(Record.GoldDelta), static_cast<long long>(Record.GoldBalance),
 		ReplicatedView.EconomyRevision, ReplicatedView.InventoryRevision);
-	Events->Emit(Record);
+	FCombatLogResourceChange Presentation;
+	Presentation.OwningPlayerId = Player ? static_cast<int32>(Player->GetUniqueID()) : 0;
+	Events->Emit(Record, Presentation);
 }
 
 void UCombatEconomyComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)

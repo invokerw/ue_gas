@@ -87,6 +87,8 @@ DECLARE_MULTICAST_DELEGATE_OneParam(FOnCombatLogRecord, const FCombatLogRecord&)
 /** 同步展示观察者的可选资源快照；仅随 Emit 调用存活，不进入核心日志 schema 或持有 gameplay 对象。 */
 struct COMBAT_API FCombatLogResourceChange
 {
+	/** 仅用于玩家展示路由；不属于核心事件 schema，也不进入复制 FastArray。 */
+	int32 OwningPlayerId = 0;
 	bool bHasHealthChange = false;
 	float PreviousHealth = 0.0f;
 	float NewHealth = 0.0f;

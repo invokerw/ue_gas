@@ -192,7 +192,7 @@ FCombatDamageResult UCombatDamageSubsystem::DealDamage(const FCombatDamageReques
 				if (Request.Target->GetUnitData()->GoldReward > 0)
 				{
 					if (ACombatPlayerController* KillerPlayer = Cast<ACombatPlayerController>(
-						Request.Source->GetCommandingPlayerController()))
+						Request.Source->GetResourceOwnerPlayerController()))
 					{
 						if (UCombatEconomyComponent* Economy = KillerPlayer->GetCombatEconomyComponent())
 						{

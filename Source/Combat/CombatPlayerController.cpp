@@ -10,6 +10,7 @@
 #include "Engine/LocalPlayer.h"
 #include "Engine/GameViewportClient.h"
 #include "Engine/Console.h"
+#include "EngineUtils.h"
 #include "UnrealClient.h"
 #include "Engine/World.h"
 #include "Framework/Application/SlateApplication.h"
@@ -65,6 +66,10 @@ bool ACombatPlayerController::SetCommandedUnitAuthority(ACombatUnitCharacter* Ne
 	}
 	if (CommandedUnit == NewUnit)
 	{
+		if (NewUnit && !NewUnit->SetResourceOwnerPlayerController(this))
+		{
+			return false;
+		}
 		if (NewUnit && NewUnit->GetCommandingPlayerController() != this
 			&& !NewUnit->SetCommandingPlayerController(this))
 		{
@@ -171,7 +176,24 @@ void ACombatPlayerController::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	ResetDestinationInput();
 	if (HasAuthority())
 	{
+		ACombatUnitCharacter* ResourceOwnedUnit = CommandedUnit;
 		SetCommandedUnitAuthority(nullptr);
+		if (ResourceOwnedUnit && ResourceOwnedUnit->GetResourceOwnerPlayerController() == this)
+		{
+			ResourceOwnedUnit->SetResourceOwnerPlayerController(nullptr);
+		}
+		// A hero may have been unbound before teardown; clear any remaining stable
+		// resource anchors owned by this player without changing other players' units.
+		if (UWorld* World = GetWorld())
+		{
+			for (TActorIterator<ACombatUnitCharacter> It(World); It; ++It)
+			{
+				if (It->GetResourceOwnerPlayerController() == this)
+				{
+					It->SetResourceOwnerPlayerController(nullptr);
+				}
+			}
+		}
 	}
 	Super::EndPlay(EndPlayReason);
 }

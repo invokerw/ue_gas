@@ -103,6 +103,13 @@ public:
 	UFUNCTION(BlueprintPure, Category="Combat|Network", meta=(DisplayName="获取指挥玩家", ToolTip="返回通过 Unit Owner 建立 owning connection 的 PlayerController。"))
 	APlayerController* GetCommandingPlayerController() const;
 	/**
+	 * 在服务器记录本单位当前归属的玩家资源账本。该归属独立于短暂的主控英雄绑定：
+	 * 英雄切换时不会清除，玩家 Controller teardown 时才显式清理。
+	 */
+	bool SetResourceOwnerPlayerController(APlayerController* NewOwner);
+	/** 返回服务器记录的稳定玩家资源归属；没有归属或非服务器端时返回 nullptr。 */
+	APlayerController* GetResourceOwnerPlayerController() const;
+	/**
 	 * 验证服务器 AIController、PathFollowing、SimulatedProxy 与单一 Crowd/RVO 不变量。
 	 * @param OutDiagnostic 始终返回包含 Controller/Owner/Role/Crowd/Collision/LifeGeneration 的诊断文本。
 	 */
@@ -260,6 +267,9 @@ private:
 	/** 服务器生命周期锚点；Pawn 销毁或 Controller 重建时不依赖 Actor Owner 的引擎回调顺序。 */
 	UPROPERTY(Transient)
 	TWeakObjectPtr<APlayerController> CommandingPlayerController;
+	/** 玩家资源归属锚点；与 CommandingPlayerController 分离，避免英雄切换丢失金币奖励。 */
+	UPROPERTY(Transient)
+	TWeakObjectPtr<APlayerController> ResourceOwnerPlayerController;
 	/** owning client 最近一次收到的安全层与逐项业务结果。 */
 	UPROPERTY(Transient)
 	FCombatOrderBatchResult LastOrderBatchResult;

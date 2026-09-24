@@ -14,10 +14,10 @@ class UCombatInventoryComponent;
 class UCombatShopData;
 
 /**
- * PlayerController 持有的服务器权威经济状态。金币跟随连接，购买和出售都直接作用于
- * 当前主控单位九格库存；经济组件不再维护第二个交易容器。
+ * PlayerController 持有的服务器权威玩家资源账本。金币和后续战略资源跟随玩家连接；
+ * 购买和出售仍直接作用于当前主控英雄的九格库存，经济组件只保存该库存的拥有者投影。
  */
-UCLASS(ClassGroup=(Combat), meta=(BlueprintSpawnableComponent, DisplayName="战斗经济组件", ToolTip="管理本局单一金币、商店事务和当前主控单位物品栏交付。"))
+UCLASS(ClassGroup=(Combat), meta=(BlueprintSpawnableComponent, DisplayName="战斗经济组件", ToolTip="管理玩家级战略资源、商店事务和当前主控英雄物品栏投影。"))
 class COMBAT_API UCombatEconomyComponent : public UActorComponent
 {
 	GENERATED_BODY()
@@ -44,8 +44,16 @@ public:
 		int32 ExpectedEconomyRevision, int32 ExpectedInventoryRevision, bool& OutLocked, FGameplayTag& OutFailure);
 	UFUNCTION(BlueprintPure, Category="Combat|Economy", meta=(DisplayName="获取金币"))
 	int64 GetGold() const { return ReplicatedView.Gold; }
+	/** 返回玩家级战略资源快照；资源归 PlayerController，不随英雄切换或英雄销毁转移。 */
+	UFUNCTION(BlueprintPure, Category="Combat|Economy", meta=(DisplayName="获取玩家资源"))
+	FCombatPlayerResourceView GetPlayerResourceView() const;
+	/** 返回当前主控英雄库存快照；物品实例仍由该英雄的库存组件持有。 */
+	UFUNCTION(BlueprintPure, Category="Combat|Economy", meta=(DisplayName="获取英雄库存"))
+	FCombatHeroInventoryView GetHeroInventoryView() const;
 	UFUNCTION(BlueprintPure, Category="Combat|Economy", meta=(DisplayName="获取经济修订"))
 	int32 GetEconomyRevision() const { return ReplicatedView.EconomyRevision; }
+	UFUNCTION(BlueprintPure, Category="Combat|Economy", meta=(DisplayName="获取玩家资源修订"))
+	int32 GetPlayerResourceRevision() const { return ReplicatedView.EconomyRevision; }
 	UFUNCTION(BlueprintPure, Category="Combat|Economy", meta=(DisplayName="获取物品栏修订", ToolTip="返回当前主控单位九槽物品栏的服务器投影修订。"))
 	int32 GetInventoryRevision() const { return ReplicatedView.InventoryRevision; }
 	/** 返回当前主控单位库存实例的当前修订；不存在或不属于该单位时返回 0。 */
@@ -60,6 +68,10 @@ public:
 
 	UPROPERTY(BlueprintAssignable, Category="Combat|Economy", meta=(DisplayName="经济界面变化"))
 	FCombatEconomyViewChangedDelegate OnEconomyViewChanged;
+	UPROPERTY(BlueprintAssignable, Category="Combat|Economy", meta=(DisplayName="玩家资源变化"))
+	FCombatPlayerResourceViewChangedDelegate OnPlayerResourceViewChanged;
+	UPROPERTY(BlueprintAssignable, Category="Combat|Economy", meta=(DisplayName="英雄库存变化"))
+	FCombatHeroInventoryViewChangedDelegate OnHeroInventoryViewChanged;
 
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
@@ -91,7 +103,7 @@ private:
 	void StartPassiveIncome();
 	/** 按调度器提供的 World Game Time 补齐绝对累计收入；无上下文时回退到当前 World 时间。 */
 	void ApplyPassiveIncome(double CurrentGameTime = -1.0);
-	void RefreshView();
+	void RefreshView(bool bResourceChanged = true, bool bInventoryChanged = true);
 	void EmitEconomyEvent(FGameplayTag EventType, const FCombatSourceContext& Source,
 		FName Action, int64 PreviousGold) const;
 	void AdvanceEconomyRevision();

@@ -16,6 +16,8 @@
 #include "Combat/Items/CombatInventoryComponent.h"
 #include "Combat/Items/CombatItemData.h"
 #include "Combat/Items/CombatItemSubsystem.h"
+#include "Combat/Log/CombatEventSubsystem.h"
+#include "Combat/Log/CombatLogComponent.h"
 #include "Combat/Network/CombatNetworkSecuritySubsystem.h"
 #include "Combat/Scheduling/CombatSchedulerSubsystem.h"
 #include "Combat/Tests/CombatAutomationWorldFixture.h"
@@ -195,6 +197,15 @@ bool FCombatEconomyTransactionTest::RunTest(const FString& Parameters)
 		Branch->GetPrimaryAssetId(), Economy->GetEconomyRevision(), Economy->GetInventoryRevision(), ResultHandle, Failure));
 	TestEqual(TEXT("Basic purchase charges one price"), Economy->GetGold(), int64(500));
 	TestEqual(TEXT("Basic purchase enters the commanded inventory"), Unit->GetCombatInventoryComponent()->GetItemCount(), 1);
+	const FCombatPlayerResourceView PlayerResource = Economy->GetPlayerResourceView();
+	TestEqual(TEXT("Player resource view carries the balance"), PlayerResource.Gold, int64(500));
+	const FCombatHeroInventoryView HeroInventory = Economy->GetHeroInventoryView();
+	TestEqual(TEXT("Hero inventory view carries the inventory revision"), HeroInventory.InventoryRevision,
+		Economy->GetInventoryRevision());
+	TestTrue(TEXT("Hero inventory view exposes the purchased item"), HeroInventory.Items.ContainsByPredicate(
+		[ResultHandle](const FCombatItemView& View) { return View.Handle == ResultHandle; }));
+	const UCombatItemInstance* HeldItem = World.GetSubsystem<UCombatItemSubsystem>()->FindItem(ResultHandle);
+	TestTrue(TEXT("Purchased item holder remains the hero"), HeldItem && HeldItem->GetHolder() == Unit);
 	TestTrue(TEXT("A second purchased component enters inventory"), Economy->PurchaseItem(
 		Branch->GetPrimaryAssetId(), Economy->GetEconomyRevision(), Economy->GetInventoryRevision(), ResultHandle, Failure));
 	TestEqual(TEXT("Second component is charged independently"), Economy->GetGold(), int64(400));
@@ -560,6 +571,92 @@ bool FCombatEconomyKillAndDeathTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("Self lethal damage still uses normal death pipeline"),
 		World.GetSubsystem<UCombatDamageSubsystem>()->DealDamage(Suicide).bSuccess);
 	TestEqual(TEXT("Self death neither rewards nor deducts gold"), KillerPlayer->GetCombatEconomyComponent()->GetGold(), int64(750));
+	return true;
+}
+
+/** 玩家切换英雄后，旧英雄已经提交的延迟击杀仍应归属于同一玩家，而不是随指挥绑定丢失。 */
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FCombatEconomyKillRewardSurvivesHeroSwitchTest,
+	"Combat.Economy.KillRewardSurvivesHeroSwitch", CombatEconomyTests::Flags)
+bool FCombatEconomyKillRewardSurvivesHeroSwitchTest::RunTest(const FString& Parameters)
+{
+	(void)Parameters;
+	FCombatAutomationWorldFixture Fixture;
+	if (!Fixture.IsValid()) return false;
+	UWorld& World = *Fixture.GetWorld();
+	ACombatPlayerController* KillerPlayer = World.SpawnActor<ACombatPlayerController>();
+	ACombatPlayerController* VictimPlayer = World.SpawnActor<ACombatPlayerController>();
+	UCombatItemData* Leaf = CombatEconomyTests::MakeLeaf(KillerPlayer, TEXT("switch_reward_leaf"), 100);
+	UCombatShopData* Shop = CombatEconomyTests::MakeShop(KillerPlayer, {Leaf});
+	UCombatEconomyData* Rules = CombatEconomyTests::MakeRules(KillerPlayer);
+	Rules->PassiveGoldPerMinute = 0;
+	FString Error;
+	if (!KillerPlayer || !VictimPlayer
+		|| !KillerPlayer->GetCombatEconomyComponent()->InitializeForMatch(Rules, Shop, false, Error)
+		|| !VictimPlayer->GetCombatEconomyComponent()->InitializeForMatch(Rules, Shop, false, Error)) return false;
+	ACombatUnitCharacter* OriginalHero = CombatEconomyTests::SpawnUnit(World, KillerPlayer, TEXT("switch_original"));
+	ACombatUnitCharacter* ReplacementHero = CombatEconomyTests::SpawnUnit(World, nullptr, TEXT("switch_replacement"));
+	ACombatUnitCharacter* Victim = CombatEconomyTests::SpawnUnit(World, VictimPlayer, TEXT("switch_victim"), 150);
+	if (!TestNotNull(TEXT("Original hero"), OriginalHero) || !TestNotNull(TEXT("Replacement hero"), ReplacementHero)
+		|| !TestNotNull(TEXT("Victim"), Victim)) return false;
+	TestTrue(TEXT("Original hero records the stable player resource owner"),
+		OriginalHero->GetResourceOwnerPlayerController() == KillerPlayer);
+	if (!TestTrue(TEXT("Switching hero succeeds"), KillerPlayer->SetCommandedUnitAuthority(ReplacementHero))) return false;
+	TestNull(TEXT("Original hero no longer has the transient command owner"), OriginalHero->GetCommandingPlayerController());
+	TestTrue(TEXT("Original hero keeps the stable player resource owner after switch"),
+		OriginalHero->GetResourceOwnerPlayerController() == KillerPlayer);
+	TestTrue(TEXT("Replacement hero is assigned to the same player resource owner"),
+		ReplacementHero->GetResourceOwnerPlayerController() == KillerPlayer);
+
+	FCombatDamageRequest Lethal;
+	Lethal.Source = OriginalHero;
+	Lethal.Target = Victim;
+	Lethal.Amount = 100000.0f;
+	Lethal.DamageType = ECombatDamageType::Pure;
+	TestTrue(TEXT("Delayed lethal damage succeeds"), World.GetSubsystem<UCombatDamageSubsystem>()->DealDamage(Lethal).bSuccess);
+	TestEqual(TEXT("Reward follows the player after hero switch"), KillerPlayer->GetCombatEconomyComponent()->GetGold(), int64(750));
+	TestTrue(TEXT("Player teardown succeeds"), KillerPlayer->Destroy());
+	TestNull(TEXT("Player teardown clears the old hero resource owner"), OriginalHero->GetResourceOwnerPlayerController());
+	TestNull(TEXT("Player teardown clears the current hero resource owner"), ReplacementHero->GetResourceOwnerPlayerController());
+	return true;
+}
+
+/** 玩家资源仍需权威落账并保留服务器事件，但纯余额变化不属于任何玩家的战斗 UI 日志。 */
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FCombatEconomyPlayerResourceLogProjectionTest,
+	"Combat.Economy.PlayerResourceChangeIsNotProjectedToCombatLog", CombatEconomyTests::Flags)
+bool FCombatEconomyPlayerResourceLogProjectionTest::RunTest(const FString& Parameters)
+{
+	(void)Parameters;
+	FCombatAutomationWorldFixture Fixture;
+	if (!Fixture.IsValid()) return false;
+	UWorld& World = *Fixture.GetWorld();
+	ACombatPlayerController* Owner = World.SpawnActor<ACombatPlayerController>();
+	ACombatPlayerController* Other = World.SpawnActor<ACombatPlayerController>();
+	if (!Owner || !Other) return false;
+	if (!Owner->HasActorBegunPlay()) Owner->DispatchBeginPlay();
+	if (!Other->HasActorBegunPlay()) Other->DispatchBeginPlay();
+	UCombatItemData* Leaf = CombatEconomyTests::MakeLeaf(Owner, TEXT("resource_log_leaf"), 100);
+	UCombatShopData* Shop = CombatEconomyTests::MakeShop(Owner, {Leaf});
+	UCombatEconomyData* Rules = CombatEconomyTests::MakeRules(Owner);
+	Rules->PassiveGoldPerMinute = 0;
+	FString Error;
+	if (!Owner->GetCombatEconomyComponent()->InitializeForMatch(Rules, Shop, false, Error)
+		|| !Other->GetCombatEconomyComponent()->InitializeForMatch(Rules, Shop, false, Error)) return false;
+	UCombatLogComponent* OwnerLog = Owner->FindComponentByClass<UCombatLogComponent>();
+	UCombatLogComponent* OtherLog = Other->FindComponentByClass<UCombatLogComponent>();
+	if (!TestNotNull(TEXT("Owner log component"), OwnerLog) || !TestNotNull(TEXT("Other log component"), OtherLog)) return false;
+	TestEqual(TEXT("Owner combat log starts empty"), OwnerLog->GetEntries().Num(), 0);
+	TestEqual(TEXT("Other combat log starts empty"), OtherLog->GetEntries().Num(), 0);
+	TestTrue(TEXT("Player resource mutation succeeds without a commanded hero"),
+		Owner->GetCombatEconomyComponent()->AddGold(25, TEXT("ResourceOwnershipTest")));
+	TestEqual(TEXT("Player resource balance still changes exactly"),
+		Owner->GetCombatEconomyComponent()->GetGold(), int64(625));
+	const TArray<FCombatLogRecord>& Records = World.GetSubsystem<UCombatEventSubsystem>()->GetRecentRecords();
+	if (!TestFalse(TEXT("Server diagnostic event is retained"), Records.IsEmpty())) return false;
+	TestTrue(TEXT("Server diagnostic event keeps the resource type"),
+		Records.Last().EventType == CombatTags::Event_Combat_GoldChanged);
+	TestEqual(TEXT("Server diagnostic event keeps the exact delta"), Records.Last().GoldDelta, int64(25));
+	TestEqual(TEXT("Owner combat UI omits pure resource changes"), OwnerLog->GetEntries().Num(), 0);
+	TestEqual(TEXT("Other combat UI also omits pure resource changes"), OtherLog->GetEntries().Num(), 0);
 	return true;
 }
 

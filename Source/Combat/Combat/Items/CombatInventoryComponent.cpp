@@ -55,7 +55,7 @@ bool UCombatInventoryComponent::GiveItem(UCombatItemData* Definition, int32 Quan
 	}
 	if (bAccepted)
 	{
-		if (ACombatPlayerController* Player = Cast<ACombatPlayerController>(Unit->GetCommandingPlayerController()))
+		if (ACombatPlayerController* Player = Cast<ACombatPlayerController>(Unit->GetResourceOwnerPlayerController()))
 		{
 			if (UCombatEconomyComponent* Economy = Player->GetCombatEconomyComponent())
 			{
@@ -166,7 +166,7 @@ bool UCombatInventoryComponent::TryPickup(FCombatItemHandle Handle, int32 Expect
 	}
 	if (bAccepted)
 	{
-		if (ACombatPlayerController* Player = Cast<ACombatPlayerController>(Unit->GetCommandingPlayerController()))
+		if (ACombatPlayerController* Player = Cast<ACombatPlayerController>(Unit->GetResourceOwnerPlayerController()))
 		{
 			if (UCombatEconomyComponent* Economy = Player->GetCombatEconomyComponent())
 			{
@@ -609,16 +609,21 @@ void UCombatInventoryComponent::NotifyChanged(UCombatItemInstance* Item, const T
 		Record.AppliedAmount = Item->Quantity;
 		Record.Diagnostic = FString::Printf(TEXT("%s Item=%s Definition=%s Slot=%d Revision=%d Quantity=%d Charges=%d"),
 			Action, *Item->Handle.ToString(), *Item->Definition->GetPrimaryAssetId().ToString(), Item->Slot, Item->Revision, Item->Quantity, Item->Charges);
-		Events->Emit(Record);
+		FCombatLogResourceChange Presentation;
+		if (APlayerController* ResourceOwner = Unit->GetResourceOwnerPlayerController())
+		{
+			Presentation.OwningPlayerId = static_cast<int32>(ResourceOwner->GetUniqueID());
+		}
+		Events->Emit(Record, Presentation);
 	}
 	if (Unit->GetCombatUnitViewComponent()) Unit->GetCombatUnitViewComponent()->RefreshHUDOwnerView();
 	Unit->ForceNetUpdate();
-	if (ACombatPlayerController* Player = Cast<ACombatPlayerController>(Unit->GetCommandingPlayerController()))
+	if (ACombatPlayerController* Player = Cast<ACombatPlayerController>(Unit->GetResourceOwnerPlayerController()))
 	{
 		if (UCombatEconomyComponent* Economy = Player->GetCombatEconomyComponent();
 			Economy && Economy->bInitialized && !Economy->bMutating && !Economy->bEnding)
 		{
-			Economy->RefreshView();
+			Economy->RefreshView(false, true);
 		}
 	}
 }

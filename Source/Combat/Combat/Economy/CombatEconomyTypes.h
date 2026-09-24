@@ -51,27 +51,51 @@ struct COMBAT_API FCombatEconomyResult
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Economy", meta=(DisplayName="物品定义", ToolTip="购买目标或结果的稳定定义 ID。")) FPrimaryAssetId ItemDefinitionId;
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Economy", meta=(DisplayName="结果实例", ToolTip="购买成功后的稳定物品句柄；出售或锁定不适用时为空。")) FCombatItemHandle ItemHandle;
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Economy", meta=(DisplayName="金币变化", ToolTip="本次事务造成的金币差值；购买为负、出售为正。")) int64 GoldDelta = 0;
-	UPROPERTY(BlueprintReadOnly, Category="Combat|Economy", meta=(DisplayName="经济修订", ToolTip="事务结束后的服务器经济修订。")) int32 EconomyRevision = 0;
+	UPROPERTY(BlueprintReadOnly, Category="Combat|Economy", meta=(DisplayName="玩家资源修订", ToolTip="事务结束后的服务器玩家资源修订。")) int32 EconomyRevision = 0;
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Economy", meta=(DisplayName="物品栏修订", ToolTip="事务结束后的当前主控单位物品栏修订。")) int32 InventoryRevision = 0;
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Economy", meta=(DisplayName="锁定状态", ToolTip="锁定切换成功后的服务器权威状态；其他事务不适用时为 false。")) bool bLocked = false;
 };
 
-	/** 仅拥有者复制的金币、关卡规则和当前库存投影。 */
+/** 仅拥有者复制的玩家级战略资源快照。库存不属于该快照。 */
+USTRUCT(BlueprintType)
+struct COMBAT_API FCombatPlayerResourceView
+{
+	GENERATED_BODY()
+
+	UPROPERTY(BlueprintReadOnly, Category="Combat|Economy", meta=(DisplayName="金币", ToolTip="服务器权威、绑定到玩家连接而不是某个英雄的金币余额。")) int64 Gold = 0;
+	UPROPERTY(BlueprintReadOnly, Category="Combat|Economy", meta=(DisplayName="金币上限", ToolTip="当前关卡在对局开始时冻结的玩家资源上限。")) int64 GoldCap = 0;
+	UPROPERTY(BlueprintReadOnly, Category="Combat|Economy", meta=(DisplayName="每分钟被动金币", ToolTip="当前关卡在对局开始时冻结的玩家级被动收入。")) int64 PassiveGoldPerMinute = 0;
+	UPROPERTY(BlueprintReadOnly, Category="Combat|Economy", meta=(DisplayName="资源修订", ToolTip="玩家资源变化时单调递增并跳过 0。")) int32 ResourceRevision = 0;
+};
+
+/** 仅拥有者复制的当前英雄库存投影；物品实例和 Holder 仍由英雄库存组件持有。 */
+USTRUCT(BlueprintType)
+struct COMBAT_API FCombatHeroInventoryView
+{
+	GENERATED_BODY()
+
+	UPROPERTY(BlueprintReadOnly, Category="Combat|Economy", meta=(DisplayName="物品栏修订", ToolTip="当前英雄库存变化时单调递增并跳过 0。")) int32 InventoryRevision = 0;
+	UPROPERTY(BlueprintReadOnly, Category="Combat|Economy", meta=(DisplayName="物品栏物品", ToolTip="当前主控英雄九槽拥有者快照；物品实例仍属于英雄。")) TArray<FCombatItemView> Items;
+};
+
+/** 仅拥有者复制的兼容聚合快照；新的代码应按玩家资源和英雄库存分别读取。 */
 USTRUCT(BlueprintType)
 struct COMBAT_API FCombatEconomyView
 {
 	GENERATED_BODY()
 
-	UPROPERTY(BlueprintReadOnly, Category="Combat|Economy", meta=(DisplayName="金币", ToolTip="服务器权威的单一金币余额。")) int64 Gold = 0;
+	UPROPERTY(BlueprintReadOnly, Category="Combat|Economy", meta=(DisplayName="金币", ToolTip="服务器权威、绑定到玩家而不是英雄的单一金币余额。")) int64 Gold = 0;
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Economy", meta=(DisplayName="金币上限", ToolTip="当前关卡在对局开始时冻结的金币上限。")) int64 GoldCap = 0;
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Economy", meta=(DisplayName="每分钟被动金币", ToolTip="当前关卡在对局开始时冻结的每分钟被动收入。")) int64 PassiveGoldPerMinute = 0;
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Economy", meta=(DisplayName="经济修订", ToolTip="金币变化时单调递增并跳过 0。")) int32 EconomyRevision = 0;
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Economy", meta=(DisplayName="物品栏修订", ToolTip="当前主控单位物品栏变化时单调递增并跳过 0。")) int32 InventoryRevision = 0;
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Economy", meta=(DisplayName="商店目录", ToolTip="当前关卡唯一商店的稳定定义 ID，客户端据此加载只读目录。")) FPrimaryAssetId ShopDefinitionId;
-	UPROPERTY(BlueprintReadOnly, Category="Combat|Economy", meta=(DisplayName="物品栏物品", ToolTip="当前主控单位九槽拥有者快照；空槽为无效物品，锁定状态随实例复制。")) TArray<FCombatItemView> InventoryItems;
+	UPROPERTY(BlueprintReadOnly, Category="Combat|Economy", meta=(DisplayName="物品栏物品", ToolTip="当前主控英雄九槽拥有者快照；空槽为无效物品，锁定状态随实例复制，物品仍属于英雄。")) TArray<FCombatItemView> InventoryItems;
 
 	bool operator==(const FCombatEconomyView& Other) const;
 };
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FCombatEconomyViewChangedDelegate);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FCombatPlayerResourceViewChangedDelegate);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FCombatHeroInventoryViewChangedDelegate);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FCombatEconomyResultDelegate, FCombatEconomyResult, Result);

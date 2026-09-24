@@ -270,7 +270,7 @@
 | --- | --- | --- | --- | --- |
 | GAP-014 | 已关闭（ADR-036） | Aura 没有 owner/target 生命周期 | 每 World registry、Scheduler Coalesce、统一 Targeting 与普通 child Modifier reconcile；完整规则见 [90-11 §4](../90-History/90-11-M6-Content-Decision.md#4-aura关闭-gap-014-的基线) | 2026-08-26 / EXT-601 |
 | GAP-015 | 明确延期（ADR-041） | Summon/illusion 的 Owner、Team、ASC、Order 权限 | 不属于 v1；发布契约固定 `bSummonsAndIllusions=false`。引入前新增独立 ADR，冻结独立 Unit/ASC、CommandingController 与 gameplay owner、Team 继承和 teardown Gate | post-v1 / 引入召唤物前 |
-| GAP-017 | 部分解除（ADR-049、ADR-055、ADR-059、ADR-060） | 物品、背包、技能点、天赋和经济 | 经验与技能点按 ADR-049 接入成长组件；物品/背包按 ADR-055 进入 v2 基础；经济按 ADR-060 收敛到 `combat_v4_economy_rc1` 的单一库存交易域。天赋仍延期；旧合并字段保持 false，物品与经济开关分别表达 | post-v1 / v4 |
+| GAP-017 | 部分解除（ADR-049、ADR-055、ADR-059、ADR-060、ADR-066） | 物品、背包、技能点、天赋和经济 | 经验与技能点按 ADR-049 接入成长组件；物品/背包按 ADR-055 进入 v2 基础；经济按 ADR-060/066 明确为玩家资源账本 + 英雄库存交易域。天赋仍延期；旧合并字段保持 false，物品与经济开关分别表达 | post-v1 / v4 |
 | GAP-018 | 已关闭（ADR-040） | 目标容量/帧/带宽预算和池化触发阈值 | 预算、采样边界与优化触发规则见 [90-13 §7](../90-History/90-13-M7-Network-Observability-Decision.md#7-容量预算关闭-gap-018-的目标值)；64 Unit/256 Modifier 双客户端 soak 通过，验收证据见 [90-14](../90-History/90-14-M7-Acceptance.md) | 2026-08-27 / PERF-701 |
 | GAP-019 | 已关闭（ADR-039） | Combat Event schema 版本、存档/回放边界 | schema v1、环形诊断与明确不支持的 replay 边界见 [90-13 §6](../90-History/90-13-M7-Network-Observability-Decision.md#6-事件调试和回放边界关闭-gap-019-的目标值) | 2026-08-27 / OBS-701 |
 | GAP-021 | 已关闭（ADR-038） | RPC token bucket、批量命令上限和重复 request id 窗口 | ownership、20/s + 32 burst、8 Order/4096 bytes、128 RequestId 窗口及失败 Tag 见 [90-13 §3](../90-History/90-13-M7-Network-Observability-Decision.md#3-order-rpc-安全基线关闭-gap-021-的目标值) | 2026-08-27 / NET-002 |
@@ -297,6 +297,14 @@
 - 查询、权限与生命周期：Utility、感知、EQS 与 Order 提交只在服务器运行。每个战术查询同时持有 QueryId、QueryGeneration、运行/控制/生命、Scope、职责和目标生命身份；Scope 退出、换 Profile、接管、死亡、EndPlay/World teardown 先使身份失效，再精确 Abort，并以 World token exactly-once 结算。感知/EQS 在执行前申请 World 配额，生命周期清理、回执和攻击边界不受普通预算阻塞。
 - 迁移与回滚：不修改 Release、Contract、Content、GameplayTag 或 Combat Event schema；旧 v1 与 A/B 资产不迁移。移除 `/Game/Combat/Demo/AI/Tactics` 的 v2 Profile/地图即可停用新路径。Consideration 仍为 UE 实验性 API，每次引擎升级重跑三 Target/cook 准入。
 - 验证：AI-004 最终战术 21/21、AI 42/42、完整 Combat 143/143；Editor/Server/Client 三 Target、42 资产、冷回读、Tactics PIE、Dedicated 双客户端和 Windows cook 通过。64/128/256 档的感知与 EQS 请求/执行/延期、峰值在途、p95/p99 和命令数均已记录，当前未触发公共空间索引扩展；详见 [AI-004](../Specs/AI-004-statetree-tactics-capacity.spec.md)。
+
+### ADR-066：玩家战略资源与英雄库存分域（2026-09-23）
+
+- 状态：已实现并于 2026-09-24 通过用户验收；对应 [RES-001](../Specs/RES-001-player-resource-ownership.spec.md)，用户已明确“金币和其他战略资源归玩家，库存仍属于英雄”的边界，并确认纯资源余额变化不进入战斗 UI 日志。
+- 选择：本局仍由 `ACombatPlayerController` 持有 `UCombatEconomyComponent` 作为玩家资源账本，不引入 `PlayerState` 或跨重连持久化。`ACombatUnitCharacter` 额外记录服务器侧稳定 `ResourceOwnerPlayerController`，与短暂的 `CommandingPlayerController` 分离；切换/解绑英雄不清除稳定 owner，Controller teardown 才清理。
+- 库存边界：`UCombatInventoryComponent`、物品实例 `Holder`、槽位、库存修订、锁定、装备能力和自动合成继续属于英雄。商店事务只作用于当前主控英雄；经济组件的兼容 `FCombatEconomyView` 仍可读取，但新增 `FCombatPlayerResourceView` / `FCombatHeroInventoryView` 及分域变化委托，避免把聚合投影误读为所有权。
+- 奖励与日志：击杀奖励、库存自动合成和库存投影回调通过稳定资源 owner 找到玩家账本。纯 `GoldChanged` 继续写服务器核心事件供诊断，但不再被 `CombatLogPresentation` 分类，因此不进入战斗 UI；购买/出售/合成和私有库存事件仍使用仅服务器的 owner recipient，公共战斗事件继续使用 Unit 相关性。核心 `FCombatLogRecord`、Event/Presentation wire schema 和 RPC 不变。
+- 兼容、验证与回滚：旧经济请求、HUD 聚合读取和历史文档保持兼容；新增英雄切换、分域视图、资源事件 UI 排除与双玩家回归。最终证据统一记录在 RES-001 0.2。回滚按 RES-001 文件组撤销稳定 owner、展示 recipient、分域 API 与日志分类修订，同时保留既有资产修改；若未来需要断线重连、团队资源或跨局保存，必须新建 Spec/ADR。
 
 ## 7. 模板适配风险
 

@@ -50,7 +50,7 @@ struct COMBAT_API FCombatLogEntry : public FFastArraySerializerItem
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Log", meta=(DisplayName="物品充能", ToolTip="此次物品操作完成后的可用充能次数。")) int32 ItemCharges = 0;
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Log", meta=(DisplayName="金币变化", ToolTip="购买为负、收入和出售为正；非经济事件为 0。")) int64 GoldDelta = 0;
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Log", meta=(DisplayName="金币余额", ToolTip="经济事务完成后的服务器权威单一金币余额。")) int64 GoldBalance = 0;
-	UPROPERTY(BlueprintReadOnly, Category="Combat|Log", meta=(DisplayName="来源是主控英雄", ToolTip="事件发生时来源有玩家指挥，用于非英雄筛选；不提供玩法分类。"))
+	UPROPERTY(BlueprintReadOnly, Category="Combat|Log", meta=(DisplayName="来源属于玩家", ToolTip="事件发生时来源是玩家主控英雄或玩家私有资源端点，用于非英雄筛选；不提供玩法分类。"))
 	bool bSourceHero = false;
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Log", meta=(DisplayName="目标是主控英雄", ToolTip="事件发生时目标有玩家指挥，历史不会因控制权变化而改写。"))
 	bool bTargetHero = false;

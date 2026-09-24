@@ -8,6 +8,7 @@ Combat 当前位于 `Combat` 单 Runtime Module 中，不是独立插件或独�
 
 - 当前发布契约：`combat_v4_economy_rc1`，Contract 为 4，物品与经济开关分别开启，GameplayTag/Event 为 3，经济目录 schema 为 1、表现 schema 为 3；Content/Formula/RNG 保持当前冻结值。物品与经济验证状态见 ITEM-001/ECON-003 台账。
 - 权威模型：服务器结算；客户端 TargetData 仅作为请求，目标、资源和结果由服务器复核。
+- 资源所有权：金币及未来战略资源归本局玩家的 `ACombatPlayerController` 经济账本；英雄切换不会清空资源。六格装备、三格背包、物品实例 `Holder`、槽位和库存修订仍归各自英雄，商店只把结果交付当前主控英雄。纯资源余额变化保留服务器诊断事件，但不进入战斗 UI 日志；分域读取与展示边界见 [RES-001](Doc/CombatSystem/Specs/RES-001-player-resource-ownership.spec.md)。
 - M0-M8 共 82 个 Task 已完成并通过用户验收；最近一次发布 Gate 记录为 `Combat.*` 40/40、Editor/Server/Client 构建、资产校验和 Dedicated 双客户端容量场景通过。
 - M8 之后增加了卓尔游侠远程攻击 Demo、头顶资源/状态/施法条、伤害治疗跳字，以及底部居中的英雄、技能、Buff HUD。C++ 提供只读数据，Widget Blueprint 维护布局和视觉；等级经验与技能加点已接入服务器权威成长组件，六格装备与三格背包已接入物品主动、被动、场景交互和权威投影。
 - 完整 gameplay 预测回滚、跨进程确定性 Replay、召唤物/幻象仍未接入；ECON-003 单一库存交易、锁定合成和出售已通过用户代码 review，NullRHI PIE、独立 Dedicated 双客户端 300 秒经济 soak、Windows cook 与资产校验通过，验证边界见 ECON-003 Spec。

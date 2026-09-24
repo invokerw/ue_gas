@@ -93,6 +93,10 @@ bool ACombatUnitCharacter::SetCommandingPlayerController(APlayerController* NewC
 			*GetName(), *GetNameSafe(GetController()));
 		return false;
 	}
+	if (NewController && !SetResourceOwnerPlayerController(NewController))
+	{
+		return false;
+	}
 	if (GetOwner() == NewController && CommandingPlayerController.Get() == NewController)
 	{
 		RefreshCombatReplicationPolicy();
@@ -117,6 +121,22 @@ APlayerController* ACombatUnitCharacter::GetCommandingPlayerController() const
 		return CommandingPlayerController.Get();
 	}
 	return Cast<APlayerController>(GetOwner());
+}
+
+bool ACombatUnitCharacter::SetResourceOwnerPlayerController(APlayerController* NewOwner)
+{
+	if (!HasAuthority() || (NewOwner && NewOwner->GetWorld() != GetWorld()))
+	{
+		return false;
+	}
+	ResourceOwnerPlayerController = NewOwner;
+	return true;
+}
+
+APlayerController* ACombatUnitCharacter::GetResourceOwnerPlayerController() const
+{
+	return HasAuthority() && ResourceOwnerPlayerController.IsValid()
+		? ResourceOwnerPlayerController.Get() : nullptr;
 }
 
 bool ACombatUnitCharacter::ValidateServerMovementTopology(FString& OutDiagnostic) const

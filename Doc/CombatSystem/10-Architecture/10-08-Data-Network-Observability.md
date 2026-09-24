@@ -151,7 +151,7 @@ FailureTag / Flags
 
 ### 7.1 玩家战斗记录投影
 
-`UCombatLogComponent` 作为 PlayerController 的原生默认子对象，只在 Authority 订阅 `UCombatEventSubsystem::OnPresentationRecord`。它将 DamageApplied、HealApplied、技能成功开始/中断/格挡/AutoCast 切换、Modifier 施加/移除及死亡/复活转换成独立 schema 2 的 `FCombatLogEntry`；不展示内部攻击/弹体阶段或零治疗。ADR-052 初版使用核心事件 schema 1；ITEM-001/ADR-055 将核心事件升级为 2，加入物品来源和操作快照，迁移入口见 [10-14](10-14-Item-System.md)。
+`UCombatLogComponent` 作为 PlayerController 的原生默认子对象，只在 Authority 订阅 `UCombatEventSubsystem::OnPresentationRecord`。它将 DamageApplied、HealApplied、技能成功开始/中断/格挡/AutoCast 切换、Modifier 施加/移除、死亡/复活以及允许展示的物品事务转换成独立 schema 2 的 `FCombatLogEntry`；不展示内部攻击/弹体阶段、零治疗或纯战略资源余额变化。`Event.Combat.GoldChanged` 仍保留在服务器核心事件环形缓冲用于诊断，只是不进入战斗 UI FastArray。ADR-052 初版使用核心事件 schema 1；ITEM-001/ADR-055 将核心事件升级为 2，加入物品来源和操作快照，迁移入口见 [10-14](10-14-Item-System.md)。
 
 Damage/Heal 在真实事务落账后，随 Emit 同步转交 `FCombatLogResourceChange` 中的生命前后值。这个原生临时上下文不参与核心事件序列化，也不反算或采样之后的生命值。已有记录的数值不会被后续恢复、反伤或死亡改写。
 

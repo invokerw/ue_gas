@@ -44,7 +44,7 @@ public:
 	/** 返回当前显式主控 Combat Unit；输入不得从 GetPawn 推断该对象。 */
 	UFUNCTION(BlueprintPure, Category="Combat|Command", meta=(DisplayName="获取主控战斗单位", ToolTip="返回由服务器绑定并仅复制给拥有者的主控 Combat Unit。"))
 	ACombatUnitCharacter* GetCommandedUnit() const { return CommandedUnit; }
-	/** 返回跟随连接的单一金币与商店事务组件；购买结果交给当前主控单位库存。 */
+	/** 返回跟随玩家连接的战略资源与商店事务组件；购买结果仍交给当前主控英雄库存。 */
 	UFUNCTION(BlueprintPure, Category="Combat|Economy", meta=(DisplayName="获取战斗经济组件"))
 	UCombatEconomyComponent* GetCombatEconomyComponent() const { return CombatEconomyComponent; }
 

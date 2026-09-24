@@ -107,6 +107,11 @@ bool FCombatLogFilterTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("Actual applied amount displayed"), Rich.Contains(TEXT("25")));
 	TestEqual(TEXT("Millisecond clock"), CombatLogPresentation::FormatTimestamp(79.366), FString(TEXT("[01:19.366]")));
 	ECombatLogCategory Category;
+	TestFalse(TEXT("Pure resource changes are omitted from the combat UI log"),
+		CombatLogPresentation::Classify(CombatTags::Event_Combat_GoldChanged, Category));
+	TestTrue(TEXT("Item transactions remain in the combat UI log"),
+		CombatLogPresentation::Classify(CombatTags::Event_Combat_ItemPurchased, Category));
+	TestEqual(TEXT("Item transaction category remains unchanged"), Category, ECombatLogCategory::Item);
 	TestFalse(TEXT("Internal projectile diagnostics are omitted"), CombatLogPresentation::Classify(CombatTags::Event_Combat_ProjectileFinished, Category));
 	TestTrue(TEXT("Modifier events are supported"), CombatLogPresentation::Classify(CombatTags::Event_Combat_ModifierApplied, Category));
 	TestEqual(TEXT("Modifier category"), Category, ECombatLogCategory::Status);
