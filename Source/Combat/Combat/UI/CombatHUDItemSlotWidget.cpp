@@ -13,7 +13,7 @@
 
 bool UCombatItemDragOperation::IsCurrent(const ACombatPlayerController* PC) const
 {
-	return PC && Unit.IsValid() && PC->GetCommandedUnit() == Unit.Get()
+	return PC && PC->CanOperateInspectedUnit() && Unit.IsValid() && PC->GetCommandedUnit() == Unit.Get()
 		&& PC->GetCommandBindingGeneration() == ControlGeneration && Unit->GetLifeGeneration() == Snapshot.LifeGeneration;
 }
 void UCombatItemDragOperation::Drop_Implementation(const FPointerEvent& Event)
@@ -36,11 +36,18 @@ void UCombatHUDItemSlotWidget::ShowItem(const FCombatHUDOwnerView& Owner, const 
 	Snapshot = Owner;
 	ClearEntry();
 	if (HotkeyText) HotkeyText->SetText(Key);
-	if (!Owner.Items.IsValidIndex(SlotIndex) || !Owner.Items[SlotIndex].Handle.IsValid()) return;
+	if (!Owner.Items.IsValidIndex(SlotIndex) || !Owner.Items[SlotIndex].DefinitionId.IsValid()) return;
 	const FCombatItemView& Item = Owner.Items[SlotIndex];
 	const UCombatItemData* Data = Cast<UCombatItemData>(UAssetManager::Get().GetPrimaryAssetObject(Item.DefinitionId));
 	const FText Name = Data ? Data->DisplayNameText : FText::FromName(Item.DefinitionId.PrimaryAssetName);
 	SetIcon(Data ? Data->Icon.Get() : nullptr, Name);
+	if (!Item.Handle.IsValid())
+	{
+		if (StackText) StackText->SetText(FText::FromString(Item.Quantity > 1 ? FString::Printf(TEXT("×%d"), Item.Quantity) : TEXT("")));
+		DetailText = FText::FromString(FString::Printf(TEXT("%s\n%s\n数量 %d\n仅查看 · 冷却与操作状态未公开"),
+			*Name.ToString(), Data ? *Data->Description.ToString() : TEXT("定义加载中"), Item.Quantity));
+		return;
+	}
 	if (SymbolText && Data)
 	{
 		SymbolText->SetText(Data->Glyph.IsEmpty() ? FText::FromString(Name.ToString().Left(1)) : Data->Glyph);
@@ -78,6 +85,7 @@ void UCombatHUDItemSlotWidget::ShowItem(const FCombatHUDOwnerView& Owner, const 
 
 FReply UCombatHUDItemSlotWidget::NativeOnMouseButtonDown(const FGeometry& Geometry, const FPointerEvent& Event)
 {
+	if (!HUD.IsValid() || !HUD->CanOperateObservedUnit()) return FReply::Handled();
 	if (Event.GetEffectingButton() == EKeys::RightMouseButton) { OpenItemMenu(); return FReply::Handled(); }
 	if (Event.GetEffectingButton() != EKeys::LeftMouseButton) return FReply::Handled();
 	ACombatPlayerController* PC = Cast<ACombatPlayerController>(GetOwningPlayer());
@@ -95,7 +103,7 @@ FReply UCombatHUDItemSlotWidget::NativeOnMouseButtonUp(const FGeometry& Geometry
 	{
 		bPressed = false;
 		ACombatPlayerController* PC = Cast<ACombatPlayerController>(GetOwningPlayer());
-		if (PC && PressUnit.IsValid() && PC->GetCommandedUnit() == PressUnit.Get() && PC->GetCommandBindingGeneration() == PressControl
+		if (PC && HUD.IsValid() && HUD->CanOperateObservedUnit() && PressUnit.IsValid() && PC->GetCommandedUnit() == PressUnit.Get() && PC->GetCommandBindingGeneration() == PressControl
 			&& PressUnit->GetLifeGeneration() == PressSnapshot.LifeGeneration && Geometry.IsUnderLocation(Event.GetScreenSpacePosition()))
 			PC->UseInventoryItem(SlotIndex, PressSnapshot.Items[SlotIndex]);
 	}
@@ -103,7 +111,7 @@ FReply UCombatHUDItemSlotWidget::NativeOnMouseButtonUp(const FGeometry& Geometry
 }
 void UCombatHUDItemSlotWidget::NativeOnDragDetected(const FGeometry& Geometry, const FPointerEvent& Event, UDragDropOperation*& Operation)
 {
-	if (!bPressed || !HUD.IsValid()) return;
+	if (!bPressed || !HUD.IsValid() || !HUD->CanOperateObservedUnit()) { bPressed = false; return; }
 	bPressed = false;
 	UCombatItemDragOperation* Drag = NewObject<UCombatItemDragOperation>();
 	Drag->Snapshot = PressSnapshot;
@@ -130,12 +138,13 @@ bool UCombatHUDItemSlotWidget::NativeOnDrop(const FGeometry& Geometry, const FDr
 	UCombatItemDragOperation* Drag = Cast<UCombatItemDragOperation>(Operation);
 	if (!Drag) return false;
 	ACombatPlayerController* PC = Cast<ACombatPlayerController>(GetOwningPlayer());
-	if (Drag->IsCurrent(PC)) PC->SwapInventoryItems(Drag->SourceSlot, SlotIndex, Drag->Snapshot);
+	if (HUD.IsValid() && HUD->CanOperateObservedUnit() && Drag->IsCurrent(PC)) PC->SwapInventoryItems(Drag->SourceSlot, SlotIndex, Drag->Snapshot);
 	if (Drag->HUD.IsValid()) Drag->HUD->FinishItemDrag();
 	return true;
 }
 void UCombatHUDItemSlotWidget::OpenItemMenu()
 {
+	if (!HUD.IsValid() || !HUD->CanOperateObservedUnit()) return;
 	ACombatPlayerController* PC = Cast<ACombatPlayerController>(GetOwningPlayer());
 	if (!PC || !Snapshot.Items.IsValidIndex(SlotIndex) || !Snapshot.Items[SlotIndex].Handle.IsValid()) return;
 	PC->CancelCombatTargeting();
@@ -144,7 +153,7 @@ void UCombatHUDItemSlotWidget::OpenItemMenu()
 	const int64 Generation = PC->GetCommandBindingGeneration();
 	const TWeakObjectPtr<ACombatPlayerController> WeakPC = PC;
 	const TWeakObjectPtr<ACombatUnitCharacter> Unit = PC->GetCommandedUnit();
-	const auto Current = [WeakPC, Unit, Generation, Frozen]() { return WeakPC.IsValid() && Unit.IsValid()
+	const auto Current = [WeakPC, Unit, Generation, Frozen]() { return WeakPC.IsValid() && WeakPC->CanOperateInspectedUnit() && Unit.IsValid()
 		&& WeakPC->GetCommandedUnit() == Unit.Get() && WeakPC->GetCommandBindingGeneration() == Generation
 		&& Unit->GetLifeGeneration() == Frozen.LifeGeneration; };
 	FMenuBuilder Menu(true, nullptr);

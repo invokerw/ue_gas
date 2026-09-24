@@ -1,6 +1,14 @@
 # 10-09 客户端与服务器交互流程
 
-ITEM-001 增加物品请求：Pickup / Drop 复用下述 Order、追击与最终回执，Swap 为即时库存事务。服务器按物品完整身份、修订号、当前持有者、生命/控制代次与合法地面复核；物品主动按独立 Spec 复用施法链路。九槽仅复制给拥有者，详见 [10-14 物品系统](10-14-Item-System.md)。
+## 多操增量（CTRL-001）
+
+`Unit.Owner` 继续作为唯一控制许可，一个玩家可以拥有多个英雄。`CommandedUnit` 表示服务器确认的主选，`GetInspectedUnit()` 和 `GetSelectedUnits()` 是本地查看与选中组。新增 `GrantUnitControlAuthority` / `RevokeUnitControlAuthority` 只由服务器授予或撤销指定单位；同队不自动授权。旧 `SetCommandedUnitAuthority` 保留显式替换绑定的兼容行为，普通点击通过 `ServerSelectPrimaryUnit` 选择已有权限的英雄，保留其他英雄的 Owner 和正在执行的命令。
+
+左键确认 Action 在未瞄准时负责点击/拖框选择，Started/Triggered/Completed/Canceled 区分开始、拖动、释放和取消；`IA_AddToSelection` 默认映射左右 Shift。瞄准确认优先于选择，UI、失焦、右键、停止和 Escape 废弃旧拖框。最多 8 个单位；技能、物品和商店只操作主选，查看无权单位时没有命令组。
+
+多选 MoveToPoint/AttackTarget/Stop 通过 Controller 的 `ServerIssueGroupOrder` 一次发送。信封带正 RequestId、去重单位数组和逐单位 LifeGeneration，服务器检查 Owner、World、8 个单位及估算载荷上限、动作互斥字段，再消费与单单位 Order/经济/主选请求共用的限频和重放窗口。安全失败不执行任何成员；安全通过后每个成员独立进入原 `UCombatOrderComponent`，服务器再次校验目标和生命状态，业务失败不回滚其他成员。每个单位沿原初始回执通知客户端，仍不代表最终移动/攻击完成。单选继续使用原 Unit RPC。详见 [CTRL-001](../Specs/CTRL-001-multi-unit-selection.spec.md)。
+
+ITEM-001 增加物品请求：Pickup / Drop 复用下述 Order、追击与最终回执，Swap 为即时库存事务。服务器按物品完整身份、修订号、当前持有者、生命/控制代次与合法地面复核；物品主动按独立 Spec 复用施法链路。九槽操作身份和修订仅复制给拥有者；CTRL-001 的公开查看只包含定义与数量，详见 [10-14 物品系统](10-14-Item-System.md)。
 
 > 本文描述 SAM Gate 通过后的当前链路。迁移决策与完整证据见 [10-10 服务器权威单位移动改造](10-10-Server-Authoritative-Movement-Kickoff.md)。
 
@@ -25,7 +33,7 @@ Combat 使用 RTS/MOBA 风格的服务器权威命令模型。客户端负责选
 
 ## 2. 统一命令入口
 
-客户端移动、攻击和施法都使用同一个 `FCombatOrderBatchRequest`：
+单单位移动、攻击和施法使用 `FCombatOrderBatchRequest`；多选移动/攻击/停止使用本文开头的群体信封，安全检查后共享同一个 Order 执行器：
 
 ```text
 RequestId                 同一连接重放窗口内唯一的正整数
@@ -76,12 +84,13 @@ owning client 调用 `ACombatUnitCharacter::ServerIssueOrderBatch`。服务器�
 | 默认输入 | Input Action | Controller 默认属性 |
 | --- | --- | --- |
 | A | `IA_AttackTarget` | `AttackTargetAction` |
-| 左键（确认攻击/技能目标） | `IA_ConfirmAttackTarget` | `ConfirmAttackTargetAction` |
+| 左键（查看、单选/框选、确认攻击/技能目标） | `IA_ConfirmAttackTarget` | `ConfirmAttackTargetAction` |
+| 左右 Shift（点击增删、框选追加） | `IA_AddToSelection` | `AddToSelectionAction` |
 | Escape（取消攻击/技能瞄准） | `IA_CancelAttackTarget` | `CancelAttackTargetAction` |
 | S | `IA_StopCommand` | `StopCommandAction` |
 | Space（按住跟随，松开停留） | `IA_CameraFollow` | `CameraFollowAction`（Input/Camera） |
 
-四个 Action 位于同一 Input 目录，类型为 Boolean；`BP_CombatDemoPlayerController` 的 `Input|Combat` 默认属性引用对应资产，原生 Controller 只绑定它们的 `Started` 事件。改键在 Mapping Context 中完成；新增的 Action 引用留空时禁用对应操作，没有固定物理键兜底。迁移说明见 ADR-046。
+这些 Action 位于同一 Input 目录，类型为 Boolean；`BP_CombatDemoPlayerController` 默认属性引用对应资产。攻击、取消、停止使用 `Started`；左键还绑定 `Triggered/Completed/Canceled` 完成选择手势，Shift 和 Space 同时处理按下与释放。改键在 Mapping Context 中完成；Action 引用留空时禁用对应操作，没有固定物理键兜底。迁移说明见 ADR-046、ADR-067。
 
 普攻只使用本次 `Visibility` 射线实际命中的单位；客户端通过 `TargetingSubsystem` 预筛目标，服务器重新执行目标、距离、LOS 与状态校验。移动、攻击和主动技能共用同一连接 `RequestId` 与 `ServerIssueOrderBatch`；AutoCast 开关使用 ASC 的 owner RPC，服务器复核句柄、行为标签和生命状态。任何输入都不直接调用客户端导航、攻击结算或伤害入口。
 

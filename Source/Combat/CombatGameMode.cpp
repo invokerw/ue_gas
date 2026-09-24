@@ -137,5 +137,17 @@ APawn* ACombatGameMode::SpawnDefaultPawnAtTransform_Implementation(
 		TEXT("SAMDefaultSpawnReady Player=%s CommandPawn=%s Unit=%s UnitController=%s ReusedUnit=%s"),
 		*GetNameSafe(NewPlayer), *GetNameSafe(CommandPawn), *GetNameSafe(Unit),
 		*GetNameSafe(Unit->GetController()), bSpawnedUnit ? TEXT("No") : TEXT("Yes"));
+	if (bSpawnedUnit)
+	{
+		for (int32 Index = 0; Index < FMath::Clamp(AdditionalControlledUnitCount, 0, 7); ++Index)
+		{
+			FActorSpawnParameters ExtraParameters;
+			ExtraParameters.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+			const FVector Offset(0, 180.0f * (Index + 1), 0);
+			auto* Extra = World->SpawnActor<ACombatUnitCharacter>(ConfiguredUnitClass,
+				SpawnTransform.GetLocation() + Offset, SpawnTransform.Rotator(), ExtraParameters);
+			if (Extra && !CombatPlayer->GrantUnitControlAuthority(Extra)) World->DestroyActor(Extra);
+		}
+	}
 	return CommandPawn;
 }

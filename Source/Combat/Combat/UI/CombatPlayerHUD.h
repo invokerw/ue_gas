@@ -18,6 +18,8 @@ class COMBAT_API ACombatPlayerHUD : public AHUD
 #endif
 public:
 	ACombatPlayerHUD();
+	/** 绘制本地选中轮廓与拖框，仅消费 Controller 的选择，不改变单位状态。 */
+	virtual void DrawHUD() override;
 	/** 返回已创建的本地界面；无本地玩家或未配置时为空。 */
 	UCombatHUDWidget* GetCombatWidget() const { return CombatWidget; }
 	/** 返回左上角记录入口；未配置蓝图或非本地玩家时为空。 */

@@ -22,6 +22,12 @@ class COMBAT_API UCombatNetworkSecuritySubsystem : public UWorldSubsystem
 	GENERATED_BODY()
 
 public:
+	/** 有界群体校验在任何执行前完成；只允许 MoveToPoint/AttackTarget/Stop，拒绝重复单位和旧生命。 */
+	bool ValidateAndConsumeGroupRequest(APlayerController* Player, const FCombatGroupOrderRequest& Request,
+		FGameplayTag& Failure, FString& Diagnostic);
+	/** 主选请求只能选择已有 Owner 权限的单位，与 Order/经济共用限频和重放窗口。 */
+	bool ValidateAndConsumePrimarySelection(APlayerController* Player, ACombatUnitCharacter* Unit,
+		int32 RequestId, FGameplayTag& Failure, FString& Diagnostic);
 	/** 全部安全检查通过后消耗该玩家 1 个批次额度并记住请求 ID；返回 true 才能继续处理业务指令。检查失败时返回原因标签与诊断，不执行任何指令。 */
 	bool ValidateAndConsumeOrderRequest(
 		APlayerController* RequestingController,

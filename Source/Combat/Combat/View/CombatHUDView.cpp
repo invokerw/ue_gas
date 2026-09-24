@@ -40,6 +40,55 @@ bool FCombatHUDOwnerView::operator==(const FCombatHUDOwnerView& Other) const
 
 namespace CombatHUDView
 {
+	/** 显式白名单避免未来增加拥有者字段时无意公开；操作身份不从输入复制。 */
+	FCombatHUDOwnerView Inspect(const FCombatHUDOwnerView& Source)
+	{
+		FCombatHUDOwnerView Result;
+		Result.UnitDefinitionId = Source.UnitDefinitionId;
+		Result.LifeGeneration = Source.LifeGeneration;
+		Result.Level = Source.Level;
+		Result.PrimaryAttribute = Source.PrimaryAttribute;
+		Result.Strength = Source.Strength;
+		Result.Agility = Source.Agility;
+		Result.Intelligence = Source.Intelligence;
+		Result.Health = Source.Health;
+		Result.MaxHealth = Source.MaxHealth;
+		Result.Mana = Source.Mana;
+		Result.MaxMana = Source.MaxMana;
+		Result.AttackDamage = Source.AttackDamage;
+		Result.Armor = Source.Armor;
+		Result.MagicResist = Source.MagicResist;
+		Result.Evasion = Source.Evasion;
+		Result.AttackSpeed = Source.AttackSpeed;
+		Result.BaseAttackTime = Source.BaseAttackTime;
+		Result.MoveSpeed = Source.MoveSpeed;
+		Result.HealthRegen = Source.HealthRegen;
+		Result.ManaRegen = Source.ManaRegen;
+		Result.LifestealPct = Source.LifestealPct;
+		Result.SpellAmplifyPct = Source.SpellAmplifyPct;
+		Result.CooldownReductionPct = Source.CooldownReductionPct;
+		Result.CastRangeBonus = Source.CastRangeBonus;
+		Result.StatusResistancePct = Source.StatusResistancePct;
+		Result.AttackRange = Source.AttackRange;
+		Result.HealAmplifyPct = Source.HealAmplifyPct;
+		Result.HealReceivedPct = Source.HealReceivedPct;
+		for (const auto& Ability : Source.Abilities)
+		{
+			auto& Entry = Result.Abilities.AddDefaulted_GetRef();
+			Entry.DefinitionId = Ability.DefinitionId;
+			Entry.Level = Ability.Level;
+			Entry.MaxLevel = Ability.MaxLevel;
+			Entry.ManaCost = Ability.ManaCost;
+			Entry.bIgnoreSilence = Ability.bIgnoreSilence;
+		}
+		for (const auto& Item : Source.Items)
+		{
+			auto& Entry = Result.Items.AddDefaulted_GetRef();
+			Entry.DefinitionId = Item.DefinitionId;
+			Entry.Quantity = Item.Quantity;
+		}
+		return Result;
+	}
 	/** 与 PlayerController 的 Q/W/E/R 规则一致，保留主动技能和可切换 AutoCast 被动的授予顺序。 */
 	TArray<const FGameplayAbilitySpec*> GetSlots(const UCombatAbilitySystemComponent& Asc)
 	{
@@ -87,7 +136,7 @@ void UCombatUnitViewComponent::RefreshHUDOwnerView()
 	if (!Unit || !Unit->HasAuthority()) return;
 	UCombatAbilitySystemComponent* Asc = Unit->GetCombatAbilitySystemComponent();
 	FCombatHUDOwnerView Next;
-	if (Asc && Unit->GetCommandingPlayerController())
+	if (Asc)
 	{
 		Next.UnitDefinitionId = Unit->GetUnitDefinitionId();
 		Next.LifeGeneration = Unit->GetLifeGeneration();
@@ -149,6 +198,14 @@ void UCombatUnitViewComponent::RefreshHUDOwnerView()
 			Asc->GetCombatAbilityCooldownWindow(Spec->Handle, Item.CooldownEndTime, Item.CooldownDuration);
 		}
 	}
+	const FCombatHUDOwnerView Inspection = CombatHUDView::Inspect(Next);
+	if (!(Inspection == HUDInspectionView))
+	{
+		HUDInspectionView = Inspection;
+		OnHUDOwnerViewChanged.Broadcast();
+		Unit->ForceNetUpdate();
+	}
+	if (!Unit->GetCommandingPlayerController()) Next = FCombatHUDOwnerView();
 	if (!(Next == HUDOwnerView))
 	{
 		HUDOwnerView = MoveTemp(Next);

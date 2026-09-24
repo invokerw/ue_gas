@@ -1,6 +1,7 @@
 #include "Combat/Tests/CombatTestScenarioActor.h"
 #include "Combat/Tests/CombatItemNetworkScenario.h"
 #include "Combat/Tests/CombatCameraNetworkScenario.h"
+#include "Combat/Tests/CombatSelectionNetworkScenario.h"
 #include "Combat/Tests/CombatAINetworkScenario.h"
 #include "Combat/Tests/CombatAIRoleNetworkScenario.h"
 #include "Combat/Tests/CombatAITacticalNetworkScenario.h"
@@ -56,6 +57,11 @@ ACombatTestScenarioActor::ACombatTestScenarioActor()
 void ACombatTestScenarioActor::BeginPlay()
 {
 	Super::BeginPlay();
+	if (FParse::Param(FCommandLine::Get(), TEXT("CombatSelectionSmoke")))
+	{
+		GetWorld()->SpawnActor<ACombatSelectionNetworkScenario>();
+		return;
+	}
 	if (FParse::Param(FCommandLine::Get(), TEXT("CombatAIRolesSmoke")))
 		GetWorld()->SpawnActor<ACombatAIRoleNetworkScenario>();
 	if (FParse::Param(FCommandLine::Get(), TEXT("CombatAITacticsSmoke")))
@@ -312,6 +318,9 @@ void ACombatTestScenarioActor::StartM7NetworkScenario()
 		}
 		if (ACombatPlayerController* CombatPlayer = Cast<ACombatPlayerController>(Players[Index]))
 		{
+			TArray<ACombatUnitCharacter*> InitialExtraUnits;
+			for (TActorIterator<ACombatUnitCharacter> UnitIt(GetWorld()); UnitIt; ++UnitIt)
+				if (UnitIt->GetCommandingPlayerController() == CombatPlayer && !SpawnedUnits.Contains(*UnitIt)) InitialExtraUnits.Add(*UnitIt);
 			ACombatUnitCharacter* InitialDemoUnit = CombatPlayer->GetCommandedUnit();
 			CombatPlayer->SetCommandedUnitAuthority(SpawnedUnits[Index]);
 			// Combat Demo GameMode 会先生成一个初始单位；测试接管场景单位后将其销毁，保持容量夹具精确为 64 Unit。
@@ -320,6 +329,9 @@ void ACombatTestScenarioActor::StartM7NetworkScenario()
 			{
 				InitialDemoUnit->Destroy();
 			}
+			// 容量测试接管自己的精确夹具，显式回收 Demo 可配置的额外英雄，不让它们改变 64/256 基线。
+			for (ACombatUnitCharacter* Extra : InitialExtraUnits)
+				if (IsValid(Extra) && Extra != InitialDemoUnit) { CombatPlayer->RevokeUnitControlAuthority(Extra); Extra->Destroy(); }
 		}
 		else
 		{
@@ -529,7 +541,7 @@ void ACombatTestScenarioActor::LogHUDNetworkSnapshot()
 		const UCombatAbilitySystemComponent* Asc = It->GetCombatAbilitySystemComponent();
 		if (!View || !Asc) { bPassed = false; continue; }
 		const FCombatHUDOwnerView Snapshot = View->GetHUDOwnerView();
-		const bool bCheckOwner = HasAuthority() ? It->GetCommandingPlayerController() != nullptr : *It == LocalUnit;
+		const bool bCheckOwner = HasAuthority() ? It->GetCommandingPlayerController() != nullptr : It->GetCommandingPlayerController() == LocalPlayer;
 		if (!bCheckOwner)
 		{
 			++CheckedForeign;
@@ -580,7 +592,8 @@ void ACombatTestScenarioActor::LogHUDNetworkSnapshot()
 		}
 		bPassed &= Snapshot.Abilities.Num() == ExpectedIndex;
 	}
-	bPassed &= CheckedOwners == (HasAuthority() ? 2 : 1) && CheckedForeign > 0 && CheckedSkills > 0;
+	// 多操 Demo 每连接可拥有多个英雄；上方逐单位验证所有 owner-only 字段，不能把非主选己方单位误判为外国单位。
+	bPassed &= CheckedOwners >= (HasAuthority() ? 2 : 1) && CheckedForeign > 0 && CheckedSkills > 0;
 	int32 Visuals = 0;
 	for (TActorIterator<ACombatAbilityIndicatorActor> It(GetWorld()); It; ++It)
 	{

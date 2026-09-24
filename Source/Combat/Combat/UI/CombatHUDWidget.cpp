@@ -97,6 +97,7 @@ void UCombatHUDWidget::InitializeForUnit(ACombatUnitCharacter* Unit)
 	if (IsDesignTime()) return;
 	if (!IsValid(Unit) || Unit == EndedUnit.Get() || Unit->IsActorBeingDestroyed()) Unit = nullptr;
 	if (BoundUnit.Get() == Unit && (Unit ? BoundView.IsValid() : !BoundView.IsValid() && DisplayLifeGeneration == 0)) return;
+	FinishItemDrag();
 	UnbindView();
 	ResetPresentation();
 	BoundUnit = Unit;
@@ -174,7 +175,7 @@ void UCombatHUDWidget::NativeTick(const FGeometry& Geometry, float DeltaTime)
 {
 	Super::NativeTick(Geometry, DeltaTime);
 	const ACombatPlayerController* Controller = Cast<ACombatPlayerController>(GetOwningPlayer());
-	if (Controller && Controller->IsLocalController()) InitializeForUnit(Controller->GetCommandedUnit());
+	if (Controller && Controller->IsLocalController()) InitializeForUnit(Controller->GetInspectedUnit());
 	if (Controller && FSlateApplication::IsInitialized())
 	{
 		const FVector2D PointerPosition = FSlateApplication::Get().GetCursorPos();
@@ -182,7 +183,7 @@ void UCombatHUDWidget::NativeTick(const FGeometry& Geometry, float DeltaTime)
 		const bool bOverOverlay = HUD
 			&& ((HUD->GetLogWidget() && HUD->GetLogWidget()->IsScreenPositionOverUI(PointerPosition))
 				|| (HUD->GetShopWidget() && HUD->GetShopWidget()->IsScreenPositionOverUI(PointerPosition)));
-		Controller->GetAbilityAimComponent()->SetHoveredSlot(bOverOverlay ? INDEX_NONE : GetHoveredAbilitySlot(PointerPosition));
+		Controller->GetAbilityAimComponent()->SetHoveredSlot(bOverOverlay || !CanOperateObservedUnit() ? INDEX_NONE : GetHoveredAbilitySlot(PointerPosition));
 	}
 	RefreshAccumulator += DeltaTime;
 	if (RefreshAccumulator >= 0.05f)
@@ -260,13 +261,16 @@ void UCombatHUDWidget::RefreshDisplay()
 		DisplayLifeGeneration = Unit.LifeGeneration;
 	}
 	if (HUDPanel) HUDPanel->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
-	const FCombatHUDOwnerView Candidate = BoundView->GetHUDOwnerView();
+	const ACombatPlayerController* Viewer = Cast<ACombatPlayerController>(GetOwningPlayer());
+	const bool bPrivateView = Viewer && Viewer->CanControlUnit(BoundUnit.Get());
+	const FCombatHUDOwnerView Candidate = bPrivateView ? BoundView->GetHUDOwnerView() : BoundView->GetHUDInspectionView();
 	const bool bOwnerReady = Candidate.LifeGeneration == Unit.LifeGeneration && Candidate.UnitDefinitionId == Unit.UnitDefinitionId;
 	DisplaySnapshot = bOwnerReady ? Candidate : FCombatHUDOwnerView();
+	if (!CanOperateObservedUnit()) for (auto& Ability : DisplaySnapshot.Abilities) Ability.bCanUpgrade = false;
 	if (bOwnerReady)
 	{
 		CombatHUD::Text(LevelText, FString::Printf(TEXT("%d"), DisplaySnapshot.Level));
-		CombatHUD::Text(ExperienceText, DisplaySnapshot.ExperienceToNextLevel > 0
+		CombatHUD::Text(ExperienceText, !bPrivateView ? TEXT("") : DisplaySnapshot.ExperienceToNextLevel > 0
 			? FString::Printf(TEXT("%lld / %lld"), static_cast<long long>(DisplaySnapshot.ExperienceIntoLevel),
 				static_cast<long long>(DisplaySnapshot.ExperienceIntoLevel + DisplaySnapshot.ExperienceToNextLevel))
 			: TEXT("满级"));
@@ -275,7 +279,7 @@ void UCombatHUDWidget::RefreshDisplay()
 		if (ExperienceRing)
 		{
 			ExperienceRing->SetProgress(DisplaySnapshot.ExperienceProgress);
-			ExperienceRing->SetToolTipText(FText::FromString(DisplaySnapshot.ExperienceToNextLevel > 0
+			ExperienceRing->SetToolTipText(FText::FromString(!bPrivateView ? TEXT("仅查看公开信息") : DisplaySnapshot.ExperienceToNextLevel > 0
 				? FString::Printf(TEXT("经验 %lld / %lld · 距离升级还需 %lld"),
 					static_cast<long long>(DisplaySnapshot.ExperienceIntoLevel),
 					static_cast<long long>(DisplaySnapshot.ExperienceIntoLevel + DisplaySnapshot.ExperienceToNextLevel),
@@ -330,7 +334,7 @@ void UCombatHUDWidget::RefreshDisplay()
 	const ACombatPlayerController* ItemPC = Cast<ACombatPlayerController>(GetOwningPlayer());
 	for (int32 Index = 0; Index < ItemWidgets.Num(); ++Index)
 		if (ItemWidgets[Index]) ItemWidgets[Index]->ShowItem(DisplaySnapshot, Unit, Now,
-			ItemPC && Index < 6 ? ItemPC->GetItemHotkeyText(Index) : FText::GetEmpty());
+			ItemPC && CanOperateObservedUnit() && Index < 6 ? ItemPC->GetItemHotkeyText(Index) : FText::GetEmpty());
 	const TArray<UCombatHUDSlotWidget*> Slots = GetSkillWidgets();
 	const TCHAR* Keys[] = { TEXT("Q"), TEXT("W"), TEXT("E"), TEXT("R") };
 	for (int32 Index = 0; Index < Slots.Num(); ++Index)
@@ -344,7 +348,8 @@ void UCombatHUDWidget::RefreshDisplay()
 			Description = FText::FromString(FString::Printf(TEXT("施法前摇 %.2f 秒%s"), Data->CastPoint,
 				Data->ChannelDuration > 0 ? *FString::Printf(TEXT(" · 引导 %.1f 秒"), Data->ChannelDuration) : TEXT("")));
 		}
-		Slots[Index]->ShowAbility(Ability, Unit, Now, ResolveName(Ability.DefinitionId), Description, FindIcon(Ability.DefinitionId), FText::FromString(Keys[Index]));
+		Slots[Index]->ShowAbility(Ability, Unit, Now, ResolveName(Ability.DefinitionId), Description, FindIcon(Ability.DefinitionId),
+			CanOperateObservedUnit() ? FText::FromString(Keys[Index]) : FText::GetEmpty());
 	}
 	TArray<FCombatModifierHandle> Handles;
 	for (int32 Index = 0; Index < FMath::Min(Modifiers.Num(), 10); ++Index) Handles.Add(Modifiers[Index].Handle);
@@ -381,8 +386,14 @@ void UCombatHUDWidget::RefreshDisplay()
 	FString Activity;
 	if (const ACombatPlayerController* PC = Cast<ACombatPlayerController>(GetOwningPlayer()))
 	{
-		Activity = PC->GetAbilityAimComponent()->GetStatusText().ToString();
-		if (Activity.IsEmpty()) Activity = PC->GetItemStatusText().ToString();
+		if (CanOperateObservedUnit())
+		{
+			Activity = PC->GetAbilityAimComponent()->GetStatusText().ToString();
+			if (Activity.IsEmpty()) Activity = PC->GetItemStatusText().ToString();
+			if (Activity.IsEmpty() && PC->GetSelectedUnits().Num() > 1)
+				Activity = FString::Printf(TEXT("已选 %d 个单位 · 技能与物品作用于主选英雄"), PC->GetSelectedUnits().Num());
+		}
+		else Activity = bPrivateView ? TEXT("正在确认主选英雄") : TEXT("仅查看 · 无控制权");
 	}
 	if (!bAlive) Activity = TEXT("已阵亡");
 	else if (Unit.AbilityPhase != ECombatAbilityViewPhase::None && Unit.ActiveAbilityDefinitionId.IsValid())
@@ -398,7 +409,7 @@ void UCombatHUDWidget::RefreshDisplay()
 
 void UCombatHUDWidget::HandleUpgradeRequested(UCombatHUDSlotWidget* Source)
 {
-	if (!Source || !BoundUnit.IsValid() || !DisplaySnapshot.LifeGeneration)
+	if (!CanOperateObservedUnit() || !Source || !BoundUnit.IsValid() || !DisplaySnapshot.LifeGeneration)
 	{
 		return;
 	}
@@ -416,7 +427,7 @@ void UCombatHUDWidget::HandleUpgradeRequested(UCombatHUDSlotWidget* Source)
 
 void UCombatHUDWidget::HandleAbilityUseRequested(UCombatHUDSlotWidget* Source)
 {
-	if (!Source || !BoundUnit.IsValid() || !DisplaySnapshot.LifeGeneration)
+	if (!CanOperateObservedUnit() || !Source || !BoundUnit.IsValid() || !DisplaySnapshot.LifeGeneration)
 	{
 		return;
 	}
@@ -432,6 +443,12 @@ void UCombatHUDWidget::HandleAbilityUseRequested(UCombatHUDSlotWidget* Source)
 	}
 }
 
+bool UCombatHUDWidget::CanOperateObservedUnit() const
+{
+	const auto* Player = Cast<ACombatPlayerController>(GetOwningPlayer());
+	return Player && BoundUnit.IsValid() && BoundUnit.Get() == Player->GetInspectedUnit() && Player->CanOperateInspectedUnit();
+}
+
 FText UCombatHUDWidget::BuildHeroDetail() const
 {
 	if (!BoundView.IsValid()) return FText::GetEmpty();
@@ -444,7 +461,7 @@ FText UCombatHUDWidget::BuildHeroDetail() const
 	case ECombatPrimaryAttribute::Intelligence: PrimaryName = TEXT("智力"); break;
 	default: break;
 	}
-	return FText::FromString(FString::Printf(TEXT("%s\n等级 %d · 经验 %lld\n力量 %.0f · 敏捷 %.0f · 智力 %.0f（主属性：%s）\n生命 %.0f / %.0f · 法力 %.0f / %.0f\n攻击力 %.0f · 攻击速度 %.0f · 攻击间隔 %.2f\n护甲 %.1f · 魔法抗性 %.1f%% · 闪避 %.1f%%\n移动速度 %.0f · 攻击距离 %.0f · 施法距离 %+0.f\n生命恢复 %.1f / 秒 · 法力恢复 %.1f / 秒\n吸血 %.1f%% · 技能增幅 %.1f%% · 冷却缩减 %.1f%% · 状态抗性 %.1f%%\n治疗来源增幅 %.1f%% · 受到治疗增幅 %.1f%%\n未使用技能点 %d"),
+	FString Detail = FString::Printf(TEXT("%s\n等级 %d · 经验 %lld\n力量 %.0f · 敏捷 %.0f · 智力 %.0f（主属性：%s）\n生命 %.0f / %.0f · 法力 %.0f / %.0f\n攻击力 %.0f · 攻击速度 %.0f · 攻击间隔 %.2f\n护甲 %.1f · 魔法抗性 %.1f%% · 闪避 %.1f%%\n移动速度 %.0f · 攻击距离 %.0f · 施法距离 %+0.f\n生命恢复 %.1f / 秒 · 法力恢复 %.1f / 秒\n吸血 %.1f%% · 技能增幅 %.1f%% · 冷却缩减 %.1f%% · 状态抗性 %.1f%%\n治疗来源增幅 %.1f%% · 受到治疗增幅 %.1f%%\n未使用技能点 %d"),
 		*Name, DisplaySnapshot.Level, static_cast<long long>(DisplaySnapshot.Experience),
 		DisplaySnapshot.Strength, DisplaySnapshot.Agility, DisplaySnapshot.Intelligence, PrimaryName,
 		DisplaySnapshot.Health, DisplaySnapshot.MaxHealth, DisplaySnapshot.Mana, DisplaySnapshot.MaxMana,
@@ -455,7 +472,14 @@ FText UCombatHUDWidget::BuildHeroDetail() const
 		DisplaySnapshot.LifestealPct * 100.0f, DisplaySnapshot.SpellAmplifyPct * 100.0f,
 		DisplaySnapshot.CooldownReductionPct * 100.0f, DisplaySnapshot.StatusResistancePct * 100.0f,
 		DisplaySnapshot.HealAmplifyPct * 100.0f, DisplaySnapshot.HealReceivedPct * 100.0f,
-		DisplaySnapshot.UnspentAbilityPoints));
+		DisplaySnapshot.UnspentAbilityPoints);
+	const auto* Viewer = Cast<ACombatPlayerController>(GetOwningPlayer());
+	if (!Viewer || !Viewer->CanControlUnit(BoundUnit.Get()))
+	{
+		Detail.ReplaceInline(*FString::Printf(TEXT(" · 经验 %lld"), static_cast<long long>(DisplaySnapshot.Experience)), TEXT(""));
+		Detail.ReplaceInline(*FString::Printf(TEXT("\n未使用技能点 %d"), DisplaySnapshot.UnspentAbilityPoints), TEXT("\n仅查看公开信息"));
+	}
+	return FText::FromString(Detail);
 }
 
 void UCombatHUDWidget::HandleDetail(const FText& Text, bool bPin, UCombatHUDSlotWidget* Source)

@@ -1,6 +1,14 @@
 # 10-12 底部居中 HUD：设计与实现
 
-技能指示器接入见 [10-13](10-13-Skill-Indicators.md)：悬停显示可靠范围，左键点击技能槽沿 Q/W/E/R 入口施法，右键可固定详情；加点、详情和日志的实际几何阻止世界输入。HUD 活动行显示瞄准原因，服务器施法/引导优先。拥有者范围与物品快照采用展示 schema 7（ADR-053、ADR-055）；物品操作与字段见 [10-14](10-14-Item-System.md)。
+## 多单位查看与操作（CTRL-001）
+
+HUD 现在观察本地 `GetInspectedUnit()`，与服务器 `GetCommandedUnit()` 主选分开。普通世界左键点击可查看满足公共目标规则的单位；点击自己的单位切换主选，Shift 点击增删、拖框与 Shift 拖框形成最多 8 个单位的选中组。选择不会转移 Owner，也不会停止旧英雄命令。无权单位的 HUD 显示“仅查看 · 无控制权”，技能快捷键、加点、物品菜单/拖放和商店提交不能误作用于旧英雄。
+
+展示 schema 9 新增 `GetHUDInspectionView()`：服务器对白名单字段投影等级、三围及战斗属性、生命/法力、技能定义/等级/费用和物品定义/数量。技能 Spec、物品实例与修订、经验/技能点、冷却、锁定与 AutoCast 状态不公开。拥有者仍使用原 owner-only 快照；无 Owner 的木桩/AI 也能显示公开属性。详情明确标注冷却和操作状态未公开。公共快照与拥有者快照均只消费 ASC、成长和库存事实，不新增 gameplay 权威。
+
+多人必须使用同版本构建。主选 RPC 尚未确认或 Owner 尚未复制时显示切换提示并阻止操作；观察目标变化会清详情、拖放状态和异步定义加载。Controller 每帧只修剪本地弱选择；Unit/Controller EndPlay 继续显式释放服务器绑定。选择框与绿/蓝/橙轮廓由本地 HUD 绘制，不复制。群体 Move/Attack/Stop、单英雄技能/物品与授权边界见 [CTRL-001](../Specs/CTRL-001-multi-unit-selection.spec.md) 和 ADR-067。
+
+技能指示器接入见 [10-13](10-13-Skill-Indicators.md)：悬停显示可靠范围，左键点击技能槽沿 Q/W/E/R 入口施法，右键可固定详情；加点、详情和日志的实际几何阻止世界输入。HUD 活动行显示瞄准原因，服务器施法/引导优先。拥有者范围与物品快照沿用 ADR-053、ADR-055；公开查看使当前展示 schema 升为 9（ADR-067）；物品操作与字段见 [10-14](10-14-Item-System.md)。
 
 > 2026-09-09：用户确认设计并明确要求开始实现。底部 HUD 已接入 Demo，验证状态以 [进度台账](../00-Project/00-01-Progress-Tracker.md) 为准；DEMO-901 将展示投影升级到 schema 4，决策 ADR-047、ADR-048。
 
@@ -53,7 +61,7 @@ HUD 固定在游戏画面底部居中，采用参考图中的紧凑横向布局�
 
 ## 4. 当前工程入口
 
-沿用 [头顶 UI 的分工](10-11-Overhead-Blueprint-UI.md)：C++ 负责只读数据适配与生命周期，Widget Blueprint 负责布局和视觉。HUD 观察 `ACombatPlayerController::GetCommandedUnit()` 指定的单位；被占有的 Command Pawn 是相机载体，不能据此推断英雄。HUD 使用可选 `BindWidget` 接线，与头顶 UI 的事件接口并存。
+沿用 [头顶 UI 的分工](10-11-Overhead-Blueprint-UI.md)：C++ 负责只读数据适配与生命周期，Widget Blueprint 负责布局和视觉。HUD 观察 `ACombatPlayerController::GetInspectedUnit()` 指定的本地查看单位；被占有的 Command Pawn 是相机载体，不能据此推断英雄。HUD 使用可选 `BindWidget` 接线，与头顶 UI 的事件接口并存。
 
 | 资产 | 作用 |
 | --- | --- |
@@ -91,9 +99,9 @@ Designer 中使用底边锚定的 ScaleBox，按 UE DPI 规则显示，狭窄区
 
 | 创建者 | 持有关系 | 正常刷新 | 终止与切换清理 | 旧回调隔离 |
 | --- | --- | --- | --- | --- |
-| 本地 `ACombatPlayerHUD` | 强持有主 Widget；Widget 弱观察 `CommandedUnit` / View，强持有效 Buff 子控件 | View 变化或本地显示刷新 | 换单位解绑；换生命清空详情与子控件；Widget Destruct / Unit EndPlay 取消加载并移除委托；HUD EndPlay 移除视口控件 | `BindingRevision + LifeGeneration`；专用服务器不创建 Widget |
+| 本地 `ACombatPlayerHUD` | 强持有主 Widget；Widget 弱观察 `InspectedUnit` / View，强持有效 Buff 子控件 | View 变化或本地显示刷新 | 换单位解绑；换生命清空详情与子控件；Widget Destruct / Unit EndPlay 取消加载并移除委托；HUD EndPlay 移除视口控件 | `BindingRevision + LifeGeneration`；专用服务器不创建 Widget |
 
-`UCombatProgressionComponent` 保存服务器权威等级、经验和技能点。累计经验阈值采用 `XP(n)=100*(n-1)*(n+2)/2`，默认上限 30 级；单位定义可配置初始等级、等级内经验和击杀经验奖励，致死伤害完成死亡转换后把奖励发给实际击杀者。技能加点通过 owning client 的可靠请求进入服务器，服务器检查技能点、英雄等级、技能上限和生命状态。物品、背包和库存由 ITEM-001 接入，经济由 `UCombatEconomyComponent` 持有并单独复制金币/当前库存快照。成长字段在 schema 5 引入，范围字段在 schema 6 引入，物品与经济展示使用当前 v4/schema 8 约束，经济表现 schema 为 3，要求服务器和客户端使用同版本。
+`UCombatProgressionComponent` 保存服务器权威等级、经验和技能点。累计经验阈值采用 `XP(n)=100*(n-1)*(n+2)/2`，默认上限 30 级；单位定义可配置初始等级、等级内经验和击杀经验奖励，致死伤害完成死亡转换后把奖励发给实际击杀者。技能加点通过 owning client 的可靠请求进入服务器，服务器检查技能点、英雄等级、技能上限和生命状态。物品、背包和库存由 ITEM-001 接入，经济由 `UCombatEconomyComponent` 持有并单独复制金币/当前库存快照。成长字段在 schema 5 引入，范围字段在 schema 6 引入，物品与经济展示使用当前 v4/schema 9 约束，经济表现 schema 为 3，要求服务器和客户端使用同版本。
 
 ## 6. 确认与验证
 

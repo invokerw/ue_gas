@@ -155,8 +155,9 @@ bool FCombatCameraLifecycleTest::RunTest(const FString& Parameters)
 	const uint64 BeforeRebind = C->BeginCameraFollow();
 	auto* NewUnit = F.World.GetWorld()->SpawnActor<ACombatUnitCharacter>();
 	NewUnit->SetActorLocation(FVector(50, 60, 70));
+	const FVector BeforeRebindAnchor = C->GetActorLocation();
 	F.PC->SetCommandedUnitAuthority(NewUnit);
-	TestEqual(TEXT("New binding centers once"), C->GetActorLocation(), NewUnit->GetActorLocation());
+	TestEqual(TEXT("Rebinding keeps initialized anchor"), C->GetActorLocation(), BeforeRebindAnchor);
 	const uint64 AfterRebind = C->BeginCameraFollow();
 	C->EndCameraFollow(BeforeRebind);
 	TestEqual(TEXT("Old binding release ignored"), C->GetCameraMode(), ECombatCameraMode::FollowHeld);
@@ -231,6 +232,42 @@ bool FCombatCameraInputTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("Missing viewport cancels follow"), F.Camera->GetCameraMode(), ECombatCameraMode::Free);
 	F.PC->OnCameraFollowStarted();
 	TestEqual(TEXT("Missing viewport rejects follow input"), F.PC->CameraFollowPressSerial, uint64(0));
+	return true;
+}
+
+/** 框选、只读切回和网络确认空窗只换观察目标，不应隐式夺回自由镜头。 */
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FCombatCameraSelectionAnchorTest,
+	"Combat.Camera.SelectionPreservesAnchor", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FCombatCameraSelectionAnchorTest::RunTest(const FString& Parameters)
+{
+	FCombatAutomationWorldFixture World;
+	auto* PC = World.GetWorld()->SpawnActor<ACombatPlayerController>();
+	auto* Camera = World.GetWorld()->SpawnActor<ACombatCharacter>();
+	auto* A = World.GetWorld()->SpawnActor<ACombatUnitCharacter>();
+	auto* B = World.GetWorld()->SpawnActor<ACombatUnitCharacter>();
+	A->SetActorLocation(FVector(400, 500, 90));
+	B->SetActorLocation(FVector(-400, -500, 90));
+	PC->SetAsLocalPlayerController();
+	PC->SetCommandedUnitAuthority(A);
+	PC->GrantUnitControlAuthority(B);
+	PC->Possess(Camera);
+	TestEqual(TEXT("First ready target initializes camera"), Camera->GetActorLocation(), A->GetActorLocation());
+	const FVector Anchor(1300, 1400, 90);
+	Camera->SetActorLocation(Anchor);
+	PC->SelectCombatUnits({B, A}, false);
+	Camera->SetFollowTarget(PC->GetCommandedUnit(), PC->GetCommandBindingGeneration());
+	TestEqual(TEXT("Box selection changing primary keeps anchor"), Camera->GetActorLocation(), Anchor);
+	Camera->SetFollowTarget(nullptr, PC->GetCommandBindingGeneration());
+	Camera->SetFollowTarget(B, PC->GetCommandBindingGeneration());
+	TestEqual(TEXT("Read-only or pending-ack gap cannot recenter"), Camera->GetActorLocation(), Anchor);
+	PC->SelectCombatUnits({A, B}, false);
+	Camera->SetFollowTarget(A, PC->GetCommandBindingGeneration());
+	TestEqual(TEXT("Reselecting another group keeps anchor"), Camera->GetActorLocation(), Anchor);
+	const auto Press = Camera->BeginCameraFollow();
+	Camera->UpdateCamera(0.1f, FVector2D::ZeroVector);
+	TestTrue(TEXT("Explicit follow still moves toward new primary"), Press > 0
+		&& FVector::Dist2D(Camera->GetActorLocation(), A->GetActorLocation()) < FVector::Dist2D(Anchor, A->GetActorLocation()));
+	Camera->EndCameraFollow(Press);
 	return true;
 }
 

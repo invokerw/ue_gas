@@ -86,7 +86,7 @@ bool ACombatPlayerController::SetCommandedUnitAuthority(ACombatUnitCharacter* Ne
 			Cast<ACombatPlayerController>(NewUnit->GetCommandingPlayerController());
 			PreviousController && PreviousController != this)
 		{
-			PreviousController->SetCommandedUnitAuthority(nullptr);
+			PreviousController->RevokeUnitControlAuthority(NewUnit);
 		}
 		else if (APlayerController* PreviousOwner = NewUnit->GetCommandingPlayerController(); PreviousOwner != this)
 		{
@@ -119,6 +119,15 @@ bool ACombatPlayerController::SetCommandedUnitAuthority(ACombatUnitCharacter* Ne
 		}
 	}
 	AdvanceCommandBindingGeneration();
+	// 此旧 API 表示显式替换绑定；普通多操主选切换走 SetPrimaryUnitAuthority。
+	if (IsLocalController())
+	{
+		bSelectionInitialized = false;
+		SelectedUnits.Reset();
+		InspectedUnit.Reset();
+		LastRequestedPrimary.Reset();
+		PendingPrimaryRequestId = 0;
+	}
 	ForceNetUpdate();
 	RefreshCommandBinding();
 	if (CombatEconomyComponent) CombatEconomyComponent->RefreshInventoryProjection();
@@ -188,6 +197,7 @@ void ACombatPlayerController::EndPlay(const EEndPlayReason::Type EndPlayReason)
 		{
 			for (TActorIterator<ACombatUnitCharacter> It(World); It; ++It)
 			{
+				if (CanControlUnit(*It)) RevokeUnitControlAuthority(*It);
 				if (It->GetResourceOwnerPlayerController() == this)
 				{
 					It->SetResourceOwnerPlayerController(nullptr);
@@ -229,6 +239,7 @@ void ACombatPlayerController::OnUnPossess()
 void ACombatPlayerController::PlayerTick(const float DeltaTime)
 {
 	Super::PlayerTick(DeltaTime);
+	RefreshLocalSelection();
 	UpdateLocalCamera(DeltaTime);
 }
 
@@ -270,7 +281,7 @@ void ACombatPlayerController::UpdateLocalCamera(const float DeltaSeconds)
 	FVector2D Cursor(MouseX, MouseY);
 	const bool bUIBlocked = IsPointerOverCombatUI() || FSlateApplication::Get().IsDragDropping()
 		|| (FSlateApplication::Get().HasAnyMouseCaptor() && !Viewport->HasMouseCapture());
-	const bool bAllowEdge = bValidMouse && !bUIBlocked && !bIsTouch && !bAttackTargeting
+	const bool bAllowEdge = bValidMouse && !bUIBlocked && !bIsTouch && !bAttackTargeting && !bSelectionGesture
 		&& !(AbilityAimComponent && AbilityAimComponent->IsAiming());
 	Cursor -= FullSize * FVector2D(LP->Origin);
 	const FVector2D LocalSize = FullSize * FVector2D(LP->Size);
@@ -317,7 +328,7 @@ void ACombatPlayerController::AdvanceCommandBindingGeneration()
 
 ACombatUnitCharacter* ACombatPlayerController::GetReadyCommandedUnit() const
 {
-	return IsValid(CommandedUnit) && CommandedUnit->GetCommandingPlayerController() == this
+	return CanOperateInspectedUnit()
 		? CommandedUnit.Get() : nullptr;
 }
 
@@ -374,6 +385,18 @@ void ACombatPlayerController::BindCombatCommandActions(UEnhancedInputComponent& 
 {
 	if (AttackTargetAction) EnhancedInputComponent.BindAction(AttackTargetAction, ETriggerEvent::Started, this, &ACombatPlayerController::OnAttackTargetingStarted);
 	if (ConfirmAttackTargetAction) EnhancedInputComponent.BindAction(ConfirmAttackTargetAction, ETriggerEvent::Started, this, &ACombatPlayerController::OnAttackTargetConfirmed);
+	if (ConfirmAttackTargetAction)
+	{
+		EnhancedInputComponent.BindAction(ConfirmAttackTargetAction, ETriggerEvent::Triggered, this, &ACombatPlayerController::UpdateSelectionGesture);
+		EnhancedInputComponent.BindAction(ConfirmAttackTargetAction, ETriggerEvent::Completed, this, &ACombatPlayerController::FinishSelectionGesture);
+		EnhancedInputComponent.BindAction(ConfirmAttackTargetAction, ETriggerEvent::Canceled, this, &ACombatPlayerController::CancelSelectionGesture);
+	}
+	if (AddToSelectionAction)
+	{
+		EnhancedInputComponent.BindAction(AddToSelectionAction, ETriggerEvent::Started, this, &ACombatPlayerController::OnSelectionModifierStarted);
+		EnhancedInputComponent.BindAction(AddToSelectionAction, ETriggerEvent::Completed, this, &ACombatPlayerController::OnSelectionModifierReleased);
+		EnhancedInputComponent.BindAction(AddToSelectionAction, ETriggerEvent::Canceled, this, &ACombatPlayerController::OnSelectionModifierReleased);
+	}
 	if (CancelAttackTargetAction) EnhancedInputComponent.BindAction(CancelAttackTargetAction, ETriggerEvent::Started, this, &ACombatPlayerController::CancelCombatTargeting);
 	if (StopCommandAction) EnhancedInputComponent.BindAction(StopCommandAction, ETriggerEvent::Started, this, &ACombatPlayerController::OnStopCommand);
 }
@@ -394,6 +417,7 @@ void ACombatPlayerController::OnInputStarted()
 
 void ACombatPlayerController::BeginDestinationInput(const FHitResult& Hit)
 {
+	CancelSelectionGesture();
 	if (GetWorld()) GetWorld()->GetTimerManager().ClearTimer(PendingHUDAbilityTimer);
 	const bool bWasAbilityAiming = AbilityAimComponent && AbilityAimComponent->IsAiming();
 	if (bWasAbilityAiming) AbilityAimComponent->ResetLocalState();
@@ -502,6 +526,7 @@ void ACombatPlayerController::OnTouchReleased()
 
 void ACombatPlayerController::OnAttackTargetingStarted()
 {
+	CancelSelectionGesture();
 	if (AbilityAimComponent) AbilityAimComponent->ResetLocalState();
 	ResetDestinationInput();
 	bAttackTargeting = GetReadyCommandedUnit() != nullptr;
@@ -520,6 +545,7 @@ void ACombatPlayerController::OnAttackTargetConfirmed()
 	if (IsPointerOverCombatUI()) return;
 	if (!bAttackTargeting)
 	{
+		BeginSelectionGesture();
 		return;
 	}
 	FHitResult Hit;
@@ -544,6 +570,7 @@ void ACombatPlayerController::CancelAttackTargeting()
 
 void ACombatPlayerController::OnStopCommand()
 {
+	CancelSelectionGesture();
 	if (AbilityAimComponent) AbilityAimComponent->ResetLocalState();
 	CancelAttackTargeting();
 	ResetDestinationInput();
@@ -581,6 +608,9 @@ bool ACombatPlayerController::SubmitCombatOrder(const FCombatOrderRequest& Order
 	{
 		return false;
 	}
+	if ((Order.Type == ECombatOrderType::MoveToPoint || Order.Type == ECombatOrderType::AttackTarget
+		|| Order.Type == ECombatOrderType::Stop) && GetSelectedUnits().Num() > 1)
+		return SubmitSelectedGroupOrder(Order);
 	FCombatOrderBatchRequest Batch;
 	Batch.RequestId = AllocateCombatRequestId();
 	Batch.UnitLifeGeneration = Unit->GetLifeGeneration();
@@ -630,7 +660,7 @@ bool ACombatPlayerController::ToggleInventoryItemLock(const FCombatItemView& Exp
 
 bool ACombatPlayerController::SubmitEconomyRequest(FCombatEconomyRequest Request)
 {
-	if (!CombatEconomyComponent || !CombatEconomyComponent->IsInitialized()) return false;
+	if (!GetReadyCommandedUnit() || !CombatEconomyComponent || !CombatEconomyComponent->IsInitialized()) return false;
 	Request.RequestId = AllocateCombatRequestId();
 	Request.CommandBindingGeneration = CommandBindingGeneration;
 	Request.ExpectedEconomyRevision = CombatEconomyComponent->GetEconomyRevision();
@@ -718,7 +748,7 @@ void ACombatPlayerController::OnAbilitySlotR() { ActivateCombatAbilitySlot(3); }
 
 void ACombatPlayerController::ActivateCombatAbilitySlotFromHUD(const int32 SlotIndex)
 {
-	if (!IsLocalController() || SlotIndex < 0 || SlotIndex >= 4)
+	if (!IsLocalController() || !CanOperateInspectedUnit() || SlotIndex < 0 || SlotIndex >= 4)
 	{
 		return;
 	}
@@ -741,6 +771,7 @@ void ACombatPlayerController::ActivateCombatAbilitySlotFromHUD(const int32 SlotI
 
 void ACombatPlayerController::ActivateCombatAbilitySlot(const int32 SlotIndex)
 {
+	CancelSelectionGesture();
 	CancelAttackTargeting();
 	ResetDestinationInput();
 	AbilityAimComponent->CancelAim();
@@ -823,6 +854,7 @@ void ACombatPlayerController::ConfirmAbilityTarget(const FHitResult& Hit, const 
 
 void ACombatPlayerController::CancelCombatTargeting()
 {
+	CancelSelectionGesture();
 	if (!bFlushingPressedKeys && GetWorld()) GetWorld()->GetTimerManager().ClearTimer(PendingHUDAbilityTimer);
 	for (uint64& Serial : ItemPressSerials) Serial = 0;
 	CancelAttackTargeting();
@@ -833,6 +865,7 @@ void ACombatPlayerController::CancelCombatTargeting()
 
 void ACombatPlayerController::FlushPressedKeys()
 {
+	bSelectionModifierDown = false;
 	ResetLocalCameraInput();
 	bFlushingPressedKeys = true;
 	CancelCombatTargeting();

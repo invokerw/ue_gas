@@ -153,7 +153,8 @@ void UCombatHUDSlotWidget::ShowAbility(const FCombatHUDAbilityView& Ability, con
 		? FString::Printf(TEXT("\n自动施法：%s（按 %s 切换）"), Ability.bAutoCastEnabled ? TEXT("开启") : TEXT("关闭"), *Key.ToString())
 		: FString();
 	const FString UpgradeDetail = Ability.bCanUpgrade ? TEXT("\n可用技能点：点击上方 + 升级") : TEXT("");
-	const FString OptionalDetail = AutoCastDetail + UpgradeDetail;
+	const FString OptionalDetail = AutoCastDetail + UpgradeDetail
+		+ (Ability.SpecHandle.IsValid() ? TEXT("") : TEXT("\n仅查看 · 冷却与自动施法状态未公开"));
 	DetailText = FText::FromString(FString::Printf(TEXT("%s  [%s]\n等级 %d / %d\n%s\n法力消耗 %.0f%s%s"),
 		*Name.ToString(), *Key.ToString(), Ability.Level, Ability.MaxLevel, *Description.ToString(), Ability.ManaCost,
 		Seconds > 0 ? *FString::Printf(TEXT(" · 冷却 %.1f 秒"), Seconds) : TEXT(""), *OptionalDetail));

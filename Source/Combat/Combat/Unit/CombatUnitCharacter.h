@@ -262,6 +262,10 @@ protected:
 	uint32 LifeGeneration = 1;
 
 private:
+	friend class ACombatPlayerController;
+	/** 仅供 Unit RPC 与已经完成群体安全检查的 Controller 共用，不提供蓝图或客户端旁路。 */
+	FCombatOrderBatchResult ExecuteValidatedOrderBatch(APlayerController* RequestingController,
+		const FCombatOrderBatchRequest& Request);
 	/** 服务器实际应用到 ASC 的复制策略。 */
 	ECombatAscReplicationPolicy EffectiveAscReplicationPolicy = ECombatAscReplicationPolicy::Mixed;
 	/** 服务器生命周期锚点；Pawn 销毁或 Controller 重建时不依赖 Actor Owner 的引擎回调顺序。 */

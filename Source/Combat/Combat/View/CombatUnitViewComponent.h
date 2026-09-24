@@ -21,8 +21,8 @@ class COMBAT_API UCombatUnitViewComponent : public UActorComponent
 	GENERATED_BODY()
 
 public:
-	/** v8 在拥有者快照增加三围、主属性和全量战斗属性；原公共 View 和核心 Combat Event schema 保持兼容。 */
-	static constexpr int32 PresentationSchemaVersion = 8;
+	/** v9 增加公开英雄查看投影；操作身份、冷却、经验与技能点仍仅向拥有者复制。 */
+	static constexpr int32 PresentationSchemaVersion = 9;
 	UCombatUnitViewComponent();
 
 	/** 返回当前客户端或服务器的单位 View。 */
@@ -34,7 +34,10 @@ public:
 	/** 返回拥有者 HUD 快照；客户端按本地输入槽匹配技能，等待复制期间保留空槽。 */
 	UFUNCTION(BlueprintPure, Category="Combat|View", meta=(DisplayName="获取拥有者 HUD 快照", ToolTip="只读英雄属性和技能；不查询或修改客户端战斗 Runtime。"))
 	FCombatHUDOwnerView GetHUDOwnerView() const;
-	/** 服务器采样当前主控单位的显示信息；无主控连接时清空，仅变化时发布。 */
+	/** 所有相关客户端可读的查看投影；技能/物品操作句柄与私人字段始终为空。 */
+	UFUNCTION(BlueprintPure, Category="Combat|View", meta=(DisplayName="获取英雄查看快照", ToolTip="公开等级、属性、技能定义和物品；不含操作身份、经验、技能点或冷却。"))
+	FCombatHUDOwnerView GetHUDInspectionView() const { return HUDInspectionView; }
+	/** 服务器采样本单位的公开和拥有者显示信息；无 Owner 时只清空私有快照，仅变化时发布。 */
 	void RefreshHUDOwnerView();
 	/** 使用服务器时间计算一个 View 的剩余持续时间；无限持续返回 -1。 */
 	UFUNCTION(BlueprintPure, Category="Combat|View", meta=(DisplayName="计算 Modifier 剩余时间", ToolTip="按服务器结束时间计算剩余秒数；无限持续返回 -1。"))
@@ -96,4 +99,7 @@ private:
 	/** 只向当前 owning connection 复制，不暴露其他单位的技能库存。 */
 	UPROPERTY(ReplicatedUsing=OnRep_HUDOwnerView)
 	FCombatHUDOwnerView HUDOwnerView;
+	/** 按字段白名单构造的公开投影，与 owner-only 操作快照隔离。 */
+	UPROPERTY(ReplicatedUsing=OnRep_HUDOwnerView)
+	FCombatHUDOwnerView HUDInspectionView;
 };

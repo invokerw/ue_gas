@@ -19,6 +19,8 @@ public:
 	UCombatCharacterMovementComponent();
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 	virtual void PhysicsRotation(float DeltaTime) override;
+	/** 单位是阻挡体而非可站立地面，避免接触胶囊顶部后触发自动跳离；地形和平台沿用 UE 判定。 */
+	virtual bool IsWalkable(const FHitResult& Hit) const override;
 
 private:
 	/** 只在当前移动 Tick 内抑制普通移动朝向，避免同一帧对 Order 转身重复叠加旋转。 */

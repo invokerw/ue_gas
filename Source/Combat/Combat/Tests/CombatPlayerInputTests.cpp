@@ -215,7 +215,8 @@ bool FCombatPlayerAttackInputCancellationTest::RunTest(const FString& Parameters
 	PC->InputComponent = Input;
 	PC->BindCombatCommandActions(*Input);
 	TestEqual(TEXT("No legacy physical key bindings"), Input->KeyBindings.Num(), 0);
-	TestEqual(TEXT("Four command actions are bound"), Input->GetActionEventBindings().Num(), 4);
+	TestEqual(TEXT("Command actions include selection drag lifecycle and optional Shift"),
+		Input->GetActionEventBindings().Num(), PC->AddToSelectionAction ? 10 : 7);
 	if (!TestNotNull(TEXT("Demo mapping context is configured"), PC->DefaultMappingContext.Get())) { return false; }
 	const TPair<const UInputAction*, FKey> ExpectedMappings[] = {
 		{ PC->AttackTargetAction, EKeys::A },

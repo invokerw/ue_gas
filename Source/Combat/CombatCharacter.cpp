@@ -68,12 +68,12 @@ void ACombatCharacter::SetFollowTarget(ACombatUnitCharacter* NewTarget, const in
 	if (NewTarget && (!IsValid(NewTarget) || !PC || PC->GetCommandedUnit() != NewTarget
 		|| NewTarget->GetCommandingPlayerController() != PC)) NewTarget = nullptr;
 	if (FollowTarget.Get() == NewTarget && CameraBindingGeneration == BindingGeneration) return;
-	const bool bNewTarget = FollowTarget.Get() != NewTarget;
 	ResetCameraInput();
 	FollowTarget = NewTarget;
 	CameraBindingGeneration = BindingGeneration;
-	if (bNewTarget && NewTarget)
+	if (!bCameraAnchorInitialized && NewTarget)
 	{
+		bCameraAnchorInitialized = true;
 		SetActorLocation(ClampCameraLocation(NewTarget->GetActorLocation()), false, nullptr, ETeleportType::TeleportPhysics);
 	}
 }

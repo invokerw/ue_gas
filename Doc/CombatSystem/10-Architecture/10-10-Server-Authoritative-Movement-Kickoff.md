@@ -4,6 +4,8 @@
 > 决策/完成日期：2026-09-02。
 > 执行状态以 [00-01 开发进度台账](../00-Project/00-01-Progress-Tracker.md) 为准；当前行为同步见 [10-01](10-01-Scope-Architecture.md)、[10-07](10-07-Order-Movement.md) 与 [10-09](10-09-Client-Server-Interaction.md)。
 
+> CTRL-001 增量（2026-09-24）：保留本文 SAM 拓扑与显式换绑 API，一个 PlayerController 现在可通过多个 `Unit.Owner` 拥有多名英雄。`CommandedUnit` 仅为已确认的主选，不再枚举全部控制权。普通点击使用 `SetPrimaryUnitAuthority`，保留旧英雄 Owner、AIController 与正在执行的 Order；`GrantUnitControlAuthority` / `RevokeUnitControlAuthority` 才改变指定单位控制许可。HUD 观察独立的本地 `GetInspectedUnit()`；群体移动/攻击/停止仍由服务器逐单位执行原 Order 和 PathFollowing。下面的完整转移事务适用于旧 `SetCommandedUnitAuthority` 或显式撤权，不适用于普通选中切换；Controller EndPlay 清理全部受控单位。实现与验证见 [CTRL-001](../Specs/CTRL-001-multi-unit-selection.spec.md)。
+
 ## 1. 背景与问题
 
 改造前的 Combat Demo 由 `ACombatPlayerController` 直接 Possess `ACombatUnitCharacter`。服务器接收 Move Order、计算 NavMesh 路径并保存 Order 状态，但远端玩家控制的 Character 实际由 owning client 的 PathFollowing 驱动，再通过 UE CharacterMovement `ServerMove` 交给服务器验证。
@@ -150,6 +152,7 @@ GetCommandedUnit()           输入代码唯一查询入口
 - 单位默认 `AIControllerClass` 指向 `ACombatUnitAIController`，`AutoPossessAI` 继续覆盖关卡放置与运行时生成。
 - 增加服务器不变量检查：被玩家指挥不代表被 PlayerController Possess；发现直接 Possess 时记录错误并拒绝开始普通移动。
 - `MaxDepenetrationWithPawnAsProxy` 初始设为 `0`，作为客户端防御性表现规则，禁止 SimulatedProxy 因其他 Pawn 在本机产生非权威位移。服务器 Authority 的 Pawn 解穿透不受该字段影响。
+- CTRL-001 0.2：`UCombatCharacterMovementComponent::IsWalkable` 明确拒绝 Combat Unit 作为脚下地面。原生 Capsule 的 `CanCharacterStepUpOn=ECB_No` 只阻止主动跨上，不阻止 FindFloor/落地把胶囊顶面当成地面；随后 `ACharacter::BaseChange` 会调用 `JumpOff` 自动向上弹离。修正在地面判定处切断该路径，单位间硬阻挡、服务器解穿透、Crowd、真实地形/平台与技能 Motion 保持原规则。
 
 ### 4.5 `UCombatOrderComponent`
 

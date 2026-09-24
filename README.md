@@ -30,7 +30,7 @@ Combat 当前位于 `Combat` 单 Runtime Module 中，不是独立插件或独�
 
 项目 Skill 全部位于仓库内的 `Skills/`，按项目路径读取，不安装到用户级 Codex Skill 目录，也不影响其他项目。
 
-Demo 操作：右键点敌方单位持续普攻，超出范围时自动追击；右键点地面移动。按 **A** 进入选敌模式，再左键点敌人确认普攻；**S** 停止，**Escape** 取消选敌。卓尔游侠的 **Q** 在“霜冻之箭”开启/关闭间切换，默认开启；W/E/R 当前为空。A 模式点地面不会自动找敌或执行攻击移动（Attack Move）。
+Demo 操作：左键点击英雄在本地 HUD 查看信息；有控制权时同时选中它。按住 **Shift** 点击增删组成员，左键拖动框选自己的单位，Shift 拖框追加，最多选择 8 个。绿色圈为主选、蓝色圈为其他选中单位，橙色圈为只读查看目标。右键点地面让选中组移动，点敌人让选中组持续普攻并自动追击；**A** 后左键指定群体攻击，**S** 停止选中组，**Escape** 取消瞄准/拖框。Q/W/E/R 和物品仅操作主选英雄，点击切换英雄不会停止旧英雄或释放控制权；查看无权单位时不会给旧英雄下令。Demo 初次出生提供两名独立英雄。详见 [多操规格](Doc/CombatSystem/Specs/CTRL-001-multi-unit-selection.spec.md)。卓尔 **Q** 切换“霜冻之箭”，默认开启，W/E/R 为空；A 模式点地面不执行 Attack Move。
 
 技能指示器训练场：打开 `/Game/Combat/Demo/Indicators/L_CombatIndicators`，Q/W/E/R 分别体验单位、圆形、直线和自身技能。目标技能默认按键瞄准、左键确认，Escape/右键取消；琥珀虚线表示超距，确认后由服务器追近。Controller 可切换按下/松开快施。配置见 [10-13 技能指示器](Doc/CombatSystem/10-Architecture/10-13-Skill-Indicators.md)。
 
@@ -40,9 +40,9 @@ StateTree AI 演示：打开 `/Game/Combat/Demo/AI/L_CombatAI`，服务器自主
 
 阶段 C 战术演示：`/Game/Combat/Demo/AI/Tactics/L_CombatAI_Tactics` 使用显式 v2 Profile 展示最高效用战术选择。Hero Bot 会在合法攻击边界从持续普攻切换到主动治疗，Ranged Guard 通过服务器 EQS 选择站位后仍由公共 Move Order 移动；World 预算限制并错峰感知/EQS，旧 v1 Profile 保持阶段 A/B 时序。AI-004 已完成三 Target、专项/全量自动化、资产冷回读、PIE、Dedicated 双客户端、cook 和 64/128/256 容量验证，并于 2026-09-22 通过用户验收；配置和边界见 [20-04](Doc/CombatSystem/20-Content/20-04-StateTree-AI-Guide.md) 与 [AI-004 Spec](Doc/CombatSystem/Specs/AI-004-statetree-tactics-capacity.spec.md)。
 
-视角操作：鼠标贴近游戏视口边缘自动平移，无需抓取键；按住 **Space** 跟随主控单位，松开停留。跟随中重新贴边会由滚屏接管，需松开重按 Space 才恢复跟随。UI、瞄准和失焦会阻止误滚屏。参数与验证边界见 [10-16 视角移动](Doc/CombatSystem/10-Architecture/10-16-Dota-Camera-Movement.md)。
+视角操作：鼠标贴近游戏视口边缘自动平移，无需抓取键；按住 **Space** 跟随主控单位，松开停留。首次进入定位一次，点击或框选切换英雄保持当前镜头位置。跟随中重新贴边会由滚屏接管，需松开重按 Space 才恢复跟随。UI、瞄准和失焦会阻止误滚屏。参数与验证边界见 [10-16 视角移动](Doc/CombatSystem/10-Architecture/10-16-Dota-Camera-Movement.md)。
 
-以上按键统一通过 `/Game/Combat/Demo/Input/IMC_Default` 映射到 Input Action；可在该资产中改键。普攻选敌、确认、取消和停止的 Action 引用配置在 `BP_CombatDemoPlayerController` 的 `Input|Combat` 默认属性中，Space 跟随引用配置在 `Input|Camera`；边缘滚屏直接检测视口位置，不需要 Action。
+以上按键统一通过 `/Game/Combat/Demo/Input/IMC_Default` 映射到 Input Action；可在该资产中改键。普攻选敌、选择/确认、Shift 追加、取消和停止的 Action 引用配置在 `BP_CombatDemoPlayerController` 的 `Input|Combat` 默认属性中，Space 跟随引用配置在 `Input|Camera`；边缘滚屏直接检测视口位置，不需要 Action。
 
 底部 HUD 随本地玩家的指挥单位切换。悬停技能、Buff 或头像上的属性可查看详情；技能左键点击复用 Q/W/E/R 施法，目标技能再左键点世界确认，未瞄准时右键技能固定详情，关闭按钮或 Escape 取消固定/瞄准。HUD 阻止鼠标穿透，物品槽通过显式使用或拖放操作提交请求。英雄等级和经验环读取服务器成长快照；有技能点且满足英雄等级时，技能图标上方显示“+”按钮，点击请求服务器加点。Q 槽显示“霜冻之箭”及服务器权威的“自动/关闭”状态，W/E/R 保留空位。界面配置入口见 [10-12 底部 HUD](Doc/CombatSystem/10-Architecture/10-12-Bottom-HUD-Design.md)。
 

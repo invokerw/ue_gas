@@ -262,6 +262,21 @@ FCombatOrderBatchResult ACombatUnitCharacter::ProcessOrderBatchForConnection(
 		}
 		return Result;
 	}
+	return ExecuteValidatedOrderBatch(RequestingController, Request);
+}
+
+FCombatOrderBatchResult ACombatUnitCharacter::ExecuteValidatedOrderBatch(
+	APlayerController* RequestingController, const FCombatOrderBatchRequest& Request)
+{
+	FCombatOrderBatchResult Result;
+	Result.RequestId = Request.RequestId;
+	// 群体内较早单位的同步回调也可能转移/销毁较晚单位；执行点必须再次复核权限。
+	if (!HasAuthority() || !IsValid(this) || GetCommandingPlayerController() != RequestingController
+		|| GetOwner() != RequestingController)
+	{
+		Result.FailureTag = CombatTags::Failure_Network_Ownership;
+		return Result;
+	}
 	Result.bAccepted = true;
 	if (!CombatOrderComponent)
 	{

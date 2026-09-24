@@ -1,6 +1,7 @@
 # 00-01 开发进度台账
 
 > 最后更新：2026-09-24
+> CTRL-001 英雄查看与多操（2026-09-24）：用户已验收 0.2 并授权本地提交。查看、切换、Shift 多选/框选和群体命令已实现；镜头仅首次定位，选择/确认空窗保持锚点；单位不可作为地面，实际接触向上速度由 193.67 降至 0 cm/s。F0 GO、F1 APPROVED 0.2、F2 PASS、Push-Ready READY；Editor/Server/Client、完整 Automation 153 项（0 失败）、真实 Demo 坡道 PIE 与 Dedicated 双客户端的三段到达/折返/静置均通过。验收回写沿用已有工程验证，不新增运行验证结论。证据见 [CTRL-001](../Specs/CTRL-001-multi-unit-selection.spec.md) 与 ADR-067。
 > RES-001 玩家资源/英雄库存边界 0.2（2026-09-24）：用户已验收并授权本地提交。玩家战略资源由 PlayerController 账本持有，库存实例/Holder/槽位/修订仍归英雄；纯资源余额变化保留服务器诊断事件但退出战斗 UI 日志，购买/出售/合成和物品事件不变。最终 UE 构建、Economy 11/11、UI Log 5/5、文档与 delivery Gate 通过，见 [RES-001](../Specs/RES-001-player-resource-ownership.spec.md) 与 ADR-066。
 > StateTree AI 阶段 C（2026-09-22）：[AI-004](../Specs/AI-004-statetree-tactics-capacity.spec.md) 已完成 F0 GO、F1 APPROVED 0.2、F2 PASS 和 Push-Ready READY，并于 2026-09-22 通过用户验收。v2 Utility/Consideration、只读技能候选、EQS 战术站位、World 查询预算与 Hero/Ranged 演示已落地；三 Target、战术 21/21、AI 42/42、完整 Combat 143/143、42 资产、PIE、Dedicated 双客户端、Windows cook 和 64/128/256 AI 容量均通过。
 > StateTree AI 阶段 B（2026-09-21）：[AI-003](../Specs/AI-003-statetree-roles.spec.md) 已完成 F0 GO、F1 APPROVED 0.1、F2 PASS 和 Push-Ready READY；角色 StateTree、感知/记忆、守点归位、巡线恢复、独立演示、NavMesh 构建命令及验证均完成。最终三 Target 构建、`Combat.AI` 20/20、完整 `Combat.` 121/121、角色资产 37/37（0 error/0 warning）、Role PIE、Dedicated 双客户端和角色地图 Windows cook 通过。2026-09-21 用户确认 B 阶段验收完成；Utility/EQS 与 AI 容量不属于 B 的通过范围，现由已验收的 AI-004 提供独立证据；完整迷雾、长 soak、网络损伤和打包 exe 仍未覆盖，阶段 A/B 历史结论保留，D 未开始。
@@ -459,6 +460,7 @@ HUD-ABILITY-CLICK-001/002 追加验收状态：`用户已验收`（2026-09-14）
 | 2026-09-22 | 用户确认 AI-004 阶段 C 验收完成并要求提交；同步 Spec、当前状态、ADR/Gap 与现行指南，复核文档、交付 Gate、差异范围和 LFS 资产，不新增 UE 运行验证结论；授权本地 Git 提交，不推送 | post-M8 AI / AI-004 已验收 / 本地提交授权 |
 | 2026-09-24 | 完成 RES-001 0.2 本地交付：玩家战略资源与英雄库存分域，稳定资源 owner 与分域视图保持；按用户反馈将纯资源余额变化从战斗 UI 日志排除，同时保留服务器核心事件，购买/出售/合成和物品日志不变。0.2 Red 为 owner UI 1/期望 0，Green 为余额与核心事件保留、双玩家 UI 0/0；最终 UE 5.8.2 增量构建、Economy 11/11、UI Log 5/5、文档和 delivery Gate 通过，转为待用户 review；未修改或纳入既有二进制资产差异 | post-M8 资源所有权 / RES-001 0.2 待用户 review / ADR-066 |
 | 2026-09-24 | 用户确认 RES-001 0.2 验收完毕并要求提交；同步 Spec、当前状态与 ADR-066，复核文档、交付 Gate 和差异范围，不新增 UE 运行验证结论；授权本地 Git 提交，不推送，继续排除既有 `ST_CombatAI_Root.uasset` 差异 | post-M8 资源所有权 / RES-001 已验收 / 本地提交授权 |
+| 2026-09-24 | 用户确认 CTRL-001 0.2 验收完毕并要求提交；英雄查看、多选/框选、群体命令及镜头/顶飞反馈修正验收完成。同步 Spec、当前状态与 ADR-067，复核文档、交付 Gate、差异范围和 LFS 资产，不新增 UE 运行验证结论；授权本地 Git 提交，不推送 | post-M8 多单位控制 / CTRL-001 已验收 / 本地提交授权 |
 
 ## 15. 更新规则
 

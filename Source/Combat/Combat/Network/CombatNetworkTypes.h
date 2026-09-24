@@ -7,6 +7,25 @@
 
 #include "CombatNetworkTypes.generated.h"
 
+/** 群体命令中的一个单位身份；服务器同时复核 Owner 和生命代次。 */
+USTRUCT()
+struct COMBAT_API FCombatGroupOrderUnit
+{
+	GENERATED_BODY()
+	UPROPERTY() TObjectPtr<ACombatUnitCharacter> Unit = nullptr;
+	UPROPERTY() int64 LifeGeneration = 0;
+};
+
+/** 一次玩家手势的有界群体移动/攻击/停止；只消耗一次连接安全预算。 */
+USTRUCT()
+struct COMBAT_API FCombatGroupOrderRequest
+{
+	GENERATED_BODY()
+	UPROPERTY() int32 RequestId = 0;
+	UPROPERTY() TArray<FCombatGroupOrderUnit> Units;
+	UPROPERTY() FCombatOrderRequest Order;
+};
+
 /** 客户端向一个已拥有 Unit 提交的有界 Order 批次。 */
 USTRUCT(BlueprintType)
 struct COMBAT_API FCombatOrderBatchRequest

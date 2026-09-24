@@ -41,3 +41,10 @@ void UCombatCharacterMovementComponent::PhysicsRotation(const float DeltaTime)
 		Super::PhysicsRotation(DeltaTime);
 	}
 }
+
+bool UCombatCharacterMovementComponent::IsWalkable(const FHitResult& Hit) const
+{
+	// CanCharacterStepUpOn 只禁止主动跨上胶囊，不能阻止 FindFloor/落地将其当作地面。
+	// Character 随后的 BaseChange 会对不可站立 Pawn 调用 JumpOff，额外注入水平和向上速度。
+	return !Cast<ACombatUnitCharacter>(Hit.GetActor()) && Super::IsWalkable(Hit);
+}

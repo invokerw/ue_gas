@@ -35,6 +35,35 @@ class ACombatPlayerController : public APlayerController
 public:
 	ACombatPlayerController();
 
+	/** 选择只改变本地 HUD/命令目标；无权单位仅供查看，Shift 只增删已有控制权的成员。 */
+	UFUNCTION(BlueprintCallable, Category="Combat|Selection", meta=(DisplayName="选择战斗单位", ToolTip="本地点击查看；追加模式切换有控制权的组成员，不会授予控制权。"))
+	void SelectCombatUnit(UPARAM(DisplayName="单位") ACombatUnitCharacter* Unit, UPARAM(DisplayName="切换组成员") bool bToggle = false);
+	/** 返回本地查看对象；尚未建立选择时回退初始主控，不授予任何控制许可。 */
+	UFUNCTION(BlueprintPure, Category="Combat|Selection", meta=(DisplayName="获取查看单位", ToolTip="本地 HUD 的观察对象，可以是无控制权的单位。"))
+	ACombatUnitCharacter* GetInspectedUnit() const;
+	/** 返回有效的有权选中组，首个为主选；不包含仅供查看的其他玩家单位。 */
+	UFUNCTION(BlueprintPure, Category="Combat|Selection", meta=(DisplayName="获取选中单位", ToolTip="返回本地有控制权的选中组，最多八个。"))
+	TArray<ACombatUnitCharacter*> GetSelectedUnits() const;
+	/** 同时核对观察对象、主选和已复制的 Owner，防止 HUD 操作发给旧英雄。 */
+	bool CanOperateInspectedUnit() const;
+	/** 网络 Owner 是控制权来源；战斗阵营相同不等于可控制。 */
+	bool CanControlUnit(const ACombatUnitCharacter* Unit) const;
+	/** 服务器授予额外单位，不改变已选主控，也不取消其他单位的命令。 */
+	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category="Combat|Command", meta=(DisplayName="授予单位控制权", ToolTip="仅服务器调用；转移此单位旧控制权并取消其旧命令，保留玩家其他单位。"))
+	bool GrantUnitControlAuthority(UPARAM(DisplayName="单位") ACombatUnitCharacter* Unit);
+	/** 服务器撤销指定单位，取消该单位命令；其他有权单位保持运行。 */
+	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category="Combat|Command", meta=(DisplayName="撤销单位控制权", ToolTip="仅服务器调用；取消指定单位命令并清除其 Owner，不影响其他单位。"))
+	bool RevokeUnitControlAuthority(UPARAM(DisplayName="单位") ACombatUnitCharacter* Unit);
+	/** 服务器只切换已有控制权的主选，不转移 Owner、不停止旧英雄。 */
+	bool SetPrimaryUnitAuthority(ACombatUnitCharacter* Unit);
+	/** 框选只接纳当前有权单位；排序由屏幕选择器提供，去重并限制八个。 */
+	void SelectCombatUnits(const TArray<ACombatUnitCharacter*>& Units, bool bAppend);
+	/** HUD 使用的本地选择框；返回 false 时没有有效拖框。 */
+	bool GetSelectionRectangle(FVector2D& Start, FVector2D& End) const;
+	/** 服务器群体请求入口；安全检查全部通过后才逐单位进入公共 Order。 */
+	FCombatOrderBatchResult ProcessGroupOrderRequest(const FCombatGroupOrderRequest& Request);
+	static constexpr int32 MaxSelectedUnits = 8;
+
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 	/** 在 Enhanced Input 本帧处理完后更新本地镜头；不提交任何单位命令。 */
 	virtual void PlayerTick(float DeltaTime) override;
@@ -165,9 +194,12 @@ protected:
 	UPROPERTY(EditAnywhere, Category="Input|Combat", meta=(DisplayName="普攻选敌输入", ToolTip="开始选择普通攻击目标；在输入映射中配置按键，Demo 默认 A。为空时禁用此输入。"))
 	TObjectPtr<UInputAction> AttackTargetAction;
 
-	/** 共享普攻选敌与标准技能瞄准的确认输入，默认鼠标左键。 */
-	UPROPERTY(EditAnywhere, Category="Input|Combat", meta=(DisplayName="确认战斗目标输入", ToolTip="在普攻选敌或技能瞄准模式中确认实际命中，Demo 默认鼠标左键；UI 上不提交。为空时禁用。"))
+	/** 普通点击/框选与战斗瞄准共用的输入，默认鼠标左键；瞄准确认优先。 */
+	UPROPERTY(EditAnywhere, Category="Input|Combat", meta=(DisplayName="确认战斗目标输入", ToolTip="普通状态点击查看或拖动框选；普攻/技能瞄准时确认实际命中。Demo 默认左键，UI 上不提交，空值禁用。"))
 	TObjectPtr<UInputAction> ConfirmAttackTargetAction;
+	/** 与点击/框选配合的追加动作，由 IMC 默认映射到左右 Shift。 */
+	UPROPERTY(EditAnywhere, Category="Input|Selection", meta=(DisplayName="追加选择输入", ToolTip="按住时点击增删组成员、框选追加；空值禁用追加选择。"))
+	TObjectPtr<UInputAction> AddToSelectionAction;
 
 	/** 取消本地选敌模式的输入，不停止正在执行的服务器命令，默认 Escape。 */
 	UPROPERTY(EditAnywhere, Category="Input|Combat", meta=(DisplayName="取消战斗选敌输入", ToolTip="退出本地普攻选敌或技能瞄准，不停止单位当前命令，Demo 默认 Escape。为空时禁用此输入。"))
@@ -192,7 +224,40 @@ protected:
 	UPROPERTY(EditAnywhere, Category="Input|Items", meta=(DisplayName="物品快捷键动作", ToolTip="六个装备槽的 Enhanced Input Action，默认映射为数字 1 到 6，可在映射上下文中修改。")) TArray<TObjectPtr<UInputAction>> ItemSlotActions;
 
 private:
+	/** 本地弱选择不参与复制；Owner 和主选继续由服务器确认。 */
+	TArray<TWeakObjectPtr<ACombatUnitCharacter>> SelectedUnits;
+	TWeakObjectPtr<ACombatUnitCharacter> InspectedUnit;
+	bool bSelectionInitialized = false;
+	bool bSelectionGesture = false;
+	bool bSelectionAdditive = false;
+	bool bSelectionModifierDown = false;
+	FVector2D SelectionStart = FVector2D::ZeroVector;
+	FVector2D SelectionEnd = FVector2D::ZeroVector;
+	/** 保留最近发送的主选意图，跨只读查看期间也能纠正尚未到达的旧复制。 */
+	TWeakObjectPtr<ACombatUnitCharacter> LastRequestedPrimary;
+	int32 PendingPrimaryRequestId = 0;
+	/** 选择输入与瞄准复用同一确认 Action，只有普通世界点击启动选择。 */
+	void BeginSelectionGesture();
+	void UpdateSelectionGesture();
+	void FinishSelectionGesture();
+	void CancelSelectionGesture();
+	void OnSelectionModifierStarted();
+	void OnSelectionModifierReleased();
+	/** 清理失效/撤权成员并在初始 Owner 到达后建立单选，不恢复已取消的手势。 */
+	void RefreshLocalSelection();
+	/** 本地选择变化只取消旧输入意图，再请求服务器切换已有权限的主选。 */
+	void PublishLocalSelection();
+	/** 多选共用一次连接预算；单选继续沿既有 Unit RPC。 */
+	bool SubmitSelectedGroupOrder(const FCombatOrderRequest& Order);
+	UFUNCTION(Server, Reliable) void ServerSelectPrimaryUnit(ACombatUnitCharacter* Unit, int32 RequestId);
+	UFUNCTION(Client, Reliable) void ClientPrimarySelectionResult(int32 RequestId, bool bAccepted);
+	UFUNCTION(Server, Reliable) void ServerIssueGroupOrder(FCombatGroupOrderRequest Request);
+#if WITH_DEV_AUTOMATION_TESTS
+	friend class FCombatSelectionGroupTest;
+	friend class FCombatSelectionLifecycleTest;
+#endif
 	friend class ACombatAbilityAimScenarioActor;
+	friend class ACombatSelectionNetworkScenario;
 	/** 本地意图适配默认子对象，Dedicated 禁用 Tick 且不生成视觉 Actor。 */
 	UPROPERTY(VisibleAnywhere, Category="Combat|Indicator", meta=(DisplayName="技能瞄准", ToolTip="只在本地玩家上更新的技能指示器会话。"))
 	TObjectPtr<UCombatAbilityAimComponent> AbilityAimComponent;

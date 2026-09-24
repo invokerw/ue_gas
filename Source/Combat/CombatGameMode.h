@@ -36,6 +36,9 @@ public:
 	bool AreEconomyDebugCommandsEnabled() const { return bEnableEconomyDebugCommands; }
 
 protected:
+	/** 初次出生时额外生成同类英雄并授予本玩家；重建 Command Pawn 不重复生成。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Command", meta=(ClampMin="0", ClampMax="7", DisplayName="额外初始英雄数", ToolTip="默认 0 保留单英雄；演示可设 1 体验多操，最多 7。额外英雄具有独立库存。"))
+	int32 AdditionalControlledUnitCount = 0;
 	/** 本关卡冻结为每个玩家规则快照的经济资产；为空时经济 fail-closed。 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Economy", meta=(DisplayName="关卡经济规则", ToolTip="设置本关卡金币上限、起始金币、被动收入与出售规则。"))
 	TObjectPtr<UCombatEconomyData> EconomyData;

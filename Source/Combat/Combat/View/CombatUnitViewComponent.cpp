@@ -209,6 +209,7 @@ void UCombatUnitViewComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProper
 	DOREPLIFETIME(UCombatUnitViewComponent, UnitView);
 	DOREPLIFETIME(UCombatUnitViewComponent, ModifierViews);
 	DOREPLIFETIME_CONDITION(UCombatUnitViewComponent, HUDOwnerView, COND_OwnerOnly);
+	DOREPLIFETIME(UCombatUnitViewComponent, HUDInspectionView);
 }
 
 void UCombatUnitViewComponent::BeginPlay()

@@ -7,6 +7,82 @@
 #include "Combat/Log/CombatEventSubsystem.h"
 #include "Combat/Unit/CombatUnitCharacter.h"
 
+bool UCombatNetworkSecuritySubsystem::ValidateAndConsumePrimarySelection(APlayerController* Player,
+	ACombatUnitCharacter* Unit, const int32 RequestId, FGameplayTag& Failure, FString& Diagnostic)
+{
+	// 使用同一拒绝记录格式和连接预算，主选请求不执行任何 Order。
+	FCombatOrderBatchRequest Envelope;
+	Envelope.RequestId = RequestId;
+	Failure = {};
+	Diagnostic.Reset();
+	PruneInvalidConnections();
+	if (!IsValid(Player) || !Player->HasAuthority() || !IsValid(Unit) || Unit->GetWorld() != GetWorld()
+		|| Unit->GetOwner() != Player || Unit->GetCommandingPlayerController() != Player)
+	{
+		Failure = CombatTags::Failure_Network_Ownership;
+		Diagnostic = TEXT("Primary selection requires an already owned unit");
+	}
+	else if (ConsumeConnectionBudget(Player, RequestId, Failure, Diagnostic))
+	{
+		++Stats.AcceptedRequests;
+		return true;
+	}
+	RecordRejection(Player, Unit, Envelope, Failure, Diagnostic);
+	return false;
+}
+
+bool UCombatNetworkSecuritySubsystem::ValidateAndConsumeGroupRequest(APlayerController* Player,
+	const FCombatGroupOrderRequest& Request, FGameplayTag& Failure, FString& Diagnostic)
+{
+	Failure = {};
+	Diagnostic.Reset();
+	PruneInvalidConnections();
+	FCombatOrderBatchRequest Envelope;
+	Envelope.RequestId = Request.RequestId;
+	Envelope.Orders.Add(Request.Order);
+	const auto Reject = [&](const FGameplayTag Tag, const TCHAR* Detail)
+	{
+		Failure = Tag;
+		Diagnostic = Detail;
+		RecordRejection(Player, nullptr, Envelope, Failure, Diagnostic);
+		return false;
+	};
+	if (!IsValid(Player) || !Player->HasAuthority() || Player->GetWorld() != GetWorld())
+		return Reject(CombatTags::Failure_Network_Ownership, TEXT("Invalid group requesting connection"));
+	if (Request.RequestId <= 0) return Reject(CombatTags::Failure_Network_InvalidRequestId, TEXT("Group RequestId must be positive"));
+	if (Request.Units.IsEmpty() || Request.Units.Num() > 8 || Request.Units.Num() > MaxOrdersPerRequest
+		|| 192 + Request.Units.Num() * 32 > MaxEstimatedPayloadBytes)
+		return Reject(CombatTags::Failure_Network_PayloadTooLarge, TEXT("Group unit count or payload exceeds limit"));
+	const auto& Order = Request.Order;
+	const bool bMove = Order.Type == ECombatOrderType::MoveToPoint;
+	const bool bAttack = Order.Type == ECombatOrderType::AttackTarget;
+	const bool bStop = Order.Type == ECombatOrderType::Stop;
+	if ((!bMove && !bAttack && !bStop) || Order.AbilitySpecHandle.IsValid() || Order.ItemHandle.IsValid()
+		|| Order.OtherItemHandle.IsValid() || Order.ItemRevision || Order.InventoryRevision
+		|| Order.FromItemSlot != INDEX_NONE || Order.ToItemSlot != INDEX_NONE
+		|| Order.bHasTargetLocation != bMove || Order.TargetLocation.ContainsNaN()
+		|| (bAttack ? !IsValid(Order.TargetUnit) || Order.TargetUnit->GetWorld() != GetWorld() : Order.TargetUnit != nullptr))
+		return Reject(CombatTags::Failure_Network_PayloadTooLarge, TEXT("Group accepts only canonical Move/Attack/Stop payloads"));
+	TSet<ACombatUnitCharacter*> Unique;
+	for (const auto& Entry : Request.Units)
+	{
+		ACombatUnitCharacter* Unit = Entry.Unit;
+		if (!IsValid(Unit) || Unit->GetWorld() != GetWorld() || !Unit->HasAuthority()
+			|| Unit->GetOwner() != Player || Unit->GetCommandingPlayerController() != Player)
+			return Reject(CombatTags::Failure_Network_Ownership, TEXT("Group contains an unowned unit"));
+		if (Unique.Contains(Unit) || Entry.LifeGeneration <= 0 || Entry.LifeGeneration != Unit->GetLifeGeneration())
+			return Reject(CombatTags::Failure_Network_PayloadTooLarge, TEXT("Group contains a duplicate or stale unit identity"));
+		Unique.Add(Unit);
+	}
+	if (!ConsumeConnectionBudget(Player, Request.RequestId, Failure, Diagnostic))
+	{
+		RecordRejection(Player, nullptr, Envelope, Failure, Diagnostic);
+		return false;
+	}
+	++Stats.AcceptedRequests;
+	return true;
+}
+
 bool UCombatNetworkSecuritySubsystem::ValidateAndConsumeOrderRequest(
 	APlayerController* RequestingController,
 	ACombatUnitCharacter* Unit,

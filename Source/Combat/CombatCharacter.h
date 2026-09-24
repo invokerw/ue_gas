@@ -70,6 +70,8 @@ private:
 	uint64 FollowPressSerial = 0;
 	uint64 NextFollowSerial = 0;
 	int32 CameraBindingGeneration = INDEX_NONE;
+	/** 每个本地 Command Pawn 仅定位一次；选择确认的空窗不能重新触发初始居中。 */
+	bool bCameraAnchorInitialized = false;
 	FVector PanVelocity = FVector::ZeroVector;
 	/** 在已有滚屏中按下 Space 时先跟随；鼠标离开再进入边缘，才作为新的手动接管。 */
 	bool bWasAtEdge = false;
@@ -90,7 +92,7 @@ public:
 
 	virtual void EndPlay(const EEndPlayReason::Type Reason) override;
 
-	/** 绑定变化时取消旧会话，新就绪目标只居中一次；同目标/代次刷新不跳镜。只供本地 Controller 调用。 */
+	/** 绑定变化时取消旧会话；仅首次有效目标初始化镜头，后续选择或重新就绪保持锚点。只供本地 Controller 调用。 */
 	void SetFollowTarget(ACombatUnitCharacter* NewTarget, int32 BindingGeneration = 0);
 	/** 开始一次按住跟随；无就绪目标/重复按住返回 0。返回号必须交给匹配的释放调用。 */
 	uint64 BeginCameraFollow();

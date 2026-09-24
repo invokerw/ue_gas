@@ -25,7 +25,7 @@
 
 ## 2. 当前工程基线
 
-截至 2026-09-20，仓库基线为（验证与验收以实时台账为准）：
+截至 2026-09-24，仓库基线为（验证与验收以实时台账为准）：
 
 - `ue_gas.uproject` 关联 UE 5.8，并启用 GameplayAbilities、StateTree 以及 Editor/MCP 辅助插件；AI-002 已接入 `StateTreeModule` / `GameplayStateTreeModule`，Unit 的可选 AI Profile 启用服务器 Brain。阶段 A 配置见 [20-04](../20-Content/20-04-StateTree-AI-Guide.md)。
 - `Source/Combat/Combat.Build.cs` 已接入 GameplayAbilities、GameplayTags、GameplayTasks、导航、网络、Niagara 和 UMG/Slate 等运行时依赖。
@@ -33,6 +33,7 @@
 - 当前仍保持单 Runtime Module；`ue_gasEditor`、`ue_gasServer`、`ue_gasClient` Target 均存在。Server/Client Target 的源码引擎要求见 [90-02 M1 环境决策](../90-History/90-02-M1-Environment-Decision.md)。
 - `/Game/Combat/Demo/Maps/L_CombatDemo` 提供卓尔游侠霜冻之箭与默认追踪普攻 Demo；英雄和木桩位于 `/Game/Combat/Demo/Heros`，`/Game/Combat/Tests/L_CombatTest` 用于 PIE、Dedicated 和容量验证。
 - SAM 服务器权威移动已落地：`ACombatGameMode` 在默认出生阶段独立生成 Combat Unit 与 Command Pawn，Unit 由唯一服务器专用 AIController Possess，玩家只拥有无碰撞 Command Pawn；所有客户端的 Combat Unit 均为 SimulatedProxy。
+- CTRL-001 支持本地英雄查看、主选切换、Shift 多选/框选及最多 8 单位的群体移动/攻击/停止。`Unit.Owner` 授权，`CommandedUnit` 标识主选，本地观察和选中组独立；切主选不取消旧英雄命令。公开 HUD 展示白名单与 owner-only 操作身份分离，展示 schema 为 9，详见 [10-09](10-09-Client-Server-Interaction.md)、[10-12](10-12-Bottom-HUD-Design.md)。
 - `Variant_Strategy` 与 `Variant_TwinStick` 模板源码、资产和关卡已移除；可玩与验证入口统一位于 `/Game/Combat/Demo` 和 `/Game/Combat/Tests`。
 - `/Game/TopDown` 模板蓝图、示例关卡及 World Partition 外部数据已移除；Combat 仍使用的移动输入、点击光标和环境材质已归档到 `/Game/Combat/Demo` 与 `/Game/Combat/Shared`。
 - `.codex/config.toml` 配置本地 `unreal-mcp` endpoint，Editor/Content/PIE 操作遵循“读取—修改—回读—测试”闭环。

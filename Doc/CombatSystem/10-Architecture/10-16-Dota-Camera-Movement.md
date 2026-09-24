@@ -1,7 +1,7 @@
 # 10-16 Dota 风格视角移动：边缘滚屏与主控单位跟随
 
 > 状态：CAM-001 设计与 CAM-002 实现均已通过用户 review；2026-09-20 用户授权本地提交。运行验证与覆盖边界见 [实施 Spec](../Specs/CAM-002-edge-pan-follow.spec.md)。
-> 更新日期：2026-09-20
+> 更新日期：2026-09-24（CTRL-001 选择反馈修正）
 > 适用基线：Unreal Engine 5.8、`Combat` 单 Runtime Module、`combat_v4_economy_rc1`
 
 ## 1. 玩家操作
@@ -19,7 +19,7 @@
 | HUD、日志、商店、拖放、技能瞄准或攻击选敌 | 阻止边缘滚屏，清除惯性 |
 | 窗口/视口失焦、控制台打开 | 停止镜头输入并取消跟随 |
 
-新主控单位就绪时居中一次。单位指针和绑定代次都相同的刷新不会重新居中。绑定高度作为镜头锚点 Z，之后平移和跟随均不追踪地形高度。
+每个本地 Command Pawn 仅在首次有效主控单位就绪时居中一次。点击、框选、切换主选、只读查看后返回和网络确认中的临时空目标均保持已有镜头锚点；需要查看新主选位置时按 Space。更换 Command Pawn 后重新执行首次定位。初始绑定高度作为镜头锚点 Z，之后平移和跟随均不追踪地形高度。
 
 ## 2. Dota 参考与项目选择
 
@@ -39,7 +39,7 @@ Space 键位、松开冻结、边缘接管、固定 Z 和下列数值是本项�
 | `IsCameraViewportFocused` | 检查 LocalPlayer、视口焦点、应用激活与控制台状态 |
 | `UpdateLocalCamera` | 获取实际视口指针位置，换算 LocalPlayer 子视口，执行 UI/瞄准/触摸/出界门控 |
 | `BindCameraActions` | Started 开始跟随，Completed/Canceled 结束匹配手势 |
-| `SetFollowTarget(Unit, Generation)` | 绑定去重、废弃旧手势，新就绪目标只居中一次 |
+| `SetFollowTarget(Unit, Generation)` | 绑定去重、废弃旧手势；只在本 Pawn 首次有效绑定时初始化位置，后续换目标保持锚点 |
 | `GetEdgePanInput(Cursor, Size)` | 将视口像素位置转换为屏幕右/上方向和强度，无输入 Action |
 | `BeginCameraFollow` / `EndCameraFollow(Serial)` | 使用单调按住号保护释放，旧号不能取消新会话 |
 | `UpdateCamera` | 每帧只执行滚屏、跟随或自由状态之一 |
@@ -63,7 +63,7 @@ stateDiagram-v2
 
 `FollowHeld` 中的新边缘输入结束本次跟随，但保留物理按住号，直到对应释放才允许新按下。已处于边缘时按 Space 会暂时忽略该边缘，避免刚进入跟随又被旧输入撤销；移出触发带后重新武装。松开 Space 后，如果鼠标仍贴边，下一帧可以继续滚屏。
 
-绑定指针或代次变化、Unit Owner 丢失、Unit 销毁、Pawn 更换、UnPossess、Controller EndPlay 和 `FlushPressedKeys` 均使旧输入失效。同一 Unit 的重复有效绑定不会跳镜。死亡 Actor 仍有效且仍是当前主控时可继续跟随；不自动寻找替代单位。
+绑定指针或代次变化、Unit Owner 丢失、Unit 销毁、Pawn 更换、UnPossess、Controller EndPlay 和 `FlushPressedKeys` 均使旧输入失效。相机锚点初始化标记独立于目标指针，临时失去可操作目标不会使下一次刷新跳镜。死亡 Actor 仍有效且仍是当前主控时可继续跟随；不自动寻找替代单位。
 
 ## 5. 参数与资产
 
@@ -87,7 +87,7 @@ stateDiagram-v2
 
 ## 6. 验证与复核
 
-自动化入口 `Combat.Camera` 包含五组：自由锚点、边缘方向/阈值/帧率/高度/边界、跟随/绑定/旧释放/销毁、非本地与 Dedicated 权限、真实 Demo 输入映射与绑定事件。完整命令、结果和日志见 [CAM-002 §7](../Specs/CAM-002-edge-pan-follow.spec.md#7-测试矩阵与命令)。
+自动化入口 `Combat.Camera` 包含六组：自由锚点、边缘方向/阈值/帧率/高度/边界、跟随/绑定/旧释放/销毁、非本地与 Dedicated 权限、真实 Demo 输入映射与绑定事件，以及 CTRL-001 新增的框选换主选/确认空窗保持锚点。初版证据见 [CAM-002 §7](../Specs/CAM-002-edge-pan-follow.spec.md#7-测试矩阵与命令)，选择修正与联机回归见 [CTRL-001](../Specs/CTRL-001-multi-unit-selection.spec.md)。
 
 PIE 与 `Tools/RunDedicated.ps1 -InstalledEditor -Camera` 在真实游戏实例和连接中注入边缘样本，核对相机位移、跟随、释放、单位不被相机修改和双客户端隔离；日志明确标记 `Input=Synthetic`。它们不代替可见窗口中的物理鼠标、Alt-Tab 和不同 DPI 手感验收。
 

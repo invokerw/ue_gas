@@ -21,7 +21,7 @@ class UTexture2D;
 struct FStreamableHandle;
 
 /**
- * 底部 HUD 的本地只读适配：由 HUD Actor 持有，观察显式 CommandedUnit。
+ * 底部 HUD 的本地只读适配：由 HUD Actor 持有，观察本地 InspectedUnit；仅已确认且有权的主选允许交互。
  * Blueprint Designer 提供布局和可选控件；本类只把 View 变为文字、进度和可见性，不写 ASC 或发送 Order。
  * 换单位、换生命、观察目标 EndPlay 及 Widget Destruct 时清理详情、效果子控件和异步定义加载。
  */
@@ -35,7 +35,9 @@ public:
 	/** 返回当前观察目标，供本地诊断，不提供控制权。 */
 	UFUNCTION(BlueprintPure, Category="Combat|HUD", meta=(DisplayName="获取 HUD 观察单位", ToolTip="当前 HUD 的弱观察目标，可能为空。"))
 	ACombatUnitCharacter* GetObservedUnit() const { return BoundUnit.Get(); }
-	/** 最近一次有效拥有者快照，用于蓝图扩展与验证。 */
+	/** UI 操作必须同时匹配观察目标与服务器确认的主选；查看其他英雄时返回 false。 */
+	bool CanOperateObservedUnit() const;
+	/** 最近一次有效展示快照；无权单位仅有公开字段，用于蓝图扩展与验证。 */
 	UFUNCTION(BlueprintPure, Category="Combat|HUD", meta=(DisplayName="获取 HUD 显示快照", ToolTip="返回本地最近一次匹配生命代次的只读快照。"))
 	const FCombatHUDOwnerView& GetDisplaySnapshot() const { return DisplaySnapshot; }
 	/** 实际可见面板、技能/加点和详情的屏幕几何命中，用于阻止世界点击穿透。 */
