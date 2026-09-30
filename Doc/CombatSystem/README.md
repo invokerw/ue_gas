@@ -52,7 +52,7 @@
 | [10-11 头顶 UI：C++ 与蓝图边界](10-Architecture/10-11-Overhead-Blueprint-UI.md) | 展示快照、生命周期、UMG 蓝图维护入口与迁移 | UI、美术、战斗与网络开发 |
 | [10-14 物品系统](10-Architecture/10-14-Item-System.md) | 装备/背包、主动被动、场景拾取、HUD、版本与迁移 | 玩法、内容、网络与 UI 开发 |
 | [10-15 经济、商店与合成](10-Architecture/10-15-Economy-Shop-Crafting.md) | 单一金币、全局商店、库存配方事务、RPC 安全与 Demo 配置 | 玩法、内容、网络与 UI 开发 |
-| [10-12 底部居中 HUD：设计与实现](10-Architecture/10-12-Bottom-HUD-Design.md) | 定稿布局、拥有者快照、Widget Blueprint 与物品接线 | UI、美术、网络开发与验收 |
+| [10-12 底部居中 HUD：设计与实现](10-Architecture/10-12-Bottom-HUD-Design.md) | 定稿布局、拥有者快照、Widget Blueprint、物品接线与左下角小地图实现基线 | UI、美术、网络开发与验收 |
 | [10-13 技能瞄准与范围指示器](10-Architecture/10-13-Skill-Indicators.md) | 输入会话、三层贴花、Action 参数与训练场 | 输入、技能、UI 与验收 |
 | [10-16 Dota 风格视角移动](10-Architecture/10-16-Dota-Camera-Movement.md) | 屏幕边缘自动平移、按住 Space 跟随主控单位、输入冲突与实现验收 | 输入、相机、单位控制与 UI 开发 |
 | [10-17 StateTree 通用 AI 决策系统设计](10-Architecture/10-17-StateTree-AI-Decision-System.md) | 已接受的 0.2 总体方案；阶段 A 已验收，其余感知、角色、Utility 和容量按阶段验证 | AI、玩法、内容、测试与架构评审 |
@@ -91,6 +91,8 @@
 | [DEMO-901 卓尔游侠 Demo 流程](Specs/DEMO-901-drow-ranger-flow.spec.md) | 英雄资产迁移、远程普攻、霜冻之箭、AutoCast HUD 与完整验证 | 内容、技能、UI 与验收人员 |
 | [CAM-001 Dota 风格相机调研](Specs/CAM-001-dota-camera-research.spec.md) | Dota 参考行为、边缘滚屏/Space 跟随设计、实现落点与验证矩阵 | 相机、输入、单位控制与评审人员 |
 | [CAM-002 边缘滚屏与 Space 跟随](Specs/CAM-002-edge-pan-follow.spec.md) | 本地相机实现、Demo 输入资产、自动化/PIE/双客户端验证 | 相机、输入与验收人员 |
+| [HUD-MINIMAP-001 小地图设计](Specs/HUD-MINIMAP-001-minimap-design.spec.md) | 左下角小地图的布局、图层、交互、权限边界、生命周期和后续验收基线 | HUD、相机、输入、网络与 UI 评审人员 |
+| [HUD-MINIMAP-002 小地图实现](Specs/HUD-MINIMAP-002-minimap-implementation.spec.md) | 原生 Widget、暗色地表与真实原型几何、全量无文字、左下锚定、固定地图与本地镜头拖动、靠边裁剪可见镜头轮廓、按地图配置投影、镜头/Move/Ping 适配、编辑器保存并生成按钮与 JSON 地形重生成流程、验证证据 | HUD、相机、输入、测试与评审人员 |
 | [AI-001 StateTree AI 设计文档](Specs/AI-001-statetree-ai-design.spec.md) | 通用 StateTree 决策方案的文档任务、事实依据、审查与验证边界 | AI、玩法与架构评审人员 |
 | [AI-002 StateTree 阶段 A 实现](Specs/AI-002-statetree-runtime.spec.md) | 已验收的运行时、Order 协议、生命周期、资产和分层验证证据 | AI、玩法与测试 |
 | [AI-003 StateTree 阶段 B 角色](Specs/AI-003-statetree-roles.spec.md) | 感知/记忆、守点归位与路线职责、角色演示及分层验证 | AI、玩法、内容与测试 |

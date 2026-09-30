@@ -37,7 +37,7 @@ public class Combat : ModuleRules
 		if (Target.bBuildEditor)
 		{
 			// 树资产构建和编译只在编辑器使用，Server/Client 不链接编辑器模块。
-			PrivateDependencyModuleNames.AddRange(new string[] { "StateTreeEditorModule", "PropertyBindingUtils", "UnrealEd" });
+			PrivateDependencyModuleNames.AddRange(new string[] { "StateTreeEditorModule", "PropertyBindingUtils", "UnrealEd", "ToolMenus", "LevelEditor" });
 		}
 
 		PublicIncludePaths.AddRange(new string[] {

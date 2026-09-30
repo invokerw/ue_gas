@@ -42,6 +42,8 @@ public:
 	const FCombatHUDOwnerView& GetDisplaySnapshot() const { return DisplaySnapshot; }
 	/** 实际可见面板、技能/加点和详情的屏幕几何命中，用于阻止世界点击穿透。 */
 	bool IsScreenPositionOverUI(FVector2D Position) const;
+	/** 返回真正可见的底部面板/详情几何，供同层小组件避让；全屏根控件不作为阻挡区。 */
+	bool GetVisibleAvoidanceRect(FSlateRect& OutRect) const;
 	/** 返回当前屏幕位置的技能槽；范围悬停不依赖详情是否固定。 */
 	int32 GetHoveredAbilitySlot(FVector2D Position) const;
 	/** 拖拽期间临时接收视口落点；结束后恢复原命中策略。 */

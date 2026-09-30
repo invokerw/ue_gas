@@ -102,6 +102,10 @@ public:
 	void ResetCameraInput();
 	/** 每帧由 Controller 输入处理后调用一次；EdgeInput 为屏幕右/上方向，UI 门控为 false 时立即清除平移。 */
 	void UpdateCamera(float DeltaSeconds, FVector2D EdgeInput, bool bAllowEdgePan = true);
+	/** 将本地镜头锚点定位到小地图世界 XY；保持高度并清除旧跟随/边缘惯性。 */
+	bool SetCameraLocationFromMinimap(FVector2D WorldXY);
+	/** 按小地图拖动产生的世界 XY 增量平移本地镜头；保持地图层固定且不修改战斗单位。 */
+	bool PanCameraFromMinimap(FVector2D WorldDelta);
 	/** 将游戏视口中的像素位置换算为边缘方向与强度；无效/出界坐标返回零，无需鼠标位移事件。 */
 	FVector2D GetEdgePanInput(FVector2D Cursor, FVector2D ViewportSize) const;
 	ECombatCameraMode GetCameraMode() const { return CameraMode; }

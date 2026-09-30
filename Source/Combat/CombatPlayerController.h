@@ -98,6 +98,14 @@ public:
 	ECombatAbilityCastMode GetAbilityCastMode() const { return AbilityCastMode; }
 	/** 使用实际 Slate 几何检测本玩家 HUD/日志区域，不把全屏根控件当成 UI 阻挡。 */
 	bool IsPointerOverCombatUI() const;
+	/** 小地图判断当前是否处于攻击或技能瞄准；右键地图只取消该本地会话。 */
+	bool IsCombatTargetingActive() const;
+	/** 小地图左键短点击只移动本地 Command Pawn，保持高度且不提交 Order。 */
+	bool RelocateCameraFromMinimap(FVector2D WorldXY);
+	/** 小地图左键拖动只平移本地相机，底图与标记保持固定且不提交 Order。 */
+	bool PanCameraFromMinimap(FVector2D WorldDelta);
+	/** 小地图右键复用现有选中组 MoveToPoint 公共入口；返回值只表示请求已发送。 */
+	bool SubmitMinimapMoveOrder(FVector WorldLocation);
 	/** HUD 消费 Escape 或应用失焦时也能取消本地意图，不发送 Stop。 */
 	void CancelCombatTargeting();
 	/** 本地 HUD 技能槽点击入口；只转发槽位索引，Ability/目标/权限仍由现有输入与服务器链路处理。 */

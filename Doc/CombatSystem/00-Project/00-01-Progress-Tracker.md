@@ -1,6 +1,7 @@
 # 00-01 开发进度台账
 
-> 最后更新：2026-09-24
+> 最后更新：2026-09-30
+> HUD-MINIMAP-002（2026-09-30）：0.3 修复运行时 `Collapsed` 后，0.4 按用户追加要求将小地图固定到视口左下并支持拖动，0.5 移除鼠标悬停时的操作提示行，0.6 将左键拖动改为平移摄像机视角并保持地图固定，0.7 保持未越界镜头为透视梯形，0.8 改为靠边裁剪可见部分并继续随摄像机移动，0.9 增加暗色地形与标识，1.0/1.1 移除全部文字并收敛按下定位拖动时序，1.2 增加保存地图后生成 JSON 配置的编辑器入口；正常模块冷启动 PIE 截图与 `VISIBLE` 回读通过，Minimap 8/8、Camera 6/6，用户已完成验收并授权本地提交。完整 Combat 回归受 UE/D3D12 设备移除中断，未宣称全量通过。见 [HUD-MINIMAP-002 Spec](../Specs/HUD-MINIMAP-002-minimap-implementation.spec.md)。
 > CTRL-001 英雄查看与多操（2026-09-24）：用户已验收 0.2 并授权本地提交。查看、切换、Shift 多选/框选和群体命令已实现；镜头仅首次定位，选择/确认空窗保持锚点；单位不可作为地面，实际接触向上速度由 193.67 降至 0 cm/s。F0 GO、F1 APPROVED 0.2、F2 PASS、Push-Ready READY；Editor/Server/Client、完整 Automation 153 项（0 失败）、真实 Demo 坡道 PIE 与 Dedicated 双客户端的三段到达/折返/静置均通过。验收回写沿用已有工程验证，不新增运行验证结论。证据见 [CTRL-001](../Specs/CTRL-001-multi-unit-selection.spec.md) 与 ADR-067。
 > RES-001 玩家资源/英雄库存边界 0.2（2026-09-24）：用户已验收并授权本地提交。玩家战略资源由 PlayerController 账本持有，库存实例/Holder/槽位/修订仍归英雄；纯资源余额变化保留服务器诊断事件但退出战斗 UI 日志，购买/出售/合成和物品事件不变。最终 UE 构建、Economy 11/11、UI Log 5/5、文档与 delivery Gate 通过，见 [RES-001](../Specs/RES-001-player-resource-ownership.spec.md) 与 ADR-066。
 > StateTree AI 阶段 C（2026-09-22）：[AI-004](../Specs/AI-004-statetree-tactics-capacity.spec.md) 已完成 F0 GO、F1 APPROVED 0.2、F2 PASS 和 Push-Ready READY，并于 2026-09-22 通过用户验收。v2 Utility/Consideration、只读技能候选、EQS 战术站位、World 查询预算与 Hero/Ranged 演示已落地；三 Target、战术 21/21、AI 42/42、完整 Combat 143/143、42 资产、PIE、Dedicated 双客户端、Windows cook 和 64/128/256 AI 容量均通过。
@@ -332,6 +333,15 @@ HUD-ABILITY-CLICK-001/002 追加验收状态：`用户已验收`（2026-09-14）
 | AI-003 | StateTree 阶段 B：感知、角色复用与演示 | 已验收 | 2026-09-21 用户确认验收并授权本地提交；`Combat.AI` 20/20、完整 `Combat.` 121/121、角色资产、PIE、Dedicated 与 cook 通过，见 [Spec](../Specs/AI-003-statetree-roles.spec.md) |
 | AI-004 | StateTree 阶段 C：Utility、技能、EQS 与容量 | 已验收 | F0 GO、F1 APPROVED 0.2、F2 PASS、Push-Ready READY；三 Target、战术 21/21、AI 42/42、完整 Combat 143/143、42 资产、PIE、Dedicated、cook 和 64/128/256 容量通过。2026-09-22 用户确认验收完成并授权本地提交，见 [Spec](../Specs/AI-004-statetree-tactics-capacity.spec.md) |
 
+## 12.12 Post-M8：HUD 左下角小地图
+
+> 状态：1.2 实现完成，用户已验收并授权本地提交（2026-09-30）。F0=`GO`、F1=`APPROVED`、F2=`PASS`、Push-Ready=`READY`；本轮在 1.1 全量无文字基础上，增加 Level Editor 的 `保存并生成小地图` 菜单项、`生成小地图` 工具栏按钮和 `combat.Editor.GenerateMinimap` 命令，保存当前关卡后扫描可见静态网格并写入 `Config/CombatMinimap.generated.json`。冷启动点击成功，生成 1 个地图/53 个特征，运行时 PIE 显示左下角暗色地形且无文字；Editor 构建、Minimap 8/8、Camera 6/6、文档/交付 Gate 已通过。完整 Combat 因 UE/D3D12 设备移除中断而保留未执行项，用户已确认当前结果。见 [HUD-MINIMAP-002 Spec](../Specs/HUD-MINIMAP-002-minimap-implementation.spec.md)。本任务不改变蓝图资产、地图几何、网络载荷、事件 schema 或发布契约。
+
+| Task | 需求名称 | 状态 | 完成证据/备注 |
+| --- | --- | --- | --- |
+| HUD-MINIMAP-001 | 左下角小地图的布局、图层、交互、权限边界、生命周期与后续验收基线 | 已审核 | [10-12 小地图实现](../10-Architecture/10-12-Bottom-HUD-Design.md)、[Spec](../Specs/HUD-MINIMAP-001-minimap-design.spec.md)、ADR-068；设计输入已冻结 |
+| HUD-MINIMAP-002 | 原生小地图、按地图包配置、地形/地标、镜头/Move/Ping 适配与回归验证 | 已完成 | [Spec](../Specs/HUD-MINIMAP-002-minimap-implementation.spec.md)；1.2 增加保存并生成按钮/命令，扫描当前关卡几何并写入 `Config/CombatMinimap.generated.json`，运行时按地图包加载，缺失/非法回退旧向量表；工具栏点击成功、1 地图/53 特征回读、PIE 无文字；Editor 构建、Minimap 8/8、Camera 6/6 和 delivery Gate 通过，用户已验收并授权本地提交。完整 Combat 因 D3D12 设备移除中断而保留边界，物理输入未单独自动化 |
+
 ## 13. 用户验收记录
 
 | 里程碑 | 提交验收日期 | 用户结论 | 修正要求 | 最终验收日期 | 下一阶段授权 |
@@ -352,6 +362,7 @@ HUD-ABILITY-CLICK-001/002 追加验收状态：`用户已验收`（2026-09-14）
 | HUD-LOG-002 | 2026-09-12 | 已验收 | 无 | 2026-09-13 | 用户授权本地提交 |
 | ATTR-001 | 2026-09-15 | 已验收 | 删除冗余初始化重算；只读盘点确认现有 5 个 UnitData 无需数据迁移 | 2026-09-15 | 用户确认“验收完成，提交吧”，授权本地提交 |
 | CAM-002 | 2026-09-20 | 已验收 | 无追加修正 | 2026-09-20 | 用户确认“review完成，提交吧”，授权本地提交 |
+| HUD-MINIMAP-002 | 2026-09-30 | 已验收 | 无追加修正 | 2026-09-30 | 用户确认“验收完成，提交吧”，授权本地 Git 提交 |
 
 ## 14. 更新日志
 
@@ -461,6 +472,19 @@ HUD-ABILITY-CLICK-001/002 追加验收状态：`用户已验收`（2026-09-14）
 | 2026-09-24 | 完成 RES-001 0.2 本地交付：玩家战略资源与英雄库存分域，稳定资源 owner 与分域视图保持；按用户反馈将纯资源余额变化从战斗 UI 日志排除，同时保留服务器核心事件，购买/出售/合成和物品日志不变。0.2 Red 为 owner UI 1/期望 0，Green 为余额与核心事件保留、双玩家 UI 0/0；最终 UE 5.8.2 增量构建、Economy 11/11、UI Log 5/5、文档和 delivery Gate 通过，转为待用户 review；未修改或纳入既有二进制资产差异 | post-M8 资源所有权 / RES-001 0.2 待用户 review / ADR-066 |
 | 2026-09-24 | 用户确认 RES-001 0.2 验收完毕并要求提交；同步 Spec、当前状态与 ADR-066，复核文档、交付 Gate 和差异范围，不新增 UE 运行验证结论；授权本地 Git 提交，不推送，继续排除既有 `ST_CombatAI_Root.uasset` 差异 | post-M8 资源所有权 / RES-001 已验收 / 本地提交授权 |
 | 2026-09-24 | 用户确认 CTRL-001 0.2 验收完毕并要求提交；英雄查看、多选/框选、群体命令及镜头/顶飞反馈修正验收完成。同步 Spec、当前状态与 ADR-067，复核文档、交付 Gate、差异范围和 LFS 资产，不新增 UE 运行验证结论；授权本地 Git 提交，不推送 | post-M8 多单位控制 / CTRL-001 已验收 / 本地提交授权 |
+| 2026-09-27 | 根据用户确认的 HUD 小地图预览，建立 HUD-MINIMAP-001 文档任务；补充 10-12 小地图设计、README 索引、台账和 ADR-068，冻结 220/184 尺寸、图层语义、相机/Move/Ping 交互意图、可见性与生命周期边界；仅文档，待用户评审 | post-M8 HUD / HUD-MINIMAP-001 待验收 |
+| 2026-09-29 | 用户确认文档审核完成并要求开始实现；完成原生小地图 Widget、HUD/Controller/Camera 接线和自动化测试，按完整地图包匹配 Demo/Test 边界并补上 PIE 前缀处理；更新 10-12、README、ADR-068 与 HUD-MINIMAP-002 Spec，保留无纹理时的低对比网格回退和真实窗口体验验收边界 | post-M8 HUD / HUD-MINIMAP-002 待用户验收 |
+| 2026-09-29 | 用户反馈真实 PIE 没有小地图；通过 UE MCP 回读确认运行时 Widget 已创建但为 `Collapsed`，定位为全屏 HUD 根几何误判布局冲突。0.3 修正实际面板几何、自恢复入口和线框绘制；正常模块冷启动后 PIE 截图显示左下角小地图，运行时回读为 `VISIBLE`，Minimap/Camera 专项通过。完整 Combat 回归因 UE/D3D12 设备移除中断，未宣称全量通过 | post-M8 HUD / HUD-MINIMAP-002 待用户复核 |
+| 2026-09-29 | 用户追加地图靠左下角并支持拖动视角；0.4 将横跨视口 HUD 容器排除出避让，改用 lower-left anchor 与 `12` 安全边距，加入固定缩放视口和左键拖动/中心夹紧；正常模块冷启动截图、`VISIBLE` 回读、Minimap 4/4、Camera 6/6 通过，物理输入手感留给用户复核 | post-M8 HUD / HUD-MINIMAP-002 待用户验收 |
+| 2026-09-29 | 用户追加要求移除鼠标悬停在小地图上的操作提示行；0.5 清理原生 ToolTip 设置并保留地图交互；Editor 模块重新构建，专项回归保持通过 | post-M8 HUD / HUD-MINIMAP-002 待用户验收 |
+| 2026-09-29 | 用户明确左键拖动应移动摄像机而非小地图；0.6 改为按地图增量调用本地相机平移，固定底图/网格/标记，新增相机拖动回归并重新构建 | post-M8 HUD / HUD-MINIMAP-002 待用户验收 |
+| 2026-09-29 | 用户要求视角梯形始终保持梯形；0.7 移除逐角 Clamp，改为四角统一拟合，新增 `CameraTrapezoidStaysTrapezoid`，Editor 构建、Minimap 5/5、Camera 6/6 和冷启动 PIE 截图通过 | post-M8 HUD / HUD-MINIMAP-002 待用户验收 |
+| 2026-09-29 | 用户补充靠边时应显示实际可见的梯形部分；0.8 改为地图矩形裁剪原始轮廓，新增 `CameraTrapezoidClipsAtBoundary`，Editor 构建、Minimap 5/5、Camera 6/6 和冷启动 PIE 截图通过 | post-M8 HUD / HUD-MINIMAP-002 待用户验收 |
+| 2026-09-29 | 用户要求地图有地形和标识；0.9 按 UE MCP 回读的 Demo/Test 静态几何范围增加暗色地表、边界墙、障碍、中央平台、出生点和补给区向量层，显式传递 Slate 画刷颜色以消除白色填充，新增 `TerrainFeatures` 回归；正常 Editor 构建、Minimap 6/6、Camera 6/6 和冷启动 PIE 截图通过，转为待用户复核 | post-M8 HUD / HUD-MINIMAP-002 待用户验收 |
+| 2026-09-30 | 用户要求移除低标文字并调整左键拖动时序；1.0 仅保留关键地标文字，普通左键按下立即定位镜头、拖动从按下点继续跟随、释放不重复定位；新增 `PressPositionsBeforeDrag` 与低优先级标签回归，Editor 构建、Minimap 7/7、Camera 6/6 和冷启动 PIE 截图通过，转为待用户复核 | post-M8 HUD / HUD-MINIMAP-002 待用户验收 |
+| 2026-09-30 | 用户要求移除小地图内所有文字，并询问地形变更后的重生成方式；1.1 清空并禁用地形标签/状态文本，补充 UE MCP bounds 回读 → 向量表更新 → 模块重建 → PIE 复核流程；Editor 构建、Minimap/Camera 13 项、PIE 文字缺失回读和 delivery Gate 通过 | post-M8 HUD / HUD-MINIMAP-002 1.1 待用户复核 |
+| 2026-09-30 | 用户要求保存地图时点击按钮生成对应小地图；1.2 增加 `工具 → COMBAT 小地图 → 保存并生成小地图`、工具栏 `生成小地图` 和 `combat.Editor.GenerateMinimap`，修正可见地面 `Movable` 被误排除的问题；正常 Editor 构建、Minimap 8/8、配置 1 地图/53 特征回读、PIE 左下角地形截图通过 | post-M8 HUD / HUD-MINIMAP-002 1.2 待用户复核 |
+| 2026-09-30 | 用户确认 HUD-MINIMAP-002 验收完成并要求提交；同步 Spec、台账验收状态与验收记录，复核差异范围并排除保存地图产生的外部 Actor/Object LFS 指针噪声；授权本地 Git 提交，不推送 | post-M8 HUD / HUD-MINIMAP-002 已验收 / 本地提交授权 |
 
 ## 15. 更新规则
 

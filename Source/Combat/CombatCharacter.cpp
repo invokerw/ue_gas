@@ -61,6 +61,36 @@ void ACombatCharacter::ResetCameraInput()
 	bIgnoreEdgeUntilExit = false;
 }
 
+bool ACombatCharacter::SetCameraLocationFromMinimap(const FVector2D WorldXY)
+{
+	if (!CanUpdateLocalCamera() || WorldXY.ContainsNaN()
+		|| !FMath::IsFinite(WorldXY.X) || !FMath::IsFinite(WorldXY.Y))
+	{
+		return false;
+	}
+	ResetCameraInput();
+	FVector Location = GetActorLocation();
+	Location.X = WorldXY.X;
+	Location.Y = WorldXY.Y;
+	SetActorLocation(ClampCameraLocation(Location), false, nullptr, ETeleportType::None);
+	return true;
+}
+
+bool ACombatCharacter::PanCameraFromMinimap(const FVector2D WorldDelta)
+{
+	if (!CanUpdateLocalCamera() || WorldDelta.ContainsNaN()
+		|| !FMath::IsFinite(WorldDelta.X) || !FMath::IsFinite(WorldDelta.Y))
+	{
+		return false;
+	}
+	ResetCameraInput();
+	FVector Location = GetActorLocation();
+	Location.X += WorldDelta.X;
+	Location.Y += WorldDelta.Y;
+	SetActorLocation(ClampCameraLocation(Location), false, nullptr, ETeleportType::None);
+	return true;
+}
+
 void ACombatCharacter::SetFollowTarget(ACombatUnitCharacter* NewTarget, const int32 BindingGeneration)
 {
 	if (!CanUpdateLocalCamera()) return;

@@ -2,6 +2,7 @@
 #include "Combat/UI/CombatHUDWidget.h"
 #include "Combat/UI/CombatLogWidget.h"
 #include "Combat/UI/CombatShopWidget.h"
+#include "Combat/UI/CombatMinimapWidget.h"
 #include "GameFramework/PlayerController.h"
 #include "CombatPlayerController.h"
 #include "Combat/Unit/CombatUnitCharacter.h"
@@ -48,6 +49,7 @@ void ACombatPlayerHUD::DrawHUD()
 ACombatPlayerHUD::ACombatPlayerHUD()
 {
 	ShopWidgetClass = UCombatShopWidget::StaticClass();
+	MinimapWidgetClass = UCombatMinimapWidget::StaticClass();
 }
 
 void ACombatPlayerHUD::BeginPlay()
@@ -58,13 +60,25 @@ void ACombatPlayerHUD::BeginPlay()
 	if (WidgetClass) CombatWidget = CreateWidget<UCombatHUDWidget>(Player, WidgetClass);
 	if (LogWidgetClass) LogWidget = CreateWidget<UCombatLogWidget>(Player, LogWidgetClass);
 	if (ShopWidgetClass) ShopWidget = CreateWidget<UCombatShopWidget>(Player, ShopWidgetClass);
+	// Blueprint HUD 可能是在原生属性加入前保存的，CDO 中会暂时没有类引用；
+	// 小地图的空类约定为使用原生绘制实现，避免 Demo PIE 因旧 CDO 静默缺失。
+	UClass* EffectiveMinimapClass = MinimapWidgetClass ? MinimapWidgetClass.Get() : UCombatMinimapWidget::StaticClass();
+	MinimapWidget = CreateWidget<UCombatMinimapWidget>(Player, EffectiveMinimapClass);
 	if (LogWidget) LogWidget->AddToPlayerScreen(20);
 	if (ShopWidget) ShopWidget->AddToPlayerScreen(15);
+	if (MinimapWidget)
+	{
+		MinimapWidget->ConfigureViewportLayout(MinimapStandardSize, MinimapCompactSize, MinimapSafeMargin, MinimapSafeMargin);
+		MinimapWidget->AddToPlayerScreen(25);
+		// NativeConstruct 发生在 AddToPlayerScreen 之前；此时再取一次真实视口，
+		// 防止首帧视口尺寸为 0 导致控件保持 Collapsed。
+		MinimapWidget->UpdateViewportLayout();
+	}
 	if (CombatWidget)
 	{
 		CombatWidget->AddToPlayerScreen(10);
 	}
-	if (CombatWidget || LogWidget || ShopWidget)
+	if (CombatWidget || LogWidget || ShopWidget || MinimapWidget)
 	{
 		// 让 HUD 先消费自身区域点击，未处理的输入仍交回游戏与原 Enhanced Input 映射。
 		FInputModeGameAndUI Mode;
@@ -80,6 +94,11 @@ void ACombatPlayerHUD::EndPlay(const EEndPlayReason::Type Reason)
 	{
 		ShopWidget->RemoveFromParent();
 		ShopWidget = nullptr;
+	}
+	if (MinimapWidget)
+	{
+		MinimapWidget->RemoveFromParent();
+		MinimapWidget = nullptr;
 	}
 	if (LogWidget)
 	{

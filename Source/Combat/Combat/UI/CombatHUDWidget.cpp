@@ -23,6 +23,7 @@
 #include "Combat/UI/CombatPlayerHUD.h"
 #include "Combat/UI/CombatLogWidget.h"
 #include "Combat/UI/CombatShopWidget.h"
+#include "Combat/UI/CombatMinimapWidget.h"
 
 namespace CombatHUD
 {
@@ -180,9 +181,13 @@ void UCombatHUDWidget::NativeTick(const FGeometry& Geometry, float DeltaTime)
 	{
 		const FVector2D PointerPosition = FSlateApplication::Get().GetCursorPos();
 		const ACombatPlayerHUD* HUD = Cast<ACombatPlayerHUD>(Controller->GetHUD());
+		// 小地图折叠时不会再收到自身 Tick；由仍可见的主 HUD 触发布局恢复，覆盖
+		// 视口尺寸、DPI 和首帧 Slate 几何尚未就绪的短暂窗口。
+		if (HUD && HUD->GetMinimapWidget()) HUD->GetMinimapWidget()->UpdateViewportLayout();
 		const bool bOverOverlay = HUD
 			&& ((HUD->GetLogWidget() && HUD->GetLogWidget()->IsScreenPositionOverUI(PointerPosition))
-				|| (HUD->GetShopWidget() && HUD->GetShopWidget()->IsScreenPositionOverUI(PointerPosition)));
+				|| (HUD->GetShopWidget() && HUD->GetShopWidget()->IsScreenPositionOverUI(PointerPosition))
+				|| (HUD->GetMinimapWidget() && HUD->GetMinimapWidget()->IsScreenPositionOverUI(PointerPosition)));
 		Controller->GetAbilityAimComponent()->SetHoveredSlot(bOverOverlay || !CanOperateObservedUnit() ? INDEX_NONE : GetHoveredAbilitySlot(PointerPosition));
 	}
 	RefreshAccumulator += DeltaTime;
@@ -554,6 +559,38 @@ bool UCombatHUDWidget::IsScreenPositionOverUI(const FVector2D Position) const
 		if (Upgrade && Upgrade->IsVisible() && Upgrade->GetCachedGeometry().IsUnderLocation(Position)) return true;
 	}
 	return false;
+}
+
+bool UCombatHUDWidget::GetVisibleAvoidanceRect(FSlateRect& OutRect) const
+{
+	OutRect = FSlateRect();
+	if (!IsVisible() || (HUDPanel && !HUDPanel->IsVisible())) return false;
+
+	// HUDFrame 是实际底部面板；详情弹层可能扩大避让范围。只有 Blueprint 未提供
+	// 这些可见子控件时才退回 HUDPanel，避免把全屏 Canvas 根当成实体面板。
+	const UWidget* Candidates[] = { HUDFrame, DetailPanel };
+	bool bFound = false;
+	for (const UWidget* Candidate : Candidates)
+	{
+		if (!Candidate || !Candidate->IsVisible()) continue;
+		const FSlateRect Rect = Candidate->GetCachedGeometry().GetLayoutBoundingRect();
+		if (Rect.GetSize().X <= 0.0f || Rect.GetSize().Y <= 0.0f) continue;
+		if (!bFound) OutRect = Rect;
+		else
+		{
+			OutRect.Left = FMath::Min(OutRect.Left, Rect.Left);
+			OutRect.Top = FMath::Min(OutRect.Top, Rect.Top);
+			OutRect.Right = FMath::Max(OutRect.Right, Rect.Right);
+			OutRect.Bottom = FMath::Max(OutRect.Bottom, Rect.Bottom);
+		}
+		bFound = true;
+	}
+	if (bFound) return true;
+	if (!HUDPanel || !HUDPanel->IsVisible()) return false;
+	const FSlateRect PanelRect = HUDPanel->GetCachedGeometry().GetLayoutBoundingRect();
+	if (PanelRect.GetSize().X <= 0.0f || PanelRect.GetSize().Y <= 0.0f) return false;
+	OutRect = PanelRect;
+	return true;
 }
 
 int32 UCombatHUDWidget::GetHoveredAbilitySlot(const FVector2D Position) const

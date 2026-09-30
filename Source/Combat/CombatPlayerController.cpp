@@ -35,6 +35,7 @@
 #include "Combat/UI/CombatHUDWidget.h"
 #include "Combat/UI/CombatLogWidget.h"
 #include "Combat/UI/CombatShopWidget.h"
+#include "Combat/UI/CombatMinimapWidget.h"
 #include "Combat/Unit/CombatUnitAIController.h"
 #include "Combat/Unit/CombatUnitCharacter.h"
 #include "Combat.h"
@@ -880,7 +881,47 @@ bool ACombatPlayerController::IsPointerOverCombatUI() const
 	const FVector2D Cursor = FSlateApplication::Get().GetCursorPos();
 	return (HUD->GetCombatWidget() && HUD->GetCombatWidget()->IsScreenPositionOverUI(Cursor))
 		|| (HUD->GetLogWidget() && HUD->GetLogWidget()->IsScreenPositionOverUI(Cursor))
-		|| (HUD->GetShopWidget() && HUD->GetShopWidget()->IsScreenPositionOverUI(Cursor));
+		|| (HUD->GetShopWidget() && HUD->GetShopWidget()->IsScreenPositionOverUI(Cursor))
+		|| (HUD->GetMinimapWidget() && HUD->GetMinimapWidget()->IsScreenPositionOverUI(Cursor));
+}
+
+bool ACombatPlayerController::IsCombatTargetingActive() const
+{
+	return bAttackTargeting || (AbilityAimComponent && AbilityAimComponent->IsAiming());
+}
+
+bool ACombatPlayerController::RelocateCameraFromMinimap(const FVector2D WorldXY)
+{
+	if (!IsLocalController() || GetNetMode() == NM_DedicatedServer) return false;
+	CancelCombatTargeting();
+	RefreshLocalCameraBinding();
+	ACombatCharacter* Camera = LocalCameraPawn.Get();
+	return Camera && Camera->SetCameraLocationFromMinimap(WorldXY);
+}
+
+bool ACombatPlayerController::PanCameraFromMinimap(const FVector2D WorldDelta)
+{
+	if (!IsLocalController() || GetNetMode() == NM_DedicatedServer
+		|| WorldDelta.ContainsNaN() || !FMath::IsFinite(WorldDelta.X)
+		|| !FMath::IsFinite(WorldDelta.Y)) return false;
+	RefreshLocalCameraBinding();
+	ACombatCharacter* Camera = LocalCameraPawn.Get();
+	return Camera && Camera->PanCameraFromMinimap(WorldDelta);
+}
+
+bool ACombatPlayerController::SubmitMinimapMoveOrder(const FVector WorldLocation)
+{
+	if (!IsLocalController() || GetNetMode() == NM_DedicatedServer
+		|| WorldLocation.ContainsNaN() || !FMath::IsFinite(WorldLocation.X)
+		|| !FMath::IsFinite(WorldLocation.Y) || !FMath::IsFinite(WorldLocation.Z)) return false;
+	CancelSelectionGesture();
+	ResetDestinationInput();
+	if (IsCombatTargetingActive() || !GetReadyCommandedUnit()) return false;
+	FCombatOrderRequest Order;
+	Order.Type = ECombatOrderType::MoveToPoint;
+	Order.TargetLocation = WorldLocation;
+	Order.bHasTargetLocation = true;
+	return SubmitCombatOrder(Order);
 }
 
 bool ACombatPlayerController::IssueCombatMoveOrder()

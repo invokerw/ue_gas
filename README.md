@@ -44,7 +44,7 @@ StateTree AI 演示：打开 `/Game/Combat/Demo/AI/L_CombatAI`，服务器自主
 
 以上按键统一通过 `/Game/Combat/Demo/Input/IMC_Default` 映射到 Input Action；可在该资产中改键。普攻选敌、选择/确认、Shift 追加、取消和停止的 Action 引用配置在 `BP_CombatDemoPlayerController` 的 `Input|Combat` 默认属性中，Space 跟随引用配置在 `Input|Camera`；边缘滚屏直接检测视口位置，不需要 Action。
 
-底部 HUD 随本地玩家的指挥单位切换。悬停技能、Buff 或头像上的属性可查看详情；技能左键点击复用 Q/W/E/R 施法，目标技能再左键点世界确认，未瞄准时右键技能固定详情，关闭按钮或 Escape 取消固定/瞄准。HUD 阻止鼠标穿透，物品槽通过显式使用或拖放操作提交请求。英雄等级和经验环读取服务器成长快照；有技能点且满足英雄等级时，技能图标上方显示“+”按钮，点击请求服务器加点。Q 槽显示“霜冻之箭”及服务器权威的“自动/关闭”状态，W/E/R 保留空位。界面配置入口见 [10-12 底部 HUD](Doc/CombatSystem/10-Architecture/10-12-Bottom-HUD-Design.md)。
+底部 HUD 随本地玩家的指挥单位切换。悬停技能、Buff 或头像上的属性可查看详情；技能左键点击复用 Q/W/E/R 施法，目标技能再左键点世界确认，未瞄准时右键技能固定详情，关闭按钮或 Escape 取消固定/瞄准。HUD 阻止鼠标穿透，物品槽通过显式使用或拖放操作提交请求。英雄等级和经验环读取服务器成长快照；有技能点且满足英雄等级时，技能图标上方显示“+”按钮，点击请求服务器加点。Q 槽显示“霜冻之箭”及服务器权威的“自动/关闭”状态，W/E/R 保留空位。界面配置入口见 [10-12 底部 HUD](Doc/CombatSystem/10-Architecture/10-12-Bottom-HUD-Design.md)；左下角小地图已接入原生绘制，按地图包匹配边界，使用暗色地表和真实原型几何轮廓，不显示任何文字；镜头未越界时显示透视梯形，靠边时只显示地图内的可见部分并继续跟随摄像机；普通左键按下先定位视角，再跟随拖动，地图固定，支持选中组移动和本地 Ping。改动关卡后在 UE Editor 使用 `工具 → COMBAT 小地图 → 保存并生成小地图` 或工具栏 `生成小地图`，再启动 PIE 即可刷新 `Config/CombatMinimap.generated.json`，详见同文档的 HUD-MINIMAP-001 章节与 [HUD-MINIMAP-002 Spec](Doc/CombatSystem/Specs/HUD-MINIMAP-002-minimap-implementation.spec.md)。
 
 点击 HUD 左上角的 **战斗记录** 查看服务器确认的伤害、治疗、技能、状态与死亡/复活事件。记录包含毫秒时间戳、彩色名称、实际数值及生命前后值；攻击者、目标、类别与时间范围可以组合筛选，默认最近 30 秒，最多保留 512 条。上滚暂停跟随，勾选“跟随最新”回到底部；按住顶部栏左键拖动窗口，松开停留，关闭再打开保留当前位置；关闭窗口仍记录，Escape 收起窗口。物品选项筛选拾取、丢弃、换槽和消耗；物品造成的伤害与治疗仍归对应类别。布局与颜色在 `WBP_CombatLog` 调整，详见 [战斗记录接入](Doc/CombatSystem/10-Architecture/10-12-Bottom-HUD-Design.md#7-战斗记录窗口hud-log-001)。
 

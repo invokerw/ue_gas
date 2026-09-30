@@ -316,6 +316,26 @@
 - Demo 的额外英雄配置默认 0，仅演示蓝图开启 1；公式、GameplayTag/Event、资源归属和核心发布契约不变。
 - 0.2 用户反馈修正：选中/框选只改变本地目标，不触发相机居中；每个 Command Pawn 首次就绪定位一次，Space 仍主动跟随。Combat Unit 不可作为另一 Combat Unit 的可行走地面，防止胶囊接触后的 UE 自动跳离；保留硬碰撞与单一 Crowd，不改变群体命令终点、权限、网络载荷或技能 Motion。
 
+### ADR-068：HUD 左下角小地图的只读投影与交互边界（2026-09-27；已实现 2026-09-29）
+
+- 状态：`accepted/implemented`；设计边界见 [HUD-MINIMAP-001](../Specs/HUD-MINIMAP-001-minimap-design.spec.md)，实现与验证见 [HUD-MINIMAP-002](../Specs/HUD-MINIMAP-002-minimap-implementation.spec.md) 和 [10-12 小地图实现](../10-Architecture/10-12-Bottom-HUD-Design.md)。原生暗色地表、真实原型几何特征和稳定地标是当前可运行基线，静态纹理与 Designer 外观保持可选。
+- 选择：小地图固定在左下角，标准 `220 × 220`、窄视口 `184 × 184`，通过 viewport lower-left anchor 和 `12` 左/底安全边距与底部主 HUD 共用视口底边；静态地形、道路/河道、主控/友军/可见敌方/目标/Ping/镜头视锥分层绘制。主控用青色菱形，友军蓝点，公开可见敌方红点，目标与 Ping 使用琥珀色并配合形状表达。
+- 交互：左键短点击定位本地镜头；左键按住移动超过阈值后按地图增量平移本地镜头，固定缩放的底图、网格和标记不移动；右键复用现有选中组 Move Order 和服务器安全校验；`Alt +` 左键短点击产生本地 Ping，未定义 Ping 事件和接收者范围前不得宣称多人可见。拖动不创建第二个 Camera Pawn，也不向世界或 Order 链路穿透。
+- 权威与隐私：小地图只消费已经允许客户端观察的地图/单位 View 和表现事件，不复制完整 owner-only HUD 快照；当前没有战争迷雾能力，不能将“只显示可见敌方”描述为网络层敌情保密。需要视野服务、公开 View 字段或可复制 Ping 时，必须另建实现 Spec/ADR。
+- 生命周期：由现有本地 `ACombatPlayerHUD` 持有 Widget；换主控、查看目标、绑定代次、Widget 重建和 Unit EndPlay 清理动态标记/异步回调，并继续使用 `BindingRevision + LifeGeneration` 隔离旧回调。静态图层和标记刷新只做表现，不新增 gameplay Timer 或服务器结算入口。
+- 0.3 运行修复（2026-09-29）：UE MCP 真实 PIE 发现全屏 HUD 根几何被误当作避让面板，导致小地图折叠；实现改为读取 `HUDFrame`/详情面板的实际 Slate 几何，并由主 HUD 在折叠状态触发布局恢复。冷启动 PIE 回读为 `VISIBLE`，不改变地图、权限、Order 或网络契约。
+- 0.4 交互/布局修订（2026-09-29）：横跨视口的 HUD 承载层不再抬高左下候选位置；小地图改用 lower-left anchor 处理 PIE/DPI 缩放，并加入 `ViewCenterUV` 边界夹紧和左键拖动视角。Minimap 4/4、Camera 6/6 与冷启动截图/`VISIBLE` 回读通过；物理拖动手感和四档 DPI留给用户复核。
+- 0.5 悬停提示修订（2026-09-29）：移除小地图鼠标悬停时的操作提示行，保留短点击、拖动、右键和 Alt+左键交互；不改变地图、相机、Order、权限或网络契约。
+- 0.6 拖动语义修订（2026-09-29）：左键拖动改为按地图增量平移本地相机，固定 `ViewCenterUV` 与地图内容；新增 `PanCameraFromMinimap` 本地入口和相机拖动回归，不改变单位、Order、权限或网络契约。
+- 0.7 镜头轮廓修订（2026-09-29）：`PaintCamera` 不再逐角夹紧越界投影点，改为对四角做统一平移/缩放拟合，保持四点、非零面积和透视梯形；新增 `CameraTrapezoidStaysTrapezoid` 回归，不改变地图、相机、Order、权限或网络契约。
+- 0.8 边界可见部分修订（2026-09-29）：取消越界轮廓的整体拟合，按地图表面矩形裁剪原始镜头投影；轮廓靠边时只显示地图内部分并继续跟随摄像机，新增 `CameraTrapezoidClipsAtBoundary` 回归，不改变地图、相机、Order、权限或网络契约。
+- 0.9 地形与地标修订（2026-09-29）：依据 UE MCP 回读的 Demo/Test `Floor_0` 和 StaticMeshActor bounds 增加暗色地表、边界墙、障碍、中央平台、出生点和补给区向量层；无可靠纹理时收起白色 Designer `MapSurface`，并显式传递 Slate 画刷颜色。`TerrainFeatures` 回归、正常 Editor 构建、Minimap 6/6、Camera 6/6 和冷启动 PIE 截图通过，不改变地图资产、权限、Order 或网络契约。
+- 1.0 文字与输入时序修订（2026-09-30）：低优先级墙体、掩体和中央十字只绘制形状，保留中心平台、出生点和补给区文字；普通左键按下立即调用本地镜头定位，后续拖动从按下点继续平移，释放不重复定位；新增低优先级标签和 `PressPositionsBeforeDrag` 回归，Minimap 7/7、Camera 6/6 和冷启动 PIE 截图通过，不改变地图、权限、Order 或网络契约。
+- 1.1 全量无文字与重生成流程（2026-09-30）：小地图静态特征、动态单位、镜头梯形和 Ping 只保留颜色/形状，所有 `Label`/`MapStatus`/TextBlock 内容清空并隐藏，`PaintTerrain` 不再绘制文字；保留 `CombatMinimapWidget.cpp` 向量表作为配置缺失/非法时的回退。
+- 1.2 编辑器生成入口（2026-09-30）：Level Editor 提供 `工具 → COMBAT 小地图 → 保存并生成小地图`、工具栏 `生成小地图` 和 `combat.Editor.GenerateMinimap` 命令。入口保存当前关卡后扫描可见静态网格（包含运行时 Mobility 为 Movable 的地面），按命名地面/最大水平几何确定范围，将无文字矩形特征写入 `Config/CombatMinimap.generated.json`；运行时按地图包加载，改图后重复按钮与 PIE 即可刷新，不改地图几何、碰撞、导航、Order 或网络契约。
+- 1.3 用户验收（2026-09-30）：用户确认小地图生成按钮、JSON 配置和 PIE 显示验收完成，授权本地 Git 提交；保留完整 Combat D3D12 设备移除作为未执行边界，不推送远端。
+- 兼容与回滚：不改变 `combat_v4_economy_rc1`、GameplayTag、事件/展示 schema、DefinitionId、RPC 和既有 HUD/相机语义。回滚时删除 HUD-MINIMAP-001 文档增量即可；实际实现需以独立 Spec 成组回退代码、蓝图、资产和网络字段。
+
 ## 7. 模板适配风险
 
 | 风险 | 现状证据 | 处理任务 |
