@@ -279,6 +279,7 @@
 | GAP-026 | 已关闭 | 直接 Possess Demo 允许 owning client 参与单位移动，客户端 Pawn 解穿透可产生服务器未认可的视觉位移 | ADR-043 已落地：服务器 Combat AIController + Command Pawn + 全客户端 SimulatedProxy + 单一 Detour Crowd；三档 Dedicated 双客户端对撞、RPC、64/256 容量和 teardown Gate 见 [10-10](../10-Architecture/10-10-Server-Authoritative-Movement-Kickoff.md) | 2026-09-02 / SAM-008 |
 | GAP-027 | 待处理 | 交互式 Editor 内运行既有完整 Automation 后切地图，部分技能测试的 CDO 持有临时 AbilityData，导致测试 World 无法 GC | HUD-LOG-001 验证时发现；引用链指向 Default__CombatSelfHealAbility、CombatMeatHookAbility 等既有测试配置，不含日志组件。当前以独立进程执行全量 Automation、干净 Editor 执行 PIE 隔离；后续为修改 CDO 的测试增加作用域恢复。证据 `Saved/CombatLog/Editor-UI.log` 的 World Memory Leaks 引用链 | 后续测试设施维护 |
 | GAP-028 | 分阶段处理（ADR-062～065） | 阶段 A/B/C 已验收；阶段 C 的 v2 Utility、技能候选、EQS、World 预算、独立演示与 64/128/256 AI 容量证据见 AI-002～004。完整权威可见性、可选公共空间索引、长时间 AI soak、网络损伤和 D 阶段遭遇扩展仍未实现或验证 | [配置指南](../20-Content/20-04-StateTree-AI-Guide.md) 区分当前 API 与 [10-17](../10-Architecture/10-17-StateTree-AI-Decision-System.md) 的后续方案；范围/LOS 不等于迷雾。本轮容量未触发空间索引升级，真实复杂地图若超预算再独立评审公共 Targeting | A/B/C 证据独立归档；总缺口保留到可见性/D 阶段与长期容量边界另行决策 |
+| GAP-029 | 待处理 | 肉鸽防守模式的 RunState、随机强化池、服务器种子、团队商店即时消耗品、波次 Director、核心 Objective、换英雄保留和断线边界尚未实现 | [DEF-001 设计](../20-Content/20-05-Roguelite-Defense-Game-Design.md) 与 [Spec](../Specs/DEF-001-coop-defense-design.spec.md) 先冻结产品与实现边界；进入 Phase 1 前需独立 feature Spec、数据/Tag/网络/生命周期审查，含 ShopRevision、购买账本和开发版 Seed Panel | Phase 1 防守骨架前 |
 
 ### ADR-064：阶段 B 的事实快照与角色职责（2026-09-21）
 
@@ -335,6 +336,15 @@
 - 1.2 编辑器生成入口（2026-09-30）：Level Editor 提供 `工具 → COMBAT 小地图 → 保存并生成小地图`、工具栏 `生成小地图` 和 `combat.Editor.GenerateMinimap` 命令。入口保存当前关卡后扫描可见静态网格（包含运行时 Mobility 为 Movable 的地面），按命名地面/最大水平几何确定范围，将无文字矩形特征写入 `Config/CombatMinimap.generated.json`；运行时按地图包加载，改图后重复按钮与 PIE 即可刷新，不改地图几何、碰撞、导航、Order 或网络契约。
 - 1.3 用户验收（2026-09-30）：用户确认小地图生成按钮、JSON 配置和 PIE 显示验收完成，授权本地 Git 提交；保留完整 Combat D3D12 设备移除作为未执行边界，不推送远端。
 - 兼容与回滚：不改变 `combat_v4_economy_rc1`、GameplayTag、事件/展示 schema、DefinitionId、RPC 和既有 HUD/相机语义。回滚时删除 HUD-MINIMAP-001 文档增量即可；实际实现需以独立 Spec 成组回退代码、蓝图、资产和网络字段。
+
+### ADR-069：肉鸽成长型合作防守作为 post-M8 玩法方向（2026-10-14；用户方向更新 2026-10-15）
+
+- 状态：`proposed`；2026-10-15 已记录用户方向，设计任务见 [DEF-001](../Specs/DEF-001-coop-defense-design.spec.md)，当前仍未授权运行时、地图、资产或发布契约变更。
+- 选择：首版按 1–4 人合作、单人可通关、每局服务器种子、个人强化三选一、团队商店即时消耗品、波次回防、事件和 Boss 组织体验；完整版目标约 25 分钟；局外永久成长、账号存档和中途加入暂时关闭。
+- 约束：随机结果按 Run/WaveSpawn、AugmentOffer、EventChoice 和 Loot 域隔离；商店目录固定，团队效果由 ShopRevision + RequestId + 购买账本幂等提交，高风险事件由 EventId + RiskRevision + RiskLedger 一次性结算；服务器拥有候选、购买、奖励、核心生命和阶段，客户端只提交请求并消费只读 View。强化和消耗品优先映射现有 Ability/Modifier/属性公共入口，不能由地图蓝图直接改 Health、金币或经验。
+- 已确定：完整版允许换英雄且个人强化保留；不适用英雄的专属卡休眠且不计入激活家族协同，切回后恢复；高风险事件可以增加下一波预算/精英概率并提高成功后的 Boss 奖励，采用发起人确认、队友可取消的简单流程，不使用共享遗物式投票；开发版必须提供服务器专用自定义种子/复现面板；核心、神殿、英雄、敌人和剧情使用原创内容。
+- 待调优：团队消耗品价格、限购效果持续时间、个人金币付款的公平性、换英雄时英雄专属卡的休眠提示、完整版 23–27 分钟节奏和高风险事件补偿数值。改变奖励所有权、网络载荷、公开 View 或发布版本时，必须递增 DEF-001/后续实现 Spec 并重新审查。
+- 回滚：删除 DEF-001 设计增量和导航/台账记录即可；不影响已验收 Combat、AI、经济、HUD 或小地图。
 
 ## 7. 模板适配风险
 

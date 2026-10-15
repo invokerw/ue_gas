@@ -65,6 +65,7 @@
 | [20-02 M6 技能模板检查表](20-Content/20-02-M6-Skill-Template-Checklist.md) | 技能旁路、身份、时序、清理、中文说明和自动化检查 | 技能开发 |
 | [20-03 公共扩展与迁移指南](20-Content/20-03-M8-Public-Extension-Guide.md) | 新技能、DataAsset、蓝图事件和版本迁移入口 | 内容开发与维护者 |
 | [20-04 StateTree AI 配置与接入](20-Content/20-04-StateTree-AI-Guide.md) | 阶段 A/B 演示地图、Profile、显式职责、感知角色节点、控制接管和诊断 | AI、玩法与内容开发 |
+| [20-05 肉鸽成长型合作防守设计](20-Content/20-05-Roguelite-Defense-Game-Design.md) | 服务器种子、强化构筑、团队商店消耗品、波次回防、事件、Boss、多人奖励和分期实现边界 | 玩法、内容、AI、网络与 UI 评审 |
 
 ### 30-Tooling：工具与诊断
 
@@ -96,6 +97,7 @@
 | [AI-001 StateTree AI 设计文档](Specs/AI-001-statetree-ai-design.spec.md) | 通用 StateTree 决策方案的文档任务、事实依据、审查与验证边界 | AI、玩法与架构评审人员 |
 | [AI-002 StateTree 阶段 A 实现](Specs/AI-002-statetree-runtime.spec.md) | 已验收的运行时、Order 协议、生命周期、资产和分层验证证据 | AI、玩法与测试 |
 | [AI-003 StateTree 阶段 B 角色](Specs/AI-003-statetree-roles.spec.md) | 感知/记忆、守点归位与路线职责、角色演示及分层验证 | AI、玩法、内容与测试 |
+| [DEF-001 肉鸽成长型合作防守设计](Specs/DEF-001-coop-defense-design.spec.md) | 肉鸽构筑、防守波次、随机种子、团队商店、合作奖励、实现分期和验证边界 | 玩法、内容、AI、网络与架构评审 |
 
 冻结与发布文档位于 `90-History`，只保存当时的决策和验收证据：
 
@@ -119,6 +121,7 @@
 - 维护底部 HUD：`10-Architecture/10-12-Bottom-HUD-Design.md` → `10-Architecture/10-14-Item-System.md` → `10-Architecture/10-15-Economy-Shop-Crafting.md` → `10-Architecture/10-08-Data-Network-Observability.md` → `00-Project/00-04-Decisions-Gaps.md` 的 ADR-047。
 - 维护相机与视角输入：`10-Architecture/10-16-Dota-Camera-Movement.md` → `10-Architecture/10-10-Server-Authoritative-Movement-Kickoff.md` → `10-Architecture/10-09-Client-Server-Interaction.md` → `Specs/CAM-002-edge-pan-follow.spec.md`（设计历史见 CAM-001）。
 - 开发 StateTree AI：`20-Content/20-04-StateTree-AI-Guide.md` → `10-Architecture/10-17-StateTree-AI-Decision-System.md` → `10-Architecture/10-07-Order-Movement.md` → `Specs/AI-002-statetree-runtime.spec.md` → `Specs/AI-003-statetree-roles.spec.md`；阶段 A 使用显式目标，阶段 B 增加感知、角色职责和独立演示，Utility/容量仍按总体方案后续实施。
+- 设计肉鸽防守模式：`20-Content/20-05-Roguelite-Defense-Game-Design.md` → `Specs/DEF-001-coop-defense-design.spec.md` → `10-Architecture/10-17-StateTree-AI-Decision-System.md` → `10-Architecture/10-15-Economy-Shop-Crafting.md` → `10-Architecture/10-12-Bottom-HUD-Design.md`；设计完成不代表防守模式已实现。
 - 核对发布状态：`00-Project/00-01-Progress-Tracker.md` → `90-History/90-15-M8-Release-Candidate-Decision.md` → `90-History/90-17-M8-Acceptance.md`。
 
 ## 原章节迁移

@@ -12,6 +12,7 @@ Combat 当前位于 `Combat` 单 Runtime Module 中，不是独立插件或独�
 - M0-M8 共 82 个 Task 已完成并通过用户验收；最近一次发布 Gate 记录为 `Combat.*` 40/40、Editor/Server/Client 构建、资产校验和 Dedicated 双客户端容量场景通过。
 - M8 之后增加了卓尔游侠远程攻击 Demo、头顶资源/状态/施法条、伤害治疗跳字，以及底部居中的英雄、技能、Buff HUD。C++ 提供只读数据，Widget Blueprint 维护布局和视觉；等级经验与技能加点已接入服务器权威成长组件，六格装备与三格背包已接入物品主动、被动、场景交互和权威投影。
 - 完整 gameplay 预测回滚、跨进程确定性 Replay、召唤物/幻象仍未接入；ECON-003 单一库存交易、锁定合成和出售已通过用户代码 review，NullRHI PIE、独立 Dedicated 双客户端 300 秒经济 soak、Windows cook 与资产校验通过，验证边界见 ECON-003 Spec。
+- Post-M8 新增肉鸽成长型合作防守设计提案：每局服务器种子、个人强化、团队商店即时消耗品、波次回防、事件和 Boss；当前只完成设计文档，未实现防守模式、地图或资产，见 [DEF-001 设计文档](Doc/CombatSystem/20-Content/20-05-Roguelite-Defense-Game-Design.md) 与 [Spec](Doc/CombatSystem/Specs/DEF-001-coop-defense-design.spec.md)。
 
 以上测试数字是已归档的最近验收证据，不自动代表任意工作区修改已经重新验证。实时任务状态以 [开发进度台账](Doc/CombatSystem/00-Project/00-01-Progress-Tracker.md) 为准。
 
