@@ -55,3 +55,18 @@
 3. 复用稳定 Handle/generation；与 Unit 生命相关时加入 LifeGeneration。
 4. 将所有出口汇入一个幂等 Finish/Remove 函数，并为重复调用写负测试。
 5. 明确委托解绑和 Schedule 取消位置，不能依赖弱引用“以后自然失效”代替退出协议。
+
+## 5. DEF-002 防守模式增量审计（2026-10-15）
+
+本节追加 post-M8 新对象，不改变上文 M8 历史验收结论；当前验证见 [DEF-002](../Specs/DEF-002-defense-phase1-skeleton.spec.md)。
+
+| 对象 | 创建/持有 | 正常/失败/取消出口 | 旧回调与 teardown |
+| --- | --- | --- | --- |
+| Defense Director | Defense GameMode 默认组件 | 唯一 Finish 冻结 Victory/Defeat；Shutdown/EndPlay 幂等结束 | Scheduler Owner 为组件；RunId + PhaseGeneration 校验；终局 CancelAllForOwner，解绑核心 |
+| Core Objective | GameMode 创建，World 持有 | 公共 Damage/Lifecycle 死亡触发失败，GameMode EndPlay 销毁 | CoreLife 校验，丢失或换生命拒绝胜利；清理专用 AIController |
+| 波次敌人 | Director Deferred Spawn，World 持有 | 已确认死亡后排队清场；异常销毁/换生命/超时失败 | Actor + LifeGeneration + Phase；先解绑再 StopOrder、Destroy Unit/Controller；旧死亡不重复减计数 |
+| 玩家对局记录 | Director 按 Controller 弱引用持有 | 每波凭证去重；经验/强化死亡暂存，安全复活再交付 | Logout 移除记录和精确 Modifier Handle；Shutdown 撤销强化，终局清待领取项 |
+| Run/Wave 冻结快照 | Director 深拷贝并强持有 | 随组件释放，不回写源资产 | 无跨局静态容器；DefinitionId 稳定，Actor 实例身份独立 |
+| Defense RunView / HUD | GameState 复制值快照，HUD 本地绘制 | 随 GameState/HUD 生命周期结束 | 只读 ASC 投影和服务器截止时间，不持有 gameplay 委托或调度 |
+
+验证覆盖成功、失败、重复死亡、旧局/阶段/生命、Owner 销毁、World teardown、奖励幂等和断线；真实网络探针仅显式 `DefenseSmoke` 开关启用，平时不 Tick。

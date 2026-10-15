@@ -279,7 +279,7 @@
 | GAP-026 | 已关闭 | 直接 Possess Demo 允许 owning client 参与单位移动，客户端 Pawn 解穿透可产生服务器未认可的视觉位移 | ADR-043 已落地：服务器 Combat AIController + Command Pawn + 全客户端 SimulatedProxy + 单一 Detour Crowd；三档 Dedicated 双客户端对撞、RPC、64/256 容量和 teardown Gate 见 [10-10](../10-Architecture/10-10-Server-Authoritative-Movement-Kickoff.md) | 2026-09-02 / SAM-008 |
 | GAP-027 | 待处理 | 交互式 Editor 内运行既有完整 Automation 后切地图，部分技能测试的 CDO 持有临时 AbilityData，导致测试 World 无法 GC | HUD-LOG-001 验证时发现；引用链指向 Default__CombatSelfHealAbility、CombatMeatHookAbility 等既有测试配置，不含日志组件。当前以独立进程执行全量 Automation、干净 Editor 执行 PIE 隔离；后续为修改 CDO 的测试增加作用域恢复。证据 `Saved/CombatLog/Editor-UI.log` 的 World Memory Leaks 引用链 | 后续测试设施维护 |
 | GAP-028 | 分阶段处理（ADR-062～065） | 阶段 A/B/C 已验收；阶段 C 的 v2 Utility、技能候选、EQS、World 预算、独立演示与 64/128/256 AI 容量证据见 AI-002～004。完整权威可见性、可选公共空间索引、长时间 AI soak、网络损伤和 D 阶段遭遇扩展仍未实现或验证 | [配置指南](../20-Content/20-04-StateTree-AI-Guide.md) 区分当前 API 与 [10-17](../10-Architecture/10-17-StateTree-AI-Decision-System.md) 的后续方案；范围/LOS 不等于迷雾。本轮容量未触发空间索引升级，真实复杂地图若超预算再独立评审公共 Targeting | A/B/C 证据独立归档；总缺口保留到可见性/D 阶段与长期容量边界另行决策 |
-| GAP-029 | 待处理 | 肉鸽防守模式的 RunState、随机强化池、服务器种子、团队商店即时消耗品、波次 Director、核心 Objective、换英雄保留和断线边界尚未实现 | [DEF-001 设计](../20-Content/20-05-Roguelite-Defense-Game-Design.md) 与 [Spec](../Specs/DEF-001-coop-defense-design.spec.md) 先冻结产品与实现边界；进入 Phase 1 前需独立 feature Spec、数据/Tag/网络/生命周期审查，含 ShopRevision、购买账本和开发版 Seed Panel | Phase 1 防守骨架前 |
+| GAP-029 | 分阶段处理 | DEF-002 Phase 1 的固定波次/核心/Director/地图/固定强化已实现并完成本地矩阵，待用户验收；随机强化池、服务器种子、团队商店即时消耗品、换英雄保留、断线边界和完整内容仍未实现 | [DEF-001 设计](../20-Content/20-05-Roguelite-Defense-Game-Design.md)、[DEF-002 Spec](../Specs/DEF-002-defense-phase1-skeleton.spec.md)；Phase 1 通过后再为 Phase 2 建立种子/选择/商店契约 | Phase 2 肉鸽构筑前 |
 
 ### ADR-064：阶段 B 的事实快照与角色职责（2026-09-21）
 
@@ -337,9 +337,18 @@
 - 1.3 用户验收（2026-09-30）：用户确认小地图生成按钮、JSON 配置和 PIE 显示验收完成，授权本地 Git 提交；保留完整 Combat D3D12 设备移除作为未执行边界，不推送远端。
 - 兼容与回滚：不改变 `combat_v4_economy_rc1`、GameplayTag、事件/展示 schema、DefinitionId、RPC 和既有 HUD/相机语义。回滚时删除 HUD-MINIMAP-001 文档增量即可；实际实现需以独立 Spec 成组回退代码、蓝图、资产和网络字段。
 
+### ADR-070：Phase 1 防守骨架的公共入口与实现边界（2026-10-15；DEF-002）
+
+- 状态：`accepted/implemented`（用户授权实现，F1 0.2 本地计划审查批准）；DEF-002 本地矩阵完成，尚未用户验收。
+- 选择：新增 DefenseRun/Wave 定义、Defense GameMode/GameState、Objective Combat Unit 代理和 Scheduler 驱动 Director；核心 Health 继续由 ASC/Combat Damage/Lifecycle 保存，敌人移动/攻击继续走公共 Order/AIController。
+- 约束：Phase 1 只消费固定 5 个普通波次 + 1 个 Boss、两条路线、有限出生失败和 PhaseGeneration；不引入随机种子、随机强化选择、团队商店、事件、重连或新 GameplayTag/Event schema；固定 Modifier 强化属于 Phase 1。核心死亡优先，终局与旧回调 exactly-once。
+- 兼容与回滚：旧 `ACombatGameMode`、Demo 地图和既有资产默认不变；删除 `Defense/`、DEF-002 测试和独立模式入口即可回滚。需要真实地图资产、公开 View 扩展、网络载荷或 Phase 2 机制时递增 Spec 并重新审查。
+- DEF-002 0.2：新增独立 Run/Wave schema 1、GameState 投影 schema 1 和稳定 Unit/Modifier 定义；保留既有 Combat Content/Tag/Event/Release 版本。出生失败不得获胜，清场延后一轮判定以保证同帧核心死亡优先；加入独立灰盒地图、固定强化、复活、每玩家每波幂等奖励和单/双人网络验证。无旧资产迁移，回滚只撤新目录和扫描条目。
+- 当前证据：DEF-002 三 Target、173 项分进程 Automation（含渲染 PIE）、56 资产、导航冷回读、单/双人胜利与单人失败独立网络 smoke 通过。原混合进程回归复现 GAP-027；3–4 人容量、长时 soak、cook/打包和用户完整游玩未覆盖。
+
 ### ADR-069：肉鸽成长型合作防守作为 post-M8 玩法方向（2026-10-14；用户方向更新 2026-10-15）
 
-- 状态：`proposed`；2026-10-15 已记录用户方向，设计任务见 [DEF-001](../Specs/DEF-001-coop-defense-design.spec.md)，当前仍未授权运行时、地图、资产或发布契约变更。
+- 状态：`proposed`；2026-10-15 已记录用户方向，设计任务见 [DEF-001](../Specs/DEF-001-coop-defense-design.spec.md)，本设计任务当时未授权运行时修改；2026-10-15 用户另行授权 DEF-002 Phase 1 实现，发布契约仍不变。
 - 选择：首版按 1–4 人合作、单人可通关、每局服务器种子、个人强化三选一、团队商店即时消耗品、波次回防、事件和 Boss 组织体验；完整版目标约 25 分钟；局外永久成长、账号存档和中途加入暂时关闭。
 - 约束：随机结果按 Run/WaveSpawn、AugmentOffer、EventChoice 和 Loot 域隔离；商店目录固定，团队效果由 ShopRevision + RequestId + 购买账本幂等提交，高风险事件由 EventId + RiskRevision + RiskLedger 一次性结算；服务器拥有候选、购买、奖励、核心生命和阶段，客户端只提交请求并消费只读 View。强化和消耗品优先映射现有 Ability/Modifier/属性公共入口，不能由地图蓝图直接改 Health、金币或经验。
 - 已确定：完整版允许换英雄且个人强化保留；不适用英雄的专属卡休眠且不计入激活家族协同，切回后恢复；高风险事件可以增加下一波预算/精英概率并提高成功后的 Boss 奖励，采用发起人确认、队友可取消的简单流程，不使用共享遗物式投票；开发版必须提供服务器专用自定义种子/复现面板；核心、神殿、英雄、敌人和剧情使用原创内容。

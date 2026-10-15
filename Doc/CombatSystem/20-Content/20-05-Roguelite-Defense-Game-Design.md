@@ -1,7 +1,7 @@
 # 肉鸽成长型合作防守 RPG 设计
 
 > 项目代号：Aegis Defense（暂名）
-> 文档状态：设计提案，待用户评审
+> 文档状态：完整设计提案；DEF-002 Phase 1 已实现并通过用户验收，进入 Phase 2
 > 版本：0.5 · 2026-10-15 · 全部数值为原型调优起点
 > 适用基线：Unreal Engine 5.8、Combat 单 Runtime Module、`combat_v4_economy_rc1`
 > 关联任务：[DEF-001 Spec](../Specs/DEF-001-coop-defense-design.spec.md)
@@ -463,7 +463,7 @@ Boss 必须有：
 
 ### 7.1 建议新增的数据定义
 
-以下是设计提案，名称和字段在实现前可调整：
+以下描述完整目标模型；Run/Wave、Director 和 RunView 已按 DEF-002 实现，其余定义仍属于后续阶段提案：
 
 | 定义 | 主要字段 | 所有者/用途 |
 | --- | --- | --- |
@@ -500,7 +500,7 @@ Boss 必须有：
 
 ### 7.3 权威边界
 
-- GameMode/未来 Defense Director：服务器拥有阶段、波次和奖励。
+- Defense GameMode / Director：服务器拥有阶段、波次和奖励。
 - Objective Actor：服务器拥有核心生命、受击和失败转换；生命变化仍走 Combat Damage/Heal 入口。
 - Combat Unit：继续由 Combat Unit、ASC、Lifecycle、Order、Attack 和 StateTree 管理。
 - Augment Runtime：服务器将合法强化映射为公开的 Modifier/Ability/属性变化；UI 只读取 View。
@@ -554,12 +554,14 @@ Boss 必须有：
 
 ### Phase 1：可玩的防守骨架
 
-新增独立防守 GameMode/地图入口、Objective、RunState、Director、两条路线、五个普通波次和一个 Boss。先使用少量固定强化卡，但数据接口必须能接入随机候选。退出条件：
+新增独立防守 GameMode/地图入口、Objective、RunState、Director、两条路线、五个普通波次和一个 Boss。先使用少量固定强化卡，但数据接口必须能接入随机候选。2026-10-15 已进入 DEF-002 实现：C++ 已建立 DefenseRun/Wave 定义、Objective Combat Unit 代理、复制 GameState、Scheduler 驱动 Director 和独立 Defense GameMode；独立灰盒地图、固定强化、共享奖励与复活已完成；三 Target、173 项分进程测试、56 资产、渲染 PIE 和单/双人 smoke 通过，尚未用户验收。退出条件：
 
 - 服务器能稳定开始、推进、结束一局；
 - 核心被摧毁只结算一次；
 - 波次不会因出生失败或旧回调卡住；
 - 单人和双人 Dedicated smoke 通过。
+
+当前实现见 [DEF-002](../Specs/DEF-002-defense-phase1-skeleton.spec.md)：独立 `/Game/Combat/Demo/Defense/L_Defense` 灰盒地图、两路固定出生、五个普通波和简单 Boss、顶部阶段/核心 HUD、共享波次奖励、两张固定 Modifier 强化与安全复活。核心死亡优先，旧 RunId/PhaseGeneration/LifeGeneration 淘汰；出生失败和异常回收不会算作击杀或胜利。随机种子、强化候选、团队商店、事件、复杂 Boss 技能与多人容量仍留后续阶段，验收以 DEF-002 证据为准。
 
 ### Phase 2：肉鸽构筑
 

@@ -12,7 +12,7 @@ Combat 当前位于 `Combat` 单 Runtime Module 中，不是独立插件或独�
 - M0-M8 共 82 个 Task 已完成并通过用户验收；最近一次发布 Gate 记录为 `Combat.*` 40/40、Editor/Server/Client 构建、资产校验和 Dedicated 双客户端容量场景通过。
 - M8 之后增加了卓尔游侠远程攻击 Demo、头顶资源/状态/施法条、伤害治疗跳字，以及底部居中的英雄、技能、Buff HUD。C++ 提供只读数据，Widget Blueprint 维护布局和视觉；等级经验与技能加点已接入服务器权威成长组件，六格装备与三格背包已接入物品主动、被动、场景交互和权威投影。
 - 完整 gameplay 预测回滚、跨进程确定性 Replay、召唤物/幻象仍未接入；ECON-003 单一库存交易、锁定合成和出售已通过用户代码 review，NullRHI PIE、独立 Dedicated 双客户端 300 秒经济 soak、Windows cook 与资产校验通过，验证边界见 ECON-003 Spec。
-- Post-M8 新增肉鸽成长型合作防守设计提案：每局服务器种子、个人强化、团队商店即时消耗品、波次回防、事件和 Boss；当前只完成设计文档，未实现防守模式、地图或资产，见 [DEF-001 设计文档](Doc/CombatSystem/20-Content/20-05-Roguelite-Defense-Game-Design.md) 与 [Spec](Doc/CombatSystem/Specs/DEF-001-coop-defense-design.spec.md)。
+- Post-M8 新增肉鸽成长型合作防守设计提案：每局服务器种子、个人强化、团队商店即时消耗品、波次回防、事件和 Boss；Phase 1 已进入实现，独立灰盒地图与防守循环见 [DEF-002](Doc/CombatSystem/Specs/DEF-002-defense-phase1-skeleton.spec.md)，当前验证/验收状态以台账为准，见 [DEF-001 设计文档](Doc/CombatSystem/20-Content/20-05-Roguelite-Defense-Game-Design.md) 与 [Spec](Doc/CombatSystem/Specs/DEF-001-coop-defense-design.spec.md)。
 
 以上测试数字是已归档的最近验收证据，不自动代表任意工作区修改已经重新验证。实时任务状态以 [开发进度台账](Doc/CombatSystem/00-Project/00-01-Progress-Tracker.md) 为准。
 
@@ -34,6 +34,8 @@ Combat 当前位于 `Combat` 单 Runtime Module 中，不是独立插件或独�
 Demo 操作：左键点击英雄在本地 HUD 查看信息；有控制权时同时选中它。按住 **Shift** 点击增删组成员，左键拖动框选自己的单位，Shift 拖框追加，最多选择 8 个。绿色圈为主选、蓝色圈为其他选中单位，橙色圈为只读查看目标。右键点地面让选中组移动，点敌人让选中组持续普攻并自动追击；**A** 后左键指定群体攻击，**S** 停止选中组，**Escape** 取消瞄准/拖框。Q/W/E/R 和物品仅操作主选英雄，点击切换英雄不会停止旧英雄或释放控制权；查看无权单位时不会给旧英雄下令。Demo 初次出生提供两名独立英雄。详见 [多操规格](Doc/CombatSystem/Specs/CTRL-001-multi-unit-selection.spec.md)。卓尔 **Q** 切换“霜冻之箭”，默认开启，W/E/R 为空；A 模式点地面不执行 Attack Move。
 
 技能指示器训练场：打开 `/Game/Combat/Demo/Indicators/L_CombatIndicators`，Q/W/E/R 分别体验单位、圆形、直线和自身技能。目标技能默认按键瞄准、左键确认，Escape/右键取消；琥珀虚线表示超距，确认后由服务器追近。Controller 可切换按下/松开快施。配置见 [10-13 技能指示器](Doc/CombatSystem/10-Architecture/10-13-Skill-Indicators.md)。
+
+防守原型：打开 `/Game/Combat/Demo/Defense/L_Defense` 后 Play。每名玩家控制一名游侠，准备 40 秒后两路敌人进攻核心，完成五个普通波和最终 Boss 获胜，核心被摧毁则失败。波间整备 8 秒，第 1/3 波固定获得 +5 护甲/+45 移速，死亡约 8 秒后安全复活。顶部显示阶段、敌人数量与核心生命；右键敌人攻击、Q 切换霜冻之箭。当前是灰盒骨架，种子、随机三选一、团队商店与复杂 Boss 技能尚未接入。
 
 StateTree AI 演示：打开 `/Game/Combat/Demo/AI/L_CombatAI`，服务器自主单位在导航就绪后追近并攻击木桩。PIE 中选中演示场实例可点击 **AI 返回起点 / AI 攻击靶子**。阶段 A 提供显式 Move/Attack/Cast、单命令写入者、攻击边界切换和玩家接管；Profile、树接线与后续阶段边界见 [20-04 配置指南](Doc/CombatSystem/20-Content/20-04-StateTree-AI-Guide.md)。
 

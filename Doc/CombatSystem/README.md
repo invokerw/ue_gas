@@ -149,3 +149,5 @@
 - 代码、DataAsset、GameplayTag 和网络载荷的命名发生变化时，先更新 `10-Architecture/10-01`、`10-Architecture/10-08`，再更新对应子系统文档与测试矩阵。
 - 涉及 Unreal Editor、Content 资产、蓝图和 PIE 的任务优先使用 `30-Tooling/30-01-UE-MCP-Workflow.md` 获取当前状态、执行受控操作并回读验证；最终完成状态仍以源码 diff、编译、Automation 和对应 Gate 为准。
 - M0-M8 已完成。post-v1 工作必须建立新的 Task/ADR/验收边界，不能继续复用已关闭里程碑伪装完成度。
+
+防守 Phase 1 实现与验证：[DEF-002 防守骨架](Specs/DEF-002-defense-phase1-skeleton.spec.md)，地图 `/Game/Combat/Demo/Defense/L_Defense`。
