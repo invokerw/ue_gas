@@ -109,11 +109,20 @@ void ACombatItemNetworkScenario::Tick(float Delta)
 	if (Step == 0)
 	{
 		if (View.Items[2].Quantity != 3 || !View.Items[2].AbilityHandle.IsValid()) return;
+		// 容量夹具会在服务器替换初始英雄；通过真实选择入口建立主选，再测试高层物品输入。
+		if(!Player->CanOperateInspectedUnit()) { Player->SelectCombatUnit(Unit); return; }
 		BoundUnit = Unit;
 		InitialBindingGeneration = Player->GetCommandBindingGeneration();
 		Item = View.Items[2].Handle;
 		Unit->OnOrderFinalResult.AddUniqueDynamic(this, &ACombatItemNetworkScenario::ReceiveFinal);
-		if (!Player->UseInventoryItem(2, View.Items[2])) { Finish(false, TEXT("Use rejected locally")); return; }
+		if (!Player->UseInventoryItem(2, View.Items[2]))
+		{
+			UE_LOG(LogCombat,Display,TEXT("ItemSmokeLocalReadiness Operate=%d Local=%d SnapshotLife=%lld UnitLife=%u Spec=%d Data=%s"),
+				Player->CanOperateInspectedUnit(),Player->IsLocalController(),View.LifeGeneration,Unit->GetLifeGeneration(),
+				Unit->GetCombatAbilitySystemComponent()->FindAbilitySpecFromHandle(View.Items[2].AbilityHandle)!=nullptr,
+				*GetNameSafe(Unit->GetCombatAbilitySystemComponent()->GetCombatAbilityData(View.Items[2].AbilityHandle)));
+			Finish(false, TEXT("Use rejected locally")); return;
+		}
 		Step = 1;
 	}
 	else if (Step == 1)

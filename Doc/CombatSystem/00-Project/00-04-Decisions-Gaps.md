@@ -279,7 +279,8 @@
 | GAP-026 | 已关闭 | 直接 Possess Demo 允许 owning client 参与单位移动，客户端 Pawn 解穿透可产生服务器未认可的视觉位移 | ADR-043 已落地：服务器 Combat AIController + Command Pawn + 全客户端 SimulatedProxy + 单一 Detour Crowd；三档 Dedicated 双客户端对撞、RPC、64/256 容量和 teardown Gate 见 [10-10](../10-Architecture/10-10-Server-Authoritative-Movement-Kickoff.md) | 2026-09-02 / SAM-008 |
 | GAP-027 | 待处理 | 交互式 Editor 内运行既有完整 Automation 后切地图，部分技能测试的 CDO 持有临时 AbilityData，导致测试 World 无法 GC | HUD-LOG-001 验证时发现；引用链指向 Default__CombatSelfHealAbility、CombatMeatHookAbility 等既有测试配置，不含日志组件。当前以独立进程执行全量 Automation、干净 Editor 执行 PIE 隔离；后续为修改 CDO 的测试增加作用域恢复。证据 `Saved/CombatLog/Editor-UI.log` 的 World Memory Leaks 引用链 | 后续测试设施维护 |
 | GAP-028 | 分阶段处理（ADR-062～065） | 阶段 A/B/C 已验收；阶段 C 的 v2 Utility、技能候选、EQS、World 预算、独立演示与 64/128/256 AI 容量证据见 AI-002～004。完整权威可见性、可选公共空间索引、长时间 AI soak、网络损伤和 D 阶段遭遇扩展仍未实现或验证 | [配置指南](../20-Content/20-04-StateTree-AI-Guide.md) 区分当前 API 与 [10-17](../10-Architecture/10-17-StateTree-AI-Decision-System.md) 的后续方案；范围/LOS 不等于迷雾。本轮容量未触发空间索引升级，真实复杂地图若超预算再独立评审公共 Targeting | A/B/C 证据独立归档；总缺口保留到可见性/D 阶段与长期容量边界另行决策 |
-| GAP-029 | 分阶段处理 | DEF-002 Phase 1 的固定波次/核心/Director/地图/固定强化已实现并完成本地矩阵，待用户验收；随机强化池、服务器种子、团队商店即时消耗品、换英雄保留、断线边界和完整内容仍未实现 | [DEF-001 设计](../20-Content/20-05-Roguelite-Defense-Game-Design.md)、[DEF-002 Spec](../Specs/DEF-002-defense-phase1-skeleton.spec.md)；Phase 1 通过后再为 Phase 2 建立种子/选择/商店契约 | Phase 2 肉鸽构筑前 |
+| GAP-029 | 分阶段处理 | DEF-002 Phase 1 已通过用户验收；DEF-004 已接入个人强化池/服务器种子/选择/重抽/效果；DEF-006 将团队原型商品接入原 Combat 商店与获得即用。换英雄保留、重连与完整机制内容仍待后续 | [DEF-001 设计](../20-Content/20-05-Roguelite-Defense-Game-Design.md)、[DEF-002 Spec](../Specs/DEF-002-defense-phase1-skeleton.spec.md)；Phase 1 通过后再为 Phase 2 建立种子/选择/商店契约 | Phase 2 肉鸽构筑前 |
+| GAP-030 | 待处理 | 既有瞬态无限 GE 在 owning-client Mixed 中无法解析完整定义，DEF-002/004 网络日志出现 PostReplicatedAdd 诊断 | 本步保持公共属性/UnitView 结果，双客户端逐项核对；完整 GE 定义复制需独立内核 Spec，不通过切换玩家复制策略掩盖 | 后续公共 Modifier 网络改造前 |
 
 ### ADR-064：阶段 B 的事实快照与角色职责（2026-09-21）
 
@@ -407,3 +408,58 @@ ADR/GAP ID:
 3. 若进入公共 API/数据/网络，已有兼容和迁移说明。
 4. 最少一个正向和一个失败/边界测试体现结论。
 5. 与已有 ADR 冲突时，明确 supersede 哪条规则。
+
+
+### ADR-071：防守个人构筑与私有选择事务（2026-10-15）
+
+- 状态：该条为 DEF-003 0.2 原计划；DEF-003 0.3 实际只完成服务器候选基底，UI/RPC/扣款和效果接线现由 DEF-004/ADR-072 落地，验证见 DEF-004。
+- 新增 Augment/Pool schema 1、owner-only Choice schema 1、Defense RunView schema 2；只在新 Defense PC/模式启用。旧 Combat Release/Tag/Event/Formula/RNG v1 不变。
+- Director 保存构筑和冻结种子/池，ChoiceComponent 只负责拥有者 RPC/私有投影；公共 Economy TrySpendGold 处理修订/余额/重入。候选和扣费一次提交，有界回执缓存，旧局/修订/生命/控制身份拒绝。
+- 复现键不包含随机 RunId/Actor 指针或其他玩家抽取计数；使用固定 Seed、域、加入席位、窗口修订和槽位。完整种子只在开发服务器面板/日志可读，客户端只有摘要。
+- 死亡窗口超时选默认、效果暂存复活；核心失败作废。新池为空保留 Phase 1 固定卡，回滚到 d7c9809 的文件组不触碰其他用户文件。
+
+
+### ADR-072：DEF-004 私有强化选择、重抽与生效（2026-10-16）
+
+- 状态：accepted/implemented（DEF-004 0.1 已完成本地实现与验证，待用户验收）。
+- Choice/RunView 独立防守 schema 2；新 Defense PC 的复制组件只向拥有者投影。请求包含局/修订/生命/控制/经济身份，复用共享连接预算与 32 条完整载荷缓存。旧 Combat Release、Event/Tag/Formula/RNG v1 不变。
+- Director 冻结数据并控制 15 秒窗口、超时默认、死亡待生效和失败作废；选择只走公共 Modifier。新服务器 TrySpendGold 校验金额/修订/余额/重入，重抽 60/100 两次且无替代卡不扣款。
+- 开局等待/种子输入仅开发本地服务器，Shipping 随机自动；Dedicated 开发固定种子仅命令行，不接收客户端种子。原型卡片最多持有一次，复杂机制卡/叠层内容/团队商店另一步。
+- Pool 为空保留固定卡；旧 Demo PC 不改，新蓝图复制输入并继承 Defense PC。回滚只撤本步增量，保留 DEF-003 工作区。
+
+
+### GAP-030：既有动态 GameplayEffect 定义的 owning-client 诊断
+
+- 状态：保留后续公共 Modifier 网络改造；本步不得通过切换玩家 ASC 复制模式或旁路属性写入掩盖。
+- 事实：`Saved/DEF-002/network-victory-2/client-1.log` 已出现 `PostReplicatedAdd Received ReplicatedGameplayEffect with no UGameplayEffect def`。DEF-004 使用同一公共 Modifier 后仍出现；`CombatModifierComponent::ApplyNewModifier` 构造瞬态无限 GE，而 owning-client Mixed 的完整 GE 定义引用不能解析。
+- 验证边界：服务器 Modifier registry、UnitView 和 AttributeSet 复制为本步实际消费的权威结果，专用网络探针逐项对照 2 名英雄 × 12 属性；不把此诊断说成“完整 ActiveGE 复制通过”。后续新建独立 Spec 处理静态/稳定 GE 定义及原有内容兼容，不在强化界面任务中重构公共 GAS 内核。
+
+DEF-004 验证结果：Editor/Server/Client、188 项分进程回归、81 定义资产、721 包 Windows cook、真实按钮/导航 PIE、双客户端重放/余额/效果及 24 属性对照通过；GAP-030 诊断保留，打包 exe/4 人容量/长期平衡不在本步通过范围。
+
+
+### ADR-072：团队商店原型事务与内容边界（2026-10-16；DEF-005）
+
+Phase 2 先交付六件独立属性/修复商品的团队限购、个人付款、共享账本、Owner RPC 和显示；正式 §6.3 护盾/条件增伤/援军效果属于 Phase 3。原型不复用正式六个 DefinitionId。目录 schema 2 通过 UE API 升级未交付的占位资产；每件属性商品引用独立、永久且无自定义 Hook 的 Modifier，由 Director 按下一波至最后覆盖波清场统一撤销。每项只限购一次，购买者掉线仍保留其对其他成员的效果，终局保留已购记录、撤销属性，World teardown 清理。稳定身份为目录 PrimaryAssetId 加 ItemId 键，网络不发送定义 UObject。具体准入与失败边界见 [DEF-005](../Specs/DEF-005-defense-team-shop.spec.md)。
+
+
+### ADR-073：复用原商店与获得即使用（2026-10-16；DEF-006）
+
+用户指出 DEF-005 应复用已有商店。六件防守消耗品迁为 UCombatItemData，由 CombatShopData 独占分类/价格，走既有 Economy RPC 和金币事务。物品新增默认关闭的 bUseOnAcquire 与同步获得效果配置；购买、拾取、奖励共用唯一物品登记表领取入口，不占槽位，成功即消耗、失败保留输入。团队行为只负责限购、公共战斗效果与逐波到期，删除第二套商店 UI/RPC/目录。
+
+客户端只读可用性与请求上下文进入原经济投影；EconomyPresentationSchemaVersion=4、ContractVersion=5、ReleaseId=combat_v5_acquisition_rc1，旧物品内容版本仍为 2。三端必须一起更新；不新增 GameplayTag/Event 语义，不部署发布。详情、迁移与验证见 [DEF-006](../Specs/DEF-006-reuse-shop-use-on-acquire.spec.md)。ADR-072 的独立目录/组件选择被本决策替代，历史 DEF-005 验证记录保留。
+
+
+### ADR-074：核心救援道具与护盾投影（2026-10-16；DEF-007）
+
+正式神殿屏障/应急石分别使用新 CombatItem DefinitionId，替换防守目录中的铁甲/固定修复原型，旧资产留存不再售卖。屏障在整备阶段购买即生效，覆盖下一波至清场；以购买时核心最大生命8%为快照，不随上限变化增加。公开 DamageBlock Hook 在抗性后吸收物理/魔法/纯粹伤害，HPLoss与免疫沿用公共规则；应急石通过公开 Heal 请求15%最大生命修复。
+
+Effect配置兼容新增，核心盾Runtime不修改现有魔法盾示例或战斗内核。Director持有核心精确句柄，耗尽/清场/终局移除，无新Timer；买家断线不撤盾。Defense RunView 独立 schema 2→3 增加只读护盾余量，三端同时更新；公共Release/Tag/Event/Formula/经济schema保持不变。原生资产迁移、验证和回滚见 [DEF-007](../Specs/DEF-007-defense-core-rescue.spec.md)，本地L1内容扩展，未部署。
+
+
+DEF-007 0.2 追加：同步获得效果在应用 Modifier 前读取组件是否正在遍历 Hook；该兼容只读 C++ 查询不改变既有延迟队列。防守领取此时拒绝，避免已退款却排队生成效果；反伤嵌套反例保留回归。
+
+### GAP-031：公共 Damage 跨 World 误用的事务归属（2026-10-16）
+
+- 状态：待独立内核修复；本地可信调用者误用边界，不是客户端新入口。
+- DEF-007 core-green1.log 的夹具主动以世界F的 DamageSubsystem 请求伤害世界G的核心：护盾被耗尽，后续G世界伤害未形成正确死亡凭证。入口目前没有显式校验 Source/Target 与 Subsystem 同 World，事件与属性回报归属可能不一致。
+- 防守商品仍检查玩家/收件人同World，效果只操作导演自身核心；正式实现不会发送上述请求。本轮移除不合法夹具调用，保留正常死亡、跨World领取拒绝测试；后续独立Spec统一Damage/Heal/Modifier可信API跨World边界和全量回归。

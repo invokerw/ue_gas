@@ -771,4 +771,17 @@ bool FCombatShopWidgetStructureTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FCombatItemAcquireUseValidationTest,
+	"Combat.Economy.ItemAcquireUseValidation", CombatEconomyTests::Flags)
+bool FCombatItemAcquireUseValidationTest::RunTest(const FString& Parameters)
+{
+	(void)Parameters;
+	UCombatItemData* Item=CombatEconomyTests::MakeLeaf(GetTransientPackage(),TEXT("acquire_use_item"),100);
+	FString Error; Item->bUseOnAcquire=true;
+	TestFalse(TEXT("Acquire-use requires an active ability"),Item->ValidateRuntime(Error));
+	Item->bUseOnAcquire=false;
+	TestTrue(TEXT("Legacy item remains valid with flag disabled"),Item->ValidateRuntime(Error));
+	return true;
+}
 #endif

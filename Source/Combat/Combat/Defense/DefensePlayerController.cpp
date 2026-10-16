@@ -1,0 +1,16 @@
+#include "Combat/Defense/DefensePlayerController.h"
+#include "Combat/Defense/DefenseChoiceComponent.h"
+#include "Combat/Defense/DefenseHUD.h"
+#include "Combat/Defense/DefenseBuildWidget.h"
+#include "Framework/Application/SlateApplication.h"
+ADefensePlayerController::ADefensePlayerController()
+{
+	Choice=CreateDefaultSubobject<UDefenseChoiceComponent>(TEXT("DefenseChoice"));
+}
+bool ADefensePlayerController::IsPointerOverCombatUI() const
+{
+	if(Super::IsPointerOverCombatUI()) return true;
+	const auto* H=Cast<ADefenseHUD>(GetHUD());
+	return H && H->GetBuildWidget() && FSlateApplication::IsInitialized()
+		&& H->GetBuildWidget()->IsScreenPositionOverUI(FSlateApplication::Get().GetCursorPos());
+}

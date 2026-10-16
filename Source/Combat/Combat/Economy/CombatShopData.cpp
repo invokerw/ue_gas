@@ -241,6 +241,7 @@ bool UCombatShopData::ValidateRuntime(FString& OutError) const
 		for (const FCombatItemRecipeIngredient& Ingredient : Item->Recipe)
 		{
 			UCombatItemData* Child = Ingredient.Item.LoadSynchronous();
+			if(Child && Child->bUseOnAcquire) { OutError=TEXT("获得即用物品不能作为配方组件"); return false; }
 			if (!Child || !ItemIds.Contains(Child->GetPrimaryAssetId()))
 			{
 				OutError = FString::Printf(TEXT("Recipe component is outside the catalog: %s"), *Item->GetPrimaryAssetId().ToString());

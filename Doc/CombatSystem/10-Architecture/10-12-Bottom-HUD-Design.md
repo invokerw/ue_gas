@@ -204,3 +204,27 @@ Designer 中使用底边锚定的 ScaleBox，按 UE DPI 规则显示，狭窄区
 | 本地 HUD BeginPlay | 强持有窗口；窗口弱观察日志组件、强持文字池与瞬态样式表 | 窗口 Destruct 解绑所有委托、取消加载并释放行；重建保留弱历史源并恢复一次订阅；HUD EndPlay 显式置空历史源并移除窗口 | 弱异步回调与 `BindingRevision`；过期请求不能写回新绑定；专用服务器不创建窗口 |
 
 相关测试为 `Combat.UI.Log.*` 的筛选与格式、容量边界、真实事务与组件 EndPlay、真实蓝图控件与重建，以及四档 DPI、视口边缘和缩小后的位置恢复。工程和联网证据记录在 [HUD-LOG-001 Spec](../Specs/HUD-LOG-001-combat-log.spec.md)，本地拖动增量证据见 [HUD-LOG-002 Spec](../Specs/HUD-LOG-002-window-drag.spec.md)；不改写此前 HUD 验收结论。
+
+
+## DEF-004 防守个人强化面板（2026-10-16）
+
+新增 `UDefenseBuildWidget` 由 DefenseHUD 本地持有，独立于底部英雄/技能/物品布局。中部显示种子开始或个人三选一，右侧展示已选卡与金币；Slate 面板的实际可见几何用于输入阻挡。DefensePlayerController 继承 Combat 输入并追加面板几何判断，旧 Demo Controller 行为不变。
+
+私有 ChoiceComponent 用 COND_OwnerOnly 复制候选/已选/期限/结果。Widget 不读取服务器 Director 产生候选或改属性；按钮只提交带身份的 RPC，倒计时只由服务器校准时间显示。开发本地服务器开始面板可锁种子，完整种子复制按钮不向客户端提供。Widget 释放 Slate 引用，Controller/Director 退出清理私有状态与 Modifier 句柄。详细流程和证据见 [DEF-004](../Specs/DEF-004-defense-choice-flow.spec.md)。
+
+
+## DEF-005 团队商店面板（2026-10-16）
+
+`DefenseTeamShopComponent` 由防守 Controller 创建，按 `COND_OwnerOnly` 发布共同商品账本和个人购买回执。左侧独立可滚动面板显示六件商品、由本人支付的价格、剩余 0/1 或 1/1、购买者、当前生效与最后覆盖波；实际按钮只发送意图。库存和原有装备商店不变。Server 的 ShopRevision 随阶段开放/购买/到期改变，组件另有 UI Revision，失败回执与金币变化也触发局部刷新。商店局部刷新不重建中部种子输入/卡片按钮，不丢失已输入文本。面板的实际可见几何纳入原有输入隔离；金币不足、Boss 整备限定、已购和战斗中禁用分别呈现。详见 [DEF-005](../Specs/DEF-005-defense-team-shop.spec.md)。
+
+
+## DEF-006：团队商品复用原商店（2026-10-16）
+
+本节替代 DEF-005 的独立团队商店面板方案：`DefenseBuildWidget` 只保留种子/个人选择和已选构筑。防守 HUD 恢复 `UCombatShopWidget` 的右下金币按钮，并把原商店置于构筑提示上方；购物时暂收起右侧构筑列表，关闭后恢复，输入和种子文本不受商店刷新影响。
+
+原商店增加“团队补给”分类，商品仍是 `UCombatItemData`；左键查看、右键购买沿用原交互。`FCombatEconomyView::ShopOffers` 显示领域可用性、剩余次数、领取者与到期波次，UI 不引用 Defense 类型。普通配方区的布局和操作不变。真实按钮/几何/消费验证见 [DEF-006](../Specs/DEF-006-reuse-shop-use-on-acquire.spec.md)。
+
+
+### DEF-007 防守核心屏障反馈
+
+原商店金币入口、基础物品分类和右键购买沿用DEF-006。防守顶部核心HUD增加蓝色屏障条及“神殿屏障”余量，数据只读FDefenseRunView schema3，不在客户端查询或创建Runtime。导演通过既有监控节拍投影服务器核心屏障；购买、清场和终局同步刷新，伤害耗尽最迟下次监控刷新。底部原HUD与通用经济表现schema不改变。

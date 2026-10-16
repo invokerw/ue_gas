@@ -99,6 +99,9 @@ public:
 		const FCombatRngSubjectId& SubjectId,
 		uint32 Ordinal);
 
+	/** 使用任意稳定文本域生成服务器候选所需的 keyed hash；不注册新的 GameplayTag。 */
+	static uint64 HashSeededTextV1(uint64 MatchSeed, const FString& DomainText, const FCombatRngSubjectId& SubjectId, uint32 Ordinal);
+
 private:
 	/** 对字节序列执行 FNV-1a 64 位哈希。 */
 	static uint64 Fnv1a64(const ANSICHAR* Bytes, int32 Length);

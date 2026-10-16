@@ -6,6 +6,8 @@
 #include "Combat/Log/CombatEventSubsystem.h"
 #include "CombatPlayerController.h"
 #include "EngineUtils.h"
+#include "Misc/CommandLine.h"
+#include "Misc/Parse.h"
 #include "Engine/World.h"
 ADefenseGameMode::ADefenseGameMode()
 {
@@ -25,8 +27,10 @@ void ADefenseGameMode::BeginPlay()
 	if (!Objective || !Objective->InitializeFromUnitData(RunData->ObjectiveData))
 	{ if (Objective) Objective->Destroy(); UE_LOG(LogCombat, Error, TEXT("DefenseCoreSpawnFailed")); return; }
 	Objective->FinishSpawning(Transform);
-	if (!Director->InitializeForRun(RunData, Objective, GetGameState<ADefenseGameState>()))
+	if (!Director->InitializeForRun(RunData, Objective, GetGameState<ADefenseGameState>(),
+		bDevelopmentWaitForStart && GetNetMode()!=NM_DedicatedServer && !FParse::Param(FCommandLine::Get(),TEXT("DefenseSmoke"))))
 	{ Objective->Destroy(); UE_LOG(LogCombat, Error, TEXT("DefenseInitializationFailed")); return; }
+	if(!Director->InitializeTeamItems(GetShopData())) { UE_LOG(LogCombat,Error,TEXT("DefenseTeamItemsConfigurationFailed")); return; }
 	for (TActorIterator<ACombatPlayerController> It(GetWorld()); It; ++It) RegisterHero(*It);
 }
 APawn* ADefenseGameMode::SpawnDefaultPawnAtTransform_Implementation(AController* Player, const FTransform& Transform)

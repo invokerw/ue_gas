@@ -1,4 +1,5 @@
 #include "Combat/Defense/DefenseData.h"
+#include "Combat/Defense/DefenseAugmentData.h"
 #include "Combat/Unit/CombatUnitCharacter.h"
 #include "Misc/DataValidation.h"
 
@@ -81,6 +82,13 @@ bool UDefenseRunData::ValidateRuntime(FString& OutDiagnostic) const
 		if (!Waves[I]->ValidateRuntime(Error)) { OutDiagnostic = Error; return false; }
 		Ids.Add(Waves[I]->GetPrimaryAssetId());
 		for (const auto& Group : Waves[I]->SpawnGroups) if (!Routes.IsValidIndex(Group.RouteIndex)) return false;
+	}
+	if (AugmentPool)
+	{
+		if (!AugmentPool->ValidateRuntime(OutDiagnostic)) return false;
+		if(!FMath::IsFinite(ChoiceDuration) || ChoiceDuration<1 || ChoiceDuration>60
+			|| PreparationDuration<ChoiceDuration || IntermissionDuration<ChoiceDuration)
+		{ OutDiagnostic=TEXT("准备和整备时长必须包含完整选择窗口"); return false; }
 	}
 	OutDiagnostic.Reset();
 	return true;

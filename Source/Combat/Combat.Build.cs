@@ -33,7 +33,8 @@ public class Combat : ModuleRules
 			"SlateCore"
 		});
 
-		PrivateDependencyModuleNames.AddRange(new string[] { });
+		// 开发种子面板复制文本到系统剪贴板；仅本地 UI 使用，不参与服务器结算。
+		PrivateDependencyModuleNames.AddRange(new string[] { "ApplicationCore" });
 		if (Target.bBuildEditor)
 		{
 			// 树资产构建和编译只在编辑器使用，Server/Client 不链接编辑器模块。

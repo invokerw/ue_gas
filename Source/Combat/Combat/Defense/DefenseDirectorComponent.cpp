@@ -1,5 +1,11 @@
 #include "Combat/Defense/DefenseDirectorComponent.h"
 #include "Combat/Defense/DefenseData.h"
+#include "Combat/Defense/DefenseAugmentData.h"
+#include "Combat/Defense/DefenseChoiceComponent.h"
+#include "Combat/Combat/CombatHealSubsystem.h"
+#include "Misc/CommandLine.h"
+#include "Misc/Parse.h"
+#include "Combat/Core/CombatRngSubsystem.h"
 #include "Combat/Defense/DefenseGameState.h"
 #include "Combat/Defense/DefenseObjective.h"
 #include "Combat/Ability/CombatAbilitySystemComponent.h"
@@ -19,7 +25,7 @@
 
 UDefenseDirectorComponent::UDefenseDirectorComponent() { PrimaryComponentTick.bCanEverTick = false; }
 
-bool UDefenseDirectorComponent::InitializeForRun(UDefenseRunData* Data, ADefenseObjective* Core, ADefenseGameState* State)
+bool UDefenseDirectorComponent::InitializeForRun(UDefenseRunData* Data, ADefenseObjective* Core, ADefenseGameState* State, const bool bWaitForStart)
 {
 	if (bInitialized || bEnding || !GetOwner() || !GetOwner()->HasAuthority() || !GetWorld() || GetNetMode() == NM_Client
 		|| !IsValid(Core) || !IsValid(State) || Core->GetWorld() != GetWorld() || State->GetWorld() != GetWorld()) return false;
@@ -40,15 +46,43 @@ bool UDefenseDirectorComponent::InitializeForRun(UDefenseRunData* Data, ADefense
 		if (Copy->FixedAugment) Copy->FixedAugment = DuplicateObject<UCombatModifierData>(Copy->FixedAugment, Copy);
 		RunData->Waves.Add(Copy);
 	}
+	if (Data->AugmentPool)
+	{
+		RunData->AugmentPool=DuplicateObject<UDefenseAugmentPoolData>(Data->AugmentPool,RunData);
+		RunData->AugmentPool->Augments.Reset();
+		for(UDefenseAugmentData* A:Data->AugmentPool->Augments)
+		{
+			auto* Copy=DuplicateObject<UDefenseAugmentData>(A,RunData->AugmentPool);
+			Copy->ModifierData=DuplicateObject<UCombatModifierData>(A->ModifierData,Copy);
+			RunData->AugmentPool->Augments.Add(Copy);
+		}
+	}
+	SeedState = {};
+	SeedState.RunSeed=GetWorld()->GetSubsystem<UCombatRngSubsystem>()->GetMatchSeed();
+#if !UE_BUILD_SHIPPING
+	if(RunData->DevelopmentSeedOverride>0) SeedState.RunSeed=static_cast<uint64>(RunData->DevelopmentSeedOverride);
+	FString SeedArgument;
+	uint64 ParsedSeed=0;
+	if(FParse::Value(FCommandLine::Get(),TEXT("DefenseSeed="),SeedArgument) && ParseSeed(SeedArgument,ParsedSeed)) SeedState.RunSeed=ParsedSeed;
+#endif
+	if (SeedState.RunSeed == 0) SeedState.RunSeed = 1;
 	Objective = Core; CoreLife = Core->GetLifeGeneration(); GameState = State;
 	View.RunId = FGuid::NewGuid(); View.TotalWaves = RunData->Waves.Num(); View.Objective = Core;
 	bInitialized = true;
+#if !UE_BUILD_SHIPPING
+	View.bWaitingForStart=bWaitForStart;
+#endif
 	Core->GetCombatLifecycleComponent()->OnDied().AddUObject(this, &ThisClass::OnCoreDied);
 	EnterPhase(EDefensePhase::Preparation, INDEX_NONE, RunData->PreparationDuration);
 	auto* Scheduler = GetWorld()->GetSubsystem<UCombatSchedulerSubsystem>();
 	MonitorSchedule = Scheduler->ScheduleRepeating(this, 0.1, 0.1, -100, ECombatCatchUpPolicy::Coalesce,
 		FCombatScheduledDelegate::CreateUObject(this, &ThisClass::Monitor));
-	SchedulePhase(RunData->PreparationDuration);
+	if(!View.bWaitingForStart)
+	{
+		UE_LOG(LogCombat,Display,TEXT("DefenseSeedLocked Run=%s Seed=%llu"),*View.RunId.ToString(),SeedState.RunSeed);
+		SchedulePhase(RunData->PreparationDuration);
+	}
+	else { View.Deadline=0; Publish(); }
 	return !Terminal.bTerminal;
 }
 
@@ -68,6 +102,8 @@ void UDefenseDirectorComponent::EnterPhase(const EDefensePhase Phase, const int3
 	++View.PhaseGeneration; View.Phase = Phase; View.WaveIndex = Wave;
 	View.Deadline = GetWorld()->GetTimeSeconds() + Duration;
 	bCompletionPending = false;
+	ExpireTeamShop();
+	PublishTeamShop();
 	UE_LOG(LogCombat, Display, TEXT("DefensePhase Run=%s Generation=%lld Wave=%d Phase=%d"),
 		*View.RunId.ToString(), View.PhaseGeneration, Wave, int32(Phase));
 	Publish();
@@ -87,6 +123,8 @@ void UDefenseDirectorComponent::Advance(const FCombatScheduledTickContext& Tick,
 	if (!IsCoreAlive()) { Finish(false, TEXT("ObjectiveLost")); return; }
 	if (View.Phase != EDefensePhase::WaveCombat)
 	{
+		ExpireChoices(Tick.ActualTime,true);
+		if(Terminal.bTerminal) return;
 		const int32 Next = View.WaveIndex + 1;
 		if (!RunData->Waves.IsValidIndex(Next)) { Finish(false, TEXT("MissingWave")); return; }
 		GroupIndex = SpawnIndex = SpawnFailures = 0;
@@ -110,6 +148,7 @@ void UDefenseDirectorComponent::Advance(const FCombatScheduledTickContext& Tick,
 		ClearEnemies();
 		EnterPhase(View.WaveIndex == 4 ? EDefensePhase::BossPreparation : EDefensePhase::Intermission,
 			View.WaveIndex, RunData->IntermissionDuration);
+		OpenChoiceWindows();
 		SchedulePhase(RunData->IntermissionDuration);
 		return;
 	}
@@ -227,15 +266,27 @@ void UDefenseDirectorComponent::Monitor(const FCombatScheduledTickContext& Tick)
 	}
 	if (View.Phase == EDefensePhase::WaveCombat && Tick.ActualTime >= View.Deadline)
 	{ Finish(false, TEXT("WaveTimeout")); return; }
+	ExpireChoices(Tick.ActualTime);
+	if(Terminal.bTerminal) return;
+	ExpireTeamShop();
 	ServicePlayers(Tick.ActualTime);
+	PublishChoices();
+	PublishTeamShop();
 	Publish();
 }
 void UDefenseDirectorComponent::Publish()
 {
+	View.ObjectiveShield=ReadObjectiveShield();
 	if (Objective.IsValid())
 	{
 		View.ObjectiveHealth = Objective->GetCombatAttributeSet()->GetHealth();
 		View.ObjectiveMaxHealth = Objective->GetCombatAttributeSet()->GetMaxHealth();
+	}
+	if(SeedState.RunSeed)
+	{
+		FCombatRngSubjectId Subject;
+		View.SeedSummary=FString::Printf(TEXT("%08x"),uint32(UCombatRngSubsystem::HashSeededTextV1(SeedState.RunSeed,TEXT("Run.Summary"),Subject,0)));
+		View.OfferDrawCount=SeedState.DomainOrdinals.FindRef(TEXT("Run.AugmentOffer"));
 	}
 	if (GameState.IsValid()) GameState->Publish(View);
 }
@@ -245,14 +296,18 @@ void UDefenseDirectorComponent::Finish(bool bVictory, const FName Reason)
 	if (bVictory && !IsCoreAlive()) { Finish(false, TEXT("ObjectiveLost")); return; }
 	Terminal = {true, bVictory, Reason};
 	View.TerminalReason = Reason;
+	View.bWaitingForStart = false;
 	View.Phase = bVictory ? EDefensePhase::Victory : EDefensePhase::Defeat;
 	++View.PhaseGeneration; View.Deadline = 0; View.PendingSpawns = 0;
 	GetWorld()->GetSubsystem<UCombatSchedulerSubsystem>()->CancelAllForOwner(this);
 	PhaseSchedule = MonitorSchedule = {};
 	if (Objective.IsValid()) Objective->GetCombatLifecycleComponent()->OnDied().RemoveAll(this);
 	ClearEnemies();
+	ClearTeamShopEffects();
 	// 结果先冻结；终局不再授予死亡期间的奖励或恢复英雄。
-	for (auto& Pair : Players) { Pair.Value.PendingExperience = 0; Pair.Value.PendingAugments.Reset(); }
+	for (auto& Pair : Players) { Pair.Value.PendingExperience = 0; Pair.Value.PendingAugments.Reset(); Pair.Value.PendingCards.Reset(); Pair.Value.CurrentOffer.bCancelled=true; }
+	PublishChoices();
+	PublishTeamShop();
 	Publish();
 	UE_LOG(LogCombat, Display, TEXT("DefenseResult Run=%s Result=%s Wave=%d Reason=%s"),
 		*View.RunId.ToString(), bVictory ? TEXT("Victory") : TEXT("Defeat"), View.WaveIndex, *Reason.ToString());
@@ -280,7 +335,12 @@ bool UDefenseDirectorComponent::RegisterPlayer(ACombatPlayerController* Player, 
 		|| !IsValid(Hero) || Hero->GetWorld() != GetWorld() || Player->GetWorld() != GetWorld()
 		|| Hero->GetResourceOwnerPlayerController() != Player) return false;
 	if (Players.Contains(Player)) return Players.FindChecked(Player).Hero == Hero;
-	FDefensePlayerRecord Record; Record.Hero = Hero; Players.Add(Player, Record);
+	FDefensePlayerRecord Record; Record.Hero = Hero; Record.PlayerOrdinal = NextPlayerOrdinal++;
+	Players.Add(Player,Record);
+	if(!View.bWaitingForStart && RunData->AugmentPool) GenerateAugmentOffer(Players.FindChecked(Player),View.WaveIndex);
+	if(!ApplyTeamShopEffects(Hero)) { Finish(false,TEXT("TeamEffectFailed")); return false; }
+	PublishChoices();
+	PublishTeamShop();
 	return true;
 }
 void UDefenseDirectorComponent::RemovePlayer(ACombatPlayerController* Player)
@@ -291,7 +351,12 @@ void UDefenseDirectorComponent::RemovePlayer(ACombatPlayerController* Player)
 		if (auto* Hero = Record->Hero.Get())
 			for (auto Handle : Record->AugmentHandles) Hero->GetCombatModifierComponent()->RemoveModifier(Handle);
 	}
+	if(IsValid(Player))
+	{
+		if(auto* Choice=Player->FindComponentByClass<UDefenseChoiceComponent>()) Choice->ClearAuthority();
+	}
 	Players.Remove(Player);
+	if(IsValid(Player)) Player->GetCombatEconomyComponent()->RefreshShopOffers();
 }
 bool UDefenseDirectorComponent::RewardWave()
 {
@@ -304,7 +369,8 @@ bool UDefenseDirectorComponent::RewardWave()
 		Record.RewardedWaves.Add(View.WaveIndex);
 		if (Wave->GoldReward > 0 && !Player->GetCombatEconomyComponent()->AddGold(Wave->GoldReward, TEXT("DefenseWave"))) return false;
 		Record.PendingExperience += Wave->ExperienceReward;
-		if (Wave->FixedAugment && !Record.OwnedAugments.Contains(Wave->FixedAugment->GetPrimaryAssetId()))
+
+		if (!RunData->AugmentPool && Wave->FixedAugment && !Record.OwnedAugments.Contains(Wave->FixedAugment->GetPrimaryAssetId()))
 		{
 			Record.OwnedAugments.Add(Wave->FixedAugment->GetPrimaryAssetId());
 			Record.PendingAugments.Add(Wave->FixedAugment);
@@ -334,6 +400,8 @@ void UDefenseDirectorComponent::ServicePlayers(const double Now)
 			R.DeadLife = 0;
 		}
 		if (Hero->GetLifeState() != ECombatLifeState::Alive) continue;
+		if(!ApplyTeamShopEffects(Hero)) { Finish(false,TEXT("TeamEffectFailed")); return; }
+		if(!ApplyPendingCards(R)) { Finish(false,TEXT("AugmentFailed")); return; }
 		if (R.PendingExperience > 0)
 		{
 			const int32 XP = R.PendingExperience; R.PendingExperience = 0;
@@ -360,9 +428,11 @@ void UDefenseDirectorComponent::Shutdown()
 	PhaseSchedule = MonitorSchedule = {};
 	if (Objective.IsValid()) Objective->GetCombatLifecycleComponent()->OnDied().RemoveAll(this);
 	ClearEnemies();
+	ClearTeamShopEffects(true);
 	TArray<TWeakObjectPtr<ACombatPlayerController>> RemovedPlayers;
 	Players.GetKeys(RemovedPlayers);
 	for (const auto& Player : RemovedPlayers) RemovePlayer(Player.Get());
 	Players.Reset(); bInitialized = false;
+	Publish();
 }
 void UDefenseDirectorComponent::EndPlay(const EEndPlayReason::Type Reason) { Shutdown(); Super::EndPlay(Reason); }

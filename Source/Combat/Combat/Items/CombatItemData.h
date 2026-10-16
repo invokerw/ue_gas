@@ -7,6 +7,7 @@
 class UTexture2D;
 class UStaticMesh;
 class UCombatItemData;
+class UCombatItemAcquireEffect;
 
 /** 一条确定性合成配方需求；同一定义可出现多次，也可用 Quantity 表达重复组件。 */
 USTRUCT(BlueprintType)
@@ -62,6 +63,9 @@ public:
 	/** 是否允许作为商店可直接购买的叶子；升级物品通过购买目标补齐组件，不直接使用本字段价格。 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Economy", meta=(DisplayName="允许直接购买", ToolTip="启用后该无配方物品可直接购买且购买价格必须大于 0；旧物品默认关闭。"))
 	bool bPurchasable = false;
+	/** 默认关闭；启用后购买、拾取和奖励直接执行同步效果并消耗物品，不占九格。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Item|Acquisition", meta=(DisplayName="获得即使用", ToolTip="开启后通过同步获得效果立即使用，成功不占库存；不能同时配置装备主动、被动、光环、配方或充能。")) bool bUseOnAcquire=false;
+	UPROPERTY(EditDefaultsOnly, Instanced, BlueprintReadOnly, Category="Combat|Item|Acquisition", meta=(DisplayName="获得效果", ToolTip="开启获得即用时必填；同步成功才消耗物品，失败保留金币或地面实例。", EditCondition="bUseOnAcquire")) TObjectPtr<UCombatItemAcquireEffect> AcquireEffect;
 	/** 是否允许从玩家物品栏出售。 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Economy", meta=(DisplayName="允许出售", ToolTip="启用后该物品可按当前关卡退款/折价规则出售；旧物品默认关闭。"))
 	bool bSellable = false;

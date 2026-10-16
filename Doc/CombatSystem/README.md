@@ -151,3 +151,11 @@
 - M0-M8 已完成。post-v1 工作必须建立新的 Task/ADR/验收边界，不能继续复用已关闭里程碑伪装完成度。
 
 防守 Phase 1 实现与验证：[DEF-002 防守骨架](Specs/DEF-002-defense-phase1-skeleton.spec.md)，地图 `/Game/Combat/Demo/Defense/L_Defense`。
+
+防守个人构筑接线：[DEF-004 三选一/重抽/Modifier](Specs/DEF-004-defense-choice-flow.spec.md)。打开 L_Defense → Play → 锁定种子并开始，初始及波后选择使用私有复制快照。
+
+团队商店原型当前增量见 [DEF-005](Specs/DEF-005-defense-team-shop.spec.md)，包含六件独立属性/修复商品及其权威购买、复制和逐波到期验证。
+
+商店复用与公共物品获得即用的当前实现见 [DEF-006](Specs/DEF-006-reuse-shop-use-on-acquire.spec.md)；它替代 DEF-005 的独立团队商店 UI/RPC/目录。
+
+- [DEF-007 正式核心救援道具](Specs/DEF-007-defense-core-rescue.spec.md)：神殿屏障、应急石、核心护盾投影与原商店验证。

@@ -1,6 +1,7 @@
 #include "Combat/Validation/CombatAssetValidationCommandlet.h"
 #include "Combat/AI/CombatAIProfileData.h"
 #include "Combat/Defense/DefenseData.h"
+#include "Combat/Defense/DefenseAugmentData.h"
 #include "Combat/Items/CombatItemData.h"
 #include "Combat/Economy/CombatEconomyData.h"
 #include "Combat/Economy/CombatShopData.h"
@@ -127,6 +128,8 @@ FCombatAssetValidationReport FCombatAssetValidator::ValidateProjectAssets()
 		UCombatAIProfileData::StaticClass()->GetClassPathName(),
 		UDefenseRunData::StaticClass()->GetClassPathName(),
 		UDefenseWaveData::StaticClass()->GetClassPathName(),
+		UDefenseAugmentData::StaticClass()->GetClassPathName(),
+		UDefenseAugmentPoolData::StaticClass()->GetClassPathName(),
 		FTopLevelAssetPath(FName(TEXT("/Script/ue_gas")), FName(TEXT("CombatDefinitionData"))),
 		FTopLevelAssetPath(FName(TEXT("/Script/ue_gas")), FName(TEXT("CombatUnitData"))),
 		FTopLevelAssetPath(FName(TEXT("/Script/ue_gas")), FName(TEXT("CombatAbilityData"))),

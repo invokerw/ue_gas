@@ -2,11 +2,15 @@
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
 #include "Combat/Defense/DefenseTypes.h"
+#include "Combat/Defense/DefenseAugmentData.h"
+#include "Combat/Items/CombatItemAcquireEffect.h"
 #include "Combat/Log/CombatEventSubsystem.h"
 #include "DefenseDirectorComponent.generated.h"
 class ACombatPlayerController;
 class ADefenseGameState;
 class ADefenseObjective;
+class UCombatShopData;
+class UCombatItemData;
 class UDefenseRunData;
 class UCombatUnitData;
 class UCombatModifierData;
@@ -19,6 +23,24 @@ struct FDefenseEnemyRecord
 	uint32 Phase = 0;
 	bool bDead = false;
 };
+/** 精确绑定到一个英雄或核心的团队效果句柄；不同组件的同编号句柄不能混用。 */
+struct FDefenseTeamAppliedModifier
+{
+	TWeakObjectPtr<ACombatUnitCharacter> Unit;
+	FCombatModifierHandle Handle;
+};
+/** 本局共享购买记录；终局保留已购状态，效果句柄单独撤销。 */
+struct FDefenseTeamPurchaseRecord
+{
+	bool bPurchased=false;
+	bool bEffectActive=false;
+	/** 1-based 最后覆盖波，清场后到期。 */
+	int32 ExpireWave=0;
+	FString BuyerName;
+	TArray<FDefenseTeamAppliedModifier> AppliedModifiers;
+	FCombatSourceContext Source;
+};
+
 /** 玩家局内记录归 Controller，英雄死亡不丢失强化及待领经验；断线移除。 */
 struct FDefensePlayerRecord
 {
@@ -31,6 +53,19 @@ struct FDefensePlayerRecord
 	uint32 DeadLife = 0;
 	double RespawnAt = 0;
 	int32 RespawnRetries = 0;
+	/** 按服务器加入顺序分配，不依赖 UObject 地址。 */
+	int32 PlayerOrdinal = INDEX_NONE;
+	int32 LastOfferWave = INDEX_NONE;
+	FDefenseAugmentOffer CurrentOffer;
+	/** 最多 32 个完整载荷回执；HighRequestId 防止缓存淘汰后再次执行旧号。 */
+	TArray<FDefenseChoiceReceipt> ChoiceResults;
+	int32 HighRequestId = 0;
+	int32 RerollsUsed = 0;
+	/** 团队商店回执按玩家隔离缓存；同 RequestId 换完整载荷只能拒绝。 */
+
+	TArray<FPrimaryAssetId> PreviousUnchosen;
+	TArray<FPrimaryAssetId> ChosenCards;
+	TSet<FPrimaryAssetId> PendingCards;
 };
 /**
  * 服务器拥有整局状态和固定出生计划，GameState 只投影。
@@ -44,7 +79,7 @@ class COMBAT_API UDefenseDirectorComponent : public UActorComponent
 public:
 	UDefenseDirectorComponent();
 	/** 开局只允许一次；复制有效计划，拒绝客户端、跨 World 和无效核心。 */
-	bool InitializeForRun(UDefenseRunData* Data, ADefenseObjective* Core, ADefenseGameState* State);
+	bool InitializeForRun(UDefenseRunData* Data, ADefenseObjective* Core, ADefenseGameState* State, bool bWaitForStart = false);
 	/** 登记开局玩家；仅准备阶段接受，不改变英雄控制权。 */
 	bool RegisterPlayer(ACombatPlayerController* Player, ACombatUnitCharacter* Hero);
 	/** 断线撤销本局强化和待领奖励，不接管别人的英雄。 */
@@ -58,9 +93,35 @@ public:
 	const FDefenseTerminalResult& GetTerminalResult() const { return Terminal; }
 	const UDefenseRunData* GetFrozenRunData() const { return RunData; }
 	int32 GetActiveEnemyCount() const { return View.RemainingEnemies; }
+	/** 返回服务器当前 RunSeed；仅开发诊断和自动化读取，客户端不通过此接口获得完整种子。 */
+	uint64 GetRunSeedForTesting() const { return SeedState.RunSeed; }
+	/** 仅开发本地服务器开局前可锁定输入种子；空白使用随机。客户端没有该 RPC。 */
+	bool StartWithSeed(const FString& Input, FString& Error);
+	/** 严格解析十进制/0x 正整数；溢出、符号、零和非法字符拒绝。 */
+	static bool ParseSeed(const FString& Input, uint64& Out);
+	/** 只有对应组件/服务器可信调用者可送请求，业务身份在此再次校验。 */
+	FDefenseChoiceResult ProcessChoice(ACombatPlayerController* Player, const FDefenseChoiceRequest& Request);
+	/** 返回玩家自己的白名单快照；不包含完整种子或效果对象。 */
+	FDefenseChoiceView BuildChoiceView(ACombatPlayerController* Player) const;
+	/** 完整缓存命中状态：0 未命中，1 同载荷，-1 复用 ID 换载荷。 */
+	int32 InspectChoiceReplay(ACombatPlayerController* Player, const FDefenseChoiceRequest& Request) const;
+	/** 为玩家返回当前修订候选；没有候选时按当前波次生成一次。 */
+	bool GetOrCreateAugmentOffer(ACombatPlayerController* Player, FDefenseAugmentOffer& OutOffer);
+	/** 提交一张当前候选；同一 RequestId 重发返回原结果。 */
+	FDefenseChoiceResult ChooseAugment(ACombatPlayerController* Player, int32 RequestId, int32 ChoiceRevision, const FPrimaryAssetId& DefinitionId);
+	/** 从唯一 CombatShopData 收集团队获得效果；只初始化一次，价格不在导演复制保存。 */
+	bool InitializeTeamItems(UCombatShopData* Shop);
+	/** 为原商店生成单项只读领取状态。 */
+	FCombatShopOfferView BuildTeamItemOffer(ACombatPlayerController* Player,FPrimaryAssetId ItemId) const;
+	/** 公开领取入口的领域预检，不扣款、不修改物品实例。 */
+	bool CanReceiveTeamItem(const FCombatItemAcquireContext& Context,FGameplayTag& Failure) const;
+	/** 在 ItemSubsystem 的领取锁内提交团队效果和限购账本。 */
+	bool ReceiveTeamItem(const FCombatItemAcquireContext& Context,FGameplayTag& Failure);
 private:
 #if WITH_DEV_AUTOMATION_TESTS
 	friend struct FDefenseTestAccess;
+	friend struct FDefenseChoiceTestAccess;
+	friend struct FDefenseTeamShopTestAccess;
 #endif
 	/** 阶段转换取消旧阶段工作，RunId 不变而 generation 递增。 */
 	void EnterPhase(EDefensePhase Phase, int32 Wave, float Duration);
@@ -90,6 +151,36 @@ private:
 	bool RewardWave();
 	/** 尝试安全复活并兑现待领状态；终局不再复活或补奖。 */
 	void ServicePlayers(double Now);
+	/** 生成固定种子下的三张合法候选。 */
+	bool GenerateAugmentOffer(FDefensePlayerRecord& Record, int32 WaveIndex);
+	/** 返回当前玩家是否持有某个 DefinitionId。 */
+	static bool HasOwnedAugment(const FDefensePlayerRecord& Record, const FPrimaryAssetId& DefinitionId);
+	/** 只在整备阶段开窗，生成成功后更新所有者投影。 */
+	void OpenChoiceWindows();
+	/** 处理超时默认选择，不受英雄死亡阻止；可在下一波开始前强制收口。 */
+	void ExpireChoices(double Now, bool bForce = false);
+	/** 唯一选择落账，先锁结果再生效；死亡时只保存待生效定义。 */
+	bool CommitChoice(ACombatPlayerController* Player, FDefensePlayerRecord& Record, FPrimaryAssetId DefinitionId);
+	/** 将待生效卡应用为持久 Modifier，成功保存精确句柄。 */
+	bool ApplyPendingCards(FDefensePlayerRecord& Record);
+	/** 查找本局冻结的合法卡。 */
+	UDefenseAugmentData* FindCard(FPrimaryAssetId Id) const;
+	/** 开窗、提交、生命变化时通知只读复制组件。 */
+	void PublishChoices();
+	/** 发布共同账本和逐项阶段门，保留连接私有失败提示。 */
+	void PublishTeamShop();
+	/** 只读当前账本中有效核心屏障余量；无活跃句柄时为0。 */
+	float ReadObjectiveShield() const;
+	/** 监控时清除耗尽屏障；清场阶段内按 1-based 最后覆盖波撤销；不在战斗期间提前过期。 */
+	void ExpireTeamShop();
+	/** 撤销精确句柄；终局保留限购记录，Shutdown 才丢弃整局账本。 */
+	void ClearTeamShopEffects(bool bClearLedger=false);
+	/** 死亡时购买或准备期加入的英雄补领当前有效效果，已有句柄不重复应用。 */
+	bool ApplyTeamShopEffects(ACombatUnitCharacter* Hero);
+	/** 只允许本局三个整备阶段交易。 */
+	bool IsTeamShopOpen() const;
+	/** 当前阶段是否允许个人强化窗口。 */
+	bool IsChoicePhase() const;
 	/** 从现有 ASC 投影生命，客户端不接收定义 UObject 或权威写入口。 */
 	void Publish();
 	/** 核心必须仍是开局的有效生命。 */
@@ -106,10 +197,19 @@ private:
 	TWeakObjectPtr<ADefenseGameState> GameState;
 	FDefenseRunView View;
 	FDefenseTerminalResult Terminal;
+	FDefenseSeedState SeedState;
+	UPROPERTY(Transient) TMap<FPrimaryAssetId,TObjectPtr<UCombatItemData>> FrozenTeamItems;
+	TMap<FPrimaryAssetId,FDefenseTeamPurchaseRecord> TeamPurchaseLedger;
+	int32 TeamShopRevision=1;
+	int64 LastShopPhase=0;
+	bool bTeamItemsInitialized=false;
+	int32 NextPlayerOrdinal = 0;
 	uint32 CoreLife = 0;
 	bool bInitialized = false;
 	bool bEnding = false;
 	bool bCompletionPending = false;
+	bool bChoiceMutating = false;
+	bool bTeamShopMutating = false;
 	int32 GroupIndex = 0, SpawnIndex = 0, SpawnFailures = 0;
 	TArray<FDefenseEnemyRecord> Enemies;
 	TMap<TWeakObjectPtr<ACombatPlayerController>, FDefensePlayerRecord> Players;

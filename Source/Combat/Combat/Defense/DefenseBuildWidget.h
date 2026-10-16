@@ -1,0 +1,49 @@
+#pragma once
+#include "CoreMinimal.h"
+#include "Blueprint/UserWidget.h"
+#include "Combat/Defense/DefenseAugmentData.h"
+#include "DefenseBuildWidget.generated.h"
+class SBorder;
+class SButton;
+class SVerticalBox;
+class SEditableTextBox;
+class UDefenseChoiceComponent;
+/** 可玩的个人强化面板；只消费复制快照，按钮只发送意图，Tick 仅刷新表现。 */
+UCLASS(meta=(DisplayName="防守构筑面板", ToolTip="显示初始/波后三选一、重抽费用、已选强化和开发开始入口。"))
+class COMBAT_API UDefenseBuildWidget : public UUserWidget
+{
+	GENERATED_BODY()
+public:
+	UDefenseBuildWidget(const FObjectInitializer& Init);
+	/** 使用实际可见面板几何阻断命令和边缘滚屏穿透。 */
+	bool IsScreenPositionOverUI(FVector2D Position) const;
+protected:
+	virtual TSharedRef<SWidget> RebuildWidget() override;
+	virtual void NativeTick(const FGeometry& Geometry,float Delta) override;
+	virtual FReply NativeOnMouseButtonDown(const FGeometry& Geometry,const FPointerEvent& Event) override;
+	virtual void ReleaseSlateResources(bool bReleaseChildren) override;
+private:
+#if WITH_DEV_AUTOMATION_TESTS
+	friend class FDefenseChoiceWidgetTest;
+	friend class FDefenseChoiceUIProbe;
+	friend class FDefenseTeamShopUIProbe;
+#endif
+	/** 解析拥有者组件；没有本地玩家时返回空。 */
+	UDefenseChoiceComponent* GetChoice() const;
+	/** 按当前快照刷新按钮内容；不生成候选/扣费。 */
+	void RefreshContents();
+	/** 显示服务器截止减校准服务器时间，不能驱动默认选择。 */
+	FText CountdownText() const;
+	/** 本地开发服务器锁种子/开始；客户端不会调用服务器种子 API。 */
+	FReply StartRun();
+	/** 把服务器失败原因翻译为可读提示。 */
+	static FText ExplainFailure(FName Reason);
+	TSharedPtr<SBorder> ChoicePanel,OwnedPanel;
+	TSharedPtr<SButton> StartButton,RerollButton;
+	TArray<TSharedPtr<SButton>> CardButtons;
+	TSharedPtr<SVerticalBox> ChoiceBody,OwnedBody;
+	TSharedPtr<SEditableTextBox> SeedInput;
+	int32 SeenRevision=INDEX_NONE;
+	bool bSeenWaiting=false;
+	FText LocalError;
+};

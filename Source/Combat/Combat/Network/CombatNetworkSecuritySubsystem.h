@@ -42,7 +42,11 @@ public:
 		UCombatEconomyComponent* Economy,
 		const FCombatEconomyRequest& Request,
 		FGameplayTag& OutFailureTag,
-		FString& OutDiagnostic);
+		FString& OutDiagnostic, bool bCachedReplay=false);
+
+	/** 新组件意图复用连接限频与重放窗口；bCachedReplay 只由拥有完整载荷缓存的服务器调用者设置，仍扣限频额度。 */
+	bool ValidateAndConsumeComponentRequest(APlayerController* Player, const UActorComponent* Component,
+		int32 RequestId, bool bCachedReplay, FGameplayTag& OutFailure);
 
 	/** 返回当前 World 的累计安全统计。 */
 	UFUNCTION(BlueprintPure, Category="Combat|Network", meta=(DisplayName="获取 RPC 安全统计", ToolTip="返回当前 World 累计的 Order RPC 接受与拒绝计数。"))

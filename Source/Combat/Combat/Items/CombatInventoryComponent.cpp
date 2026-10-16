@@ -53,7 +53,7 @@ bool UCombatInventoryComponent::GiveItem(UCombatItemData* Definition, int32 Quan
 		bAccepted = AcceptItem(*Item, OutHandle, Failure);
 		if (!bAccepted) Items->DestroyItem(Created);
 	}
-	if (bAccepted)
+	if (bAccepted && !Definition->bUseOnAcquire)
 	{
 		if (ACombatPlayerController* Player = Cast<ACombatPlayerController>(Unit->GetResourceOwnerPlayerController()))
 		{
@@ -97,6 +97,10 @@ bool UCombatInventoryComponent::AcceptItem(UCombatItemInstance& Item, FCombatIte
 		{
 			Failure = CombatTags::Failure_Item_Bound; return false;
 		}
+	}
+	if(Item.Definition->bUseOnAcquire)
+	{
+		OutHandle={}; return Items->ConsumeOnAcquire(Item,Unit,Failure);
 	}
 	for (const FCombatItemHandle Handle : Slots)
 	{
@@ -160,11 +164,12 @@ bool UCombatInventoryComponent::TryPickup(FCombatItemHandle Handle, int32 Expect
 	if (!Validation.bValid) { Failure = Validation.FailureTag; return false; }
 	bool bAccepted;
 	FCombatItemHandle ResultHandle;
+	const bool UseOnAcquire=Item->Definition->bUseOnAcquire;
 	{
-		TGuardValue<bool> Guard(bMutating, true);
-		bAccepted = AcceptItem(*Item, ResultHandle, Failure);
+		TGuardValue<bool> Guard(bMutating,true);
+		bAccepted=AcceptItem(*Item,ResultHandle,Failure);
 	}
-	if (bAccepted)
+	if (bAccepted && !UseOnAcquire)
 	{
 		if (ACombatPlayerController* Player = Cast<ACombatPlayerController>(Unit->GetResourceOwnerPlayerController()))
 		{

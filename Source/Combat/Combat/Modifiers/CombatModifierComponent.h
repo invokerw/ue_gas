@@ -123,6 +123,8 @@ public:
 	UCombatModifierRuntime* FindRuntime(FCombatModifierHandle Handle) const;
 	/** 把当前可见效果整理为 UI 所需的定义 ID、层数和时间等值数据；不把运行时 UObject 交给客户端。 */
 	void BuildModifierViews(TArray<FCombatModifierView>& OutViews) const;
+	/** 当前 Hook 内的结构修改只会排队；需要同步句柄和失败回滚的调用者必须在此状态下提前拒绝。 */
+	bool IsDeferringOperations() const { return DeferredOperations.IsInPhase(); }
 	/** 返回 Modifier 集合变化观察委托。 */
 	FOnCombatModifierCollectionChanged& OnModifierCollectionChanged() { return ModifierCollectionChangedDelegate; }
 

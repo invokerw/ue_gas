@@ -20,6 +20,8 @@ public:
 	UDefenseDirectorComponent* GetDefenseDirector() const { return Director; }
 	ADefenseObjective* GetDefenseObjective() const { return Objective; }
 protected:
+	UPROPERTY(EditDefaultsOnly, Category="Defense", meta=(DisplayName="开发等待开始", ToolTip="本地开发服务器在 Play 后显示种子/开始面板；Dedicated/Shipping 自动开始。"))
+	bool bDevelopmentWaitForStart = false;
 	UPROPERTY(EditDefaultsOnly, Category="Defense", meta=(DisplayName="防守对局定义", ToolTip="必填；缺失或校验失败不启动，不能用隐式默认配置替代损坏资产。"))
 	TObjectPtr<UDefenseRunData> RunData;
 private:

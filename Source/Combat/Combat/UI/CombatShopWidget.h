@@ -63,6 +63,7 @@ protected:
 private:
 #if WITH_DEV_AUTOMATION_TESTS
 	friend class FCombatShopWidgetStructureTest;
+	friend class FDefenseTeamShopUIProbe;
 #endif
 
 	struct FItemEntry

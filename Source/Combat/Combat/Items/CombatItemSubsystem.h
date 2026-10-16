@@ -21,6 +21,7 @@ public:
 	const UCombatItemData* GetDefinition() const { return Definition; }
 	int32 GetRevision() const { return Revision; }
 	int32 GetQuantity() const { return Quantity; }
+	bool IsAcquiring() const { return bAcquiring; }
 	int32 GetCharges() const { return Charges; }
 	int32 GetSlot() const { return Slot; }
 	/** 返回该实例是否被玩家锁定；锁定只影响合成与购买计划，不阻止出售或丢弃。 */
@@ -48,6 +49,8 @@ private:
 	bool bBoundUnitAssigned = false;
 	FCombatTeamId BoundTeam;
 	int32 Revision = 1;
+	/** 在一次同步领取效果中锁定本实例，跨英雄重入也不能二领。 */
+	bool bAcquiring = false;
 	int32 Quantity = 1;
 	int32 Charges = 0;
 	/** 锁定实例不能作为自动合成或商店购买计划的组件；状态只在服务器修改。 */
@@ -102,6 +105,8 @@ private:
 	ACombatWorldItem* CreateWorldActor(UCombatItemInstance& Item, const FVector& Location);
 	/** 从唯一登记表解除实例；调用方先清理授予和地面投影。 */
 	void DestroyItem(FCombatItemHandle Handle);
+	/** 获得即用的唯一提交入口；调用者持有库存事务锁。成功释放实例和投影，失败不移动物品。 */
+	bool ConsumeOnAcquire(UCombatItemInstance& Item,ACombatUnitCharacter* Recipient,FGameplayTag& Failure);
 	UCombatItemInstance* FindMutable(FCombatItemHandle Handle) const;
 	UPROPERTY(Transient) TMap<uint64, TObjectPtr<UCombatItemInstance>> Instances;
 	uint64 NextId = 1;

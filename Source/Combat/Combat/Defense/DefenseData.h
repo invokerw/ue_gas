@@ -4,6 +4,8 @@
 #include "Combat/Defense/DefenseTypes.h"
 #include "DefenseData.generated.h"
 
+class UDefenseAugmentPoolData;
+
 /** 单波定义，只保存计划与奖励；运行状态由 Director 保存。 */
 UCLASS(BlueprintType, meta=(DisplayName="防守波次定义", ToolTip="固定出生组、时限与共享奖励。"))
 class COMBAT_API UDefenseWaveData : public UCombatDefinitionData
@@ -74,6 +76,16 @@ public:
 	/** 失败后最多重试 0 到 10 次，每次间隔 0.5 秒；用尽后对局失败。 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Defense", meta=(DisplayName="出生重试", ToolTip="失败后最多重试 0 到 10 次，每次间隔 0.5 秒；用尽后对局失败。", ClampMin="0", ClampMax="10"))
 	int32 SpawnRetryLimit = 3;
+	/** Phase 2A 候选池；为空保持 DEF-002 固定强化兼容。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Defense|Augment", meta=(DisplayName="强化池", ToolTip="Phase 2A 服务器候选池；为空时不生成随机强化候选。"))
+	TObjectPtr<UDefenseAugmentPoolData> AugmentPool;
+	/** 开发/测试用固定种子；0 表示服务器生成。完整种子不复制给客户端。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Defense|RNG", meta=(DisplayName="开发固定种子", ToolTip="仅开发或自动化使用；非零时服务器使用该 RunSeed，生产默认 0 由服务器生成。", ClampMin="0"))
+	int64 DevelopmentSeedOverride = 0;
+	/** 团队商店目录；为空保持 DEF-004 无团队购买。 */
+	/** 选择不暂停对局，整备时间必须容纳整个窗口。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Defense|Augment", meta=(DisplayName="选择时长", ToolTip="初始与普通波后选择的游戏秒数，1 到 60；不能大于准备或整备时长。", ClampMin="1", ClampMax="60", Units="s"))
+	float ChoiceDuration = 15.0f;
 	virtual FPrimaryAssetType GetCombatPrimaryAssetType() const override;
 	/** 校验全部定义、路线坐标、有限数、队伍、时限与六波结构。 */
 	bool ValidateRuntime(FString& OutDiagnostic) const;

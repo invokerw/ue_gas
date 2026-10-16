@@ -1,4 +1,5 @@
 #include "Combat/Items/CombatItemData.h"
+#include "Combat/Items/CombatItemAcquireEffect.h"
 #include "Combat/Ability/CombatGameplayAbility.h"
 #include "Combat/Core/CombatTags.h"
 #include "Misc/DataValidation.h"
@@ -47,6 +48,14 @@ bool UCombatItemData::ValidateRuntime(FString& OutError) const
 		OutError = TEXT("Consumable requires an active ability");
 		return false;
 	}
+	if (bUseOnAcquire)
+	{
+		if (!AcquireEffect || ActiveAbility || !Passives.IsEmpty() || AuraModifier || !Recipe.IsEmpty() || bSellable || bRecipeScroll
+			|| MaxStack!=1 || QuantityPerUse!=0 || InitialCharges!=0 || ChargesPerUse!=0 || bDestroyWhenChargesEmpty || !SharedCooldownGroup.IsNone())
+		{ OutError=TEXT("获得即用要求独立同步效果、单数量，且不配置装备/配方/充能/出售"); return false; }
+		if(!AcquireEffect->ValidateDefinition(OutError)) return false;
+	}
+	else if(AcquireEffect) { OutError=TEXT("获得效果仅在开启获得即使用时有效"); return false; }
 	TSet<const UCombatModifierData*> Seen;
 	if (Ability && Ability->GetAbilityData()->IntrinsicModifier)
 	{

@@ -56,17 +56,20 @@ struct COMBAT_API FDefenseSpawnGroup
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Defense", meta=(DisplayName="Boss 组", ToolTip="仅最终波允许，必须恰好一名 Boss。"))
 	bool bBoss = false;
 };
-/** 无第二套生命权威：客户端只读服务器从 ASC 投影的完整快照，schema 1。 */
+/** 无第二套生命权威：客户端只读服务器从 ASC 投影的生命与 Modifier 护盾的只读快照，schema 3。 */
 USTRUCT(BlueprintType)
 struct COMBAT_API FDefenseRunView
 {
 	GENERATED_BODY()
 	/** 防守独立投影版本。 */
 	UPROPERTY(BlueprintReadOnly, Category="Defense", meta=(DisplayName="视图版本", ToolTip="防守独立投影版本。"))
-	int32 SchemaVersion = 1;
+	int32 SchemaVersion = 3;
 	/** 本局唯一身份。 */
 	UPROPERTY(BlueprintReadOnly, Category="Defense", meta=(DisplayName="对局编号", ToolTip="本局唯一身份。"))
 	FGuid RunId;
+	UPROPERTY(BlueprintReadOnly, Category="Defense", meta=(DisplayName="等待开始", ToolTip="开发服务器还未锁定种子并开始准备。")) bool bWaitingForStart = false;
+	UPROPERTY(BlueprintReadOnly, Category="Defense", meta=(DisplayName="种子摘要", ToolTip="仅用于对应服务器日志，不包含完整种子。")) FString SeedSummary;
+	UPROPERTY(BlueprintReadOnly, Category="Defense", meta=(DisplayName="候选随机计数", ToolTip="本局候选已抽取槽数，只用于诊断。")) int64 OfferDrawCount = 0;
 	/** 服务器确认的阶段。 */
 	UPROPERTY(BlueprintReadOnly, Category="Defense", meta=(DisplayName="阶段", ToolTip="服务器确认的阶段。"))
 	EDefensePhase Phase = EDefensePhase::Preparation;
@@ -97,6 +100,9 @@ struct COMBAT_API FDefenseRunView
 	/** 来自核心 ASC 的只读最大生命。 */
 	UPROPERTY(BlueprintReadOnly, Category="Defense", meta=(DisplayName="核心生命上限", ToolTip="来自核心 ASC 的只读最大生命。"))
 	float ObjectiveMaxHealth = 0.0f;
+	/** 核心屏障 Runtime 余量的只读投影，不参与结算。 */
+	UPROPERTY(BlueprintReadOnly, Category="Defense", meta=(DisplayName="核心护盾", ToolTip="服务器当前神殿屏障剩余吸收量；耗尽、到期或终局为0。"))
+	float ObjectiveShield = 0.0f;
 	/** 稳定诊断原因；非终局为 None。 */
 	UPROPERTY(BlueprintReadOnly, Category="Defense", meta=(DisplayName="终局原因", ToolTip="稳定诊断原因；非终局为 None。"))
 	FName TerminalReason;

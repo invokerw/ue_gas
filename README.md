@@ -6,13 +6,13 @@ Combat 当前位于 `Combat` 单 Runtime Module 中，不是独立插件或独�
 
 ## 当前基线
 
-- 当前发布契约：`combat_v4_economy_rc1`，Contract 为 4，物品与经济开关分别开启，GameplayTag/Event 为 3，经济目录 schema 为 1、表现 schema 为 3；Content/Formula/RNG 保持当前冻结值。物品与经济验证状态见 ITEM-001/ECON-003 台账。
+- 当前发布契约：`combat_v5_acquisition_rc1`，Contract 为 5，物品与经济开关分别开启，GameplayTag/Event 为 3，经济目录 schema 为 1、表现 schema 为 4；Content/Formula/RNG 保持当前冻结值。物品与经济验证状态见 ITEM-001/ECON-003 台账。
 - 权威模型：服务器结算；客户端 TargetData 仅作为请求，目标、资源和结果由服务器复核。
 - 资源所有权：金币及未来战略资源归本局玩家的 `ACombatPlayerController` 经济账本；英雄切换不会清空资源。六格装备、三格背包、物品实例 `Holder`、槽位和库存修订仍归各自英雄，商店只把结果交付当前主控英雄。纯资源余额变化保留服务器诊断事件，但不进入战斗 UI 日志；分域读取与展示边界见 [RES-001](Doc/CombatSystem/Specs/RES-001-player-resource-ownership.spec.md)。
 - M0-M8 共 82 个 Task 已完成并通过用户验收；最近一次发布 Gate 记录为 `Combat.*` 40/40、Editor/Server/Client 构建、资产校验和 Dedicated 双客户端容量场景通过。
 - M8 之后增加了卓尔游侠远程攻击 Demo、头顶资源/状态/施法条、伤害治疗跳字，以及底部居中的英雄、技能、Buff HUD。C++ 提供只读数据，Widget Blueprint 维护布局和视觉；等级经验与技能加点已接入服务器权威成长组件，六格装备与三格背包已接入物品主动、被动、场景交互和权威投影。
 - 完整 gameplay 预测回滚、跨进程确定性 Replay、召唤物/幻象仍未接入；ECON-003 单一库存交易、锁定合成和出售已通过用户代码 review，NullRHI PIE、独立 Dedicated 双客户端 300 秒经济 soak、Windows cook 与资产校验通过，验证边界见 ECON-003 Spec。
-- Post-M8 新增肉鸽成长型合作防守设计提案：每局服务器种子、个人强化、团队商店即时消耗品、波次回防、事件和 Boss；Phase 1 已进入实现，独立灰盒地图与防守循环见 [DEF-002](Doc/CombatSystem/Specs/DEF-002-defense-phase1-skeleton.spec.md)，当前验证/验收状态以台账为准，见 [DEF-001 设计文档](Doc/CombatSystem/20-Content/20-05-Roguelite-Defense-Game-Design.md) 与 [Spec](Doc/CombatSystem/Specs/DEF-001-coop-defense-design.spec.md)。
+- Post-M8 新增肉鸽成长型合作防守设计提案：每局服务器种子、个人强化、团队商店即时消耗品、波次回防、事件和 Boss；Phase 1 已验收，个人强化选择/重抽/种子面板已由 DEF-004 接入；独立灰盒地图与防守循环见 [DEF-002](Doc/CombatSystem/Specs/DEF-002-defense-phase1-skeleton.spec.md)，当前验证/验收状态以台账为准，见 [DEF-001 设计文档](Doc/CombatSystem/20-Content/20-05-Roguelite-Defense-Game-Design.md) 与 [Spec](Doc/CombatSystem/Specs/DEF-001-coop-defense-design.spec.md)。
 
 以上测试数字是已归档的最近验收证据，不自动代表任意工作区修改已经重新验证。实时任务状态以 [开发进度台账](Doc/CombatSystem/00-Project/00-01-Progress-Tracker.md) 为准。
 
@@ -35,7 +35,9 @@ Demo 操作：左键点击英雄在本地 HUD 查看信息；有控制权时同�
 
 技能指示器训练场：打开 `/Game/Combat/Demo/Indicators/L_CombatIndicators`，Q/W/E/R 分别体验单位、圆形、直线和自身技能。目标技能默认按键瞄准、左键确认，Escape/右键取消；琥珀虚线表示超距，确认后由服务器追近。Controller 可切换按下/松开快施。配置见 [10-13 技能指示器](Doc/CombatSystem/10-Architecture/10-13-Skill-Indicators.md)。
 
-防守原型：打开 `/Game/Combat/Demo/Defense/L_Defense` 后 Play。每名玩家控制一名游侠，准备 40 秒后两路敌人进攻核心，完成五个普通波和最终 Boss 获胜，核心被摧毁则失败。波间整备 8 秒，第 1/3 波固定获得 +5 护甲/+45 移速，死亡约 8 秒后安全复活。顶部显示阶段、敌人数量与核心生命；右键敌人攻击、Q 切换霜冻之箭。当前是灰盒骨架，种子、随机三选一、团队商店与复杂 Boss 技能尚未接入。
+防守原型：打开 `/Game/Combat/Demo/Defense/L_Defense`，点击 UE 顶部 Play（Alt+P），在中央点击 **锁定种子并开始**；可留空随机或输入十进制/0x 种子。准备 40 秒后两路敌人进攻核心，完成五个普通波与 Boss 获胜，核心摧毁则失败。波间整备 25 秒，开局与第 1–5 波后有 15 秒个人三选一；每局可重抽两次，费用 60/100 金币。阵亡后约 8 秒安全复活。
+
+购物复用原商店：点击右下角 **金币按钮**，在 **基础物品 → 团队补给 · 获得即用** 中 **右键购买**。六件商品由本人支付、全队受益、每局全队限购一次，成功立即消耗且不占库存；悬停查看剩余次数、领取者与到期波次。准备/波间/Boss 整备开放团队领取，决战鼓舞仅 Boss 整备可购；普通装备仍按原商店规则购买。原左侧独立商店及专用购买 RPC 已撤除。新物品的“获得即使用”配置也支持满库存拾取和奖励，失败保留金币或原地面物品。团队目录现包含两件正式核心道具：**神殿屏障**（220 金币，核心获得当前最大生命8%的护盾，至下一波清场）和 **应急石**（180 金币，修复核心当前最大生命15%）。默认5000生命核心对应400护盾/750修复；顶部核心条显示剩余屏障。其余四件团队商品和个人卡仍为属性原型，条件增伤、援军、事件与复杂 Boss 内容留后续。见 [DEF-007](Doc/CombatSystem/Specs/DEF-007-defense-core-rescue.spec.md)。见 [DEF-006](Doc/CombatSystem/Specs/DEF-006-reuse-shop-use-on-acquire.spec.md) 与 [DEF-004](Doc/CombatSystem/Specs/DEF-004-defense-choice-flow.spec.md)。
 
 StateTree AI 演示：打开 `/Game/Combat/Demo/AI/L_CombatAI`，服务器自主单位在导航就绪后追近并攻击木桩。PIE 中选中演示场实例可点击 **AI 返回起点 / AI 攻击靶子**。阶段 A 提供显式 Move/Attack/Cast、单命令写入者、攻击边界切换和玩家接管；Profile、树接线与后续阶段边界见 [20-04 配置指南](Doc/CombatSystem/20-Content/20-04-StateTree-AI-Guide.md)。
 

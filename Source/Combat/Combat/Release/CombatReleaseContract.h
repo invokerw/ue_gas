@@ -17,11 +17,11 @@ struct COMBAT_API FCombatReleaseContract
 
 	/** 发布契约结构自身的版本。 */
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Release", meta=(DisplayName="发布契约版本", ToolTip="发布契约结构自身的版本；修改字段语义时必须递增。"))
-	int32 ContractVersion = 4;
+	int32 ContractVersion = 5;
 
 	/** 当前候选发布的稳定标识。 */
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Release", meta=(DisplayName="候选发布标识", ToolTip="用于日志、验收报告与问题追踪的稳定候选发布标识。"))
-	FName ReleaseId = TEXT("combat_v4_economy_rc1");
+	FName ReleaseId = TEXT("combat_v5_acquisition_rc1");
 
 	/** Combat PrimaryDataAsset 内容 schema 版本。 */
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Release", meta=(DisplayName="内容版本", ToolTip="Combat PrimaryDataAsset 与 DefinitionId 迁移所使用的内容 schema 版本。"))
@@ -45,7 +45,7 @@ struct COMBAT_API FCombatReleaseContract
 
 	/** 玩家金币与当前主控单位物品栏 UI 快照的布局版本。 */
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Release", meta=(DisplayName="经济表现版本", ToolTip="金币与当前主控单位物品栏拥有者快照的兼容版本。"))
-	int32 EconomyPresentationSchemaVersion = 3;
+	int32 EconomyPresentationSchemaVersion = 4;
 
 	/** 唯一商店目录与配方展示的布局版本。 */
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Release", meta=(DisplayName="商店目录版本", ToolTip="基础/升级页、分类和配方目录的兼容版本。"))

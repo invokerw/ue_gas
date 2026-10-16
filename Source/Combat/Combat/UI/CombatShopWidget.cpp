@@ -2,6 +2,7 @@
 
 #include "Combat/Economy/CombatEconomyComponent.h"
 #include "Combat/Items/CombatItemData.h"
+#include "Combat/Core/CombatTags.h"
 #include "CombatPlayerController.h"
 #include "Blueprint/WidgetBlueprintLibrary.h"
 #include "Engine/AssetManager.h"
@@ -187,7 +188,20 @@ TSharedRef<SWidget> UCombatShopWidget::RebuildWidget()
 						+ SHorizontalBox::Slot().AutoWidth()
 						[
 							SNew(STextBlock)
-							.Text(NSLOCTEXT("CombatShop", "CatalogHelp", "左键查看 · 右键购买"))
+							.Text_Lambda([this]()
+							{
+								const auto* Player=GetCombatPlayer();
+								if(Player)
+								{
+									const auto& R=Player->GetLastEconomyResult();
+									if(R.RequestId>0)
+									{
+										if(R.bConsumedOnAcquire) return FText::FromString(TEXT("购买成功 · 已使用"));
+										if(!R.bSuccess) return FText::FromString(R.FailureTag==CombatTags::Failure_Economy_InsufficientGold?TEXT("金币不足"):TEXT("当前无法购买"));
+									}
+								}
+								return NSLOCTEXT("CombatShop", "CatalogHelp", "左键查看 · 右键购买");
+							})
 							.ColorAndOpacity(FLinearColor(0.55f, 0.61f, 0.67f))
 						]
 					]
@@ -380,7 +394,18 @@ FText UCombatShopWidget::BuildItemToolTip(const UCombatItemData& Item) const
 	int64 Price = 0;
 	FString Error;
 	if (DisplayShopData) DisplayShopData->CalculateItemPrice(Item.GetPrimaryAssetId(), Price, Error);
-	const FString Description = Item.Description.IsEmpty() ? TEXT("") : TEXT("\n") + Item.Description.ToString();
+	FString Description = Item.Description.IsEmpty() ? TEXT("") : TEXT("\n") + Item.Description.ToString();
+	if(Item.bUseOnAcquire)
+	{
+		Description+=TEXT("\n获得即使用 · 不占库存");
+		if(const auto* Economy=GetEconomy()) if(const auto* Offer=Economy->FindShopOffer(Item.GetPrimaryAssetId()))
+		{
+			Description+=TEXT("\n")+Offer->Status.ToString();
+			if(Offer->RemainingPurchases>=0) Description+=FString::Printf(TEXT(" · 剩余 %d 次"),Offer->RemainingPurchases);
+			if(!Offer->RecipientName.IsEmpty()) Description+=TEXT("\n领取者：")+Offer->RecipientName;
+			if(Offer->ExpireWave>0) Description+=FString::Printf(TEXT("\n第 %d 波清场结束%s"),Offer->ExpireWave,Offer->bEffectActive?TEXT(" · 生效中"):TEXT(""));
+		}
+	}
 	return FText::FromString(FString::Printf(TEXT("%s\n价格 %lld%s\n左键查看配方 · 右键购买"),
 		*ResolveItemName(&Item).ToString(), static_cast<long long>(Price), *Description));
 }
@@ -496,7 +521,9 @@ void UCombatShopWidget::RebuildCatalog()
 			int64 Price = 0;
 			FString Error;
 			Shop->CalculateItemPrice(Item->GetPrimaryAssetId(), Price, Error);
-			const FText Badge = FText::AsNumber(Price);
+			FText Badge = FText::AsNumber(Price);
+			if(Item->bUseOnAcquire) if(const auto* Economy=GetEconomy()) if(const auto* Offer=Economy->FindShopOffer(Item->GetPrimaryAssetId()))
+				if(!Offer->bCanPurchase) Badge=FText::FromString(Offer->RemainingPurchases==0?TEXT("已用"):TEXT("未开放"));
 			Items->AddSlot()
 			[
 				BuildItemNode(*Item, Badge, BuildItemToolTip(*Item), CatalogEntries, CatalogIconResources,

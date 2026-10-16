@@ -11,6 +11,8 @@
 #include "UnrealClient.h"
 #include "NavigationSystem.h"
 #include "Combat/Defense/DefenseGameState.h"
+#include "Combat/Defense/DefenseGameMode.h"
+#include "Combat/Defense/DefenseDirectorComponent.h"
 #include "Combat/Defense/DefenseObjective.h"
 #include "Combat/AI/CombatAIBrainComponent.h"
 
@@ -42,6 +44,7 @@ public:
 		auto* State=World?World->GetGameState<ADefenseGameState>():nullptr;
 		if(!State) return false;
 		const auto& V=State->GetRunView();
+		if(V.bWaitingForStart) { FString Error; World->GetAuthGameMode<ADefenseGameMode>()->GetDefenseDirector()->StartWithSeed(TEXT("831907"),Error); return false; }
 		if(V.Phase==EDefensePhase::Defeat) { Test->AddError(TEXT("Unexpected defense startup failure: ")+V.TerminalReason.ToString()); return true; }
 		for(TActorIterator<ADefenseEnemy> It(World);It;++It)
 		{

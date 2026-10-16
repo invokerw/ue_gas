@@ -1,7 +1,7 @@
 # 00-01 开发进度台账
 
-> 最后更新：2026-10-15
-> 当前工作：DEF-002 Phase 1 防守骨架已验收并授权本地提交；下一步进入 Phase 2 种子/强化候选骨架。独立地图、六波、核心/阶段 HUD、固定强化、共享奖励与复活已接入；三 Target、分进程 173 项回归、资产 56 项、PIE 与单/双人 Dedicated smoke 通过。
+> 最后更新：2026-10-16
+> 当前工作：DEF-004 可玩个人强化流程已完成本地验证，待用户验收；Editor/Server/Client、188 项分进程回归、81 资产、Windows cook、双客户端六波选择/重抽/属性对照通过。Phase 1 已提交 d7c9809，DEF-003/004 保留工作区未提交。
 > HUD-MINIMAP-002（2026-09-30）：0.3 修复运行时 `Collapsed` 后，0.4 按用户追加要求将小地图固定到视口左下并支持拖动，0.5 移除鼠标悬停时的操作提示行，0.6 将左键拖动改为平移摄像机视角并保持地图固定，0.7 保持未越界镜头为透视梯形，0.8 改为靠边裁剪可见部分并继续随摄像机移动，0.9 增加暗色地形与标识，1.0/1.1 移除全部文字并收敛按下定位拖动时序，1.2 增加保存地图后生成 JSON 配置的编辑器入口；正常模块冷启动 PIE 截图与 `VISIBLE` 回读通过，Minimap 8/8、Camera 6/6，用户已完成验收并授权本地提交。完整 Combat 回归受 UE/D3D12 设备移除中断，未宣称全量通过。见 [HUD-MINIMAP-002 Spec](../Specs/HUD-MINIMAP-002-minimap-implementation.spec.md)。
 > CTRL-001 英雄查看与多操（2026-09-24）：用户已验收 0.2 并授权本地提交。查看、切换、Shift 多选/框选和群体命令已实现；镜头仅首次定位，选择/确认空窗保持锚点；单位不可作为地面，实际接触向上速度由 193.67 降至 0 cm/s。F0 GO、F1 APPROVED 0.2、F2 PASS、Push-Ready READY；Editor/Server/Client、完整 Automation 153 项（0 失败）、真实 Demo 坡道 PIE 与 Dedicated 双客户端的三段到达/折返/静置均通过。验收回写沿用已有工程验证，不新增运行验证结论。证据见 [CTRL-001](../Specs/CTRL-001-multi-unit-selection.spec.md) 与 ADR-067。
 > RES-001 玩家资源/英雄库存边界 0.2（2026-09-24）：用户已验收并授权本地提交。玩家战略资源由 PlayerController 账本持有，库存实例/Holder/槽位/修订仍归英雄；纯资源余额变化保留服务器诊断事件但退出战斗 UI 日志，购买/出售/合成和物品事件不变。最终 UE 构建、Economy 11/11、UI Log 5/5、文档与 delivery Gate 通过，见 [RES-001](../Specs/RES-001-player-resource-ownership.spec.md) 与 ADR-066。
@@ -352,6 +352,15 @@ HUD-ABILITY-CLICK-001/002 追加验收状态：`用户已验收`（2026-09-14）
 | DEF-001 | 肉鸽成长型合作防守 RPG 设计文档 | 待验收 | 已完成定位、13 分钟六波原型、团队商店即时消耗品、完整版 25 分钟方向、24 张强化、八件装备、事件、种子面板、换英雄保留、服务器权威、数据边界、UI、分期和验证提案；0.5 自审补充完整版排期、休眠卡协同、RiskLedger、无投票风险确认和种子摘要权限；preflight/plan/build/docs/delivery Gate 均通过，待用户评审后更新状态 |
 | DEF-002 | Phase 1 防守骨架 | 已验收 | F0 GO、F1 APPROVED 0.2；已实现独立灰盒地图、5+1 波、两路、核心/阶段 HUD、固定强化、共享奖励与安全复活。Editor/Server/Client、169 非 PIE + 4 PIE 共 173 项、56 资产、导航冷回读、渲染 PIE、单/双人胜利与单人失败网络矩阵通过；F2 PASS/Push-Ready READY，用户于 2026-10-15 确认验收完成并授权本地提交。混合进程复现已有 GAP-027，采用分进程完成等价全覆盖，见 [DEF-002 Spec](../Specs/DEF-002-defense-phase1-skeleton.spec.md) |
 
+| DEF-003 | Phase 2A 服务器种子与强化候选骨架 | 已验收 | Phase 1 已提交 d7c9809；0.3 完成 RunSeed、Augment/Pool、三张候选、过滤/排序和 ChoiceRevision/幂等 API；Augment 3/3、Defense 回归 12/12、资产 56/56，见 [Spec](../Specs/DEF-003-defense-phase2-augment-seed.spec.md)。正式 UI/RPC/重抽扣款属于后续 DEF-004；用户于2026-10-16要求“提交，并进行下一步” |
+
+| DEF-004 | 可玩强化三选一、重抽、网络与效果生效 | 已验收 | 0.1 F0 GO/F1 APPROVED/F2 PASS；188 测试、81 资产、真实 UI/导航 PIE、721 包 cook 与双客户端六波/选择/重抽/余额/2英雄×12属性对照通过，三 Target 最终增量与 delivery Gate 均通过。见 [Spec](../Specs/DEF-004-defense-choice-flow.spec.md)，保留 GAP-030 历史诊断，2026-10-16 用户确认提交当前集成版本 |
+
+| DEF-005 | 团队商店事务与六件原型消耗品 | 被 DEF-006 替代 | 0.2 F0 GO/F1 APPROVED/F2 PASS/Push-Ready READY；修复重入二扣、完整回执、精确逐波到期、死亡补领和冻结目录。三 Target、199 独立测试（193 非 PIE + 4 AI/导航 + 2 渲染 UI）、87 资产、最终双客户端六波争购/属性对照、727 包 cook、文档与 delivery Gate 通过。§6.3 正式护盾/条件增伤/援军仍属后续；未提交，见 [Spec](../Specs/DEF-005-defense-team-shop.spec.md) |
+
+| DEF-006 | 复用既有商店与物品获得即使用 | 已验收 | 0.2 F0 GO/F1 APPROVED/F2 PASS/Push-Ready READY；六件商品迁回原 CombatShop/经济 RPC，公共同步获得即用覆盖购买/拾取/奖励，移除独立商店。三 Target、205 独立用例、93 资产、原 UI 渲染 PIE、防守双客户端六波、旧物品争抢/64-256 容量、300 秒经济 soak、733 包 cook 与 delivery Gate 通过；本次授权合并提交，见 [Spec](../Specs/DEF-006-reuse-shop-use-on-acquire.spec.md)；用户于2026-10-16要求“提交，并进行下一步” |
+| DEF-007 | 正式团队道具：核心屏障与应急石 | 已验收 | 0.2 F0 GO/F1 APPROVED/F2 PASS/Push-Ready READY；原商店替换两件，屏障Hook/比例修复/RunView schema3；三Target、213独立测试（207非PIE+6渲染PIE）、96资产、双客户端六波护盾吸收/耗尽/账本、736包Cook及文档/交付门通过。保留GAP-030/031；本次授权合并提交，见 [Spec](../Specs/DEF-007-defense-core-rescue.spec.md)；用户于2026-10-16要求“提交，并进行下一步” |
+
 ## 13. 用户验收记录
 
 | 里程碑 | 提交验收日期 | 用户结论 | 修正要求 | 最终验收日期 | 下一阶段授权 |
@@ -504,6 +513,8 @@ HUD-ABILITY-CLICK-001/002 追加验收状态：`用户已验收`（2026-09-14）
 
 | 2026-10-15 | 用户确认 DEF-002 Phase 1 验收完成并要求提交，授权继续下一阶段；DEF-003 Phase 2 Spec 将独立建立并重新走 Gate | post-M8 防守 / DEF-002 → DEF-003 |
 
+| 2026-10-16 | 完成 DEF-004：12 原型卡、个人三选一/重抽/永久 Modifier、死亡超时默认与复活、开发种子开始面板；三 Target、188 项分进程回归、81 资产、721 包 cook、真实 Slate 按钮 PIE、双客户端六波/重复信封/余额/24 属性对照通过。保留 GAP-030 动态 GE 定义诊断，待用户验收，未提交推送 | post-M8 防守 / DEF-004 |
+
 ## 15. 更新规则
 
 - 开始任务时立即将其改为“进行中”，并更新“最后更新”和“当前里程碑”。
@@ -514,3 +525,6 @@ HUD-ABILITY-CLICK-001/002 追加验收状态：`用户已验收`（2026-09-14）
 - 用户要求修正时记录原话摘要和影响 Task，将状态改为“需修正”或“进行中”。
 - 用户明确验收通过后才填写“已验收”和日期；只有用户另行要求继续，才把下一阶段改为进行中。
 - 阻塞项必须写清原因、已尝试方法和解除条件，不能只写“阻塞”。
+
+
+2026-10-16：用户明确要求“提交，并进行下一步”，确认DEF-003/004/006/007构成的当前集成版本并授权本地提交；DEF-005保留被替代历史。提交后继续正式团队道具，不等于整个Phase2/3验收。

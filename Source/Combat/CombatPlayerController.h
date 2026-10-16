@@ -34,6 +34,8 @@ class ACombatPlayerController : public APlayerController
 
 public:
 	ACombatPlayerController();
+	/** 本地扩展意图共用同一请求序号，避免与 Order/经济请求重号；不授予服务器执行权。 */
+	int32 ReserveCombatRequestId() { return AllocateCombatRequestId(); }
 
 	/** 选择只改变本地 HUD/命令目标；无权单位仅供查看，Shift 只增删已有控制权的成员。 */
 	UFUNCTION(BlueprintCallable, Category="Combat|Selection", meta=(DisplayName="选择战斗单位", ToolTip="本地点击查看；追加模式切换有控制权的组成员，不会授予控制权。"))
@@ -97,7 +99,7 @@ public:
 	UCombatAbilityAimComponent* GetAbilityAimComponent() const { return AbilityAimComponent; }
 	ECombatAbilityCastMode GetAbilityCastMode() const { return AbilityCastMode; }
 	/** 使用实际 Slate 几何检测本玩家 HUD/日志区域，不把全屏根控件当成 UI 阻挡。 */
-	bool IsPointerOverCombatUI() const;
+	virtual bool IsPointerOverCombatUI() const;
 	/** 小地图判断当前是否处于攻击或技能瞄准；右键地图只取消该本地会话。 */
 	bool IsCombatTargetingActive() const;
 	/** 小地图左键短点击只移动本地 Command Pawn，保持高度且不提交 Order。 */
@@ -266,6 +268,7 @@ private:
 #endif
 	friend class ACombatAbilityAimScenarioActor;
 	friend class ACombatSelectionNetworkScenario;
+	friend class ACombatDefenseNetworkScenario;
 	/** 本地意图适配默认子对象，Dedicated 禁用 Tick 且不生成视觉 Actor。 */
 	UPROPERTY(VisibleAnywhere, Category="Combat|Indicator", meta=(DisplayName="技能瞄准", ToolTip="只在本地玩家上更新的技能指示器会话。"))
 	TObjectPtr<UCombatAbilityAimComponent> AbilityAimComponent;

@@ -1,5 +1,10 @@
 #include "Combat/Items/CombatItemSubsystem.h"
 #include "Combat/Items/CombatItemData.h"
+#include "Combat/Items/CombatItemAcquireEffect.h"
+#include "Combat/Core/CombatTags.h"
+#include "Combat/Log/CombatEventSubsystem.h"
+#include "CombatPlayerController.h"
+#include "UObject/StrongObjectPtr.h"
 #include "Combat/Items/CombatWorldItem.h"
 #include "Combat/Items/CombatInventoryComponent.h"
 #include "Combat/Unit/CombatUnitCharacter.h"
@@ -112,4 +117,30 @@ void UCombatItemSubsystem::Deinitialize()
 	for (UCombatItemInstance* Item : Remaining) if (Item->WorldActor.IsValid()) Item->WorldActor->Destroy();
 	++Generation;
 	Super::Deinitialize();
+}
+
+
+bool UCombatItemSubsystem::ConsumeOnAcquire(UCombatItemInstance& Item,ACombatUnitCharacter* Unit,FGameplayTag& Failure)
+{
+	Failure={};
+	if(!IsValid(Unit)||Unit->GetWorld()!=GetWorld()||!Unit->HasAuthority()||GetWorld()->GetNetMode()==NM_Client||bShuttingDown)
+	{ Failure=CombatTags::Failure_Authority; return false; }
+	if(FindMutable(Item.Handle)!=&Item||Item.bAcquiring||Item.Holder.IsValid()||Item.Quantity!=1||!Item.Definition||!Item.Definition->bUseOnAcquire||!Item.Definition->AcquireEffect)
+	{ Failure=CombatTags::Failure_Item_Stale; return false; }
+	TStrongObjectPtr<UCombatItemInstance> KeepAlive(&Item);
+	TGuardValue<bool> Guard(Item.bAcquiring,true);
+	FCombatItemAcquireContext C; C.Recipient=Unit; C.Player=Cast<ACombatPlayerController>(Unit->GetResourceOwnerPlayerController()); C.Definition=Item.Definition; C.Source=Item.MakeSource();
+	if(!Item.Definition->AcquireEffect->CanUse(C,Failure)||!Item.Definition->AcquireEffect->Use(C,Failure)) return false;
+	// 在任何销毁或事件广播前解除实例归属。重复旧 Handle 立即失效，不留延迟清理任务。
+	const auto Handle=Item.Handle; auto* Actor=Item.WorldActor.Get(); Item.WorldActor.Reset(); Item.Quantity=0;
+	DestroyItem(Handle); if(IsValid(Actor)) Actor->Destroy();
+	if(auto* Events=GetWorld()->GetSubsystem<UCombatEventSubsystem>())
+	{
+		FCombatLogRecord Log; Log.Context=Events->CreateRootEvent(); Log.EventType=CombatTags::Event_Combat_ItemChanged; Log.Source=C.Source;
+		Log.ItemAction=TEXT("Consumed"); Log.ItemQuantity=0; Log.RequestedAmount=1; Log.AppliedAmount=0;
+		Log.SourceActorId=Log.TargetActorId=Unit->GetUniqueID(); Log.UnitLifeGeneration=Unit->GetLifeGeneration();
+		Log.Diagnostic=TEXT("ConsumedOnAcquire Definition=")+C.Source.ItemDefinitionId.ToString();
+		FCombatLogResourceChange Projection; if(C.Player) Projection.OwningPlayerId=C.Player->GetUniqueID(); Events->Emit(Log,Projection);
+	}
+	return true;
 }

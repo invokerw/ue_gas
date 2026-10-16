@@ -21,7 +21,7 @@ class COMBAT_API UCombatInventoryComponent : public UActorComponent
 	GENERATED_BODY()
 public:
 	UCombatInventoryComponent();
-	/** 服务器剧情、出生或奖励入口。优先完整合并，再选装备空槽，最后背包；失败不留实例。 */
+	/** 服务器剧情、出生或奖励入口。普通物品优先完整合并，再选装备空槽，最后背包；获得即用物品走同步领取并不占槽。 */
 	bool GiveItem(UCombatItemData* Definition, int32 Quantity, FCombatItemHandle& OutHandle, FGameplayTag& Failure);
 	/** 到达后再次校验实例、绑定、距离、视线及容量，完成地面到持有者的原子交接。 */
 	bool TryPickup(FCombatItemHandle Handle, int32 ExpectedRevision, FGameplayTag& Failure);

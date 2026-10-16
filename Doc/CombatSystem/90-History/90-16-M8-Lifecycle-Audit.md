@@ -70,3 +70,29 @@
 | Defense RunView / HUD | GameState 复制值快照，HUD 本地绘制 | 随 GameState/HUD 生命周期结束 | 只读 ASC 投影和服务器截止时间，不持有 gameplay 委托或调度 |
 
 验证覆盖成功、失败、重复死亡、旧局/阶段/生命、Owner 销毁、World teardown、奖励幂等和断线；真实网络探针仅显式 `DefenseSmoke` 开关启用，平时不 Tick。
+
+
+## DEF-004 选择窗口增量（2026-10-16）
+
+追加新对象审计，不修改历史 M8/DEF-002 结论：Director 按 RunId/PhaseGeneration/ChoiceRevision 和英雄生命/控制身份维护每玩家窗口，开窗不延长公共阶段，重抽不延长期限。15 秒到期或开始下一波时统一收口；重复请求只读最多 32 条完整载荷回执。选择通过公共 Modifier 生效，死亡时保留待生效 ID，复活后恰好一次；核心失败清待领，断线/Shutdown 撤销精确已授予句柄。
+
+ChoiceComponent 随 Defense PC 创建，只复制拥有者视图、不保存第二套构筑真值；EndPlay 清视图，UI NativeTick 仅显示快照。Seed/Pool/Card/Modifier 在开局冻结且不复制对象指针，World teardown 不留下静态引用。新的测试覆盖同号换载荷、旧生命/修订/局、终局取消、死亡超时/复活、Shutdown 和有界缓存；见 [DEF-004](../Specs/DEF-004-defense-choice-flow.spec.md)。
+
+
+## DEF-005 团队商品增量（2026-10-16）
+
+本节追加当前实现，不改写历史验收：Director 强持有冻结目录及独立效果定义，按 RunId/目录项键保存每局限购记录。活跃临时效果绑定精确 Hero 弱引用 + Modifier Handle；准备期迟加入和阵亡时未领效果在有效期内补领。购买者离开不会撤销其他成员效果。最后覆盖波清场、终局与 Shutdown 都先取走句柄再调用公共移除；终局保留购买记录，Shutdown 清空账本及回执，重复清理无副作用。复用已有阶段/监控 Scheduler，不新建 Actor Timer。RPC 组件拥有者复制，EndPlay 清视图；Widget 释放商店 Slate 引用。独立效果、死亡补领、旧请求、GC、Owner teardown 和提交中取消有专项测试，见 [DEF-005](../Specs/DEF-005-defense-team-shop.spec.md)。
+
+
+## DEF-006 同步领取增量（2026-10-16）
+
+本节记录新实现并替代上文 DEF-005 独立组件的当前职责，不改历史验收：ItemSubsystem 仍是唯一实例登记表；获得即用在一次同步领取锁内调用配置效果，成功后立即销毁实例与地面投影。没有额外 Actor Timer、延迟 AbilityEnded 或隐藏库存槽。原经济组件持有即用定义快照、有界购买回执及只读 ShopOffers；EndPlay 释放这些引用。
+
+Defense Director 仅持有领域效果快照、每局限领账本与精确 Hero+Modifier Handle。复制状态由原经济组件投影，不再有 TeamShop Component/RPC。阶段改变、到期、死亡补领与终局仍复用既有 Scheduler。已提交的即时治疗若在日志回调中引发 Shutdown，物品消费仍成功，导演不再重建已清空账本；属性效果执行中取消会撤销已授予句柄并使经济事务回滚。状态发布先快照接收者集合，避免观察者结束对局时迭代失效。新 Red/Green 与回归见 [DEF-006](../Specs/DEF-006-reuse-shop-use-on-acquire.spec.md)。
+
+
+## DEF-007 核心屏障增量（2026-10-16）
+
+核心 ModifierComponent 唯一持有屏障Runtime与ActiveGE；Director账本只保存核心弱引用和精确Handle。创建时以核心最大生命快照参数初始化余量；公共伤害Hook扣减、耗尽请求deferred remove，不新增Timer或委托。现有Monitor发现耗尽后清活跃状态，下一波清场/终局/Shutdown撤销精确句柄。买家离开不撤核心效果，英雄复活补领仅处理属性商品。
+
+同步领取在任何目标正执行Hook时提前拒绝；不能将无句柄的延迟Apply当作失败后留给队列执行。比例治疗仍沿用“已提交治疗被观察者终结时消费成功、不得重建账本”的边界。测试与证据见 [DEF-007](../Specs/DEF-007-defense-core-rescue.spec.md)。

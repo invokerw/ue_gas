@@ -64,6 +64,20 @@ uint64 UCombatRngSubsystem::CombatHash64V1(
 	return State;
 }
 
+uint64 UCombatRngSubsystem::HashSeededTextV1(
+	const uint64 InMatchSeed, const FString& DomainText, const FCombatRngSubjectId& SubjectId, const uint32 Ordinal)
+{
+	const FTCHARToUTF8 DomainUtf8(*DomainText);
+	const uint64 DomainHash = Fnv1a64(DomainUtf8.Get(), DomainUtf8.Length());
+	uint64 State = 0xC0B47A11D06A5EEDull;
+	State = SplitMix64(State ^ InMatchSeed);
+	State = SplitMix64(State ^ DomainHash);
+	State = SplitMix64(State ^ SubjectId.High);
+	State = SplitMix64(State ^ SubjectId.Low);
+	State = SplitMix64(State ^ static_cast<uint64>(Ordinal));
+	return State;
+}
+
 uint64 UCombatRngSubsystem::Fnv1a64(const ANSICHAR* Bytes, const int32 Length)
 {
 	uint64 Hash = 0xcbf29ce484222325ull;

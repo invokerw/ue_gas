@@ -129,12 +129,13 @@ bool UCombatNetworkSecuritySubsystem::ValidateAndConsumeOrderRequest(
 
 bool UCombatNetworkSecuritySubsystem::ValidateAndConsumeEconomyRequest(
 	APlayerController* RequestingController, UCombatEconomyComponent* Economy,
-	const FCombatEconomyRequest& Request, FGameplayTag& OutFailureTag, FString& OutDiagnostic)
+	const FCombatEconomyRequest& Request, FGameplayTag& OutFailureTag, FString& OutDiagnostic,const bool bCachedReplay)
 {
 	OutFailureTag = {};
 	OutDiagnostic.Reset();
 	PruneInvalidConnections();
 	if (!RequestingController || !RequestingController->HasAuthority() || !Economy
+		|| RequestingController->GetWorld()!=GetWorld() || Economy->GetWorld()!=GetWorld() || GetWorld()->GetNetMode()==NM_Client
 		|| Economy->GetOwner() != RequestingController)
 	{
 		OutFailureTag = CombatTags::Failure_Network_Ownership;
@@ -143,7 +144,7 @@ bool UCombatNetworkSecuritySubsystem::ValidateAndConsumeEconomyRequest(
 		return false;
 	}
 	const bool bCommonPayloadValid = Request.ExpectedEconomyRevision > 0
-		&& Request.CommandBindingGeneration >= 0;
+		&& Request.CommandBindingGeneration >= 0 && Request.PurchaseContextRevision>=0 && Request.ItemDefinitionId.ToString().Len()<=160;
 	bool bActionPayloadValid = false;
 	switch (Request.Action)
 	{
@@ -154,7 +155,7 @@ bool UCombatNetworkSecuritySubsystem::ValidateAndConsumeEconomyRequest(
 	case ECombatEconomyAction::SellInventoryItem:
 	case ECombatEconomyAction::ToggleInventoryItemLock:
 		bActionPayloadValid = Request.ExpectedInventoryRevision > 0 && !Request.ItemDefinitionId.IsValid()
-			&& Request.ItemHandle.IsValid() && Request.ItemRevision > 0;
+			&& Request.ItemHandle.IsValid() && Request.ItemRevision > 0 && !Request.PurchaseContextId.IsValid() && Request.PurchaseContextRevision==0;
 		break;
 	default:
 		break;
@@ -166,10 +167,14 @@ bool UCombatNetworkSecuritySubsystem::ValidateAndConsumeEconomyRequest(
 		RecordEconomyRejection(RequestingController, Request, OutFailureTag, OutDiagnostic);
 		return false;
 	}
+	if(bCachedReplay)
+	{
+		if(!ValidateAndConsumeComponentRequest(RequestingController,Economy,Request.RequestId,true,OutFailureTag)) return false;
+		return true;
+	}
 	if (!ConsumeConnectionBudget(RequestingController, Request.RequestId, OutFailureTag, OutDiagnostic))
 	{
-		RecordEconomyRejection(RequestingController, Request, OutFailureTag, OutDiagnostic);
-		return false;
+		RecordEconomyRejection(RequestingController, Request, OutFailureTag, OutDiagnostic); return false;
 	}
 	++Stats.AcceptedRequests;
 	return true;
@@ -298,4 +303,30 @@ void UCombatNetworkSecuritySubsystem::PruneInvalidConnections()
 			It.RemoveCurrent();
 		}
 	}
+}
+
+bool UCombatNetworkSecuritySubsystem::ValidateAndConsumeComponentRequest(APlayerController* Player,
+	const UActorComponent* Component, const int32 RequestId, const bool bCachedReplay, FGameplayTag& OutFailure)
+{
+	OutFailure={}; PruneInvalidConnections();
+	if (!IsValid(Player) || !IsValid(Component) || Player->GetWorld()!=GetWorld() || Component->GetOwner()!=Player
+		|| !Player->HasAuthority() || GetWorld()->GetNetMode()==NM_Client || RequestId<=0)
+	{ OutFailure=CombatTags::Failure_Network_Ownership; return false; }
+	if (!bCachedReplay)
+	{
+		FString Diagnostic;
+		if (!ConsumeConnectionBudget(Player,RequestId,OutFailure,Diagnostic)) return false;
+	}
+	else
+	{
+		auto* State=ConnectionStates.Find(Player);
+		if (!State || !State->RecentRequestIds.Contains(RequestId))
+		{ OutFailure=CombatTags::Failure_Network_DuplicateRequest; return false; }
+		const double Now=GetWorld()->GetTimeSeconds();
+		State->Tokens=FMath::Min<double>(FMath::Max(1.0f,BurstCapacity),State->Tokens+FMath::Max(0.0,Now-State->LastRefillTime)*FMath::Max(1.0f,RequestsPerSecond));
+		State->LastRefillTime=Now;
+		if(State->Tokens<1) { OutFailure=CombatTags::Failure_Network_RateLimited; return false; }
+		--State->Tokens;
+	}
+	++Stats.AcceptedRequests; return true;
 }

@@ -1,6 +1,6 @@
 # 物品系统：配置、操作与权威边界
 
-ITEM-001 在 Combat 单 Runtime Module 内增加物品实例、库存、地面拾取物和 HUD。当前物品能力作为 `combat_v4_economy_rc1` 的基础；物品自身规则仍见 [Spec](../Specs/ITEM-001-item-system.spec.md) 与 [进度台账](../00-Project/00-01-Progress-Tracker.md)，经济扩展见 [10-15](10-15-Economy-Shop-Crafting.md)、ECON-003 Spec、RES-001 和 ADR-060/066。
+ITEM-001 在 Combat 单 Runtime Module 内增加物品实例、库存、地面拾取物和 HUD。当前物品能力作为 `combat_v5_acquisition_rc1` 的基础；物品自身规则仍见 [Spec](../Specs/ITEM-001-item-system.spec.md) 与 [进度台账](../00-Project/00-01-Progress-Tracker.md)，经济扩展见 [10-15](10-15-Economy-Shop-Crafting.md)、ECON-003 Spec、RES-001 和 ADR-060/066。
 
 物品实例、槽位、`Holder`、库存修订与装备效果始终属于英雄；金币及其他战略资源不属于物品库存，而由玩家的 `UCombatEconomyComponent` 账本持有。英雄切换只替换当前库存投影，不迁移物品，也不清空玩家资源。
 
@@ -107,3 +107,12 @@ Pickup / Drop 进入 Order 状态机，复用 AI 导航、路径跟随、Schedul
 本机配置 `.env` 后执行 `Tools/RunDedicated.ps1 -Items`，启动独立服务器与两个客户端，同时验证物品 RPC、owner-only 快照及既有 64 单位/256 Modifier 容量场景。三 Target、完整 Combat、资产、真实 PIE 与 Dedicated/容量的实际结果以 ITEM-001 Spec 记录为准。
 
 源码 Editor 的启动入口不可用时，可用 `-InstalledEditor` 选择安装版 Editor 的独立 `-server`/`-game` 进程，日志单独写入 `Saved/UEEnvironment/Dedicated-Installed`。该运行证据不替代源码 Server/Client Target 构建，也不代表已验证打包后的可执行文件。
+
+
+## DEF-006：获得即使用
+
+`UCombatItemData::bUseOnAcquire` 默认关闭。启用后设置内嵌 `AcquireEffect`：通用 `UCombatHealOnAcquireEffect` 治疗接收者，`UDefenseTeamItemEffect` 将团队效果交给防守 Director。每件必须数量 1、无装备 ActiveAbility/被动/光环/充能/配方/出售；获得效果只允许同步完成，失败须不留副作用。它不会触发手动施法的前摇、冷却或装备槽校验，旧主动物品流程保持原样。
+
+`GiveItem`、`TryPickup` 与原经济购买共用 ItemSubsystem 的领取入口。实例在执行期间被锁定；成功后同步消费并释放地面 Actor/登记记录，结果 Handle 为空；失败保留地面实例或回滚购买金额/修订。满九格仍能领取，库存修订不因无槽消费变化。拾取仍先经过公共 Targeting 的距离、状态、LOS 与原共享约束。日志保留已消费实例的不可变 SourceContext，后续团队效果也保留来源。
+
+即用商品不能充当合成组件；复制请求与快照规则见 [10-15](10-15-Economy-Shop-Crafting.md) 和 [DEF-006](../Specs/DEF-006-reuse-shop-use-on-acquire.spec.md)。

@@ -636,6 +636,8 @@ bool ACombatPlayerController::PurchaseShopItem(const FPrimaryAssetId ItemDefinit
 	FCombatEconomyRequest Request;
 	Request.Action = ECombatEconomyAction::Purchase;
 	Request.ItemDefinitionId = ItemDefinitionId;
+	if(const auto* Offer=CombatEconomyComponent->FindShopOffer(ItemDefinitionId))
+	{ Request.PurchaseContextId=Offer->ContextId; Request.PurchaseContextRevision=Offer->Revision; }
 	return SubmitEconomyRequest(MoveTemp(Request));
 }
 
@@ -690,9 +692,11 @@ FCombatEconomyResult ACombatPlayerController::ProcessEconomyRequestForConnection
 	}
 	UCombatNetworkSecuritySubsystem* Security = GetWorld()
 		? GetWorld()->GetSubsystem<UCombatNetworkSecuritySubsystem>() : nullptr;
+	const int32 Replay=CombatEconomyComponent?CombatEconomyComponent->InspectAcquireReplay(Request):0;
+	const bool AcquirePurchase=CombatEconomyComponent&&CombatEconomyComponent->IsAcquirePurchase(Request);
 	FString Diagnostic;
 	if (!Security || !Security->ValidateAndConsumeEconomyRequest(
-		RequestingController, CombatEconomyComponent, Request, Result.FailureTag, Diagnostic))
+		RequestingController, CombatEconomyComponent, Request, Result.FailureTag, Diagnostic, Replay!=0))
 	{
 		if (!Result.FailureTag.IsValid()) Result.FailureTag = CombatTags::Failure_ActionUnsupported;
 		return Result;
@@ -708,12 +712,23 @@ FCombatEconomyResult ACombatPlayerController::ProcessEconomyRequestForConnection
 		return Result;
 	}
 
+	if(Replay<0) { Result.FailureTag=CombatTags::Failure_Network_DuplicateRequest; return Result; }
+	if(AcquirePurchase)
+	{
+		CombatEconomyComponent->RefreshShopOffers();
+		const auto* Offer=CombatEconomyComponent->FindShopOffer(Request.ItemDefinitionId);
+		if(!Offer || Offer->ContextId!=Request.PurchaseContextId) { Result.FailureTag=CombatTags::Failure_Economy_Stale; return Result; }
+		if(Replay==1) return CombatEconomyComponent->GetAcquireReplay(Request.RequestId);
+		if(Request.RequestId<=CombatEconomyComponent->GetAcquireRequestHighWater()) { Result.FailureTag=CombatTags::Failure_Network_DuplicateRequest; return Result; }
+	}
+	else if(Request.PurchaseContextId.IsValid() || Request.PurchaseContextRevision!=0) { Result.FailureTag=CombatTags::Failure_Economy_Stale; return Result; }
 	const int64 BeforeGold = CombatEconomyComponent->GetGold();
 	switch (Request.Action)
 	{
 	case ECombatEconomyAction::Purchase:
 		Result.bSuccess = CombatEconomyComponent->PurchaseItem(Request.ItemDefinitionId,
-			Request.ExpectedEconomyRevision, Request.ExpectedInventoryRevision, Result.ItemHandle, Result.FailureTag);
+			Request.ExpectedEconomyRevision, Request.ExpectedInventoryRevision, Result.ItemHandle, Result.FailureTag,Request.PurchaseContextId,Request.PurchaseContextRevision);
+		Result.bConsumedOnAcquire=Result.bSuccess&&AcquirePurchase;
 		break;
 	case ECombatEconomyAction::SellInventoryItem:
 		Result.ItemHandle = Request.ItemHandle;
@@ -732,6 +747,7 @@ FCombatEconomyResult ACombatPlayerController::ProcessEconomyRequestForConnection
 	Result.GoldDelta = CombatEconomyComponent->GetGold() - BeforeGold;
 	Result.EconomyRevision = CombatEconomyComponent->GetEconomyRevision();
 	Result.InventoryRevision = CombatEconomyComponent->GetInventoryRevision();
+	if(AcquirePurchase) CombatEconomyComponent->RememberAcquireResult(Request,Result);
 	return Result;
 }
 

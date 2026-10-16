@@ -30,12 +30,15 @@ public:
 		bool bEnableDebugCommands, FString& OutError);
 	/** 服务器增加非负金币并按关卡上限限制；零值是无状态变化的成功操作。 */
 	bool AddGold(int64 Amount, FName Reason);
+	/** 服务器消费玩家金币；非负金额、当前资源修订和足额余额均满足才提交。拒绝重入；不操作英雄库存。 */
+	bool TrySpendGold(int64 Amount, int32 ExpectedRevision, FName Reason);
 	/** 仅调试命令使用；越界值拒绝且不静默截断。 */
 	bool SetGoldForDebug(int64 Amount, FString& OutError);
 
 	/** 在当前主控单位库存域中购买目标、消费未锁定组件并原子生成最终实例。 */
 	bool PurchaseItem(const FPrimaryAssetId& ItemDefinitionId, int32 ExpectedEconomyRevision,
-		int32 ExpectedInventoryRevision, FCombatItemHandle& OutResultHandle, FGameplayTag& OutFailure);
+		int32 ExpectedInventoryRevision, FCombatItemHandle& OutResultHandle, FGameplayTag& OutFailure,
+		FGuid PurchaseContextId=FGuid(), int32 PurchaseContextRevision=0);
 	/** 出售当前主控单位库存中的精确实例；沿用配置的全额退款窗口与折扣值。 */
 	bool SellInventoryItem(FCombatItemHandle ItemHandle, int32 ExpectedItemRevision,
 		int32 ExpectedEconomyRevision, int32 ExpectedInventoryRevision, FGameplayTag& OutFailure);
@@ -65,6 +68,21 @@ public:
 	bool IsInitialized() const { return bInitialized || (ReplicatedView.GoldCap > 0 && ReplicatedView.ShopDefinitionId.IsValid()); }
 	bool AreDebugCommandsEnabled() const { return bDebugCommandsEnabled; }
 	UCombatShopData* GetShopData() const { return ShopData; }
+	/** 只重建商品条件，不改变金币/库存修订。领域阶段变化时调用。 */
+	void RefreshShopOffers();
+	/** 当前拥有者投影中的指定商品条件；普通商品返回空。 */
+	const FCombatShopOfferView* FindShopOffer(FPrimaryAssetId Id) const;
+	/** 是否为当前目录的获得即用商品，客户端不能自行指定。 */
+	bool IsAcquirePurchase(const FCombatEconomyRequest& Request) const;
+	/** 检查完整回执：0 未缓存、1 同载荷、-1 换载荷。 */
+	int32 InspectAcquireReplay(const FCombatEconomyRequest& Request) const;
+	/** 读取缓存回执，调用方先完成当前连接/绑定/上下文验证。 */
+	FCombatEconomyResult GetAcquireReplay(int32 RequestId) const;
+	/** 记住终态回执，最多 32 条；高水位淘汰旧号。 */
+	void RememberAcquireResult(const FCombatEconomyRequest& Request,const FCombatEconomyResult& Result);
+	int32 GetAcquireReceiptCount() const { return AcquireReceipts.Num(); }
+	int32 GetAcquireRequestHighWater() const { return AcquireRequestHighWater; }
+
 
 	UPROPERTY(BlueprintAssignable, Category="Combat|Economy", meta=(DisplayName="经济界面变化"))
 	FCombatEconomyViewChangedDelegate OnEconomyViewChanged;
@@ -85,6 +103,8 @@ private:
 		int32 Quantity = 0;
 	};
 
+	/** 在原经济互斥范围内购买并同步消费即用物品；失败恢复金币和修订。 */
+	bool PurchaseAcquireItem(UCombatItemData& Item,int32 EconomyRevision,int32 InventoryRevision,FGuid ContextId,int32 ContextRevision,FGameplayTag& Failure);
 	ACombatPlayerController* GetCombatPlayer() const;
 	UCombatItemSubsystem* GetItems() const;
 	UCombatInventoryComponent* GetCommandedInventory() const;
@@ -116,6 +136,9 @@ private:
 	UPROPERTY(ReplicatedUsing=OnRep_EconomyView, Transient)
 	FCombatEconomyView ReplicatedView;
 	UPROPERTY(Transient) TObjectPtr<UCombatShopData> ShopData;
+	UPROPERTY(Transient) TArray<TObjectPtr<UCombatItemData>> FrozenAcquireItems;
+	TArray<FCombatAcquirePurchaseReceipt> AcquireReceipts;
+	int32 AcquireRequestHighWater=0;
 	int64 FrozenGoldCap = 0;
 	int64 FrozenPassiveGoldPerMinute = 0;
 	float FrozenFullRefundSeconds = 0.0f;

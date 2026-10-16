@@ -2,6 +2,7 @@
 
 #include "Combat/Economy/CombatEconomyData.h"
 #include "Combat/Economy/CombatShopData.h"
+#include "Combat/Items/CombatItemAcquireEffect.h"
 #include "Combat/Items/CombatItemData.h"
 #include "Combat/Items/CombatItemSubsystem.h"
 #include "Combat/Items/CombatInventoryComponent.h"
@@ -97,7 +98,13 @@ bool UCombatEconomyComponent::InitializeForMatch(UCombatEconomyData* EconomyData
 	FrozenPassiveGoldPerMinute = EconomyData->PassiveGoldPerMinute;
 	FrozenFullRefundSeconds = EconomyData->FullRefundSeconds;
 	FrozenSellValueBasisPoints = EconomyData->SellValueBasisPoints;
-	ShopData = InShopData;
+	ShopData = DuplicateObject<UCombatShopData>(InShopData,this);
+	for(auto& Category:ShopData->Categories) for(auto& Reference:Category.Items)
+		if(auto* Item=Reference.LoadSynchronous(); Item&&Item->bUseOnAcquire)
+		{
+			auto* Copy=DuplicateObject<UCombatItemData>(Item,this);
+			FrozenAcquireItems.Add(Copy); Reference=Copy;
+		}
 	bDebugCommandsEnabled = bEnableDebugCommands;
 	bInitialized = true;
 	ReplicatedView.Gold = EconomyData->StartingGold;
@@ -152,6 +159,21 @@ bool UCombatEconomyComponent::AddGold(const int64 Amount, const FName Reason)
 	AdvanceEconomyRevision();
 	EmitEconomyEvent(CombatTags::Event_Combat_GoldChanged, {}, Reason, PreviousGold);
 	RefreshView(true, false);
+	return true;
+}
+
+bool UCombatEconomyComponent::TrySpendGold(const int64 Amount, const int32 ExpectedRevision, const FName Reason)
+{
+	const auto* Player=GetCombatPlayer();
+	if (!bInitialized || bEnding || bMutating || !Player || !Player->HasAuthority() || GetNetMode()==NM_Client
+		|| Amount<0 || ExpectedRevision!=ReplicatedView.EconomyRevision || ReplicatedView.Gold<Amount) return false;
+	if (Amount==0) return true;
+	TGuardValue<bool> Guard(bMutating,true);
+	const int64 PreviousGold=ReplicatedView.Gold;
+	ReplicatedView.Gold-=Amount;
+	AdvanceEconomyRevision();
+	EmitEconomyEvent(CombatTags::Event_Combat_GoldChanged,{},Reason,PreviousGold);
+	RefreshView(true,false);
 	return true;
 }
 
@@ -429,9 +451,11 @@ bool UCombatEconomyComponent::CommitInventoryResult(UCombatInventoryComponent& I
 
 bool UCombatEconomyComponent::PurchaseItem(const FPrimaryAssetId& ItemDefinitionId,
 	const int32 ExpectedEconomyRevision, const int32 ExpectedInventoryRevision,
-	FCombatItemHandle& OutResultHandle, FGameplayTag& OutFailure)
+	FCombatItemHandle& OutResultHandle, FGameplayTag& OutFailure,const FGuid ContextId,const int32 ContextRevision)
 {
 	OutResultHandle = {};
+	if(ShopData) if(auto* Target=ShopData->FindItem(ItemDefinitionId); Target&&Target->bUseOnAcquire)
+		return PurchaseAcquireItem(*Target,ExpectedEconomyRevision,ExpectedInventoryRevision,ContextId,ContextRevision,OutFailure);
 	UCombatInventoryComponent* Inventory = nullptr;
 	if (!ValidateInventoryTransactionRevisions(ExpectedEconomyRevision, ExpectedInventoryRevision, OutFailure, Inventory)) return false;
 
@@ -816,6 +840,7 @@ void UCombatEconomyComponent::RefreshView(const bool bResourceChanged, const boo
 		Inventory->BuildViews(ReplicatedView.InventoryItems);
 		ReplicatedView.InventoryRevision = Inventory->GetRevision();
 	}
+	RefreshShopOffers();
 	if (ACombatPlayerController* Player = GetCombatPlayer()) Player->ForceNetUpdate();
 	OnEconomyViewChanged.Broadcast();
 	if (bResourceChanged) OnPlayerResourceViewChanged.Broadcast();
@@ -868,6 +893,58 @@ void UCombatEconomyComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	{
 		Scheduler->CancelAllForOwner(this);
 	}
-	ShopData = nullptr;
+	ShopData = nullptr; FrozenAcquireItems.Reset(); AcquireReceipts.Reset(); ReplicatedView.ShopOffers.Reset();
 	Super::EndPlay(EndPlayReason);
+}
+
+
+bool UCombatEconomyComponent::PurchaseAcquireItem(UCombatItemData& Item,const int32 MoneyRevision,const int32 InventoryRevision,const FGuid ContextId,const int32 ContextRevision,FGameplayTag& Failure)
+{
+	Failure={}; auto* PC=GetCombatPlayer(); auto* Unit=PC?PC->GetCommandedUnit():nullptr; auto* Inventory=Unit?Unit->GetCombatInventoryComponent():nullptr;
+	if(!PC||!PC->HasAuthority()||GetNetMode()==NM_Client||!bInitialized||bEnding||!GetItems()||!IsValid(Unit)||!Inventory)
+	{ Failure=CombatTags::Failure_Economy_Uninitialized; return false; }
+	if(bMutating||Inventory->bMutating||Inventory->bEnding) { Failure=CombatTags::Failure_Item_Busy; return false; }
+	if(MoneyRevision!=ReplicatedView.EconomyRevision||InventoryRevision!=Inventory->GetRevision()) { Failure=CombatTags::Failure_Economy_Stale; return false; }
+	FString Error; if(!Item.ValidateRuntime(Error)) { Failure=CombatTags::Failure_ActionUnsupported; return false; }
+	const auto Offer=Item.AcquireEffect->QueryOffer(Unit,&Item);
+	if(Offer.ContextId!=ContextId||Offer.Revision!=ContextRevision) { Failure=CombatTags::Failure_Economy_Stale; return false; }
+	if(!Offer.bCanPurchase) { Failure=CombatTags::Failure_ActionUnsupported; return false; }
+	FCombatPurchasePlan Plan;
+	if(!ShopData->BuildPurchasePlan(Item.GetPrimaryAssetId(),{},Plan,Error)||!Plan.ConsumedDefinitions.IsEmpty()) { Failure=CombatTags::Failure_Economy_RecipeInvalid; return false; }
+	if(ReplicatedView.Gold<Plan.TotalCost) { Failure=CombatTags::Failure_Economy_InsufficientGold; return false; }
+	TGuardValue<bool> MoneyGuard(bMutating,true); TGuardValue<bool> InventoryGuard(Inventory->bMutating,true);
+	auto* Instance=GetItems()->CreateItem(&Item,1); if(!Instance) { Failure=CombatTags::Failure_ActionUnsupported; return false; }
+	const auto Handle=Instance->Handle; const auto Source=Instance->MakeSource();
+	const int64 Before=ReplicatedView.Gold; const int32 BeforeRevision=ReplicatedView.EconomyRevision;
+	ReplicatedView.Gold-=Plan.TotalCost; AdvanceEconomyRevision();
+	if(!GetItems()->ConsumeOnAcquire(*Instance,Unit,Failure))
+	{
+		GetItems()->DestroyItem(Handle); ReplicatedView.Gold=Before; ReplicatedView.EconomyRevision=BeforeRevision; return false;
+	}
+	EmitEconomyEvent(CombatTags::Event_Combat_ItemPurchased,Source,TEXT("ConsumedOnAcquire"),Before);
+	RefreshView(true,false); return true;
+}
+void UCombatEconomyComponent::RefreshShopOffers()
+{
+	auto* PC=GetCombatPlayer(); if(!PC||!PC->HasAuthority()||!bInitialized||bEnding||!ShopData) return;
+	TArray<FCombatShopOfferView> Next;
+	for(const auto& Item:FrozenAcquireItems) if(Item&&Item->AcquireEffect) Next.Add(Item->AcquireEffect->QueryOffer(PC->GetCommandedUnit(),Item));
+	if(Next==ReplicatedView.ShopOffers) return;
+	ReplicatedView.ShopOffers=MoveTemp(Next); PC->ForceNetUpdate(); OnEconomyViewChanged.Broadcast();
+}
+const FCombatShopOfferView* UCombatEconomyComponent::FindShopOffer(const FPrimaryAssetId Id) const
+{ return ReplicatedView.ShopOffers.FindByPredicate([&](const auto& V){return V.DefinitionId==Id;}); }
+bool UCombatEconomyComponent::IsAcquirePurchase(const FCombatEconomyRequest& R) const
+{
+	const auto* Item=ShopData&&R.Action==ECombatEconomyAction::Purchase?ShopData->FindItem(R.ItemDefinitionId):nullptr;
+	return Item&&Item->bUseOnAcquire;
+}
+int32 UCombatEconomyComponent::InspectAcquireReplay(const FCombatEconomyRequest& R) const
+{ for(const auto& E:AcquireReceipts) if(E.Request.RequestId==R.RequestId) return E.Request==R?1:-1; return 0; }
+FCombatEconomyResult UCombatEconomyComponent::GetAcquireReplay(const int32 Id) const
+{ for(const auto& E:AcquireReceipts) if(E.Request.RequestId==Id) return E.Result; return {}; }
+void UCombatEconomyComponent::RememberAcquireResult(const FCombatEconomyRequest& R,const FCombatEconomyResult& Result)
+{
+	AcquireRequestHighWater=FMath::Max(AcquireRequestHighWater,R.RequestId);
+	AcquireReceipts.Add({R,Result}); if(AcquireReceipts.Num()>32) AcquireReceipts.RemoveAt(0,1,EAllowShrinking::No);
 }

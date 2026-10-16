@@ -76,3 +76,15 @@
 | 蓝图公开函数改名或删除 | 提供 DeprecatedFunction/重定向和迁移期；更新 `PublicExtensionSurface` 测试 |
 
 运行时可通过蓝图节点“获取战斗发布契约”和“校验战斗发布契约”读取并检查当前边界；候选发布若发生版本漂移会在 M8 自动化和 Dedicated `M8ReleaseContract` 日志中失败。
+
+
+## DEF-006 获得即用扩展
+
+物品可配置默认关闭的 `bUseOnAcquire` 和内嵌 `UCombatItemAcquireEffect`。它是同步物品领取行为，`QueryOffer`/`CanUse` 无副作用，`Use` 必须同步返回且失败无残留；不能在其中扣金币或操作库存。效果执行仍使用公共 Heal/Modifier 等接口，异步或玩家选目标的行为继续走原 ActiveAbility。通用层不依赖任何玩法模式；防守团队实现是该公开接口的一个适配器。示例、限制和迁移见 [DEF-006](../Specs/DEF-006-reuse-shop-use-on-acquire.spec.md)。
+
+
+## DEF-007 同步获得效果与核心屏障
+
+核心救援内容通过原获得效果接口进入公共 Modifier/Heal。UDefenseCoreShieldRuntime 只在 DamageBlock 消耗余量，不修改Health；定义和平衡比例在防守物品效果中配置。防守RunView schema3投影核心屏障，公共发布契约不变。
+
+需要同步返回句柄/可失败回滚的获得效果，在 ApplyModifier 前必须检查目标组件 `IsDeferringOperations()`；Hook 内 Apply 只排队，不能把暂时无句柄当作无副作用失败。防守团队适配器会在任何应用前检查所有目标，拒绝该时序；普通 Apply/Remove 的延迟队列语义保持不变。

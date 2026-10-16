@@ -1,13 +1,13 @@
 # 经济、商店与物品合成：运行时入口与配置
 
-ECON-003 在 ECON-001/002 的唯一物品实例和商店目录之上，将购买与出售收敛到当前主控单位物品栏。当前实现与验收证据以 [ECON-003 Spec](../Specs/ECON-003-direct-inventory-shop-lock.spec.md) 和 [进度台账](../00-Project/00-01-Progress-Tracker.md) 为准；运行时只有库存交易域。资源与库存的所有权在 [RES-001](../Specs/RES-001-player-resource-ownership.spec.md) 中进一步明确：金币及未来战略资源属于玩家，物品实例和库存槽仍属于英雄。
+ECON-003 在 ECON-001/002 的唯一物品实例和商店目录之上，将购买与出售收敛到当前主控单位物品栏。当前实现与验收证据以 [ECON-003 Spec](../Specs/ECON-003-direct-inventory-shop-lock.spec.md) 和 [进度台账](../00-Project/00-01-Progress-Tracker.md) 为准；普通装备使用唯一库存交易域；DEF-006 增加同步获得即用交付，仍由同一商店和金币事务执行。资源与库存的所有权在 [RES-001](../Specs/RES-001-player-resource-ownership.spec.md) 中进一步明确：金币及未来战略资源属于玩家，物品实例和库存槽仍属于英雄。
 
 ## 1. 权威边界
 
 - `ACombatGameMode` 选择 `UCombatEconomyData` 与唯一 `UCombatShopData`；服务器初始化时校验并冻结本局规则。
 - `ACombatPlayerController` 持有 `UCombatEconomyComponent`。金币及未来战略资源的权威账本属于玩家连接；当前主控英雄的库存实例、`Holder` 和槽位仍由英雄 `UCombatInventoryComponent` 持有。客户端继续接收 owner-only `FCombatEconomyView` 兼容聚合，同时可通过 `GetPlayerResourceView()` / `GetHeroInventoryView()` 读取分域投影。
 - `UCombatShopData` 是目录、页面、分类、价格和递归配方的唯一来源。客户端搜索和展示不能改变服务器购买计划。
-- 英雄六装备/三背包组成唯一活动交易和合成域；购买直接消费未锁定库存组件并把结果写回该英雄库存。锁定实例不参与购买抵扣或自动合成，切换英雄只切换当前库存投影，不转移物品实例。
+- 普通物品的英雄六装备/三背包组成唯一活动交易和合成域；购买直接消费未锁定库存组件并把结果写回该英雄库存。锁定实例不参与购买抵扣或自动合成，切换英雄只切换当前库存投影，不转移物品实例。
 
 ### 1.1 资源与库存所有权
 
@@ -53,4 +53,13 @@ Demo 资产仍位于 `/Game/Combat/Demo/Economy` 和 `/Game/Combat/Demo/UI`，�
 
 ## 5. 版本与回滚
 
-发布契约为 `ContractVersion=4`、`ReleaseId=combat_v4_economy_rc1`、物品与经济开关分别为 true，旧合并字段保持 false；`EconomyPresentationSchemaVersion=3` 和核心 `EventSchemaVersion=3` 保持不变，分域 API 与展示 recipient 不新增客户端 wire 字段。回滚必须成组恢复 Economy/Shop 源码、Item 扩展、Controller RPC、配置和文档，并同时回退客户端/服务器版本；不得只关闭开关而留下可写经济入口。
+当前发布契约为 `ContractVersion=5`、`ReleaseId=combat_v5_acquisition_rc1`、物品与经济开关分别为 true，旧合并字段保持 false；`EconomyPresentationSchemaVersion=4`；核心 `EventSchemaVersion=3` 保持不变。本轮仅新增商品条件上下文、即用消费回执与 ShopOffers 投影，玩家资源与英雄库存仍分域。回滚必须成组恢复 Economy/Shop 源码、Item 扩展、Controller RPC、配置和文档，并同时回退客户端/服务器版本；不得只关闭开关而留下可写经济入口。
+
+
+## DEF-006：原商店内的即用商品
+
+即用商品仍属于 `CombatItem`，分类/价格只有 `CombatShopData` 一份，客户端仍调用 `PurchaseShopItem → ServerSubmitEconomyRequest → PurchaseItem`。经济组件在初始化时冻结即用定义，收到请求后重新检查当前金币、库存修订和商品 ContextId/Revision；领域效果不负责付款。普通购买继续原库存/合成流程，即用购买在经济与库存互斥范围内执行领取，成功输出 `bConsumedOnAcquire=true` 和空结果句柄，失败恢复原余额与修订。
+
+只对即用购买保存 32 条完整载荷回执与请求高水位。重发仍消耗连接限频，但不会重复扣款或生效；同号换载荷、旧绑定、旧上下文/阶段拒绝。普通经济请求仍沿用旧重放拒绝语义。`ShopOffers` 仅向拥有者复制，给既有商店提供可购/剩余次数/领取者/效果到期；变更商品条件不递增玩家金币修订。
+
+防守专用目录 `/Game/Combat/Demo/Defense/DA_DefenseUnifiedShop` 保留原商品分类并追加“团队补给 · 获得即用”。六件物品在 `/Game/Combat/Demo/Defense/TeamShop/DA_Item_team_*`；团队效果仍归 Director，使用者可阵亡，待复活补领有效期内的属性。原 `DefenseTeamShopData`、`DefenseTeamShopComponent` 和专用购买 RPC 已删除，UI 继续使用右下金币按钮、左键查看与右键购买。商品 tooltip 显示限购和持续信息，标题提示最近即用购买结果。详见 [DEF-006](../Specs/DEF-006-reuse-shop-use-on-acquire.spec.md)。
