@@ -1,4 +1,4 @@
-param([ValidateRange(1,2)][int]$Players = 1, [switch]$Defeat, [switch]$Choices, [switch]$TeamShop, [int]$Port = 7880, [int]$TimeoutSeconds = 420)
+param([ValidateRange(1,2)][int]$Players = 1, [switch]$Defeat, [switch]$Choices, [switch]$TeamShop, [switch]$Reinforcement, [int]$Port = 7880, [int]$TimeoutSeconds = 420)
 $ErrorActionPreference = 'Stop'
 $Repo = Split-Path $PSScriptRoot -Parent
 $EnvironmentInfo = python (Join-Path $PSScriptRoot 'ue_environment.py') check --json | ConvertFrom-Json
@@ -6,7 +6,8 @@ if (-not $EnvironmentInfo.editor_ready) { throw 'Installed UE editor unavailable
 $Editor = $EnvironmentInfo.installed_editor
 $Project = Join-Path $Repo 'ue_gas.uproject'
 $Case = if ($Defeat) { "defeat-$Players" } else { "victory-$Players" }
-$TaskFolder = if ($TeamShop) { "DEF-007" } elseif ($Choices) { "DEF-004" } else { "DEF-002" }
+$TaskFolder = if ($TeamShop -or $Reinforcement) { "DEF-008" } elseif ($Choices) { "DEF-004" } else { "DEF-002" }
+if ($Reinforcement) { $Case = "reinforcement-$Case" } elseif ($TeamShop) { $Case = "team-shop-$Case" }
 $OutputDir = Join-Path $Repo "Saved/$TaskFolder/network-$Case"
 New-Item -ItemType Directory -Force -Path $OutputDir | Out-Null
 # 清除本用例的旧日志，避免新进程启动前误读上次 Pass。
@@ -22,6 +23,7 @@ try {
     if ($Defeat) { $Flags += '-DefenseSmokeDefeat' }
     if ($Choices) { $Flags += @('-DefenseChoiceSmoke','-DefenseSeed=831907') }
     if ($TeamShop) { $Flags += @('-DefenseTeamShopSmoke','-DefenseSeed=831907') }
+    if ($Reinforcement) { $Flags += @('-DefenseReinforcementSmoke','-DefenseSeed=831907') }
     $Arguments = @(('"' + $Project + '"'), '/Game/Combat/Demo/Defense/L_Defense', '-server', "-port=$Port", ('-abslog="' + $ServerLog + '"')) + $Flags
     $Processes += Start-Process -FilePath $Editor -ArgumentList $Arguments -WindowStyle Hidden -PassThru
     $Logs += $ServerLog

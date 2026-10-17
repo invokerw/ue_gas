@@ -303,6 +303,7 @@ void UDefenseDirectorComponent::Finish(bool bVictory, const FName Reason)
 	PhaseSchedule = MonitorSchedule = {};
 	if (Objective.IsValid()) Objective->GetCombatLifecycleComponent()->OnDied().RemoveAll(this);
 	ClearEnemies();
+	for(const auto& Pair:Players) UnbindHeroLifecycle(Pair.Value.Hero.Get());
 	ClearTeamShopEffects();
 	// 结果先冻结；终局不再授予死亡期间的奖励或恢复英雄。
 	for (auto& Pair : Players) { Pair.Value.PendingExperience = 0; Pair.Value.PendingAugments.Reset(); Pair.Value.PendingCards.Reset(); Pair.Value.CurrentOffer.bCancelled=true; }
@@ -335,8 +336,11 @@ bool UDefenseDirectorComponent::RegisterPlayer(ACombatPlayerController* Player, 
 		|| !IsValid(Hero) || Hero->GetWorld() != GetWorld() || Player->GetWorld() != GetWorld()
 		|| Hero->GetResourceOwnerPlayerController() != Player) return false;
 	if (Players.Contains(Player)) return Players.FindChecked(Player).Hero == Hero;
+	for(const auto& Pair:Players) if(Pair.Value.Hero.Get()==Hero) return false;
 	FDefensePlayerRecord Record; Record.Hero = Hero; Record.PlayerOrdinal = NextPlayerOrdinal++;
 	Players.Add(Player,Record);
+	Hero->GetCombatLifecycleComponent()->OnDied().AddUObject(this,&UDefenseDirectorComponent::OnHeroDied);
+	Hero->GetCombatLifecycleComponent()->OnRespawned().AddUObject(this,&UDefenseDirectorComponent::OnHeroRespawned);
 	if(!View.bWaitingForStart && RunData->AugmentPool) GenerateAugmentOffer(Players.FindChecked(Player),View.WaveIndex);
 	if(!ApplyTeamShopEffects(Hero)) { Finish(false,TEXT("TeamEffectFailed")); return false; }
 	PublishChoices();
@@ -346,17 +350,22 @@ bool UDefenseDirectorComponent::RegisterPlayer(ACombatPlayerController* Player, 
 void UDefenseDirectorComponent::RemovePlayer(ACombatPlayerController* Player)
 {
 	if (!GetOwner() || !GetOwner()->HasAuthority() || GetNetMode() == NM_Client) return;
-	if (auto* Record = Players.Find(Player))
+	FDefensePlayerRecord Removed;
+	if(Players.RemoveAndCopyValue(Player,Removed))
 	{
-		if (auto* Hero = Record->Hero.Get())
-			for (auto Handle : Record->AugmentHandles) Hero->GetCombatModifierComponent()->RemoveModifier(Handle);
+		if(auto* Hero=Removed.Hero.Get())
+		{
+			UnbindHeroLifecycle(Hero); RemoveHeroReinforcement(Hero);
+			for(auto Handle:Removed.AugmentHandles) Hero->GetCombatModifierComponent()->RemoveModifier(Handle);
+		}
+		++TeamShopRevision;
 	}
 	if(IsValid(Player))
 	{
 		if(auto* Choice=Player->FindComponentByClass<UDefenseChoiceComponent>()) Choice->ClearAuthority();
+		Player->GetCombatEconomyComponent()->RefreshShopOffers();
 	}
-	Players.Remove(Player);
-	if(IsValid(Player)) Player->GetCombatEconomyComponent()->RefreshShopOffers();
+	ExpireTeamShop(); PublishTeamShop();
 }
 bool UDefenseDirectorComponent::RewardWave()
 {
@@ -381,43 +390,58 @@ bool UDefenseDirectorComponent::RewardWave()
 }
 void UDefenseDirectorComponent::ServicePlayers(const double Now)
 {
-	for (auto& Pair : Players)
+	TArray<TWeakObjectPtr<ACombatPlayerController>> Keys; Players.GetKeys(Keys);
+	for(const auto& Key:Keys)
 	{
-		auto& R = Pair.Value; auto* Hero = R.Hero.Get();
-		if (!Pair.Key.IsValid() || !IsValid(Hero)) continue;
-		if (Hero->GetLifeState() == ECombatLifeState::Dead)
+		if(!IsCurrent(View.RunId,GetPhaseGeneration())) return;
+		auto* R=Players.Find(Key); auto* Hero=R?R->Hero.Get():nullptr;
+		if(!Key.IsValid()||!IsValid(Hero)||Hero->IsActorBeingDestroyed()) continue;
+		if(Hero->GetLifeState()==ECombatLifeState::Dead)
 		{
-			if (R.DeadLife != Hero->GetLifeGeneration())
-			{ R.DeadLife = Hero->GetLifeGeneration(); R.RespawnAt = Now + RunData->RespawnDelay; R.RespawnRetries = 0; }
-			if (Now < R.RespawnAt) continue;
+			// 已经死亡后才登记的英雄没有本局死亡事件，按普通等待处理，不追溯援军。
+			if(R->DeadLife!=Hero->GetLifeGeneration())
+			{ R->DeadLife=Hero->GetLifeGeneration(); R->RespawnAt=Now+RunData->RespawnDelay; R->RespawnRetries=0; }
+			if(Now<R->RespawnAt) continue;
 			FVector Safe;
-			if (!FindSafeLocation(*Hero, RunData->RespawnLocation, Safe)
-				|| !Hero->GetCombatLifecycleComponent()->RespawnAtLocation(Safe))
+			const bool Respawned=FindSafeLocation(*Hero,RunData->RespawnLocation,Safe)&&Hero->GetCombatLifecycleComponent()->RespawnAtLocation(Safe);
+			// 复活委托可以清空整局或移除当前玩家，禁止继续使用之前的容器引用。
+			if(!IsCurrent(View.RunId,GetPhaseGeneration())) return;
+			R=Players.Find(Key); if(!R||!IsValid(Hero)||Hero->IsActorBeingDestroyed()||R->Hero.Get()!=Hero) continue;
+			if(!Respawned)
 			{
-				if (++R.RespawnRetries > 10) { Finish(false, TEXT("RespawnBlocked")); return; }
-				R.RespawnAt = Now + 0.5; continue;
+				if(++R->RespawnRetries>10) { Finish(false,TEXT("RespawnBlocked")); return; }
+				R->RespawnAt=Now+0.5; continue;
 			}
-			R.DeadLife = 0;
+			if(Hero->GetLifeState()==ECombatLifeState::Alive) R->DeadLife=0;
 		}
-		if (Hero->GetLifeState() != ECombatLifeState::Alive) continue;
+		if(Hero->GetLifeState()!=ECombatLifeState::Alive) continue;
+		if(!ApplyPendingReinforcement(Hero)) { Finish(false,TEXT("ReinforcementEffectFailed")); return; }
+		if(!IsCurrent(View.RunId,GetPhaseGeneration())) return;
+		R=Players.Find(Key); if(!R||R->Hero.Get()!=Hero) continue;
 		if(!ApplyTeamShopEffects(Hero)) { Finish(false,TEXT("TeamEffectFailed")); return; }
-		if(!ApplyPendingCards(R)) { Finish(false,TEXT("AugmentFailed")); return; }
-		if (R.PendingExperience > 0)
+		if(!IsCurrent(View.RunId,GetPhaseGeneration())) return;
+		R=Players.Find(Key); if(!R||R->Hero.Get()!=Hero) continue;
+		if(!ApplyPendingCards(*R)) { Finish(false,TEXT("AugmentFailed")); return; }
+		if(!IsCurrent(View.RunId,GetPhaseGeneration())) return;
+		R=Players.Find(Key); if(!R||R->Hero.Get()!=Hero) continue;
+		if(R->PendingExperience>0)
 		{
-			const int32 XP = R.PendingExperience; R.PendingExperience = 0;
-			if (!Hero->GetCombatProgressionComponent()->AddExperience(XP)) { Finish(false, TEXT("ExperienceFailed")); return; }
+			const int32 XP=R->PendingExperience; R->PendingExperience=0;
+			if(!Hero->GetCombatProgressionComponent()->AddExperience(XP)) { Finish(false,TEXT("ExperienceFailed")); return; }
+			if(!IsCurrent(View.RunId,GetPhaseGeneration())) return;
+			R=Players.Find(Key); if(!R||R->Hero.Get()!=Hero) continue;
 		}
-		const auto Pending = MoveTemp(R.PendingAugments);
-		R.PendingAugments.Reset();
-		for (const auto& Augment : Pending)
+		const auto Pending=MoveTemp(R->PendingAugments); R->PendingAugments.Reset();
+		for(const auto& Augment:Pending)
 		{
-			FCombatModifierApplyRequest Request;
-			Request.ModifierData = Augment.Get(); Request.Source = Hero;
-			const auto Applied = Hero->GetCombatModifierComponent()->ApplyModifier(Request);
-			if (!Applied.bSuccess) { Finish(false, TEXT("AugmentFailed")); return; }
-			R.AugmentHandles.Add(Applied.Handle);
+			FCombatModifierApplyRequest Request; Request.ModifierData=Augment.Get(); Request.Source=Hero;
+			const auto Applied=Hero->GetCombatModifierComponent()->ApplyModifier(Request);
+			R=Players.Find(Key);
+			if(!IsCurrent(View.RunId,GetPhaseGeneration())||!R||R->Hero.Get()!=Hero)
+			{ if(IsValid(Hero)) Hero->GetCombatModifierComponent()->RemoveModifier(Applied.Handle); return; }
+			if(!Applied.bSuccess) { Finish(false,TEXT("AugmentFailed")); return; }
+			R->AugmentHandles.Add(Applied.Handle);
 		}
-		R.PendingAugments.Reset();
 	}
 }
 void UDefenseDirectorComponent::Shutdown()
@@ -428,6 +452,7 @@ void UDefenseDirectorComponent::Shutdown()
 	PhaseSchedule = MonitorSchedule = {};
 	if (Objective.IsValid()) Objective->GetCombatLifecycleComponent()->OnDied().RemoveAll(this);
 	ClearEnemies();
+	for(const auto& Pair:Players) UnbindHeroLifecycle(Pair.Value.Hero.Get());
 	ClearTeamShopEffects(true);
 	TArray<TWeakObjectPtr<ACombatPlayerController>> RemovedPlayers;
 	Players.GetKeys(RemovedPlayers);

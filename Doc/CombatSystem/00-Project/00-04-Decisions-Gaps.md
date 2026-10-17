@@ -463,3 +463,10 @@ DEF-007 0.2 追加：同步获得效果在应用 Modifier 前读取组件是否�
 - 状态：待独立内核修复；本地可信调用者误用边界，不是客户端新入口。
 - DEF-007 core-green1.log 的夹具主动以世界F的 DamageSubsystem 请求伤害世界G的核心：护盾被耗尽，后续G世界伤害未形成正确死亡凭证。入口目前没有显式校验 Source/Target 与 Subsystem 同 World，事件与属性回报归属可能不一致。
 - 防守商品仍检查玩家/收件人同World，效果只操作导演自身核心；正式实现不会发送上述请求。本轮移除不合法夹具调用，保留正常死亡、跨World领取拒绝测试；后续独立Spec统一Damage/Heal/Modifier可信API跨World边界和全量回归。
+
+
+### ADR-075：援军次数与特定复活生命绑定（2026-10-16；DEF-008）
+
+正式援军印记使用新CombatItem身份，替换防守目录的魔法加固原型；原获得即用/经济RPC与每局限购不变。购买后按已登记英雄的真实死亡委托顺序分配两次救援，排除购买时已Dead/Dying的生命；重复或旧生命事件不重复消耗。预留绑定Hero和DeathLife，仅在DeathLife+1复活时领取20%最大生命、4秒护盾，已预留后断线不退团队次数。复活延迟按死亡事件时刻计算max(0,原等待−3)，仍由原Monitor执行安全复活。
+
+共享UDefenseShieldRuntime承接已有吸收逻辑；UDefenseCoreShieldRuntime保留类身份作为子类，旧屏障资产无需重命名。援军状态复用原ShopOffer.Status、英雄护盾复用ModifierView，不新增网络字段/schema或伤害结算旁路。Director负责两类生命周期委托与精确句柄清理，公开调用后重查玩家记录，避免重入使引用失效。见 [DEF-008](../Specs/DEF-008-defense-reinforcement.spec.md)。

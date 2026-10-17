@@ -31,6 +31,15 @@ private:
 	void ExerciseChoices();
 	/** 双客户端争购、同载荷重放、战斗期拒绝及共享效果到期验证。 */
 	void ExerciseTeamShop();
+	/** 显式援军测试：真实RPC争购，三次死亡5/5/8秒与两次4秒护盾复制。 */
+	void ExerciseReinforcement();
+	int32 AidDeaths=0,AidRevivals=0,AidExpiries=0,AidAttemptRevision=0;
+	bool bAidTwo=false,bAidOne=false,bAidZero=false,bAidExpired=false;
+	TSet<FString> AidClientShields;
+	TWeakObjectPtr<ACombatUnitCharacter> AidHero,AidProtectedHero;
+	uint32 AidDeathLife=0;
+	double AidDeathAt=0,AidShieldExpires=0;
+	FCombatModifierHandle AidShieldHandle;
 	int32 ShopAttemptRevision=0;
 	int32 ShopClosedRequestId=0;
 	bool bShopActiveSeen=false,bShopSupplySeen=false,bShopExpiredSeen=false,bShopClosedSent=false,bShopClosedRejected=false;

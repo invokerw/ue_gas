@@ -36,6 +36,10 @@ struct FDefenseTeamPurchaseRecord
 	bool bEffectActive=false;
 	/** 1-based 最后覆盖波，清场后到期。 */
 	int32 ExpireWave=0;
+	/** 尚未分配给新死亡的次数；已分配后断线或终局不退款。 */
+	int32 RemainingReinforcements=0;
+	/** 购买时已经Dead/Dying的生命不追溯；只保留本局弱引用。 */
+	TMap<TWeakObjectPtr<ACombatUnitCharacter>,uint32> ExcludedDeaths;
 	FString BuyerName;
 	TArray<FDefenseTeamAppliedModifier> AppliedModifiers;
 	FCombatSourceContext Source;
@@ -53,6 +57,9 @@ struct FDefensePlayerRecord
 	uint32 DeadLife = 0;
 	double RespawnAt = 0;
 	int32 RespawnRetries = 0;
+	/** 救援凭证绑定某次死亡，只允许紧接着的新生命领取一次。 */
+	FPrimaryAssetId PendingReinforcement;
+	uint32 ReinforcementDeathLife=0;
 	/** 按服务器加入顺序分配，不依赖 UObject 地址。 */
 	int32 PlayerOrdinal = INDEX_NONE;
 	int32 LastOfferWave = INDEX_NONE;
@@ -61,8 +68,6 @@ struct FDefensePlayerRecord
 	TArray<FDefenseChoiceReceipt> ChoiceResults;
 	int32 HighRequestId = 0;
 	int32 RerollsUsed = 0;
-	/** 团队商店回执按玩家隔离缓存；同 RequestId 换完整载荷只能拒绝。 */
-
 	TArray<FPrimaryAssetId> PreviousUnchosen;
 	TArray<FPrimaryAssetId> ChosenCards;
 	TSet<FPrimaryAssetId> PendingCards;
@@ -151,6 +156,18 @@ private:
 	bool RewardWave();
 	/** 尝试安全复活并兑现待领状态；终局不再复活或补奖。 */
 	void ServicePlayers(double Now);
+	/** 死亡事件先锁生命代次和等待截止，再消耗至多一次团队援军；不在死亡栈内复活。 */
+	void OnHeroDied(ACombatUnitCharacter* Hero,const FCombatEventContext& Cause);
+	/** 复活后领取与上一死亡绑定的护盾；旧生命、终局或已消费凭证不重复执行。 */
+	void OnHeroRespawned(ACombatUnitCharacter* Hero,const FCombatEventContext& Cause);
+	/** 唯一援军待领入口；Hook内保留待领由Monitor重试，失败且当前生命仍合法时返回false。 */
+	bool ApplyPendingReinforcement(ACombatUnitCharacter* Hero);
+	/** 统计指定团队道具尚未兑现的复活凭证，只供状态投影。 */
+	int32 CountPendingReinforcements(FPrimaryAssetId ItemId) const;
+	/** 断线撤销该英雄的短盾，不退次数、不影响其他英雄。 */
+	void RemoveHeroReinforcement(ACombatUnitCharacter* Hero);
+	/** 登记解除、终局与Shutdown共用的幂等委托解绑。 */
+	void UnbindHeroLifecycle(ACombatUnitCharacter* Hero);
 	/** 生成固定种子下的三张合法候选。 */
 	bool GenerateAugmentOffer(FDefensePlayerRecord& Record, int32 WaveIndex);
 	/** 返回当前玩家是否持有某个 DefinitionId。 */

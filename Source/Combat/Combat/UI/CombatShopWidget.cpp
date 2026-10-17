@@ -401,7 +401,7 @@ FText UCombatShopWidget::BuildItemToolTip(const UCombatItemData& Item) const
 		if(const auto* Economy=GetEconomy()) if(const auto* Offer=Economy->FindShopOffer(Item.GetPrimaryAssetId()))
 		{
 			Description+=TEXT("\n")+Offer->Status.ToString();
-			if(Offer->RemainingPurchases>=0) Description+=FString::Printf(TEXT(" · 剩余 %d 次"),Offer->RemainingPurchases);
+			if(Offer->RemainingPurchases>=0) Description+=FString::Printf(TEXT(" · 剩余购买 %d 次"),Offer->RemainingPurchases);
 			if(!Offer->RecipientName.IsEmpty()) Description+=TEXT("\n领取者：")+Offer->RecipientName;
 			if(Offer->ExpireWave>0) Description+=FString::Printf(TEXT("\n第 %d 波清场结束%s"),Offer->ExpireWave,Offer->bEffectActive?TEXT(" · 生效中"):TEXT(""));
 		}

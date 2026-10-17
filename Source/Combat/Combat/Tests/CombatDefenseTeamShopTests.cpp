@@ -37,6 +37,10 @@ struct FDefenseTeamShopTestAccess
 		const auto* Record=D->TeamPurchaseLedger.Find(Id);
 		return Record&&!Record->AppliedModifiers.IsEmpty()?Record->AppliedModifiers[0].Handle:FCombatModifierHandle();
 	}
+	static int32 AidLeft(UDefenseDirectorComponent* D,FPrimaryAssetId Id) { const auto* R=D->TeamPurchaseLedger.Find(Id); return R?R->RemainingReinforcements:0; }
+	static double RespawnAt(UDefenseDirectorComponent* D,ACombatPlayerController* P) { return D->Players.FindChecked(P).RespawnAt; }
+	static void DiedAgain(UDefenseDirectorComponent* D,ACombatUnitCharacter* H) { D->OnHeroDied(H,FCombatEventContext()); }
+	static void RespawnedAgain(UDefenseDirectorComponent* D,ACombatUnitCharacter* H) { D->OnHeroRespawned(H,FCombatEventContext()); }
 	static int32 Ledger(UDefenseDirectorComponent* D) { return D->TeamPurchaseLedger.Num(); }
 	static int32 Cache(UDefenseDirectorComponent* D,ACombatPlayerController* PC) { return PC->GetCombatEconomyComponent()->GetAcquireReceiptCount(); }
 };
@@ -86,6 +90,15 @@ namespace DefenseTeamShopTests
 			auto* M=NewObject<UCombatModifierData>(E); M->DefinitionName=TEXT("core_barrier_effect");
 			M->RuntimeClass=UDefenseCoreShieldRuntime::StaticClass(); M->DispelRule=ECombatModifierDispelRule::NotDispellable;
 			E->CoreShieldData=M; Items[0]->PurchasePrice=220;
+		}
+		/** 通过正式获得效果配置援军，测试仍从原经济入口购买。 */
+		void ConfigureReinforcement()
+		{
+			auto* E=Effects[0]; E->ModifierData=nullptr; E->DurationWaves=0;
+			E->ReinforcementDeaths=2; E->RespawnReduction=3; E->RespawnShieldFraction=.2f;
+			auto* M=NewObject<UCombatModifierData>(E); M->DefinitionName=TEXT("reinforcement_test_shield");
+			M->RuntimeClass=UDefenseShieldRuntime::StaticClass(); M->Duration=4; M->DispelRule=ECombatModifierDispelRule::NotDispellable;
+			E->ReinforcementShieldData=M; Items[0]->PurchasePrice=200;
 		}
 		/** 初始化经济及控制绑定，任何失败都带诊断，禁止仅返回 false 隐藏夹具问题。 */
 		bool Start(FAutomationTestBase& Test)
@@ -436,5 +449,178 @@ bool FDefenseCoreShieldOwnerEndPlayTest::RunTest(const FString&)
 	TestTrue(TEXT("Actual core EndPlay exercised"),Destroyed);
 	TestEqual(TEXT("Lost core refunds purchase"),F.Players[0]->GetCombatEconomyComponent()->GetGold(),int64(500));
 	TestEqual(TEXT("Lost core creates no purchase ledger"),FDefenseTeamShopTestAccess::Ledger(F.Director),0); return true;
+}
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDefenseReinforcementPurchaseTest,"Combat.Defense.Reinforcement.PurchaseAndRevival",DefenseTeamShopTests::Flags)
+bool FDefenseReinforcementPurchaseTest::RunTest(const FString&)
+{
+	DefenseTeamShopTests::FFixture F; F.ConfigureReinforcement(); if(!F.Start(*this)) return false;
+	const auto Id=F.Items[0]->GetPrimaryAssetId(); const auto R=F.Request(); const auto Rival=F.Request(1,0,1);
+	TestTrue(TEXT("Reinforcement bought from original economy"),F.Buy(F.Players[0],R).bSuccess);
+	TestTrue(TEXT("Same request receipt"),F.Buy(F.Players[0],R).bSuccess);
+	TestFalse(TEXT("Competing purchase rejected"),F.Buy(F.Players[1],Rival).bSuccess);
+	TestEqual(TEXT("One200 charge"),F.Players[0]->GetCombatEconomyComponent()->GetGold(),int64(300));
+	TestEqual(TEXT("Two initial reinforcements"),FDefenseTeamShopTestAccess::AidLeft(F.Director,Id),2);
+	auto* Hero=F.Players[0]->GetCommandedUnit(); F.Damage(Hero,100000);
+	TestEqual(TEXT("First death takes one charge"),FDefenseTeamShopTestAccess::AidLeft(F.Director,Id),1);
+	TestEqual(TEXT("Default8 reduced to5"),FDefenseTeamShopTestAccess::RespawnAt(F.Director,F.Players[0])-F.World.GetWorld()->GetTimeSeconds(),5.0);
+	FDefenseTeamShopTestAccess::DiedAgain(F.Director,Hero);
+	TestEqual(TEXT("Repeated death event cannot take another"),FDefenseTeamShopTestAccess::AidLeft(F.Director,Id),1);
+	TestTrue(TEXT("Pending rescue visible"),F.Director->BuildTeamItemOffer(F.Players[0],Id).Status.ToString().Contains(TEXT("等待复活 1 人")));
+	CombatEffectUtilities::ApplyAttributeAdditive(Hero,*Hero->GetCombatAbilitySystemComponent(),UCombatAttributeSet::GetMaxHealthAttribute(),100);
+	const float Amount=Hero->GetCombatAttributeSet()->GetMaxHealth()*.2f;
+	TestTrue(TEXT("Public respawn"),Hero->GetCombatLifecycleComponent()->RespawnAtLocation(FVector(1000,0,100)));
+	const auto Handle=FDefenseTeamShopTestAccess::FirstHandle(F.Director,Id);
+	auto* Shield=Cast<UDefenseShieldRuntime>(Hero->GetCombatModifierComponent()->FindRuntime(Handle));
+	if(!TestNotNull(TEXT("Respawn grants shield"),Shield)) return false;
+	TestEqual(TEXT("Shield snapshots respawn max health"),Shield->GetRemainingShield(),Amount);
+	TestEqual(TEXT("Shield uses four second Scheduler duration"),Shield->GetExpireAt()-Shield->GetAppliedAt(),4.0);
+	const double ExpireAt=Shield->GetExpireAt(); FDefenseTeamShopTestAccess::RespawnedAgain(F.Director,Hero); FDefenseTeamShopTestAccess::Service(F.Director);
+	TestEqual(TEXT("Repeated respawn does not duplicate shield"),Hero->GetCombatModifierComponent()->GetActiveModifierCount(),1);
+	TestEqual(TEXT("Repeated respawn does not refresh duration"),Shield->GetExpireAt(),ExpireAt);
+	const float Health=Hero->GetCombatAttributeSet()->GetHealth(); F.Damage(Hero,10);
+	TestEqual(TEXT("Shield absorbs actual damage"),Hero->GetCombatAttributeSet()->GetHealth(),Health);
+	F.World.GetWorld()->GetSubsystem<UCombatSchedulerSubsystem>()->RunDueTasks(ExpireAt+.01);
+	FDefenseTeamShopTestAccess::Refresh(F.Director);
+	TestNull(TEXT("Timed shield removed"),Hero->GetCombatModifierComponent()->FindRuntime(Handle));
+	TestFalse(TEXT("Old handle stays invalid"),Hero->GetCombatModifierComponent()->RemoveModifier(Handle));
+	TestTrue(TEXT("Unused charge stays across expiry"),F.Director->BuildTeamItemOffer(F.Players[0],Id).bEffectActive); return true;
+}
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDefenseReinforcementThreeDeathsTest,"Combat.Defense.Reinforcement.ThreeDeathsAndWavePersistence",DefenseTeamShopTests::Flags)
+bool FDefenseReinforcementThreeDeathsTest::RunTest(const FString&)
+{
+	DefenseTeamShopTests::FFixture F; F.ConfigureReinforcement(); if(!F.Start(*this)) return false;
+	const auto Id=F.Items[0]->GetPrimaryAssetId(); TestTrue(TEXT("Purchase"),F.Buy(F.Players[0],F.Request()).bSuccess);
+	FDefenseTeamShopTestAccess::Phase(F.Director,EDefensePhase::Intermission,1);
+	TestEqual(TEXT("Charges persist across waves"),FDefenseTeamShopTestAccess::AidLeft(F.Director,Id),2);
+	auto* Hero=F.Players[0]->GetCommandedUnit();
+	for(int32 I=0;I<3;++I)
+	{
+		F.Damage(Hero,100000);
+		TestEqual(TEXT("Only next two deaths consume charges"),FDefenseTeamShopTestAccess::AidLeft(F.Director,Id),FMath::Max(0,1-I));
+		TestEqual(TEXT("Delays5/5/8"),FDefenseTeamShopTestAccess::RespawnAt(F.Director,F.Players[0])-F.World.GetWorld()->GetTimeSeconds(),I<2?5.0:8.0);
+		TestTrue(TEXT("Successive public respawn"),Hero->GetCombatLifecycleComponent()->RespawnAtLocation(FVector(1000,0,100)));
+		TestEqual(TEXT("No shield on third revival"),Hero->GetCombatModifierComponent()->GetActiveModifierCount(),I<2?1:0);
+		FDefenseTeamShopTestAccess::Refresh(F.Director);
+	}
+	TestFalse(TEXT("Exhausted reinforcement not active"),F.Director->BuildTeamItemOffer(F.Players[0],Id).bEffectActive);
+	TestFalse(TEXT("Cannot buy same item again"),F.Buy(F.Players[0],F.Request(2)).bSuccess); return true;
+}
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDefenseReinforcementPreexistingTest,"Combat.Defense.Reinforcement.PreexistingDeathAndLogReentry",DefenseTeamShopTests::Flags)
+bool FDefenseReinforcementPreexistingTest::RunTest(const FString&)
+{
+	for(bool InDeathLog:{false,true})
+	{
+		DefenseTeamShopTests::FFixture F; F.ConfigureReinforcement(); if(!F.Start(*this)) return false;
+		auto* Hero=F.Players[0]->GetCommandedUnit(); const auto Id=F.Items[0]->GetPrimaryAssetId();
+		auto* Events=F.World.GetWorld()->GetSubsystem<UCombatEventSubsystem>(); bool Bought=false;
+		const auto Hook=Events->OnRecord().AddLambda([&](const FCombatLogRecord& Record)
+		{
+			if(InDeathLog&&!Bought&&Record.EventType==CombatTags::Event_Combat_UnitDeath&&Record.TargetActorId==Hero->GetUniqueID())
+			{ Bought=true; TestTrue(TEXT("Can purchase while newly dead"),F.Buy(F.Players[0],F.Request()).bSuccess); }
+		});
+		F.Damage(Hero,100000); Events->OnRecord().Remove(Hook);
+		if(!InDeathLog) TestTrue(TEXT("Dead buyer purchase"),F.Buy(F.Players[0],F.Request()).bSuccess);
+		else TestTrue(TEXT("Death log observer really ran"),Bought);
+		TestEqual(TEXT("Already dead is not retroactively shortened"),FDefenseTeamShopTestAccess::RespawnAt(F.Director,F.Players[0])-F.World.GetWorld()->GetTimeSeconds(),8.0);
+		TestEqual(TEXT("Two charges preserved"),FDefenseTeamShopTestAccess::AidLeft(F.Director,Id),2);
+		TestTrue(TEXT("Old death respawn"),Hero->GetCombatLifecycleComponent()->RespawnAtLocation(FVector(1000,0,100)));
+		TestEqual(TEXT("No shield for old death"),Hero->GetCombatModifierComponent()->GetActiveModifierCount(),0);
+		F.Damage(Hero,100000); TestEqual(TEXT("Next new death eligible"),FDefenseTeamShopTestAccess::AidLeft(F.Director,Id),1);
+	}
+	return true;
+}
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDefenseReinforcementDisconnectTest,"Combat.Defense.Reinforcement.DisconnectAndTeardown",DefenseTeamShopTests::Flags)
+bool FDefenseReinforcementDisconnectTest::RunTest(const FString&)
+{
+	DefenseTeamShopTests::FFixture F; F.ConfigureReinforcement(); if(!F.Start(*this)) return false;
+	const auto Id=F.Items[0]->GetPrimaryAssetId(); TestTrue(TEXT("Buy"),F.Buy(F.Players[0],F.Request()).bSuccess);
+	auto* Buyer=F.Players[0]->GetCommandedUnit(); F.Director->RemovePlayer(F.Players[0]);
+	TestFalse(TEXT("Buyer death delegate unbound"),Buyer->GetCombatLifecycleComponent()->OnDied().IsBoundToObject(F.Director));
+	auto* Hero=F.Players[1]->GetCommandedUnit(); F.Damage(Hero,100000);
+	TestEqual(TEXT("Buyer departure preserves teammate rescue"),FDefenseTeamShopTestAccess::AidLeft(F.Director,Id),1);
+	TestTrue(TEXT("Teammate respawn"),Hero->GetCombatLifecycleComponent()->RespawnAtLocation(FVector(1000,300,100)));
+	TestEqual(TEXT("Teammate protected"),Hero->GetCombatModifierComponent()->GetActiveModifierCount(),1);
+	F.Director->RemovePlayer(F.Players[1]);
+	TestEqual(TEXT("Disconnected receiver shield removed"),Hero->GetCombatModifierComponent()->GetActiveModifierCount(),0);
+	TestEqual(TEXT("Spent charge not refunded"),FDefenseTeamShopTestAccess::AidLeft(F.Director,Id),1);
+	TestFalse(TEXT("Receiver respawn delegate unbound"),Hero->GetCombatLifecycleComponent()->OnRespawned().IsBoundToObject(F.Director));
+	F.Director->Shutdown(); F.Director->Shutdown(); TestEqual(TEXT("Ledger cleared"),FDefenseTeamShopTestAccess::Ledger(F.Director),0); return true;
+}
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDefenseReinforcementTerminalTest,"Combat.Defense.Reinforcement.PendingTerminalAndApplyReentry",DefenseTeamShopTests::Flags)
+bool FDefenseReinforcementTerminalTest::RunTest(const FString&)
+{
+	for(int32 Case=0;Case<3;++Case)
+	{
+		DefenseTeamShopTests::FFixture F; F.ConfigureReinforcement(); if(!F.Start(*this)) return false;
+		TestTrue(TEXT("Buy"),F.Buy(F.Players[0],F.Request()).bSuccess); auto* Hero=F.Players[0]->GetCommandedUnit();
+		F.Damage(Hero,100000); bool Changed=false;
+		FDelegateHandle Delegate;
+		if(Case==0) FDefenseTeamShopTestAccess::Finish(F.Director);
+		else Delegate=Hero->GetCombatModifierComponent()->OnModifierCollectionChanged().AddLambda([&]
+		{ if(!Changed) { Changed=true; if(Case==1) F.Director->Shutdown(); else F.Director->RemovePlayer(F.Players[0]); } });
+		TestTrue(TEXT("Lifecycle itself still respawns"),Hero->GetCombatLifecycleComponent()->RespawnAtLocation(FVector(1000,0,100)));
+		if(Delegate.IsValid()) Hero->GetCombatModifierComponent()->OnModifierCollectionChanged().Remove(Delegate);
+		if(Case>0) TestTrue(TEXT("Real application observer executed"),Changed);
+		TestEqual(TEXT("No shield leaks from canceled recipient"),Hero->GetCombatModifierComponent()->GetActiveModifierCount(),0);
+		TestFalse(TEXT("Canceled lifecycle delegate removed"),Hero->GetCombatLifecycleComponent()->OnRespawned().IsBoundToObject(F.Director));
+	}
+	return true;
+}
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDefenseReinforcementValidationTest,"Combat.Defense.Reinforcement.ValidationAndFrozenGC",DefenseTeamShopTests::Flags)
+bool FDefenseReinforcementValidationTest::RunTest(const FString&)
+{
+	DefenseTeamShopTests::FFixture F; F.ConfigureReinforcement(); FString Error; auto* E=F.Effects[0];
+	TestTrue(TEXT("Valid aid"),E->ValidateDefinition(Error));
+	E->ReinforcementDeaths=9; TestFalse(TEXT("Counts bounded"),E->ValidateDefinition(Error)); E->ReinforcementDeaths=2;
+	E->RespawnReduction=NAN; TestFalse(TEXT("Finite reduction"),E->ValidateDefinition(Error)); E->RespawnReduction=3;
+	E->RespawnShieldFraction=1.01f; TestFalse(TEXT("Fraction bounded"),E->ValidateDefinition(Error)); E->RespawnShieldFraction=.2f;
+	E->ReinforcementShieldData->Duration=0; TestFalse(TEXT("Infinite revival shield forbidden"),E->ValidateDefinition(Error)); E->ReinforcementShieldData->Duration=4;
+	E->ObjectiveHeal=10; TestFalse(TEXT("Combined partial commit forbidden"),E->ValidateDefinition(Error)); E->ObjectiveHeal=0;
+	if(!F.Start(*this)) return false;
+	const auto Request=F.Request(); auto* Hero=F.Players[0]->GetCommandedUnit();
+	E->RespawnReduction=1; E->RespawnShieldFraction=.9f; E->ReinforcementShieldData->Duration=30;
+	CollectGarbage(RF_NoFlags); TestTrue(TEXT("Frozen definitions retained"),F.Buy(F.Players[0],Request).bSuccess);
+	F.Damage(Hero,100000);
+	TestEqual(TEXT("Frozen reduction remains3"),FDefenseTeamShopTestAccess::RespawnAt(F.Director,F.Players[0])-F.World.GetWorld()->GetTimeSeconds(),5.0);
+	TestTrue(TEXT("Frozen revival"),Hero->GetCombatLifecycleComponent()->RespawnAtLocation(FVector(1000,0,100)));
+	const auto Handle=FDefenseTeamShopTestAccess::FirstHandle(F.Director,Request.ItemDefinitionId);
+	const auto* Shield=Cast<UDefenseShieldRuntime>(Hero->GetCombatModifierComponent()->FindRuntime(Handle));
+	if(!TestNotNull(TEXT("Frozen shield applied"),Shield)) return false;
+	TestEqual(TEXT("Frozen percentage"),Shield->GetRemainingShield(),Hero->GetCombatAttributeSet()->GetMaxHealth()*.2f);
+	TestEqual(TEXT("Frozen duration"),Shield->GetExpireAt()-Shield->GetAppliedAt(),4.0); return true;
+}
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDefenseReinforcementOldDeathTest,"Combat.Defense.Reinforcement.OldDeathAfterReregister",DefenseTeamShopTests::Flags)
+bool FDefenseReinforcementOldDeathTest::RunTest(const FString&)
+{
+	DefenseTeamShopTests::FFixture F; F.ConfigureReinforcement(); if(!F.Start(*this)) return false;
+	auto* Hero=F.Players[0]->GetCommandedUnit(); F.Damage(Hero,100000);
+	TestTrue(TEXT("Purchase after death"),F.Buy(F.Players[1],F.Request(1,0,1)).bSuccess);
+	F.Director->RemovePlayer(F.Players[0]); TestTrue(TEXT("Preparation reregisters same hero"),F.Director->RegisterPlayer(F.Players[0],Hero));
+	FDefenseTeamShopTestAccess::DiedAgain(F.Director,Hero);
+	TestEqual(TEXT("Old life exclusion survives registration churn"),FDefenseTeamShopTestAccess::AidLeft(F.Director,F.Items[0]->GetPrimaryAssetId()),2); return true;
+}
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDefenseReinforcementDeferredTest,"Combat.Defense.Reinforcement.RespawnInsideHookDefersSafely",DefenseTeamShopTests::Flags)
+bool FDefenseReinforcementDeferredTest::RunTest(const FString&)
+{
+	DefenseTeamShopTests::FFixture F; F.ConfigureReinforcement(); if(!F.Start(*this)) return false;
+	TestTrue(TEXT("Purchase"),F.Buy(F.Players[0],F.Request()).bSuccess); auto* Hero=F.Players[0]->GetCommandedUnit();
+	auto* M=NewObject<UCombatModifierData>(Hero); M->DefinitionName=TEXT("aid_reflection_fixture"); M->RuntimeClass=UCombatDamageReflectionRuntime::StaticClass(); M->RuntimeParameters.Add(TEXT("reflection_pct"),.1f);
+	FCombatModifierApplyRequest Apply; Apply.ModifierData=M; Apply.Source=Hero; TestTrue(TEXT("Reflection applied"),Hero->GetCombatModifierComponent()->ApplyModifier(Apply).bSuccess);
+	auto* Events=F.World.GetWorld()->GetSubsystem<UCombatEventSubsystem>(); bool Ran=false;
+	const auto Delegate=Events->OnRecord().AddLambda([&](const FCombatLogRecord& R)
+	{
+		if(!Ran&&R.EventType==CombatTags::Event_Combat_DamageApplied&&R.Flags.HasTagExact(CombatTags::Damage_Flag_Reflection))
+		{
+			Ran=true; TestTrue(TEXT("Hero hook is deferring"),Hero->GetCombatModifierComponent()->IsDeferringOperations());
+			TestTrue(TEXT("Public death inside observer"),Hero->GetCombatLifecycleComponent()->RequestDeath(R.Context,nullptr));
+			TestTrue(TEXT("Public revival inside observer"),Hero->GetCombatLifecycleComponent()->RespawnAtLocation(FVector(1000,0,100)));
+		}
+	});
+	FCombatDamageRequest Damage; Damage.Source=F.Core; Damage.Target=Hero; Damage.Amount=10; Damage.DamageType=ECombatDamageType::Pure;
+	F.World.GetWorld()->GetSubsystem<UCombatDamageSubsystem>()->DealDamage(Damage); Events->OnRecord().Remove(Delegate);
+	TestTrue(TEXT("Actual nested hook tested"),Ran);
+	TestEqual(TEXT("No queued orphan shield"),Hero->GetCombatModifierComponent()->GetActiveModifierCount(),0);
+	FDefenseTeamShopTestAccess::Service(F.Director); TestEqual(TEXT("Next monitor grants exactly one shield"),Hero->GetCombatModifierComponent()->GetActiveModifierCount(),1);
+	TestEqual(TEXT("One death charged once"),FDefenseTeamShopTestAccess::AidLeft(F.Director,F.Items[0]->GetPrimaryAssetId()),1); return true;
 }
 #endif

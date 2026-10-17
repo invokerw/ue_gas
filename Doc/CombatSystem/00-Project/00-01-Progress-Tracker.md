@@ -360,6 +360,7 @@ HUD-ABILITY-CLICK-001/002 追加验收状态：`用户已验收`（2026-09-14）
 
 | DEF-006 | 复用既有商店与物品获得即使用 | 已验收 | 0.2 F0 GO/F1 APPROVED/F2 PASS/Push-Ready READY；六件商品迁回原 CombatShop/经济 RPC，公共同步获得即用覆盖购买/拾取/奖励，移除独立商店。三 Target、205 独立用例、93 资产、原 UI 渲染 PIE、防守双客户端六波、旧物品争抢/64-256 容量、300 秒经济 soak、733 包 cook 与 delivery Gate 通过；本次授权合并提交，见 [Spec](../Specs/DEF-006-reuse-shop-use-on-acquire.spec.md)；用户于2026-10-16要求“提交，并进行下一步” |
 | DEF-007 | 正式团队道具：核心屏障与应急石 | 已验收 | 0.2 F0 GO/F1 APPROVED/F2 PASS/Push-Ready READY；原商店替换两件，屏障Hook/比例修复/RunView schema3；三Target、213独立测试（207非PIE+6渲染PIE）、96资产、双客户端六波护盾吸收/耗尽/账本、736包Cook及文档/交付门通过。保留GAP-030/031；本次授权合并提交，见 [Spec](../Specs/DEF-007-defense-core-rescue.spec.md)；用户于2026-10-16要求“提交，并进行下一步” |
+| DEF-008 | 正式援军印记与复活保护 | 已验收 | 前序版本已提交ff418a2；0.1 F0 GO/F1 APPROVED/F2 PASS/Push-Ready READY。原商店200金币、两次复活缩短3秒/20%四秒盾；三Target、222用例（215非PIE+7渲染PIE）、98资产、两组双客户端六波（实测5.094/5.114/8.041秒）、738包Cook及文档/交付门通过；用户于2026-10-17确认验收完成并授权本地提交，未推送，见 [Spec](../Specs/DEF-008-defense-reinforcement.spec.md) |
 
 ## 13. 用户验收记录
 
@@ -514,6 +515,8 @@ HUD-ABILITY-CLICK-001/002 追加验收状态：`用户已验收`（2026-09-14）
 | 2026-10-15 | 用户确认 DEF-002 Phase 1 验收完成并要求提交，授权继续下一阶段；DEF-003 Phase 2 Spec 将独立建立并重新走 Gate | post-M8 防守 / DEF-002 → DEF-003 |
 
 | 2026-10-16 | 完成 DEF-004：12 原型卡、个人三选一/重抽/永久 Modifier、死亡超时默认与复活、开发种子开始面板；三 Target、188 项分进程回归、81 资产、721 包 cook、真实 Slate 按钮 PIE、双客户端六波/重复信封/余额/24 属性对照通过。保留 GAP-030 动态 GE 定义诊断，待用户验收，未提交推送 | post-M8 防守 / DEF-004 |
+| 2026-10-17 | 用户确认 DEF-008 援军印记与复活保护验收完成并要求提交；授权本地 Git 提交，不推送远端 | post-M8 防守 / DEF-008 已验收 / 本地提交授权 |
+
 
 ## 15. 更新规则
 

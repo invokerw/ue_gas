@@ -33,10 +33,10 @@ bool UDefenseDirectorComponent::InitializeTeamItems(UCombatShopData* Shop)
 	TSet<FPrimaryAssetId> Effects;
 	if(RunData->AugmentPool) for(const UDefenseAugmentData* Card:RunData->AugmentPool->Augments) Effects.Add(Card->ModifierData->GetPrimaryAssetId());
 	for(const UDefenseWaveData* Wave:RunData->Waves) if(Wave->FixedAugment) Effects.Add(Wave->FixedAugment->GetPrimaryAssetId());
-	TArray<UCombatItemData*> Team; bool bHasCoreShield=false;
+	TArray<UCombatItemData*> Team; bool bHasCoreShield=false,bHasReinforcement=false;
 	for(auto* Item:Catalog) if(Item->bUseOnAcquire) if(auto* Effect=Cast<UDefenseTeamItemEffect>(Item->AcquireEffect))
 	{
-		const auto* Data=Effect->CoreShieldData?Effect->CoreShieldData.Get():Effect->ModifierData.Get();
+		const auto* Data=Effect->ReinforcementShieldData?Effect->ReinforcementShieldData.Get():(Effect->CoreShieldData?Effect->CoreShieldData.Get():Effect->ModifierData.Get());
 		if(Data)
 		{
 			if(Effects.Contains(Data->GetPrimaryAssetId())) return false;
@@ -44,6 +44,7 @@ bool UDefenseDirectorComponent::InitializeTeamItems(UCombatShopData* Shop)
 		}
 		// 一个目录只能提供一种核心屏障，阻止编辑出多种不同身份而叠加同类护盾。
 		if(Effect->CoreShieldData) { if(bHasCoreShield) return false; bHasCoreShield=true; }
+		if(Effect->ReinforcementShieldData) { if(bHasReinforcement) return false; bHasReinforcement=true; }
 		Team.Add(Item);
 	}
 	if(Team.Num()>6) return false;
@@ -53,6 +54,7 @@ bool UDefenseDirectorComponent::InitializeTeamItems(UCombatShopData* Shop)
 		auto* E=CastChecked<UDefenseTeamItemEffect>(Copy->AcquireEffect);
 		if(E->ModifierData) E->ModifierData=DuplicateObject<UCombatModifierData>(E->ModifierData,E);
 		if(E->CoreShieldData) E->CoreShieldData=DuplicateObject<UCombatModifierData>(E->CoreShieldData,E);
+		if(E->ReinforcementShieldData) E->ReinforcementShieldData=DuplicateObject<UCombatModifierData>(E->ReinforcementShieldData,E);
 		FrozenTeamItems.Add(Copy->GetPrimaryAssetId(),Copy);
 	}
 	bTeamItemsInitialized=true; PublishTeamShop(); return true;
@@ -76,6 +78,9 @@ FCombatShopOfferView UDefenseDirectorComponent::BuildTeamItemOffer(ACombatPlayer
 	V.bCanPurchase=IsValid(Player)&&Player->GetWorld()==GetWorld()&&Players.Contains(Player)&&IsTeamShopOpen()&&IsCoreAlive()
 		&&E->AllowedPhases.Contains(View.Phase)&&!Record;
 	V.Status=FText::FromString(Record?(Record->bEffectActive?TEXT("全队生效中"):TEXT("本局已使用")):(V.bCanPurchase?TEXT("本人付款 · 全队受益"):TEXT("本阶段不能领取")));
+	if(Record&&E->ReinforcementShieldData)
+		V.Status=FText::FromString(FString::Printf(TEXT("剩余援军 %d 次 · 等待复活 %d 人 · 护盾保护 %d 人"),
+			Record->RemainingReinforcements,CountPendingReinforcements(Id),Record->AppliedModifiers.Num()));
 	return V;
 }
 void UDefenseDirectorComponent::PublishTeamShop()
@@ -95,6 +100,17 @@ void UDefenseDirectorComponent::ExpireTeamShop()
 		if(!Record.bEffectActive) continue;
 		const auto* Item=FrozenTeamItems.Find(Pair.Key);
 		const auto* Effect=Item?Cast<UDefenseTeamItemEffect>((*Item)->AcquireEffect):nullptr;
+		if(Effect&&Effect->ReinforcementShieldData)
+		{
+			const int32 RemovedCount=Record.AppliedModifiers.RemoveAll([](const auto& Applied)
+			{
+				const auto* Unit=Applied.Unit.Get();
+				return !Unit||!Unit->GetCombatModifierComponent()->FindRuntime(Applied.Handle);
+			});
+			const bool Active=Record.RemainingReinforcements>0||CountPendingReinforcements(Pair.Key)>0||!Record.AppliedModifiers.IsEmpty();
+			if(RemovedCount||Active!=Record.bEffectActive) ++TeamShopRevision;
+			Record.bEffectActive=Active; continue;
+		}
 		const bool bDepleted=Effect&&Effect->CoreShieldData&&!Record.AppliedModifiers.ContainsByPredicate([](const auto& Applied)
 		{
 			const auto* Unit=Applied.Unit.Get();
@@ -116,9 +132,10 @@ void UDefenseDirectorComponent::ClearTeamShopEffects(const bool bClearLedger)
 	TArray<FDefenseTeamAppliedModifier> Removed;
 	for(auto& Pair:TeamPurchaseLedger)
 	{
-		Pair.Value.bEffectActive=false;
+		Pair.Value.bEffectActive=false; Pair.Value.RemainingReinforcements=0; Pair.Value.ExcludedDeaths.Reset();
 		Removed.Append(MoveTemp(Pair.Value.AppliedModifiers)); Pair.Value.AppliedModifiers.Reset();
 	}
+	for(auto& Pair:Players) { Pair.Value.PendingReinforcement={}; Pair.Value.ReinforcementDeathLife=0; }
 	++TeamShopRevision; if(bClearLedger) TeamPurchaseLedger.Reset();
 	TGuardValue<bool> Guard(bTeamShopMutating,true);
 	DefenseTeamShop::Revoke(MoveTemp(Removed));
@@ -168,10 +185,14 @@ bool UDefenseDirectorComponent::ReceiveTeamItem(const FCombatItemAcquireContext&
 	if(!CanReceiveTeamItem(C,Failure)) return false;
 	TGuardValue<bool> Guard(bTeamShopMutating,true);
 	const auto Id=C.Definition->GetPrimaryAssetId(); const auto* E=CastChecked<UDefenseTeamItemEffect>(FrozenTeamItems.FindChecked(Id)->AcquireEffect);
-	FDefenseTeamPurchaseRecord Purchase; Purchase.bPurchased=true; Purchase.bEffectActive=E->ModifierData!=nullptr||E->CoreShieldData!=nullptr;
+	FDefenseTeamPurchaseRecord Purchase; Purchase.bPurchased=true; Purchase.bEffectActive=E->ModifierData!=nullptr||E->CoreShieldData!=nullptr||E->ReinforcementShieldData!=nullptr;
+	Purchase.RemainingReinforcements=E->ReinforcementDeaths;
 	Purchase.BuyerName=C.Player->PlayerState?C.Player->PlayerState->GetPlayerName():C.Player->GetName(); Purchase.Source=C.Source;
 	Purchase.ExpireWave=E->DurationWaves?FMath::Min(View.TotalWaves,View.WaveIndex+1+E->DurationWaves):0;
 	TArray<TWeakObjectPtr<ACombatUnitCharacter>> Heroes; for(const auto& Pair:Players) Heroes.Add(Pair.Value.Hero);
+	if(E->ReinforcementShieldData) for(const auto& Target:Heroes)
+		if(auto* Hero=Target.Get();Hero&&(Hero->GetLifeState()==ECombatLifeState::Dead||Hero->GetLifeState()==ECombatLifeState::Dying))
+			Purchase.ExcludedDeaths.Add(Hero,Hero->GetLifeGeneration());
 	if(E->ModifierData) for(const auto& Target:Heroes)
 	{
 		auto* Hero=Target.Get(); if(!Hero||Hero->GetLifeState()!=ECombatLifeState::Alive) continue;

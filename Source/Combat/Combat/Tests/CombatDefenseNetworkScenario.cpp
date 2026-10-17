@@ -15,6 +15,7 @@
 #include "Combat/Defense/DefenseDirectorComponent.h"
 #include "Combat/Defense/DefenseData.h"
 #include "Combat/Defense/DefenseCoreShieldRuntime.h"
+#include "Combat/View/CombatUnitViewComponent.h"
 #include "Combat/Modifiers/CombatModifierComponent.h"
 #include "EngineUtils.h"
 #include "Net/UnrealNetwork.h"
@@ -68,6 +69,9 @@ void ACombatDefenseNetworkScenario::Tick(float Delta)
 	if(Choices) ExerciseChoices();
 	const bool TeamShop=FParse::Param(FCommandLine::Get(),TEXT("DefenseTeamShopSmoke"));
 	if(TeamShop) ExerciseTeamShop();
+	const bool Reinforcement=FParse::Param(FCommandLine::Get(),TEXT("DefenseReinforcementSmoke"));
+	if(Reinforcement) ExerciseReinforcement();
+	if(bDone) return;
 	const bool DefeatCase=FParse::Param(FCommandLine::Get(),TEXT("DefenseSmokeDefeat"));
 	if(GetNetMode()==NM_Client)
 	{
@@ -95,7 +99,7 @@ void ACombatDefenseNetworkScenario::Tick(float Delta)
 		if(V.Phase==EDefensePhase::WaveCombat && LastWave!=V.WaveIndex)
 		{
 			LastWave=V.WaveIndex; WaveStarted=Elapsed; CoreAtWaveStart=V.ObjectiveHealth; InitialPositions.Reset();
-			if(LastWave==1 && !Heroes.IsEmpty())
+			if(LastWave==1 && !Heroes.IsEmpty() && !Reinforcement)
 			{ RespawnHero=Heroes[0]; PreviousLife=Heroes[0]->GetLifeGeneration(); Kill(Heroes[0]); }
 		}
 		if(RespawnHero.IsValid() && RespawnHero->GetLifeGeneration()>PreviousLife && RespawnHero->GetLifeState()==ECombatLifeState::Alive) bRespawn=true;
@@ -124,7 +128,7 @@ void ACombatDefenseNetworkScenario::Tick(float Delta)
 		bool Rewards=true;
 		if(GetNetMode()!=NM_Client && !DefeatCase)
 			for(TActorIterator<ACombatPlayerController> It(GetWorld());It;++It)
-				Rewards &= (TeamShop || It->GetCombatEconomyComponent()->GetGold()==(Choices?1210:1370)) && It->GetCommandedUnit()
+				Rewards &= (TeamShop || Reinforcement || It->GetCombatEconomyComponent()->GetGold()==(Choices?1210:1370)) && It->GetCommandedUnit()
 					&& It->GetCommandedUnit()->GetCombatProgressionComponent()->GetExperience()==2000;
 		if(Choices && GetNetMode()!=NM_Client)
 		{
@@ -178,6 +182,22 @@ void ACombatDefenseNetworkScenario::Tick(float Delta)
 			UE_LOG(LogTemp,Display,TEXT("DefenseCoreShieldNetwork NetMode=%d Full=%d Partial=%d Depleted=%d Schema=%d"),int32(GetNetMode()),bCoreShieldFullSeen,bCoreShieldPartialSeen,bCoreShieldDepletedSeen,V.SchemaVersion);
 			UE_LOG(LogTemp,Display,TEXT("DefenseTeamShopNetwork NetMode=%d ActiveSeen=%d SupplySeen=%d ExpiredSeen=%d CombatRejected=%d ServerEffect=%d Match=%d"),
 				int32(GetNetMode()),bShopActiveSeen,bShopSupplySeen,bShopExpiredSeen,bShopClosedRejected,bShopServerActive,Rewards);
+		}
+		if(Reinforcement)
+		{
+			if(GetNetMode()==NM_Client) Rewards &= bAidTwo&&bAidOne&&bAidZero&&bAidExpired&&AidClientShields.Num()>=2;
+			else
+			{
+				int64 Gold=0; bool Finished=false;
+				for(TActorIterator<ACombatPlayerController> It(GetWorld());It;++It)
+				{
+					Gold+=It->GetCombatEconomyComponent()->GetGold();
+					if(const auto* O=It->GetCombatEconomyComponent()->FindShopOffer(FPrimaryAssetId(TEXT("CombatItem"),TEXT("team_reinforcement_mark")))) Finished=O->RemainingPurchases==0&&!O->bEffectActive;
+				}
+				Rewards &= Gold==ExpectedPlayers*1370-200&&AidRevivals==3&&AidExpiries==2&&Finished;
+			}
+			UE_LOG(LogTemp,Display,TEXT("DefenseReinforcementNetwork NetMode=%d Revivals=%d Expiries=%d Two=%d One=%d Zero=%d ClientShields=%d Expired=%d Match=%d"),
+				int32(GetNetMode()),AidRevivals,AidExpiries,bAidTwo,bAidOne,bAidZero,AidClientShields.Num(),bAidExpired,Rewards);
 		}
 		const bool Evidence=GetNetMode()==NM_Client ? bRPC : bSawMovement && bSawDamage && (DefeatCase || (ClearedWaves==6 && bRespawn));
 		Finish(Expected && Evidence && Rewards,FString::Printf(TEXT("Wave=%d CoreHP=%.0f Movement=%d Damage=%d Respawn=%d RPC=%d Cleared=%d Rewards=%d Reason=%s"),
@@ -266,4 +286,71 @@ void ACombatDefenseNetworkScenario::ExerciseTeamShop()
 		if(Item==TEXT("team_rally")) { bShopClosedSent=true; ShopClosedRequestId=R.RequestId; }
 		It->ServerSubmitEconomyRequest(R); It->ServerSubmitEconomyRequest(R);
 	}
+}
+
+void ACombatDefenseNetworkScenario::ExerciseReinforcement()
+{
+	const auto* State=GetWorld()->GetGameState<ADefenseGameState>(); if(!State) return;
+	const FPrimaryAssetId Item(TEXT("CombatItem"),TEXT("team_reinforcement_mark"));
+	const FPrimaryAssetId Effect(TEXT("CombatModifier"),TEXT("team_reinforcement_shield"));
+	if(GetNetMode()==NM_Client)
+	{
+		for(TActorIterator<ACombatPlayerController> It(GetWorld());It;++It)
+		{
+			if(!It->IsLocalController()||!It->GetCommandedUnit()) continue;
+			auto* C=It->GetCombatEconomyComponent(); const auto* O=C->FindShopOffer(Item); if(!O) continue;
+			const auto Status=O->Status.ToString();
+			bAidTwo |= O->RemainingPurchases==0&&Status.Contains(TEXT("剩余援军 2 次"));
+			bAidOne |= O->RemainingPurchases==0&&Status.Contains(TEXT("剩余援军 1 次"));
+			bAidZero |= O->RemainingPurchases==0&&Status.Contains(TEXT("剩余援军 0 次"));
+			bAidExpired |= bAidZero&&!O->bEffectActive;
+			if(State->GetDefensePhase()==EDefensePhase::Preparation&&O->bCanPurchase&&AidAttemptRevision!=O->Revision)
+			{
+				AidAttemptRevision=O->Revision;
+				FCombatEconomyRequest R; R.RequestId=It->ReserveCombatRequestId(); R.ItemDefinitionId=Item;
+				R.PurchaseContextId=O->ContextId; R.PurchaseContextRevision=O->Revision; R.CommandBindingGeneration=It->GetCommandBindingGeneration();
+				R.ExpectedEconomyRevision=C->GetEconomyRevision(); R.ExpectedInventoryRevision=C->GetInventoryRevision();
+				It->ServerSubmitEconomyRequest(R); It->ServerSubmitEconomyRequest(R);
+			}
+		}
+		for(TActorIterator<ACombatUnitCharacter> It(GetWorld());It;++It)
+			for(const auto& M:It->GetCombatUnitViewComponent()->GetVisibleModifiers())
+				if(M.DefinitionId==Effect) AidClientShields.Add(FString::Printf(TEXT("%d:%u"),It->GetUniqueID(),It->GetLifeGeneration()));
+		return;
+	}
+	const double Now=GetWorld()->GetTimeSeconds();
+	if(AidShieldHandle.IsValid()&&Now>AidShieldExpires+.5)
+	{
+		if(auto* Hero=AidProtectedHero.Get();Hero&&Hero->GetCombatModifierComponent()->FindRuntime(AidShieldHandle))
+		{ Finish(false,TEXT("AidShieldDidNotExpire")); return; }
+		++AidExpiries; AidShieldHandle={};
+	}
+	if(auto* Hero=AidHero.Get();Hero&&Hero->GetLifeState()==ECombatLifeState::Alive&&Hero->GetLifeGeneration()>AidDeathLife)
+	{
+		const double Delay=Now-AidDeathAt; const double Expected=AidRevivals<2?5.0:8.0;
+		if(Delay<Expected-.05||Delay>Expected+.8) { Finish(false,FString::Printf(TEXT("AidDelay Actual=%.3f Expected=%.1f"),Delay,Expected)); return; }
+		TArray<FCombatModifierView> Views; Hero->GetCombatModifierComponent()->BuildModifierViews(Views);
+		const auto* Shield=Views.FindByPredicate([&](const auto& V){return V.DefinitionId==Effect;});
+		if((AidRevivals<2)!=(Shield!=nullptr)) { Finish(false,TEXT("AidRevivalShieldMismatch")); return; }
+		if(Shield)
+		{
+			const auto* Runtime=Cast<UDefenseShieldRuntime>(Hero->GetCombatModifierComponent()->FindRuntime(Shield->Handle));
+			if(!Runtime||!FMath::IsNearlyEqual(Runtime->GetRemainingShield(),Hero->GetCombatAttributeSet()->GetMaxHealth()*.2f,.01f)
+				||!FMath::IsNearlyEqual(Runtime->GetExpireAt()-Runtime->GetAppliedAt(),4.0,.01)) { Finish(false,TEXT("AidShieldValueMismatch")); return; }
+			AidProtectedHero=Hero; AidShieldHandle=Shield->Handle; AidShieldExpires=Runtime->GetExpireAt();
+		}
+		UE_LOG(LogTemp,Display,TEXT("DefenseReinforcementRevival Index=%d Delay=%.3f Expected=%.1f Shield=%d"),AidRevivals,Delay,Expected,Shield!=nullptr);
+		++AidRevivals; bRespawn=true; AidHero.Reset();
+	}
+	const auto& V=State->GetRunView();
+	if(V.Phase!=EDefensePhase::WaveCombat||V.WaveIndex>2||AidDeaths>V.WaveIndex||AidHero.IsValid()) return;
+	TArray<ACombatUnitCharacter*> Heroes; bool Bought=false;
+	for(TActorIterator<ACombatPlayerController> It(GetWorld());It;++It)
+	{
+		if(It->GetCommandedUnit()) Heroes.Add(It->GetCommandedUnit());
+		if(const auto* O=It->GetCombatEconomyComponent()->FindShopOffer(Item)) Bought |= O->RemainingPurchases==0;
+	}
+	if(!Bought||Heroes.Num()!=ExpectedPlayers) return;
+	AidHero=Heroes[AidDeaths%Heroes.Num()]; AidDeathLife=AidHero->GetLifeGeneration(); AidDeathAt=Now;
+	Kill(AidHero.Get()); ++AidDeaths;
 }

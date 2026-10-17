@@ -88,3 +88,8 @@
 核心救援内容通过原获得效果接口进入公共 Modifier/Heal。UDefenseCoreShieldRuntime 只在 DamageBlock 消耗余量，不修改Health；定义和平衡比例在防守物品效果中配置。防守RunView schema3投影核心屏障，公共发布契约不变。
 
 需要同步返回句柄/可失败回滚的获得效果，在 ApplyModifier 前必须检查目标组件 `IsDeferringOperations()`；Hook 内 Apply 只排队，不能把暂时无句柄当作无副作用失败。防守团队适配器会在任何应用前检查所有目标，拒绝该时序；普通 Apply/Remove 的延迟队列语义保持不变。
+
+
+## DEF-008 共享有限护盾与复活组合
+
+UDefenseShieldRuntime承接DEF-007的有限护盾吸收逻辑，原UDefenseCoreShieldRuntime保留为兼容子类；原核心资产身份不变。援军内容通过已有生命周期委托和公开ApplyModifier组合，比例在复活时取ASC最大生命，持续时间来自独立ModifierData。同步Apply若处于Hook阶段，凭证保留到下一Monitor，不把无句柄的排队结果作为完成。此组合没有新增通用复活API或发布schema。

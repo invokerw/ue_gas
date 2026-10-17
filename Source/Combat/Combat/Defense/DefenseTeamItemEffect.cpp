@@ -25,10 +25,18 @@ namespace DefenseTeamItem
 }
 bool UDefenseTeamItemEffect::ValidateDefinition(FString& Error) const
 {
-	Error=TEXT("团队效果必须且只能配置英雄属性、固定修复、比例修复或核心屏障之一");
+	Error=TEXT("团队效果必须且只能配置英雄属性、固定修复、比例修复或核心屏障或援军之一");
 	if(!FMath::IsFinite(ObjectiveShieldFraction)||ObjectiveShieldFraction<0||ObjectiveShieldFraction>1
 		||!FMath::IsFinite(ObjectiveHealFraction)||ObjectiveHealFraction<0||ObjectiveHealFraction>1) return false;
-	const int32 Modes=int32(ModifierData!=nullptr)+int32(ObjectiveHeal>0)+int32(ObjectiveHealFraction>0)+int32(CoreShieldData!=nullptr);
+	const int32 Modes=int32(ModifierData!=nullptr)+int32(ObjectiveHeal>0)+int32(ObjectiveHealFraction>0)+int32(CoreShieldData!=nullptr)+int32(ReinforcementShieldData!=nullptr);
+	if(!FMath::IsFinite(RespawnReduction)||RespawnReduction<0||RespawnReduction>60
+		||!FMath::IsFinite(RespawnShieldFraction)||RespawnShieldFraction<0||RespawnShieldFraction>1
+		||ReinforcementDeaths<0||ReinforcementDeaths>8) return false;
+	if(ReinforcementShieldData)
+	{
+		if(ReinforcementDeaths<1||RespawnReduction<=0||RespawnShieldFraction<=0) return false;
+	}
+	else if(ReinforcementDeaths||RespawnReduction!=0||RespawnShieldFraction!=0) return false;
 	if(Modes!=1 || (CoreShieldData!=nullptr)!=(ObjectiveShieldFraction>0)) return false;
 	if(AllowedPhases.IsEmpty()||AllowedPhases.Num()>3||DurationWaves<0||DurationWaves>6||ObjectiveHeal<0||ObjectiveHeal>100000) return false;
 	TSet<EDefensePhase> Seen;
@@ -37,7 +45,15 @@ bool UDefenseTeamItemEffect::ValidateDefinition(FString& Error) const
 		if((P!=EDefensePhase::Preparation&&P!=EDefensePhase::Intermission&&P!=EDefensePhase::BossPreparation)||Seen.Contains(P)) return false;
 		Seen.Add(P);
 	}
-	if(CoreShieldData)
+	if(ReinforcementShieldData)
+	{
+		const auto* M=ReinforcementShieldData.Get();
+		if(DurationWaves!=0||!M->GetPrimaryAssetId().IsValid()||M->SchemaVersion!=FCombatDefinitionRegistry::CombatContentVersion
+			||M->RuntimeClass!=UDefenseShieldRuntime::StaticClass()||M->bIsDebuff||!M->bRemoveOnDeath||M->bDisabledByBreak
+			||!FMath::IsFinite(M->Duration)||M->Duration<=0||M->Duration>30||M->ThinkInterval!=0||M->MaxStacks!=1
+			||M->DispelRule!=ECombatModifierDispelRule::NotDispellable||!M->GrantedTags.IsEmpty()||!M->RuntimeParameters.IsEmpty()||!M->AttributeChanges.IsEmpty()) return false;
+	}
+	else if(CoreShieldData)
 	{
 		const auto* M=CoreShieldData.Get();
 		if(DurationWaves!=1||!M->GetPrimaryAssetId().IsValid()||M->SchemaVersion!=FCombatDefinitionRegistry::CombatContentVersion

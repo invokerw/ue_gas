@@ -159,3 +159,5 @@
 商店复用与公共物品获得即用的当前实现见 [DEF-006](Specs/DEF-006-reuse-shop-use-on-acquire.spec.md)；它替代 DEF-005 的独立团队商店 UI/RPC/目录。
 
 - [DEF-007 正式核心救援道具](Specs/DEF-007-defense-core-rescue.spec.md)：神殿屏障、应急石、核心护盾投影与原商店验证。
+
+- [DEF-008 援军印记与复活保护](Specs/DEF-008-defense-reinforcement.spec.md)：两次救援、缩短复活、短盾与原商店状态反馈。
