@@ -93,3 +93,8 @@
 ## DEF-008 共享有限护盾与复活组合
 
 UDefenseShieldRuntime承接DEF-007的有限护盾吸收逻辑，原UDefenseCoreShieldRuntime保留为兼容子类；原核心资产身份不变。援军内容通过已有生命周期委托和公开ApplyModifier组合，比例在复活时取ASC最大生命，持续时间来自独立ModifierData。同步Apply若处于Hook阶段，凭证保留到下一Monitor，不把无句柄的排队结果作为完成。此组合没有新增通用复活API或发布schema。
+
+
+## DEF-009 Phase 2 构筑扩展
+
+强化定义继续使用稳定PrimaryAssetId、Family/Rarity/Prerequisites/CompatibleHeroes；终局卡的时间和家族门槛由服务器Sampler判断，客户端只显示CardView。新团队条件效果使用已有ModifierRuntime/PreDealDamage和CooldownReductionPct，不新增商店、RPC或Damage子系统。Hero替换使用公开Controller绑定与Director记录迁移；不兼容卡保留ID但不创建Modifier。

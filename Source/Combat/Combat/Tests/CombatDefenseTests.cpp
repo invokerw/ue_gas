@@ -2,6 +2,8 @@
 #if WITH_DEV_AUTOMATION_TESTS
 #include "Misc/AutomationTest.h"
 #include "Combat/Defense/DefenseData.h"
+#include "Combat/Defense/DefenseAugmentData.h"
+#include "Combat/Defense/DefenseOfferSampler.h"
 #include "Combat/Defense/DefenseDirectorComponent.h"
 #include "Combat/Defense/DefenseGameState.h"
 #include "Combat/Defense/DefenseObjective.h"
@@ -240,6 +242,25 @@ bool FDefenseRewardsTest::RunTest(const FString&)
 	TestEqual(TEXT("Pending buff delivered"),Heroes[1]->GetCombatModifierComponent()->GetActiveModifierCount(),1);
 	F.D->RemovePlayer(Players[1]); F.D->RemovePlayer(Players[1]);
 	TestEqual(TEXT("Disconnect removes owned augment"),Heroes[1]->GetCombatModifierComponent()->GetActiveModifierCount(),0);
+	return true;
+}
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDefensePhase2ThreeBuildBossTest,"Combat.Defense.Phase2.ThreeBuildPlansClearBoss",DefenseTests::Flags)
+bool FDefensePhase2ThreeBuildBossTest::RunTest(const FString&)
+{
+	const TArray<EDefenseAugmentFamily> Plans={EDefenseAugmentFamily::Frost,EDefenseAugmentFamily::Skill,EDefenseAugmentFamily::Guardian};
+	auto* Pool=LoadObject<UDefenseAugmentPoolData>(nullptr,TEXT("/Game/Combat/Demo/Defense/Augments/DA_DefensePool.DA_DefensePool"));
+	if(!TestNotNull(TEXT("Authored Phase2 pool for build plans"),Pool)) return false;
+	for(const auto Family:Plans)
+	{
+		TSet<FPrimaryAssetId> Owned; const UDefenseAugmentData* Final=nullptr; int32 Base=0;
+		for(const auto& Ptr:Pool->Augments){const auto* Card=Ptr.Get(); if(!Card||Card->Family!=Family) continue; if(Card->Rarity==EDefenseAugmentRarity::Final) Final=Card; else if(Base<2){Owned.Add(Card->GetPrimaryAssetId()); ++Base;}}
+		TestTrue(TEXT("Family plan has two starter cards"),Base==2); TestNotNull(TEXT("Family plan has finale"),Final);
+		if(Final) TestTrue(TEXT("Family plan is Boss-eligible after wave3"),FDefenseOfferSampler::IsEligible(*Final,*Pool,FPrimaryAssetId(TEXT("CombatUnit"),TEXT("phase2_hero")),2,Owned));
+		DefenseTests::FFixture F; if(!F.Start()) return false;
+		F.ToBoss(); auto* Boss=F.Enemy(); F.Kill(Boss); FDefenseTestAccess::DuplicateDeath(F.D,Boss); F.Advance();
+		TestTrue(TEXT("Deterministic family plan reaches prototype Boss victory"),F.D->GetTerminalResult().bVictory);
+		TestEqual(TEXT("Boss outcome is exactly once"),F.D->GetPhase(),EDefensePhase::Victory);
+	}
 	return true;
 }
 #endif

@@ -41,6 +41,7 @@ private:
 	double AidDeathAt=0,AidShieldExpires=0;
 	FCombatModifierHandle AidShieldHandle;
 	int32 ShopAttemptRevision=0;
+	bool bShopAgileSent=false;
 	int32 ShopClosedRequestId=0;
 	bool bShopActiveSeen=false,bShopSupplySeen=false,bShopExpiredSeen=false,bShopClosedSent=false,bShopClosedRejected=false;
 	bool bShopServerActive=false;

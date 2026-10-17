@@ -177,7 +177,7 @@ void ACombatDefenseNetworkScenario::Tick(float Delta)
 				TArray<FCombatShopOfferView> Offers;
 				int64 TotalGold=0; for(TActorIterator<ACombatPlayerController> It(GetWorld());It;++It) { TotalGold+=It->GetCombatEconomyComponent()->GetGold(); Offers=It->GetCombatEconomyComponent()->GetEconomyView().ShopOffers; }
 				int32 Bought=0; for(const auto& Entry:Offers) { Bought+=Entry.RemainingPurchases==0?1:0; Rewards &= !Entry.bEffectActive; }
-				Rewards &= Bought==2 && TotalGold==ExpectedPlayers*1370-420 && bShopServerActive;
+				Rewards &= Bought==2 && TotalGold==ExpectedPlayers*1370-460 && bShopServerActive;
 			}
 			UE_LOG(LogTemp,Display,TEXT("DefenseCoreShieldNetwork NetMode=%d Full=%d Partial=%d Depleted=%d Schema=%d"),int32(GetNetMode()),bCoreShieldFullSeen,bCoreShieldPartialSeen,bCoreShieldDepletedSeen,V.SchemaVersion);
 			UE_LOG(LogTemp,Display,TEXT("DefenseTeamShopNetwork NetMode=%d ActiveSeen=%d SupplySeen=%d ExpiredSeen=%d CombatRejected=%d ServerEffect=%d Match=%d"),
@@ -260,7 +260,7 @@ void ACombatDefenseNetworkScenario::ExerciseTeamShop()
 		if(!It->IsLocalController() || !It->GetCommandedUnit()) continue;
 		auto* C=It->GetCombatEconomyComponent();
 		const auto* Guard=C->FindShopOffer(FPrimaryAssetId(TEXT("CombatItem"),TEXT("team_shrine_barrier")));
-		const auto* Supply=C->FindShopOffer(FPrimaryAssetId(TEXT("CombatItem"),TEXT("team_supply")));
+		const auto* Supply=C->FindShopOffer(FPrimaryAssetId(TEXT("CombatItem"),TEXT("team_agile_circuit")));
 		if(!Guard||!Supply) continue;
 		bShopActiveSeen |= (Guard->RemainingPurchases==0)&&Guard->bEffectActive;
 		const auto& CoreView=State->GetRunView();
@@ -275,15 +275,16 @@ void ACombatDefenseNetworkScenario::ExerciseTeamShop()
 			&&(Last.FailureTag==CombatTags::Failure_ActionUnsupported||Last.FailureTag==CombatTags::Failure_Economy_Stale);
 		FName Item;
 		if(State->GetDefensePhase()==EDefensePhase::Preparation&&!(Guard->RemainingPurchases==0)) Item=TEXT("team_shrine_barrier");
-		if(State->GetDefensePhase()==EDefensePhase::Intermission && State->GetWaveIndex()==0 && !(Supply->RemainingPurchases==0)) Item=TEXT("team_supply");
+		if(State->GetDefensePhase()==EDefensePhase::Intermission && State->GetWaveIndex()==0 && !(Supply->RemainingPurchases==0)) Item=TEXT("team_agile_circuit");
 		if(State->GetDefensePhase()==EDefensePhase::WaveCombat && State->GetWaveIndex()==0 && !bShopClosedSent)
-		{ Item=TEXT("team_rally"); }
-		if(Item.IsNone() || ShopAttemptRevision==Guard->Revision) continue;
+		{ Item=TEXT("team_hunt_horn"); }
+		if(Item.IsNone() || (Item!=TEXT("team_hunt_horn") && ShopAttemptRevision==Guard->Revision) || (Item==TEXT("team_hunt_horn") && bShopClosedSent) || (Item==TEXT("team_agile_circuit") && bShopAgileSent)) continue;
 		ShopAttemptRevision=Guard->Revision;
 		FCombatEconomyRequest R; R.RequestId=It->ReserveCombatRequestId(); R.ItemDefinitionId=FPrimaryAssetId(TEXT("CombatItem"),Item);
-		R.PurchaseContextId=Guard->ContextId; R.PurchaseContextRevision=Guard->Revision; R.CommandBindingGeneration=It->GetCommandBindingGeneration();
+		const auto* SelectedOffer=Item==TEXT("team_hunt_horn")?Guard:Supply; R.PurchaseContextId=SelectedOffer->ContextId; R.PurchaseContextRevision=SelectedOffer->Revision; R.CommandBindingGeneration=It->GetCommandBindingGeneration();
 		R.ExpectedEconomyRevision=C->GetEconomyRevision(); R.ExpectedInventoryRevision=C->GetInventoryRevision();
-		if(Item==TEXT("team_rally")) { bShopClosedSent=true; ShopClosedRequestId=R.RequestId; }
+		if(Item==TEXT("team_hunt_horn")) { bShopClosedSent=true; ShopClosedRequestId=R.RequestId; }
+		if(Item==TEXT("team_agile_circuit")) bShopAgileSent=true;
 		It->ServerSubmitEconomyRequest(R); It->ServerSubmitEconomyRequest(R);
 	}
 }

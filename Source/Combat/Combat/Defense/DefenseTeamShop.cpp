@@ -152,6 +152,11 @@ bool UDefenseDirectorComponent::ApplyTeamShopEffects(ACombatUnitCharacter* Hero)
 		if(!E->ModifierData||!Record||!Record->bEffectActive) continue;
 		if(Record->AppliedModifiers.ContainsByPredicate([&](const auto& A){return A.Unit.Get()==Hero;})) continue;
 		FCombatModifierApplyRequest R; R.ModifierData=E->ModifierData; R.Source=Hero; R.SourceContext=Record->Source;
+		if(E->ConditionalTargetRole!=EDefenseTeamTargetRole::None)
+		{
+			R.RuntimeParameterOverrides.Add(TEXT("target_role"),static_cast<float>(E->ConditionalTargetRole));
+			R.RuntimeParameterOverrides.Add(TEXT("damage_fraction"),E->ConditionalDamageFraction);
+		}
 		const auto Applied=Hero->GetCombatModifierComponent()->ApplyModifier(R);
 		if(!Applied.bSuccess||!Applied.Handle.IsValid()) return false;
 		Record=TeamPurchaseLedger.Find(Pair.Key);
@@ -197,6 +202,11 @@ bool UDefenseDirectorComponent::ReceiveTeamItem(const FCombatItemAcquireContext&
 	{
 		auto* Hero=Target.Get(); if(!Hero||Hero->GetLifeState()!=ECombatLifeState::Alive) continue;
 		FCombatModifierApplyRequest R; R.ModifierData=E->ModifierData; R.Source=Hero; R.SourceContext=C.Source;
+		if(E->ConditionalTargetRole!=EDefenseTeamTargetRole::None)
+		{
+			R.RuntimeParameterOverrides.Add(TEXT("target_role"),static_cast<float>(E->ConditionalTargetRole));
+			R.RuntimeParameterOverrides.Add(TEXT("damage_fraction"),E->ConditionalDamageFraction);
+		}
 		const auto Applied=Hero->GetCombatModifierComponent()->ApplyModifier(R);
 		if(Applied.Handle.IsValid()) Purchase.AppliedModifiers.Add({Hero,Applied.Handle});
 		if(!Applied.bSuccess||!Applied.Handle.IsValid()||!IsCurrent(View.RunId,GetPhaseGeneration())||!Players.Contains(C.Player))

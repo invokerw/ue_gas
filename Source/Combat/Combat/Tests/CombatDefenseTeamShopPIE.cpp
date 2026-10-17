@@ -64,7 +64,7 @@ public:
 		if(Stage==3 && FPlatformTime::Seconds()-CapturedAt>1) { Shop->SetShopOpen(false); Click(Widget->StartButton); Stage=4; return false; }
 		if(Stage==4 && W->GetGameState<ADefenseGameState>()->GetDefensePhase()==EDefensePhase::WaveCombat)
 		{
-			const auto* Other=Economy->FindShopOffer(FPrimaryAssetId(TEXT("CombatItem"),TEXT("team_rally")));
+			const auto* Other=Economy->FindShopOffer(FPrimaryAssetId(TEXT("CombatItem"),TEXT("team_hunt_horn")));
 			if(!Other||Other->bCanPurchase) return false;
 			Test->AddInfo(bAid?TEXT("DefenseReinforcementPIE OriginalWidget=1 RightClick=1 Gold=200 Charges=2 NoSlot=1"):TEXT("DefenseUnifiedShopPIE OriginalWidget=1 RightClick=1 Gold=220 CoreShield=400 NoSlot=1 SeedPreserved=1")); return true;
 		}

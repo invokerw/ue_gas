@@ -470,3 +470,12 @@ DEF-007 0.2 追加：同步获得效果在应用 Modifier 前读取组件是否�
 正式援军印记使用新CombatItem身份，替换防守目录的魔法加固原型；原获得即用/经济RPC与每局限购不变。购买后按已登记英雄的真实死亡委托顺序分配两次救援，排除购买时已Dead/Dying的生命；重复或旧生命事件不重复消耗。预留绑定Hero和DeathLife，仅在DeathLife+1复活时领取20%最大生命、4秒护盾，已预留后断线不退团队次数。复活延迟按死亡事件时刻计算max(0,原等待−3)，仍由原Monitor执行安全复活。
 
 共享UDefenseShieldRuntime承接已有吸收逻辑；UDefenseCoreShieldRuntime保留类身份作为子类，旧屏障资产无需重命名。援军状态复用原ShopOffer.Status、英雄护盾复用ModifierView，不新增网络字段/schema或伤害结算旁路。Director负责两类生命周期委托与精确句柄清理，公开调用后重查玩家记录，避免重入使引用失效。见 [DEF-008](../Specs/DEF-008-defense-reinforcement.spec.md)。
+
+
+### ADR-076：Phase 2 正式团队效果、24卡池与英雄替换（2026-10-17；DEF-009）
+
+Phase 2六件团队商品继续使用原CombatShop/获得即用；正式补齐追猎号角（攻城/刺客目标+15%）、灵巧回路（CooldownReductionPct+5%，受40%上限）和破城铭文（Boss目标+12%）。条件目标使用稳定Unit DefinitionId角色片段，未知目标不触发；Phase3敌人资产沿用相同定义规则接入，不新增Damage入口。
+
+强化池由12张原型扩展为24张，新增四张终局卡；终局卡最早第3波候选，家族计数仍由服务器IsEligible判断，个人卡每张最多一次。Build HUD显示拥有卡的家族计数，客户端只消费CardView。服务器替换英雄保留PlayerRecord的OwnedAugments、ChosenCards、ChoiceResults、PendingCards和经济/团队账本，通用卡重新应用，不兼容卡休眠；Controller继续使用既有SetCommandedUnitAuthority与BindingGeneration。
+
+本步不引入第二英雄、攻城/刺客生产内容、事件、装备或Boss多阶段技能；Phase2的三构筑Boss回归使用现有原型Boss胜负入口。实现和验证见 [DEF-009](../Specs/DEF-009-defense-phase2-completion.spec.md)。

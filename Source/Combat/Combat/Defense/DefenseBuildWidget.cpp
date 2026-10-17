@@ -106,6 +106,14 @@ void UDefenseBuildWidget::RefreshContents()
 		OwnedBody->AddSlot().AutoHeight().Padding(0,7)[DefenseBuildUI::Label(FText::FromString(Card.Name.ToString()+TEXT(" · ")+Family.ToString()+(Card.bPending?TEXT("（待复活生效）"):TEXT(""))))];
 	}
 	if(View.Owned.IsEmpty()) OwnedBody->AddSlot().AutoHeight().Padding(0,6)[DefenseBuildUI::Label(FText::FromString(TEXT("尚未选择强化")),12)];
+	else
+	{
+		TMap<EDefenseAugmentFamily,int32> FamilyCounts;
+		for(const auto& Card:View.Owned) if(!Card.bPending) ++FamilyCounts.FindOrAdd(Card.Family);
+		FString Summary(TEXT("家族："));
+		for(const auto& Pair:FamilyCounts) Summary+=StaticEnum<EDefenseAugmentFamily>()->GetDisplayNameTextByValue(int64(Pair.Key)).ToString()+FString::Printf(TEXT(" x%d  "),Pair.Value);
+		OwnedBody->AddSlot().AutoHeight().Padding(0,2)[DefenseBuildUI::Label(FText::FromString(Summary),11)];
+	}
 	OwnedBody->AddSlot().AutoHeight().Padding(0,5)[SNew(STextBlock).ColorAndOpacity(DefenseBuildUI::Accent).Text_Lambda([this]()
 	{
 		const auto* PC=Cast<ACombatPlayerController>(GetOwningPlayer());

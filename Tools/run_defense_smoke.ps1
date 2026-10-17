@@ -6,7 +6,7 @@ if (-not $EnvironmentInfo.editor_ready) { throw 'Installed UE editor unavailable
 $Editor = $EnvironmentInfo.installed_editor
 $Project = Join-Path $Repo 'ue_gas.uproject'
 $Case = if ($Defeat) { "defeat-$Players" } else { "victory-$Players" }
-$TaskFolder = if ($TeamShop -or $Reinforcement) { "DEF-008" } elseif ($Choices) { "DEF-004" } else { "DEF-002" }
+$TaskFolder = if ($TeamShop -or $Reinforcement) { "DEF-009" } elseif ($Choices) { "DEF-004" } else { "DEF-002" }
 if ($Reinforcement) { $Case = "reinforcement-$Case" } elseif ($TeamShop) { $Case = "team-shop-$Case" }
 $OutputDir = Join-Path $Repo "Saved/$TaskFolder/network-$Case"
 New-Item -ItemType Directory -Force -Path $OutputDir | Out-Null

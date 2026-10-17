@@ -87,6 +87,8 @@ public:
 	bool InitializeForRun(UDefenseRunData* Data, ADefenseObjective* Core, ADefenseGameState* State, bool bWaitForStart = false);
 	/** 登记开局玩家；仅准备阶段接受，不改变英雄控制权。 */
 	bool RegisterPlayer(ACombatPlayerController* Player, ACombatUnitCharacter* Hero);
+	/** 服务器替换当前英雄；保留本局选择/回执/经济/团队账本，通用卡迁移，不兼容卡休眠。 */
+	bool ReplacePlayerHero(ACombatPlayerController* Player,ACombatUnitCharacter* NewHero);
 	/** 断线撤销本局强化和待领奖励，不接管别人的英雄。 */
 	void RemovePlayer(ACombatPlayerController* Player);
 	/** 幂等清理所有己方资源；GameMode 和 Component EndPlay 共用。 */

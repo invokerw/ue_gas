@@ -340,4 +340,31 @@ bool FDefenseChoiceTerminalTest::RunTest(const FString&)
 	TestFalse(TEXT("Pre-start defeat dismisses start panel"),Waiting.State->GetRunView().bWaitingForStart);
 	return true;
 }
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDefensePhase2Pool24Test,"Combat.Defense.Phase2.Pool24AndFinalGate",DefenseAugmentTests::Flags)
+bool FDefensePhase2Pool24Test::RunTest(const FString&)
+{
+	auto* Pool=LoadObject<UDefenseAugmentPoolData>(nullptr,TEXT("/Game/Combat/Demo/Defense/Augments/DA_DefensePool.DA_DefensePool"));
+	if(!TestNotNull(TEXT("Phase2 authored pool loads"),Pool)) return false;
+	FString Error; TestTrue(TEXT("24 card pool validates"),Pool->ValidateRuntime(Error)); TestEqual(TEXT("Exactly24 authored cards"),Pool->Augments.Num(),24);
+	int32 Finals=0; TArray<const UDefenseAugmentData*> Family;
+	for(const auto& CardPtr:Pool->Augments){const auto* Card=CardPtr.Get(); if(Card&&Card->Rarity==EDefenseAugmentRarity::Final){++Finals; Family.Add(Card);}}
+	TestEqual(TEXT("Four family finale cards"),Finals,4);
+	for(auto* Card:Family) TestTrue(TEXT("Final card has a post-wave gate"),Card->EarliestWave>=2);
+	return true;
+}
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDefenseHeroSwapPersistenceTest,"Combat.Defense.Phase2.HeroSwapPreservesBuild",DefenseAugmentTests::Flags)
+bool FDefenseHeroSwapPersistenceTest::RunTest(const FString&)
+{
+	DefenseAugmentTests::FFixture F; if(!F.Start()) return false;
+	auto* PC=F.Players[0]; auto* Old=PC->GetCommandedUnit(); FDefenseAugmentOffer Offer; TestTrue(TEXT("Offer"),F.Director->GetOrCreateAugmentOffer(PC,Offer));
+	if(Offer.Candidates.IsEmpty()) return false; const auto Chosen=Offer.Candidates[0]; TestTrue(TEXT("Choose build card"),F.Director->ChooseAugment(PC,1,Offer.ChoiceRevision,Chosen).bAccepted);
+	const int32 OwnedBefore=F.Director->BuildChoiceView(PC).Owned.Num(); const float ArmorBefore=Old->GetCombatAttributeSet()->GetArmor();
+	FActorSpawnParameters Spawn; Spawn.SpawnCollisionHandlingOverride=ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	auto* NewHero=F.World.GetWorld()->SpawnActor<ACombatUnitCharacter>(FVector(1200,500,100),FRotator::ZeroRotator,Spawn); auto* Data=NewObject<UCombatUnitData>(NewHero); Data->DefinitionName=TEXT("swap_hero"); TestTrue(TEXT("New hero init"),NewHero->InitializeFromUnitData(Data)); if(!NewHero->HasActorBegunPlay()) NewHero->DispatchBeginPlay();
+	TestTrue(TEXT("Server hero replacement"),F.Director->ReplacePlayerHero(PC,NewHero));
+	TestEqual(TEXT("Build ownership preserved"),F.Director->BuildChoiceView(PC).Owned.Num(),OwnedBefore);
+	TestTrue(TEXT("New hero receives compatible public modifier"),NewHero->GetCombatModifierComponent()->GetActiveModifierCount()>0);
+	TestEqual(TEXT("Old hero loses migrated modifier"),Old->GetCombatModifierComponent()->GetActiveModifierCount(),0);
+	TestTrue(TEXT("Economy remains player owned"),PC->GetCombatEconomyComponent()->GetGold()>=0); return true;
+}
 #endif

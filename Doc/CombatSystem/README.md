@@ -161,3 +161,5 @@
 - [DEF-007 正式核心救援道具](Specs/DEF-007-defense-core-rescue.spec.md)：神殿屏障、应急石、核心护盾投影与原商店验证。
 
 - [DEF-008 援军印记与复活保护](Specs/DEF-008-defense-reinforcement.spec.md)：两次救援、缩短复活、短盾与原商店状态反馈。
+
+- [DEF-009 Phase 2 收口](Specs/DEF-009-defense-phase2-completion.spec.md)：六件正式团队商品、24卡池、家族门槛与英雄替换保留。

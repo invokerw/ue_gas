@@ -3,6 +3,7 @@
 #include "Misc/AutomationTest.h"
 #include "Combat/Defense/DefenseData.h"
 #include "Combat/Defense/DefenseCoreShieldRuntime.h"
+#include "Combat/Defense/DefenseConditionalDamageRuntime.h"
 #include "Combat/Ability/CombatAbilitySystemComponent.h"
 #include "Combat/Combat/CombatEffectUtilities.h"
 #include "Combat/Demo/CombatDemoModifierRuntimes.h"
@@ -91,6 +92,20 @@ namespace DefenseTeamShopTests
 			M->RuntimeClass=UDefenseCoreShieldRuntime::StaticClass(); M->DispelRule=ECombatModifierDispelRule::NotDispellable;
 			E->CoreShieldData=M; Items[0]->PurchasePrice=220;
 		}
+		/** 配置三件正式Phase2条件团队效果；测试仍从原经济入口购买。 */
+		void ConfigureFormal()
+		{
+			for(int32 I=0;I<3;++I) { Effects[I]->ModifierData=nullptr; Effects[I]->DurationWaves=1; Effects[I]->ConditionalTargetRole=EDefenseTeamTargetRole::None; Effects[I]->ConditionalDamageFraction=0; }
+			auto MakeConditional=[&](int32 Index,FName Name,EDefenseTeamTargetRole Role,float Fraction)
+			{
+				auto* M=NewObject<UCombatModifierData>(Effects[Index]); M->DefinitionName=Name; M->RuntimeClass=UDefenseConditionalDamageRuntime::StaticClass();
+				M->RuntimeParameters.Add(TEXT("target_role"),float(Role)); M->RuntimeParameters.Add(TEXT("damage_fraction"),Fraction); M->bRemoveOnDeath=false; M->DispelRule=ECombatModifierDispelRule::NotDispellable;
+				Effects[Index]->ModifierData=M; Effects[Index]->ConditionalTargetRole=Role; Effects[Index]->ConditionalDamageFraction=Fraction; Items[Index]->PurchasePrice=Role==EDefenseTeamTargetRole::SiegeOrAssassin?260:280;
+			};
+			MakeConditional(0,TEXT("hunt_horn_effect"),EDefenseTeamTargetRole::SiegeOrAssassin,.15f);
+			auto* Agile=NewObject<UCombatModifierData>(Effects[1]); Agile->DefinitionName=TEXT("agile_circuit_effect"); Agile->bRemoveOnDeath=false; Agile->DispelRule=ECombatModifierDispelRule::NotDispellable; FCombatModifierAttributeChange C; C.Attribute=UCombatAttributeSet::GetCooldownReductionPctAttribute(); C.Magnitude=.05f; Agile->AttributeChanges.Add(C); Effects[1]->ModifierData=Agile; Items[1]->PurchasePrice=240;
+			MakeConditional(2,TEXT("breach_inscription_effect"),EDefenseTeamTargetRole::Boss,.12f);
+		}
 		/** 通过正式获得效果配置援军，测试仍从原经济入口购买。 */
 		void ConfigureReinforcement()
 		{
@@ -104,7 +119,7 @@ namespace DefenseTeamShopTests
 		bool Start(FAutomationTestBase& Test)
 		{
 			if(!Test.TestTrue(TEXT("Initialize defense run"),Director->InitializeForRun(Run,Core,State))) return false;
-			if(!Test.TestTrue(TEXT("Initialize shared catalog"),Director->InitializeTeamItems(Shop))) return false;
+			if(!Test.TestTrue(TEXT("Initialize shared catalog"),Director->InitializeTeamItems(Shop))) { FString Diag; Shop->ValidateRuntime(Diag); Test.AddError(Diag); return false; }
 			World.GetWorld()->GetSubsystem<UCombatNetworkSecuritySubsystem>()->BurstCapacity=1000;
 			for(int32 I=0;I<2;++I)
 			{
@@ -622,5 +637,38 @@ bool FDefenseReinforcementDeferredTest::RunTest(const FString&)
 	TestEqual(TEXT("No queued orphan shield"),Hero->GetCombatModifierComponent()->GetActiveModifierCount(),0);
 	FDefenseTeamShopTestAccess::Service(F.Director); TestEqual(TEXT("Next monitor grants exactly one shield"),Hero->GetCombatModifierComponent()->GetActiveModifierCount(),1);
 	TestEqual(TEXT("One death charged once"),FDefenseTeamShopTestAccess::AidLeft(F.Director,F.Items[0]->GetPrimaryAssetId()),1); return true;
+}
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDefenseFormalTeamItemsTest,"Combat.Defense.Phase2.FormalTeamItems",DefenseTeamShopTests::Flags)
+bool FDefenseFormalTeamItemsTest::RunTest(const FString&)
+{
+	DefenseTeamShopTests::FFixture F; F.ConfigureFormal(); if(!F.Start(*this)) return false;
+	auto* Source=F.Players[0]->GetCommandedUnit();
+	FActorSpawnParameters Spawn; Spawn.SpawnCollisionHandlingOverride=ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	auto MakeTarget=[&](const TCHAR* Name)
+	{
+		auto* Unit=F.World.GetWorld()->SpawnActor<ACombatUnitCharacter>(FVector(1500,0,100),FRotator::ZeroRotator,Spawn); auto* Data=NewObject<UCombatUnitData>(Unit); Data->DefinitionName=Name; Unit->InitializeFromUnitData(Data); if(!Unit->HasActorBegunPlay()) Unit->DispatchBeginPlay(); return Unit;
+	};
+	auto* Siege=MakeTarget(TEXT("siege_enemy")); auto* Normal=MakeTarget(TEXT("normal_enemy")); auto* Boss=MakeTarget(TEXT("boss_enemy"));
+	F.Players[0]->GetCombatEconomyComponent()->AddGold(500,TEXT("FormalTest")); const float BaseCooldown=Source->GetCombatAttributeSet()->GetCooldownReductionPct();
+	TestTrue(TEXT("Hunt horn purchase"),F.Buy(F.Players[0],F.Request(1,0)).bSuccess);
+	TestTrue(TEXT("Agile circuit purchase"),F.Buy(F.Players[0],F.Request(2,1)).bSuccess);
+	TestTrue(TEXT("Breach inscription purchase"),F.Buy(F.Players[0],F.Request(3,2)).bSuccess);
+	TestEqual(TEXT("Agile circuit adds five percent cooldown reduction"),Source->GetCombatAttributeSet()->GetCooldownReductionPct(),BaseCooldown+.05f);
+	FCombatDamageRequest D; D.Source=Source; D.Amount=100; D.DamageType=ECombatDamageType::Pure;
+	D.Target=Siege; const auto Hunt=F.World.GetWorld()->GetSubsystem<UCombatDamageSubsystem>()->DealDamage(D);
+	D.Target=Normal; const auto Plain=F.World.GetWorld()->GetSubsystem<UCombatDamageSubsystem>()->DealDamage(D);
+	D.Target=Boss; const auto BossHit=F.World.GetWorld()->GetSubsystem<UCombatDamageSubsystem>()->DealDamage(D);
+	TestTrue(TEXT("Hunt horn increases siege damage"),Hunt.Event.Amount>Plain.Event.Amount);
+	TestTrue(TEXT("Unknown target is not increased"),Plain.Event.AppliedAmount>0&&Plain.Event.AppliedAmount<115.0f);
+	TestTrue(TEXT("Breach inscription increases boss damage"),BossHit.Event.Amount>Plain.Event.Amount);
+	TestEqual(TEXT("All three formal items occupy one shared ledger each"),FDefenseTeamShopTestAccess::Ledger(F.Director),3); return true;
+}
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDefenseFormalTeamItemsValidationTest,"Combat.Defense.Phase2.FormalTeamItemsValidation",DefenseTeamShopTests::Flags)
+bool FDefenseFormalTeamItemsValidationTest::RunTest(const FString&)
+{
+	DefenseTeamShopTests::FFixture F; F.ConfigureFormal(); FString Error; TestTrue(TEXT("Formal definitions valid"),F.Shop->ValidateRuntime(Error));
+	F.Effects[0]->ConditionalDamageFraction=1.01f; TestFalse(TEXT("Conditional fraction bounded"),F.Effects[0]->ValidateDefinition(Error)); F.Effects[0]->ConditionalDamageFraction=.15f;
+	F.Effects[0]->ModifierData->RuntimeParameters.Reset(); TestFalse(TEXT("Conditional runtime needs target parameters"),F.Effects[0]->ValidateDefinition(Error)); F.Effects[0]->ModifierData->RuntimeParameters.Add(TEXT("target_role"),1); F.Effects[0]->ModifierData->RuntimeParameters.Add(TEXT("damage_fraction"),.15f);
+	F.Effects[1]->DurationWaves=0; TestFalse(TEXT("Agile is wave scoped"),F.Effects[1]->ValidateDefinition(Error)); return true;
 }
 #endif

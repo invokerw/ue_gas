@@ -2,6 +2,7 @@
 #include "Combat/Defense/DefenseDirectorComponent.h"
 #include "Combat/Defense/DefenseGameMode.h"
 #include "Combat/Defense/DefenseCoreShieldRuntime.h"
+#include "Combat/Defense/DefenseConditionalDamageRuntime.h"
 #include "Combat/Items/CombatItemData.h"
 #include "Combat/Modifiers/CombatModifierRuntime.h"
 #include "Combat/Attributes/CombatAttributeSet.h"
@@ -66,13 +67,20 @@ bool UDefenseTeamItemEffect::ValidateDefinition(FString& Error) const
 		const auto* M=ModifierData.Get();
 		if(DurationWaves<1||ObjectiveHeal||!M->GetPrimaryAssetId().IsValid()||M->SchemaVersion!=FCombatDefinitionRegistry::CombatContentVersion||M->bIsDebuff||M->bRemoveOnDeath
 			||M->Duration!=0||M->ThinkInterval!=0||M->MaxStacks!=1||M->DispelRule!=ECombatModifierDispelRule::NotDispellable
-			||(M->RuntimeClass&&M->RuntimeClass!=UCombatModifierRuntime::StaticClass())||!M->GrantedTags.IsEmpty()||!M->RuntimeParameters.IsEmpty()
+			||!M->GrantedTags.IsEmpty()) return false;
+		const bool bConditional=ConditionalTargetRole!=EDefenseTeamTargetRole::None;
+		if(bConditional)
+		{
+			if(ConditionalDamageFraction<=0||ConditionalDamageFraction>1||M->RuntimeClass!=UDefenseConditionalDamageRuntime::StaticClass()
+			||M->AttributeChanges.Num()!=0||M->RuntimeParameters.Num()!=2) return false;
+		}
+		else if((M->RuntimeClass&&M->RuntimeClass!=UCombatModifierRuntime::StaticClass())||!M->RuntimeParameters.IsEmpty()
 			||M->AttributeChanges.IsEmpty()||M->AttributeChanges.Num()>8) return false;
 		for(const auto& C:M->AttributeChanges)
 		{
 			const bool Allowed=C.Attribute==UCombatAttributeSet::GetArmorAttribute()||C.Attribute==UCombatAttributeSet::GetAttackDamageAttribute()
 				||C.Attribute==UCombatAttributeSet::GetAttackSpeedAttribute()||C.Attribute==UCombatAttributeSet::GetManaRegenAttribute()
-				||C.Attribute==UCombatAttributeSet::GetHealthRegenAttribute()||C.Attribute==UCombatAttributeSet::GetMagicResistAttribute();
+				||C.Attribute==UCombatAttributeSet::GetHealthRegenAttribute()||C.Attribute==UCombatAttributeSet::GetMagicResistAttribute()||C.Attribute==UCombatAttributeSet::GetCooldownReductionPctAttribute();
 			if(!Allowed||!FMath::IsFinite(C.Magnitude)||C.Magnitude<=0||C.Magnitude>10000||C.ModifierOp!=EGameplayModOp::Additive||!C.MagnitudeParameterKey.IsNone()) return false;
 		}
 	}

@@ -103,3 +103,10 @@ Defense Director 仅持有领域效果快照、每局限领账本与精确 Hero+
 Director在RegisterPlayer绑定英雄现有OnDied/OnRespawned；解除登记、终局、Shutdown/EndPlay均解绑。死亡先锁DeadLife及等待截止，再原子消耗援军次数并保存Hero/DeathLife凭证；购买时已死生命的排除表只持弱引用，保留整局抵抗迟到回调，不因解除登记删除。
 
 复活领取只接受DeathLife+1，先取走凭证再公开Apply；Hook内保留凭证交给既有Monitor重试，不创建无句柄的延迟Apply。新的UDefenseShieldRuntime复用旧吸收实现，旧核心类继承它且身份不变；英雄4秒时限由Modifier Scheduler持有。精确Unit+Handle归团队账本，耗尽/过期/再死/断线/终局统一清理，不新建Timer。ServicePlayers快照玩家键，在公开生命周期、效果和成长调用后重新查记录；关闭对局或移除玩家不会留下悬空容器引用。对应Red/Green、旧生命、GC、世界teardown与双客户端见 [DEF-008](../Specs/DEF-008-defense-reinforcement.spec.md)。
+
+
+## DEF-009 Phase 2 生命周期增量（2026-10-17）
+
+英雄替换事务先停止旧Order并解绑旧Hero生命周期观察，再通过既有Controller绑定代次建立新Unit；旧Hero的精确强化句柄撤销后，Director按OwnedAugments和CompatibleHeroes重建新Hero效果。公开Apply后重新查PlayerRecord，失败时终局或保持旧绑定，不使用失效Map引用。选择回执、待生效卡和团队账本不随Hero实例迁移而丢失。
+
+正式团队条件效果仍由团队账本持有Hero+Handle；换Hero时团队属性/条件效果重新应用，核心效果和购买记录不变。24卡终局门槛只读OwnedAugments家族计数，不在UI维护第二套构筑事实。Phase2回归覆盖替换、旧句柄、24卡冷读和正式三件商品；见 [DEF-009](../Specs/DEF-009-defense-phase2-completion.spec.md)。

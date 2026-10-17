@@ -361,6 +361,7 @@ HUD-ABILITY-CLICK-001/002 追加验收状态：`用户已验收`（2026-09-14）
 | DEF-006 | 复用既有商店与物品获得即使用 | 已验收 | 0.2 F0 GO/F1 APPROVED/F2 PASS/Push-Ready READY；六件商品迁回原 CombatShop/经济 RPC，公共同步获得即用覆盖购买/拾取/奖励，移除独立商店。三 Target、205 独立用例、93 资产、原 UI 渲染 PIE、防守双客户端六波、旧物品争抢/64-256 容量、300 秒经济 soak、733 包 cook 与 delivery Gate 通过；本次授权合并提交，见 [Spec](../Specs/DEF-006-reuse-shop-use-on-acquire.spec.md)；用户于2026-10-16要求“提交，并进行下一步” |
 | DEF-007 | 正式团队道具：核心屏障与应急石 | 已验收 | 0.2 F0 GO/F1 APPROVED/F2 PASS/Push-Ready READY；原商店替换两件，屏障Hook/比例修复/RunView schema3；三Target、213独立测试（207非PIE+6渲染PIE）、96资产、双客户端六波护盾吸收/耗尽/账本、736包Cook及文档/交付门通过。保留GAP-030/031；本次授权合并提交，见 [Spec](../Specs/DEF-007-defense-core-rescue.spec.md)；用户于2026-10-16要求“提交，并进行下一步” |
 | DEF-008 | 正式援军印记与复活保护 | 已验收 | 前序版本已提交ff418a2；0.1 F0 GO/F1 APPROVED/F2 PASS/Push-Ready READY。原商店200金币、两次复活缩短3秒/20%四秒盾；三Target、222用例（215非PIE+7渲染PIE）、98资产、两组双客户端六波（实测5.094/5.114/8.041秒）、738包Cook及文档/交付门通过；用户于2026-10-17确认验收完成并授权本地提交，未推送，见 [Spec](../Specs/DEF-008-defense-reinforcement.spec.md) |
+| DEF-009 | Phase 2 肉鸽构筑收口 | 已验收 | 三件正式团队效果、24卡池/终局门槛、家族摘要、Hero替换后端已实现；220非PIE、2渲染PIE、128资产0错误、三Target、双客户端团队回归和768包Cook通过；2026-10-17用户验收当前版本并授权提交；三构筑测试仅验证门槛/胜负流程、24卡仍为属性原型，边界见Spec§13，见 [Spec](../Specs/DEF-009-defense-phase2-completion.spec.md) |
 
 ## 13. 用户验收记录
 
@@ -531,3 +532,5 @@ HUD-ABILITY-CLICK-001/002 追加验收状态：`用户已验收`（2026-09-14）
 
 
 2026-10-16：用户明确要求“提交，并进行下一步”，确认DEF-003/004/006/007构成的当前集成版本并授权本地提交；DEF-005保留被替代历史。提交后继续正式团队道具，不等于整个Phase2/3验收。
+
+2026-10-17：用户确认DEF-009验收，授权本地提交并开始Phase3；补充如实记录三构筑与属性原型的验证边界，不增加历史测试证明范围。
