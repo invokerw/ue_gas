@@ -37,7 +37,9 @@ Demo 操作：左键点击英雄在本地 HUD 查看信息；有控制权时同�
 
 防守原型：打开 `/Game/Combat/Demo/Defense/L_Defense`，点击 UE 顶部 Play（Alt+P），在中央点击 **锁定种子并开始**；可留空随机或输入十进制/0x 种子。准备 40 秒后两路敌人进攻核心，完成五个普通波与 Boss 获胜，核心摧毁则失败。波间整备 25 秒，开局与第 1–5 波后有 15 秒个人三选一；每局可重抽两次，费用 60/100 金币。阵亡后约 8 秒安全复活。
 
-购物复用原商店：点击右下角 **金币按钮**，在 **基础物品 → 团队补给 · 获得即用** 中 **右键购买**。六件商品由本人支付、全队受益、每局全队限购一次，成功立即消耗且不占库存；悬停查看剩余次数、领取者与到期波次。准备/波间/Boss 整备开放团队领取，决战鼓舞仅 Boss 整备可购；普通装备仍按原商店规则购买。原左侧独立商店及专用购买 RPC 已撤除。新物品的“获得即使用”配置也支持满库存拾取和奖励，失败保留金币或原地面物品。团队目录现包含六件正式团队道具：**神殿屏障**（220 金币，核心获得当前最大生命8%的护盾，至下一波清场）和 **应急石**（180 金币，修复核心当前最大生命15%）。默认5000生命核心对应400护盾/750修复；顶部核心条显示剩余屏障。**援军印记**（200金币）提供接下来两次新死亡的救援：复活等待各减少3秒，复活后获得最大生命20%的4秒护盾；购买前已阵亡者不追溯。悬停商品可看剩余援军、待复活和护盾保护人数。个人强化池现有24张卡，包含四家族终局卡；替换英雄时通用强化保留，不兼容卡休眠。Phase 2完成后，第二英雄、事件、装备和多阶段Boss仍属于Phase 3，条件增伤、冷却机制、事件与复杂 Boss 内容留后续。见 [DEF-009](Doc/CombatSystem/Specs/DEF-009-defense-phase2-completion.spec.md)。见 [DEF-006](Doc/CombatSystem/Specs/DEF-006-reuse-shop-use-on-acquire.spec.md) 与 [DEF-004](Doc/CombatSystem/Specs/DEF-004-defense-choice-flow.spec.md)。
+Phase 3 首项攻城兵已接入第 **3、5 波**，每路一名橙色车体、前方带冲槌的敌人；总出生数仍为8/12。攻城兵650生命、移速140、每3秒80攻击，沿原路线攻击核心，追猎号角对它增伤15%。数值仍在灰盒调优，见 [DEF-010](Doc/CombatSystem/Specs/DEF-010-phase3-siege-enemy.spec.md)。
+
+购物复用原商店：点击右下角 **金币按钮**，在 **基础物品 → 团队补给 · 获得即用** 中 **右键购买**。六件商品由本人支付、全队受益、每局全队限购一次，成功立即消耗且不占库存；悬停查看剩余次数、领取者与到期波次。准备/波间/Boss 整备开放团队领取；普通装备仍按原商店规则购买。原左侧独立商店及专用购买 RPC 已撤除。新物品的“获得即使用”配置也支持满库存拾取和奖励，失败保留金币或原地面物品。团队目录现包含六件正式团队道具：**神殿屏障**（220 金币，核心获得当前最大生命8%的护盾，至下一波清场）和 **应急石**（180 金币，修复核心当前最大生命15%）。默认5000生命核心对应400护盾/750修复；顶部核心条显示剩余屏障。**援军印记**（200金币）提供接下来两次新死亡的救援：复活等待各减少3秒，复活后获得最大生命20%的4秒护盾；购买前已阵亡者不追溯。悬停商品可看剩余援军、待复活和护盾保护人数。个人强化池现有24张卡，包含四家族终局卡；替换英雄时通用强化保留，不兼容卡休眠。Phase 2完成后，第二英雄、事件、装备和多阶段Boss仍属于Phase 3，条件增伤、冷却机制、事件与复杂 Boss 内容留后续。见 [DEF-009](Doc/CombatSystem/Specs/DEF-009-defense-phase2-completion.spec.md)。见 [DEF-006](Doc/CombatSystem/Specs/DEF-006-reuse-shop-use-on-acquire.spec.md) 与 [DEF-004](Doc/CombatSystem/Specs/DEF-004-defense-choice-flow.spec.md)。
 
 StateTree AI 演示：打开 `/Game/Combat/Demo/AI/L_CombatAI`，服务器自主单位在导航就绪后追近并攻击木桩。PIE 中选中演示场实例可点击 **AI 返回起点 / AI 攻击靶子**。阶段 A 提供显式 Move/Attack/Cast、单命令写入者、攻击边界切换和玩家接管；Profile、树接线与后续阶段边界见 [20-04 配置指南](Doc/CombatSystem/20-Content/20-04-StateTree-AI-Guide.md)。
 
@@ -205,3 +207,7 @@ python3 -B -m unittest discover -s Tools/Tests -p 'test_validate_docs.py' -v
 ```
 
 若 IDE 构建报 `Unable to delete hot-reload file`，先检查日志中的 DLL 是否仍被同工程的 UE 进程占用；后台没有可见窗口的进程也可能持有模块。保存资产并完全退出占用进程后，运行上面的常规 Editor 构建，让 UBT 清理热重载记录并恢复 `UnrealEditor-Combat.dll`。使用 `-ModuleWithSuffix` 做临时验证后，交付前应完成这一步，并退出仅用于启动验证的 Editor 实例，避免影响下一次 IDE 构建。
+
+防守Phase3继续接入游猎刺客：第4/5波双路紫色尖锥，优先威胁低生命比例英雄，原追猎号角生效；攻城已验收。当前实现/验证进度见 [DEF-011](Doc/CombatSystem/Specs/DEF-011-phase3-assassin-enemy.spec.md)。
+
+第二英雄神殿守卫已接入开局选择（2026-10-19已验收）：Play后先点“改用神殿守卫”，再锁定种子并开始、选择强化。Q指向盾击、W固守、E震地，被动三次普攻受击后下次普攻蓄盾；仅开局可选择一次，见 [DEF-012](Doc/CombatSystem/Specs/DEF-012-phase3-guardian-hero.spec.md)。

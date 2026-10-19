@@ -4,6 +4,7 @@
 #include "Combat/Defense/DefenseAugmentData.h"
 #include "CombatDefenseNetworkScenario.generated.h"
 class ACombatUnitCharacter;
+struct FCombatLogRecord;
 /** 网络验证末态：由服务器采样属性，客户端比对复制的实际 AttributeSet；只用于测试探针。 */
 USTRUCT()
 struct FDefenseChoiceSmokeSample
@@ -21,6 +22,7 @@ public:
 	ACombatDefenseNetworkScenario();
 	virtual void BeginPlay() override;
 	virtual void Tick(float Delta) override;
+	virtual void EndPlay(const EEndPlayReason::Type Reason) override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 private:
 	/** 汇总真实服务器或客户端观察，输出唯一结果。 */
@@ -29,6 +31,34 @@ private:
 	void Kill(ACombatUnitCharacter* Unit);
 	/** 在真实连接上提交选择/重抽及相同载荷重放，只在显式测试开关下执行。 */
 	void ExerciseChoices();
+	/** 显式攻城验证只观察生产出生/移动/伤害，不为攻城单位发出测试命令。 */
+	void ObserveSiege();
+	/** 原自然攻击日志用于确认每名攻城兵确实打到核心。 */
+	void OnSiegeCombatRecord(const FCombatLogRecord& Record);
+	/** 当前含攻城的波次必须等两名攻城真实击中核心才允许测试清场。 */
+	bool IsSiegeWaveObserved() const;
+	/** 显式刺客探针等待生产角色自然伤害英雄，客户端仅检查可见移动与无权威AI。 */
+	void ObserveAssassins();
+	/** 只记录普攻真实AppliedAmount，不使用测试清场伤害作为交战证据。 */
+	void OnAssassinCombatRecord(const FCombatLogRecord& Record);
+	/** 含刺客波两名均移动并击中英雄后才允许清场。 */
+	bool IsAssassinWaveObserved() const;
+	TMap<int32,TSet<int32>> AssassinByWave;
+	TMap<int32,FVector> AssassinInitialPositions;
+	TSet<int32> AssassinMoved,AssassinHeroHit;
+	TMap<int32,TSet<int32>> SiegeByWave;
+	TMap<int32,FVector> SiegeInitialPositions;
+	TSet<int32> SiegeMoved,SiegeCoreHit;
+	/** 显式守卫验证：客户端选角/施法，服务器训练靶只用于隔离技能证据。 */
+	void ExerciseGuardian();
+	/** 统计真实技能伤害与护盾吸收，不把fixture清场算入技能命中。 */
+	void OnGuardianCombatRecord(const FCombatLogRecord& Record);
+	UPROPERTY(Replicated) TObjectPtr<ACombatUnitCharacter> GuardianSmokeHero;
+	UPROPERTY(Replicated) TObjectPtr<ACombatUnitCharacter> GuardianTrainingTarget;
+	int32 GuardianStage=0,GuardianSkillMask=0;
+	double GuardianNextAction=0;
+	bool bGuardianRequestSent=false,bGuardianWSeen=false,bGuardianPassiveSeen=false,bGuardianStunSeen=false;
+	bool bGuardianDamageSeen=false,bGuardianAbsorbed=false,bGuardianSecurity=false,bGuardianCombatReady=false,bGuardianPhaseRejected=false;
 	/** 双客户端争购、同载荷重放、战斗期拒绝及共享效果到期验证。 */
 	void ExerciseTeamShop();
 	/** 显式援军测试：真实RPC争购，三次死亡5/5/8秒与两次4秒护盾复制。 */

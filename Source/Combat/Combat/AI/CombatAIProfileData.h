@@ -32,8 +32,11 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="AI|Perception", meta=(DisplayName="预算延期重试", ToolTip="World 感知配额不足时的最短重试秒数，范围 0.01 到 1；实际延迟会稳定错峰，延期期间不执行全量扫描。", Units="s", ClampMin="0.01", ClampMax="1")) float PerceptionBudgetRetrySeconds = 0.05f;
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="AI|Perception", meta=(DisplayName="感知与记忆", ToolTip="仅启用自主感知时使用；公共 Targeting 的范围/LOS 模型，不是完整迷雾。", EditCondition="bEnablePerception")) FCombatAIPerceptionConfig Perception;
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="AI|Targets", meta=(DisplayName="定义优先级", ToolTip="按单位定义配置候选优先级；未列出的定义为 0。不得重复，最多 64 条。", TitleProperty="Definition")) TArray<FCombatAITargetPriority> TargetPriorities;
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="AI|Targets", meta=(DisplayName="距离权重", ToolTip="同优先级按 Threat×威胁权重减去距离厘米×本权重排序，必须有限非负。", ClampMin="0", ClampMax="100")) float DistanceWeight = 0.01f;
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="AI|Targets", meta=(DisplayName="距离权重", ToolTip="同优先级分数减去距离厘米×本权重，另叠加威胁与可选缺失生命比例分数；必须有限非负。", ClampMin="0", ClampMax="100")) float DistanceWeight = 0.01f;
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="AI|Targets", meta=(DisplayName="威胁权重", ToolTip="实际可观察受伤量的权重，必须有限非负；单目标威胁累计封顶 10000。", ClampMin="0", ClampMax="100")) float ThreatWeight = 1;
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="AI|Targets", meta=(DisplayName="巡线交战最低优先级", ToolTip="尚有未完成航点时，只允许不低于本值的敌人中断巡线。范围-100到100，默认-100允许所有旧候选；路线完成后不再过滤。", ClampMin="-100", ClampMax="100")) int32 RouteEngagementMinPriority = -100;
+	/** 仅当前公共感知可见候选读取ASC；零保持旧评分，不读取历史记忆的实时生命。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="AI|Targets", meta=(DisplayName="缺失生命比例权重", ToolTip="候选分数增加缺失生命比例乘本权重；0关闭并保持旧算法，范围0到10000。仅当前范围和视线许可的敌人参与，定义优先级仍优先，持续攻击不因此自动换敌。", ClampMin="0", ClampMax="10000")) float MissingHealthWeight = 0;
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="AI|Targets", meta=(DisplayName="目标最短保持", ToolTip="合法选择点保留当前候选的最少游戏秒数，范围 0 到 30；无效或新生命立即淘汰。不会在持续攻击中自动换敌。", Units="s", ClampMin="0", ClampMax="30")) float MinTargetHold = 1;
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="AI|Targets", meta=(DisplayName="换目标分差", ToolTip="最短保持结束后，同优先级新候选需超过当前分数的差值；范围 0 到 10000。", ClampMin="0", ClampMax="10000")) float TargetSwitchMargin = 5;
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="AI|Duty", meta=(DisplayName="最大职责偏离", ToolTip="单位距职责锚点或最近已确认路线航点的最大 XY 距离，范围 80 到 10000 厘米；超限允许打断攻击前摇并归位。", Units="cm", ClampMin="80", ClampMax="10000")) float LeashDistance = 1200;

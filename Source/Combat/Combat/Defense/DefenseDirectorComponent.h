@@ -68,6 +68,8 @@ struct FDefensePlayerRecord
 	TArray<FDefenseChoiceReceipt> ChoiceResults;
 	int32 HighRequestId = 0;
 	int32 RerollsUsed = 0;
+	/** 初始空构筑选择只成功一次，不作为中途英雄迁移入口。 */
+	bool bStartingHeroSelected=false;
 	TArray<FPrimaryAssetId> PreviousUnchosen;
 	TArray<FPrimaryAssetId> ChosenCards;
 	TSet<FPrimaryAssetId> PendingCards;
@@ -89,6 +91,10 @@ public:
 	bool RegisterPlayer(ACombatPlayerController* Player, ACombatUnitCharacter* Hero);
 	/** 服务器替换当前英雄；保留本局选择/回执/经济/团队账本，通用卡迁移，不兼容卡休眠。 */
 	bool ReplacePlayerHero(ACombatPlayerController* Player,ACombatUnitCharacter* NewHero);
+	/** 初始准备、空构筑/库存/经验且无团队交易时可选择一次；不读取客户端判断。 */
+	bool CanSelectStartingHero(ACombatPlayerController* Player) const;
+	/** 安全出生并初始化白名单英雄，绑定失败保留旧Unit；仅成功后改绑生命周期并清理旧角色。 */
+	bool SelectStartingHero(ACombatPlayerController* Player,TSubclassOf<ACombatUnitCharacter> HeroClass,FName& Failure);
 	/** 断线撤销本局强化和待领奖励，不接管别人的英雄。 */
 	void RemovePlayer(ACombatPlayerController* Player);
 	/** 幂等清理所有己方资源；GameMode 和 Component EndPlay 共用。 */
@@ -228,6 +234,7 @@ private:
 	bool bEnding = false;
 	bool bCompletionPending = false;
 	bool bChoiceMutating = false;
+	bool bStartingHeroMutating=false;
 	bool bTeamShopMutating = false;
 	int32 GroupIndex = 0, SpawnIndex = 0, SpawnFailures = 0;
 	TArray<FDefenseEnemyRecord> Enemies;

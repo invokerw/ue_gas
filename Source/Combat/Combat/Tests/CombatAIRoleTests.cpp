@@ -8,6 +8,8 @@
 #include "Combat/AI/CombatAIRoleTasks.h"
 #include "Combat/Ability/CombatAbilitySystemComponent.h"
 #include "Combat/Core/CombatTags.h"
+#include "Combat/Combat/CombatDamageSubsystem.h"
+#include "Combat/Attributes/CombatAttributeSet.h"
 #include "Combat/Log/CombatEventSubsystem.h"
 #include "Combat/Order/CombatOrderComponent.h"
 #include "Combat/Scheduling/CombatSchedulerSubsystem.h"
@@ -29,14 +31,14 @@ namespace CombatAIRoleTests
 {
 	constexpr EAutomationTestFlags Flags = EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter;
 	/** 生成无重力、长生命单位，测试仅编排空间和异步回执，不替代生产移动。 */
-	ACombatUnitCharacter* Spawn(UWorld& World, FVector Location = FVector::ZeroVector, uint8 Team = 1)
+	ACombatUnitCharacter* Spawn(UWorld& World, FVector Location = FVector::ZeroVector, uint8 Team = 1, float MaxHealth = 10000)
 	{
 		FActorSpawnParameters Params;
 		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 		auto* Unit = World.SpawnActor<ACombatUnitCharacter>(Location, FRotator::ZeroRotator, Params);
 		auto* Data = NewObject<UCombatUnitData>(Unit);
 		Data->DefinitionName = TEXT("ai_role_fixture_unit");
-		Data->BaseStats.MaxHealth = 10000;
+		Data->BaseStats.MaxHealth = MaxHealth;
 		Data->InitialTeamId = FCombatTeamId(Team);
 		Unit->InitializeFromUnitData(Data);
 		Unit->GetCharacterMovement()->GravityScale = 0;
@@ -397,5 +399,95 @@ bool FCombatAIRoleReceiptEdgesTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("Successful navigation receipt still requires actual arrival"), Brain->GetHomeCommitCount(), uint64(0));
 	TestEqual(TEXT("Arrival mismatch is one bounded failure"), Brain->GetFailureCount(ECombatAIRoleOperation::Home), 1);
 	return true;
+}
+/** 默认不观察生命；显式启用后按比例排序，隐藏目标不泄露变化，实际攻击也消费同一选择。 */
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FCombatAILowHealthTest, "Combat.AI.Roles.LowHealthSelectionAndPrivacy", CombatAIRoleTests::Flags)
+bool FCombatAILowHealthTest::RunTest(const FString&)
+{
+	FCombatAutomationWorldFixture Fixture; auto& W=*Fixture.GetWorld();
+	auto* Unit=CombatAIRoleTests::Spawn(W);
+	auto* Near=CombatAIRoleTests::Spawn(W,FVector(200,200,0),2);
+	auto* Low=CombatAIRoleTests::Spawn(W,FVector(500,0,0),2,20000);
+	FCombatDamageRequest Damage; Damage.Source=Unit; Damage.Target=Near; Damage.Amount=5000; Damage.DamageType=ECombatDamageType::Pure;
+	TestTrue(TEXT("Wound near target through public Damage"),W.GetSubsystem<UCombatDamageSubsystem>()->DealDamage(Damage).bSuccess);
+	Damage.Target=Low; Damage.Amount=14000; TestTrue(TEXT("Wound high maximum-health target"),W.GetSubsystem<UCombatDamageSubsystem>()->DealDamage(Damage).bSuccess);
+	TestTrue(TEXT("Selected target has MORE absolute health"),Low->GetCombatAttributeSet()->GetHealth()>Near->GetCombatAttributeSet()->GetHealth());
+	auto* Brain=Unit->GetCombatAIBrainComponent(); auto* P=CombatAIRoleTests::Profile(Unit,false,true);
+	Brain->SetAssignment({}); Brain->ConfigureProfile(P);
+	if(!TestEqual(TEXT("Two visible enemies"),Brain->GetKnowledge().Candidates.Num(),2)) return false;
+	TestTrue(TEXT("Default zero preserves nearest selection"),Brain->GetKnowledge().Candidates[0].Unit==Near);
+	P->MissingHealthWeight=100; P->DistanceWeight=P->ThreatWeight=0; P->Perception.MemorySeconds=5;
+	Brain->ConfigureProfile(P);
+	TestTrue(TEXT("Lower health ratio selected despite distance"),Brain->GetKnowledge().Candidates[0].Unit==Low);
+	TestTrue(TEXT("Actual ASC ratio gives seventy points"),FMath::IsNearlyEqual(Brain->GetKnowledge().Candidates[0].Score,70.f,.01f));
+	P->Perception.bRequireLineOfSight=true;
+	auto* Wall=W.SpawnActor<AActor>(); auto* Box=NewObject<UBoxComponent>(Wall); Wall->SetRootComponent(Box);
+	Box->SetBoxExtent(FVector(25,70,200)); Box->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+	Box->SetCollisionResponseToAllChannels(ECR_Ignore); Box->SetCollisionResponseToChannel(ECC_GameTraceChannel4,ECR_Block);
+	Box->RegisterComponent(); Wall->SetActorLocation(FVector(250,0,0));
+	Damage.Amount=1000; W.GetSubsystem<UCombatDamageSubsystem>()->DealDamage(Damage); CombatAIRoleTests::Advance(W,2);
+	TestEqual(TEXT("Occluded low-health target excluded"),Brain->GetKnowledge().Candidates.Num(),1);
+	const auto* Memory=Brain->GetKnowledge().Memories.FindByPredicate([&](const auto& M){return M.Unit==Low;});
+	TestTrue(TEXT("Hidden damage does not update memory score"),Memory&&!Memory->bVisible&&FMath::IsNearlyEqual(Memory->Score,70.f,.01f));
+	Wall->Destroy();
+	auto* Active=CombatAIRoleTests::Profile(Unit,true); Active->MissingHealthWeight=100; Active->DistanceWeight=Active->ThreatWeight=0;
+	Brain->ConfigureProfile(Active); CombatAIRoleTests::Advance(W,8);
+	TestTrue(TEXT("Compiled role tree submits attack"),Brain->GetSubmittedCount()>0);
+	TestTrue(TEXT("Actual attack pursues wounded enemy"),Unit->GetCombatOrderComponent()->GetCurrentMoveGoal().Equals(Low->GetActorLocation(),1));
+	const uint32 OldLife=Low->GetLifeGeneration(); Damage.Amount=100000; W.GetSubsystem<UCombatDamageSubsystem>()->DealDamage(Damage);
+	CombatAIRoleTests::Advance(W,6);
+	TestTrue(TEXT("Dead target removed"),!Brain->GetKnowledge().Candidates.ContainsByPredicate([&](const auto& M){return M.Unit==Low;}));
+	Low->GetCombatLifecycleComponent()->RespawnAtLocation(FVector(500,0,0)); CombatAIRoleTests::Advance(W,4);
+	const auto* Reborn=Brain->GetKnowledge().Candidates.FindByPredicate([&](const auto& M){return M.Unit==Low;});
+	TestTrue(TEXT("New life reobserved at full health"),Reborn&&Reborn->Life>OldLife&&FMath::IsNearlyZero(Reborn->Score));
+	FString Error; Active->MissingHealthWeight=-1; TestFalse(TEXT("Negative weight rejected"),Active->ValidateRuntime(Error));
+	Active->MissingHealthWeight=std::numeric_limits<float>::infinity(); TestFalse(TEXT("Nonfinite weight rejected"),Active->ValidateRuntime(Error));
+	Unit->Destroy(); TestFalse(TEXT("Sensor schedule canceled"),Brain->HasPerceptionSchedule());
+	TestFalse(TEXT("Observer canceled"),Brain->HasPerceptionSubscription()); TestEqual(TEXT("Knowledge cleared"),Brain->GetKnowledge().Memories.Num(),0);
+	return true;
+}
+/** 巡线只响应高优先级定义，完成原路线后允许核心类低优先级敌人，防止反复攻核归位。 */
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FCombatAIRoutePriorityTest,"Combat.AI.Roles.RoutePriorityAndFallback",CombatAIRoleTests::Flags)
+bool FCombatAIRoutePriorityTest::RunTest(const FString&)
+{
+	FCombatAutomationWorldFixture F; auto& W=*F.GetWorld();
+	auto* Unit=CombatAIRoleTests::Spawn(W); auto* Enemy=CombatAIRoleTests::Spawn(W,FVector(500,0,0),2);
+	auto* Brain=Unit->GetCombatAIBrainComponent(); auto* Orders=Unit->GetCombatOrderComponent();
+	FCombatAIAssignment Duty; Duty.Route={FVector(200,100,0)}; Brain->SetAssignment(Duty);
+	auto* P=CombatAIRoleTests::Profile(Unit,true); P->RouteEngagementMinPriority=10;
+	Brain->ConfigureProfile(P); CombatAIRoleTests::Advance(W,4);
+	TestEqual(TEXT("Low priority cannot interrupt route"),Brain->GetKnowledge().Candidates.Num(),0);
+	TestTrue(TEXT("Actual move follows assigned waypoint"),Orders->GetCurrentMoveGoal().Equals(Duty.Route[0],1));
+	Unit->SetActorLocation(Duty.Route[0]); TestTrue(TEXT("Fixture confirms genuine issued move"),Orders->CompleteMovementForTesting(Orders->GetCurrentOrderHandle(),true));
+	CombatAIRoleTests::Advance(W,10);
+	TestEqual(TEXT("Route fully committed"),Brain->GetRouteCursor(),1);
+	TestTrue(TEXT("Finished route admits fallback enemy"),Brain->GetKnowledge().Candidates.Num()==1&&Brain->GetKnowledge().Candidates[0].Unit==Enemy);
+	TestTrue(TEXT("Fallback attack pursues enemy"),Orders->GetCurrentMoveGoal().Equals(Enemy->GetActorLocation(),1));
+	Brain->SuspendForManualCommand(); Brain->SetAssignment(Duty);
+	FCombatAITargetPriority Priority; Priority.Definition=Enemy->GetUnitDefinitionId(); Priority.Priority=10; P->TargetPriorities.Add(Priority);
+	Brain->ConfigureProfile(P); Brain->ResumeAutonomous(); CombatAIRoleTests::Advance(W,5);
+	TestTrue(TEXT("High priority interrupts unfinished route"),Brain->GetRouteCursor()==0&&Brain->GetKnowledge().Candidates.Num()==1);
+	FString Error; P->RouteEngagementMinPriority=101; TestFalse(TEXT("Unsupported priority rejected"),P->ValidateRuntime(Error));
+	return true;
+}
+/** 交战期限确实取消原攻击并归位；旧移动回调和新可见敌人都不能夺走归位命令。 */
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FCombatAIEngagementDeadlineTest,"Combat.AI.Roles.EngagementDeadlineAndCleanup",CombatAIRoleTests::Flags)
+bool FCombatAIEngagementDeadlineTest::RunTest(const FString&)
+{
+	FCombatAutomationWorldFixture F; auto& W=*F.GetWorld();
+	auto* Unit=CombatAIRoleTests::Spawn(W,FVector(200,0,0)); CombatAIRoleTests::Spawn(W,FVector(600,0,0),2);
+	auto* Brain=Unit->GetCombatAIBrainComponent(); auto* Orders=Unit->GetCombatOrderComponent();
+	auto* P=CombatAIRoleTests::Profile(Unit,true); P->MaxEngagementSeconds=1;
+	Brain->SetAssignment({}); Brain->ConfigureProfile(P); CombatAIRoleTests::Advance(W,4);
+	const auto Old=Orders->GetCurrentOrderHandle(); TestTrue(TEXT("Attack began"),Old.IsValid());
+	CombatAIRoleTests::Advance(W,24);
+	TestTrue(TEXT("Deadline forces return even with visible enemy"),Brain->IsReturnRequested());
+	const auto Home=Orders->GetCurrentOrderHandle(); TestTrue(TEXT("Return replaces exact old attack"),Home.IsValid()&&!(Home==Old));
+	TestTrue(TEXT("Return uses duty anchor"),Orders->GetCurrentMoveGoal().Equals(FVector::ZeroVector,1));
+	TestFalse(TEXT("Stale attack movement callback rejected"),Orders->CompleteMovementForTesting(Old,true));
+	CombatAIRoleTests::Advance(W,5); TestEqual(TEXT("Fresh observations preserve return order"),Orders->GetCurrentOrderHandle(),Home);
+	Unit->Destroy(); TestFalse(TEXT("Destroy cancels perception"),Brain->HasPerceptionSchedule());
+	TestFalse(TEXT("Destroy removes delegate"),Brain->HasPerceptionSubscription());
+	TestFalse(TEXT("Destroy invalidates role scope"),Brain->GetDecisionScope().IsValid()); return true;
 }
 #endif

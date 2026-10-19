@@ -8,6 +8,7 @@
 #include "Combat/Targeting/CombatTargetingSubsystem.h"
 #include "Combat/Unit/CombatUnitCharacter.h"
 #include "Engine/World.h"
+#include "Combat/Attributes/CombatAttributeSet.h"
 
 namespace CombatAIRoleBrain
 {
@@ -139,7 +140,17 @@ void UCombatAIBrainComponent::SampleKnowledge()
 			if (Entry.Definition == Memory->Definition) { Memory->Priority = Entry.Priority; break; }
 		Memory->Score = Memory->Threat * Profile->ThreatWeight
 			- FVector::Dist2D(Context.Unit->GetActorLocation(), Memory->LastSeenPosition) * Profile->DistanceWeight;
-		if (!bHasAssignment || FVector::Dist2D(GetDutyAnchor(), Memory->LastSeenPosition) <= Profile->LeashDistance)
+		// 只有本轮公共查询许可的目标才读取生命，失去视线的历史记忆不可泄露实时属性。
+		if (Profile->MissingHealthWeight > 0)
+		{
+			const auto* Attributes = Target->GetCombatAttributeSet();
+			const float Maximum = Attributes ? Attributes->GetMaxHealth() : 0;
+			const float Health = Attributes ? Attributes->GetHealth() : 0;
+			if (FMath::IsFinite(Maximum) && Maximum > 0 && FMath::IsFinite(Health))
+				Memory->Score += FMath::Clamp(1.0f - Health / Maximum, 0.0f, 1.0f) * Profile->MissingHealthWeight;
+		}
+		if ((!HasRoutePoint() || Memory->Priority >= Profile->RouteEngagementMinPriority)
+			&& (!bHasAssignment || FVector::Dist2D(GetDutyAnchor(), Memory->LastSeenPosition) <= Profile->LeashDistance))
 			Next.Candidates.Add(*Memory);
 	}
 	FCombatAITargetSelection::Sort(Next.Candidates);

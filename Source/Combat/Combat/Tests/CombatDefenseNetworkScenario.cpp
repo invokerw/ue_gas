@@ -1,5 +1,8 @@
 #include "Combat/Tests/CombatDefenseNetworkScenario.h"
 #include "Combat/Defense/DefenseGameState.h"
+#include "Combat/Defense/DefenseHeroSelectionComponent.h"
+#include "Combat/Defense/DefenseGuardian.h"
+#include "Combat/Order/CombatOrderComponent.h"
 #include "Combat/Defense/DefenseObjective.h"
 #include "Combat/Combat/CombatDamageSubsystem.h"
 #include "Combat/AI/CombatAIBrainComponent.h"
@@ -17,6 +20,7 @@
 #include "Combat/Defense/DefenseCoreShieldRuntime.h"
 #include "Combat/View/CombatUnitViewComponent.h"
 #include "Combat/Modifiers/CombatModifierComponent.h"
+#include "Combat/Log/CombatEventSubsystem.h"
 #include "EngineUtils.h"
 #include "Net/UnrealNetwork.h"
 #include "Combat/Ability/CombatAbilitySystemComponent.h"
@@ -46,6 +50,12 @@ void ACombatDefenseNetworkScenario::BeginPlay()
 #else
 	SetActorTickEnabled(FParse::Param(FCommandLine::Get(),TEXT("DefenseSmoke")));
 	FParse::Value(FCommandLine::Get(),TEXT("DefenseSmokePlayers="),ExpectedPlayers);
+	if(FParse::Param(FCommandLine::Get(),TEXT("DefenseSmoke"))&&FParse::Param(FCommandLine::Get(),TEXT("DefenseSiegeSmoke"))&&HasAuthority())
+		GetWorld()->GetSubsystem<UCombatEventSubsystem>()->OnRecord().AddUObject(this,&ThisClass::OnSiegeCombatRecord);
+	if(FParse::Param(FCommandLine::Get(),TEXT("DefenseSmoke"))&&FParse::Param(FCommandLine::Get(),TEXT("DefenseAssassinSmoke"))&&HasAuthority())
+		GetWorld()->GetSubsystem<UCombatEventSubsystem>()->OnRecord().AddUObject(this,&ThisClass::OnAssassinCombatRecord);
+	if(FParse::Param(FCommandLine::Get(),TEXT("DefenseSmoke"))&&FParse::Param(FCommandLine::Get(),TEXT("DefenseGuardianSmoke"))&&HasAuthority())
+		GetWorld()->GetSubsystem<UCombatEventSubsystem>()->OnRecord().AddUObject(this,&ThisClass::OnGuardianCombatRecord);
 #endif
 }
 void ACombatDefenseNetworkScenario::Kill(ACombatUnitCharacter* Unit)
@@ -65,6 +75,12 @@ void ACombatDefenseNetworkScenario::Tick(float Delta)
 	auto* State=GetWorld()->GetGameState<ADefenseGameState>();
 	if(!State || !State->GetRunView().RunId.IsValid()) return;
 	const auto& V=State->GetRunView();
+	const bool Siege=FParse::Param(FCommandLine::Get(),TEXT("DefenseSiegeSmoke"));
+	if(Siege) ObserveSiege();
+	const bool Assassin=FParse::Param(FCommandLine::Get(),TEXT("DefenseAssassinSmoke"));
+	if(Assassin) ObserveAssassins();
+	const bool Guardian=FParse::Param(FCommandLine::Get(),TEXT("DefenseGuardianSmoke"));
+	if(Guardian) ExerciseGuardian();
 	const bool Choices=FParse::Param(FCommandLine::Get(),TEXT("DefenseChoiceSmoke"));
 	if(Choices) ExerciseChoices();
 	const bool TeamShop=FParse::Param(FCommandLine::Get(),TEXT("DefenseTeamShopSmoke"));
@@ -115,7 +131,7 @@ void ACombatDefenseNetworkScenario::Tick(float Delta)
 			}
 			const bool WaveDamage=V.ObjectiveHealth<CoreAtWaveStart-1;
 			bSawDamage |= WaveDamage;
-			if(V.PendingSpawns==0 && WaveDamage && Elapsed-WaveStarted>10 && ClearedWaves==V.WaveIndex)
+			if(V.PendingSpawns==0 && WaveDamage && Elapsed-WaveStarted>10 && ClearedWaves==V.WaveIndex && (!Siege||IsSiegeWaveObserved()) && (!Assassin||IsAssassinWaveObserved()))
 			{
 				if(DefeatCase) Kill(V.Objective);
 				else { for(auto* Enemy:Enemies) Kill(Enemy); ++ClearedWaves; }
@@ -199,6 +215,30 @@ void ACombatDefenseNetworkScenario::Tick(float Delta)
 			UE_LOG(LogTemp,Display,TEXT("DefenseReinforcementNetwork NetMode=%d Revivals=%d Expiries=%d Two=%d One=%d Zero=%d ClientShields=%d Expired=%d Match=%d"),
 				int32(GetNetMode()),AidRevivals,AidExpiries,bAidTwo,bAidOne,bAidZero,AidClientShields.Num(),bAidExpired,Rewards);
 		}
+		if(Siege)
+		{
+			Rewards &= SiegeInitialPositions.Num()==4&&SiegeMoved.Num()==4;
+			if(GetNetMode()!=NM_Client) Rewards &= SiegeCoreHit.Num()==4;
+			UE_LOG(LogTemp,Display,TEXT("DefenseSiegeNetwork NetMode=%d Spawned=%d Moved=%d CoreAttackers=%d Match=%d"),int32(GetNetMode()),SiegeInitialPositions.Num(),SiegeMoved.Num(),SiegeCoreHit.Num(),Rewards);
+		}
+		if(Assassin)
+		{
+			Rewards &= AssassinInitialPositions.Num()==4&&AssassinMoved.Num()==4;
+			if(GetNetMode()!=NM_Client) Rewards &= AssassinHeroHit.Num()==4;
+			UE_LOG(LogTemp,Display,TEXT("DefenseAssassinNetwork NetMode=%d Spawned=%d Moved=%d HeroAttackers=%d Match=%d"),int32(GetNetMode()),AssassinInitialPositions.Num(),AssassinMoved.Num(),AssassinHeroHit.Num(),Rewards);
+		}
+		if(Guardian)
+		{
+			Rewards &= bGuardianWSeen&&bGuardianPassiveSeen&&bGuardianStunSeen&&bGuardianDamageSeen;
+			if(GetNetMode()!=NM_Client) Rewards &= GuardianSkillMask==7&&bGuardianAbsorbed&&bGuardianSecurity&&bGuardianCombatReady;
+			else
+			{
+				int32 Seat=0; FParse::Value(FCommandLine::Get(),TEXT("DefenseSmokeSeat="),Seat);
+				if(Seat==1) Rewards &= bGuardianPhaseRejected;
+			}
+			UE_LOG(LogTemp,Display,TEXT("DefenseGuardianNetwork NetMode=%d Skills=%d W=%d Passive=%d Stun=%d Damage=%d Absorb=%d Security=%d CombatReady=%d Closed=%d Match=%d"),
+				int32(GetNetMode()),GuardianSkillMask,bGuardianWSeen,bGuardianPassiveSeen,bGuardianStunSeen,bGuardianDamageSeen,bGuardianAbsorbed,bGuardianSecurity,bGuardianCombatReady,bGuardianPhaseRejected,Rewards);
+		}
 		const bool Evidence=GetNetMode()==NM_Client ? bRPC : bSawMovement && bSawDamage && (DefeatCase || (ClearedWaves==6 && bRespawn));
 		Finish(Expected && Evidence && Rewards,FString::Printf(TEXT("Wave=%d CoreHP=%.0f Movement=%d Damage=%d Respawn=%d RPC=%d Cleared=%d Rewards=%d Reason=%s"),
 			V.WaveIndex,V.ObjectiveHealth,bSawMovement,bSawDamage,bRespawn,bRPC,ClearedWaves,Rewards,*V.TerminalReason.ToString()));
@@ -235,6 +275,8 @@ void ACombatDefenseNetworkScenario::GetLifetimeReplicatedProps(TArray<FLifetimeP
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 	DOREPLIFETIME(ACombatDefenseNetworkScenario,FinalAttributes);
+	DOREPLIFETIME(ACombatDefenseNetworkScenario,GuardianSmokeHero);
+	DOREPLIFETIME(ACombatDefenseNetworkScenario,GuardianTrainingTarget);
 }
 
 
@@ -354,4 +396,64 @@ void ACombatDefenseNetworkScenario::ExerciseReinforcement()
 	if(!Bought||Heroes.Num()!=ExpectedPlayers) return;
 	AidHero=Heroes[AidDeaths%Heroes.Num()]; AidDeathLife=AidHero->GetLifeGeneration(); AidDeathAt=Now;
 	Kill(AidHero.Get()); ++AidDeaths;
+}
+
+void ACombatDefenseNetworkScenario::EndPlay(const EEndPlayReason::Type Reason)
+{
+	if(auto* Events=GetWorld()?GetWorld()->GetSubsystem<UCombatEventSubsystem>():nullptr) Events->OnRecord().RemoveAll(this);
+	if(HasAuthority()&&IsValid(GuardianTrainingTarget)) { auto* Controller=GuardianTrainingTarget->GetController(); GuardianTrainingTarget->Destroy(); if(IsValid(Controller)) Controller->Destroy(); }
+	Super::EndPlay(Reason);
+}
+void ACombatDefenseNetworkScenario::ObserveSiege()
+{
+	const auto* State=GetWorld()->GetGameState<ADefenseGameState>(); if(!State) return;
+	for(TActorIterator<ADefenseSiegeEnemy> It(GetWorld());It;++It)
+	{
+		const int32 Id=It->GetUniqueID(); const int32 Wave=State->GetWaveIndex();
+		if(const auto* Initial=SiegeInitialPositions.Find(Id)) { if(FVector::Dist2D(*Initial,It->GetActorLocation())>300) SiegeMoved.Add(Id); }
+		else { SiegeInitialPositions.Add(Id,It->GetActorLocation()); SiegeByWave.FindOrAdd(Wave).Add(Id); }
+		if(GetNetMode()==NM_Client&&(It->HasAuthority()||It->GetCombatAIBrainComponent()->IsRunning())) Finish(false,TEXT("SiegeClientAuthorityLeak"));
+	}
+}
+void ACombatDefenseNetworkScenario::OnSiegeCombatRecord(const FCombatLogRecord& R)
+{
+	const auto* State=GetWorld()->GetGameState<ADefenseGameState>(); if(!State||!State->GetRunView().Objective) return;
+	if(R.EventType==CombatTags::Event_Combat_DamageApplied&&R.AppliedAmount>0
+		&&R.Source.DirectSourceType==ECombatDirectSourceType::Attack&&R.TargetActorId==State->GetRunView().Objective->GetUniqueID()
+		&&SiegeInitialPositions.Contains(R.SourceActorId)) SiegeCoreHit.Add(R.SourceActorId);
+}
+bool ACombatDefenseNetworkScenario::IsSiegeWaveObserved() const
+{
+	const auto* State=GetWorld()->GetGameState<ADefenseGameState>(); if(!State) return false;
+	const int32 Wave=State->GetWaveIndex(); if(Wave!=2&&Wave!=4) return true;
+	const auto* Ids=SiegeByWave.Find(Wave); if(!Ids||Ids->Num()!=2) return false;
+	for(const int32 Id:*Ids) if(!SiegeCoreHit.Contains(Id)||!SiegeMoved.Contains(Id)) return false;
+	return true;
+}
+
+void ACombatDefenseNetworkScenario::ObserveAssassins()
+{
+	const auto* State=GetWorld()->GetGameState<ADefenseGameState>(); if(!State) return;
+	for(TActorIterator<ADefenseAssassinEnemy> It(GetWorld());It;++It)
+	{
+		const int32 Id=It->GetUniqueID(); const int32 Wave=State->GetWaveIndex();
+		if(const auto* Initial=AssassinInitialPositions.Find(Id)) { if(FVector::Dist2D(*Initial,It->GetActorLocation())>300) AssassinMoved.Add(Id); }
+		else { AssassinInitialPositions.Add(Id,It->GetActorLocation()); AssassinByWave.FindOrAdd(Wave).Add(Id); }
+		if(GetNetMode()==NM_Client&&(It->HasAuthority()||It->GetCombatAIBrainComponent()->IsRunning())) Finish(false,TEXT("AssassinClientAuthorityLeak"));
+	}
+}
+void ACombatDefenseNetworkScenario::OnAssassinCombatRecord(const FCombatLogRecord& R)
+{
+	if(R.EventType!=CombatTags::Event_Combat_DamageApplied||R.AppliedAmount<=0
+		||R.Source.DirectSourceType!=ECombatDirectSourceType::Attack||!AssassinInitialPositions.Contains(R.SourceActorId)) return;
+	for(TActorIterator<ACombatPlayerController> It(GetWorld());It;++It)
+		if(It->GetCommandedUnit()&&It->GetCommandedUnit()->GetUniqueID()==R.TargetActorId) AssassinHeroHit.Add(R.SourceActorId);
+}
+bool ACombatDefenseNetworkScenario::IsAssassinWaveObserved() const
+{
+	const auto* State=GetWorld()->GetGameState<ADefenseGameState>(); if(!State) return false;
+	const int32 Wave=State->GetWaveIndex(); if(Wave!=3&&Wave!=4) return true;
+	const auto* Ids=AssassinByWave.Find(Wave); if(!Ids||Ids->Num()!=2) return false;
+	for(const int32 Id:*Ids) if(!AssassinHeroHit.Contains(Id)||!AssassinMoved.Contains(Id)) return false;
+	return true;
 }

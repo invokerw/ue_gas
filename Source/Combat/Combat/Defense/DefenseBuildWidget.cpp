@@ -1,5 +1,6 @@
 #include "Combat/Defense/DefenseBuildWidget.h"
 #include "Combat/Defense/DefenseChoiceComponent.h"
+#include "Combat/Defense/DefenseHeroSelectionComponent.h"
 #include "Combat/Defense/DefensePlayerController.h"
 #include "Combat/Defense/DefenseGameState.h"
 #include "Combat/Defense/DefenseGameMode.h"
@@ -92,7 +93,8 @@ FText UDefenseBuildWidget::ExplainFailure(const FName Reason)
 void UDefenseBuildWidget::RefreshContents()
 {
 	if(!ChoiceBody || !OwnedBody) return;
-	ChoiceBody->ClearChildren(); OwnedBody->ClearChildren(); SeedInput.Reset(); StartButton.Reset(); RerollButton.Reset(); CardButtons.Reset();
+	const FText PreservedSeed=SeedInput?SeedInput->GetText():FText::GetEmpty();
+	GuardianButton.Reset(); ChoiceBody->ClearChildren(); OwnedBody->ClearChildren(); SeedInput.Reset(); StartButton.Reset(); RerollButton.Reset(); CardButtons.Reset();
 	const auto* State=GetWorld()?GetWorld()->GetGameState<ADefenseGameState>():nullptr;
 	const bool Waiting=State && State->GetRunView().bWaitingForStart;
 	const auto* C=GetChoice(); const auto View=C?C->GetView():FDefenseChoiceView();
@@ -136,10 +138,11 @@ void UDefenseBuildWidget::RefreshContents()
 	if(Waiting)
 	{
 		ChoiceBody->AddSlot().AutoHeight()[DefenseBuildUI::Label(FText::FromString(TEXT("守护神殿")),26)];
+		AddHeroPicker();
 		if(GetWorld()->GetNetMode()!=NM_Client)
 		{
 			ChoiceBody->AddSlot().AutoHeight().Padding(0,12)[DefenseBuildUI::Label(FText::FromString(TEXT("输入种子复现同一局，或留空随机。开始后种子锁定。")))];
-			ChoiceBody->AddSlot().AutoHeight().Padding(0,6)[SAssignNew(SeedInput,SEditableTextBox).HintText(FText::FromString(TEXT("随机种子（可选）：12345 或 0xABCD")))];
+			ChoiceBody->AddSlot().AutoHeight().Padding(0,6)[SAssignNew(SeedInput,SEditableTextBox).Text(PreservedSeed).HintText(FText::FromString(TEXT("随机种子（可选）：12345 或 0xABCD")))];
 			ChoiceBody->AddSlot().AutoHeight().Padding(0,12)[SAssignNew(StartButton,SButton).ClickMethod(EButtonClickMethod::MouseDown).ContentPadding(12).OnClicked_UObject(this,&ThisClass::StartRun)
 				[DefenseBuildUI::Label(FText::FromString(TEXT("锁定种子并开始")),18)]];
 			ChoiceBody->AddSlot().AutoHeight()[SNew(STextBlock).ColorAndOpacity(FLinearColor(1,0.45f,0.3f)).Text_Lambda([this]{return LocalError;})];
@@ -148,6 +151,7 @@ void UDefenseBuildWidget::RefreshContents()
 		return;
 	}
 	if(!Open) return;
+	if(State&&State->GetWaveIndex()==INDEX_NONE) AddHeroPicker();
 	ChoiceBody->AddSlot().AutoHeight()[DefenseBuildUI::Label(FText::FromString(TEXT("选择本轮强化")),24)];
 	ChoiceBody->AddSlot().AutoHeight().Padding(0,8)[SNew(STextBlock).ColorAndOpacity(DefenseBuildUI::Accent).Text_UObject(this,&ThisClass::CountdownText)];
 	TSharedRef<SHorizontalBox> Cards=SNew(SHorizontalBox);
@@ -189,7 +193,9 @@ void UDefenseBuildWidget::NativeTick(const FGeometry& Geometry,float Delta)
 	Super::NativeTick(Geometry,Delta);
 	const auto* C=GetChoice(); const auto* State=GetWorld()?GetWorld()->GetGameState<ADefenseGameState>():nullptr;
 	const int32 Revision=C?C->GetView().Revision:0; const bool Waiting=State&&State->GetRunView().bWaitingForStart;
-	if(Revision!=SeenRevision || Waiting!=bSeenWaiting) { SeenRevision=Revision; bSeenWaiting=Waiting; RefreshContents(); }
+	const auto* PC=Cast<ADefensePlayerController>(GetOwningPlayer());
+	const int32 HeroRevision=PC&&PC->GetHeroSelection()?PC->GetHeroSelection()->GetView().Revision:0;
+	if(Revision!=SeenRevision || Waiting!=bSeenWaiting || HeroRevision!=SeenHeroRevision) { SeenRevision=Revision; bSeenWaiting=Waiting; SeenHeroRevision=HeroRevision; RefreshContents(); }
 	const auto* HUD=GetOwningPlayer()?Cast<ACombatPlayerHUD>(GetOwningPlayer()->GetHUD()):nullptr;
 	const bool Shopping=HUD&&HUD->GetShopWidget()&&HUD->GetShopWidget()->IsShopOpen();
 	if(OwnedPanel) OwnedPanel->SetVisibility(C&&!Shopping?EVisibility::Visible:EVisibility::Collapsed);
@@ -207,6 +213,25 @@ FReply UDefenseBuildWidget::NativeOnMouseButtonDown(const FGeometry& Geometry,co
 }
 void UDefenseBuildWidget::ReleaseSlateResources(bool bReleaseChildren)
 {
-	ChoicePanel.Reset(); OwnedPanel.Reset(); ChoiceBody.Reset(); OwnedBody.Reset(); SeedInput.Reset(); StartButton.Reset(); RerollButton.Reset(); CardButtons.Reset();
+	GuardianButton.Reset(); ChoicePanel.Reset(); OwnedPanel.Reset(); ChoiceBody.Reset(); OwnedBody.Reset(); SeedInput.Reset(); StartButton.Reset(); RerollButton.Reset(); CardButtons.Reset();
 	Super::ReleaseSlateResources(bReleaseChildren);
+}
+
+void UDefenseBuildWidget::AddHeroPicker()
+{
+	auto* PC=Cast<ADefensePlayerController>(GetOwningPlayer()); auto* Selection=PC?PC->GetHeroSelection():nullptr;
+	if(!Selection||!ChoiceBody) return;
+	const auto& V=Selection->GetView();
+	ChoiceBody->AddSlot().AutoHeight().Padding(0,8)[DefenseBuildUI::Label(FText::FromString(V.bGuardianSelected?TEXT("当前英雄：神殿守卫 · 近战承伤"):TEXT("当前英雄：神殿游侠 · 远程输出")),18)];
+	if(V.bGuardianSelected)
+	{
+		ChoiceBody->AddSlot().AutoHeight()[DefenseBuildUI::Label(FText::FromString(TEXT("Q 指向盾击 · W 固守护盾 · E 震地控制；被动：三次普攻受击后，下次普攻蓄盾。")),13)];
+		return;
+	}
+	ChoiceBody->AddSlot().AutoHeight().Padding(0,4)[SAssignNew(GuardianButton,SButton).ClickMethod(EButtonClickMethod::MouseDown).ContentPadding(10)
+		.IsEnabled(V.bCanChoose).OnClicked_Lambda([this]()
+		{ if(auto* Owner=Cast<ADefensePlayerController>(GetOwningPlayer())) if(auto* S=Owner->GetHeroSelection()) S->RequestGuardian(); return FReply::Handled(); })
+		[DefenseBuildUI::Label(FText::FromString(TEXT("改用神殿守卫 · 本局一次")),16)]];
+	ChoiceBody->AddSlot().AutoHeight()[DefenseBuildUI::Label(FText::FromString(TEXT("请先选英雄，再选强化或购物；首次强化到期、获得经验、携带物品或团队购买后锁定。")),11)];
+	if(!V.FailureReason.IsNone()) ChoiceBody->AddSlot().AutoHeight()[DefenseBuildUI::Label(FText::FromString(TEXT("未能更换：资格或身份已变化，或出生点被阻挡；原英雄与金币保留。")),12)];
 }

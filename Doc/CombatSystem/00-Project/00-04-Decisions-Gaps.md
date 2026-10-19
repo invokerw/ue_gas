@@ -479,3 +479,19 @@ Phase 2六件团队商品继续使用原CombatShop/获得即用；正式补齐�
 强化池由12张原型扩展为24张，新增四张终局卡；终局卡最早第3波候选，家族计数仍由服务器IsEligible判断，个人卡每张最多一次。Build HUD显示拥有卡的家族计数，客户端只消费CardView。服务器替换英雄保留PlayerRecord的OwnedAugments、ChosenCards、ChoiceResults、PendingCards和经济/团队账本，通用卡重新应用，不兼容卡休眠；Controller继续使用既有SetCommandedUnitAuthority与BindingGeneration。
 
 本步不引入第二英雄、攻城/刺客生产内容、事件、装备或Boss多阶段技能；Phase2的三构筑Boss回归使用现有原型Boss胜负入口。实现和验证见 [DEF-009](../Specs/DEF-009-defense-phase2-completion.spec.md)。
+
+### ADR-077：防守刺客复用角色树与可选低生命评分（2026-10-17；DEF-011）
+
+采用兼容新增：AI Profile的MissingHealthWeight默认为0，启用时同定义优先级候选分数增加`clamp(1-Health/MaxHealth,0,1)*MissingHealthWeight`；仅在公共Targeting范围/LOS许可的当前观察中读ASC。失去观察的记忆不读取实时生命，持续攻击不强制换敌。默认0保持旧评分，AIProfileVersion仍1/2，不改变发布契约和网络schema。
+
+Defense SpawnGroup增加可空RoleProfile，初始化复制冻结其配置。空值仍由导演提交原路线Move/Attack；非空则导演设置职责后只启动角色树，禁止UnitData同时配置AIProfile，也禁止Boss组使用本入口。新刺客Profile复用Lane树，当前英雄定义优先级高于核心，按低生命比例择敌，8秒或越界后归位。固定英雄身份优先级在以后新增英雄时须同步配置；未知友方定义作为普通敌对候选处理。新字段可逆、旧资产默认兼容，无新增权威计时、RPC或Damage入口。
+
+DEF-011 0.2追加：RouteEngagementMinPriority默认-100保留旧候选；刺客巡线设10，仅英雄可中断航点。完点后允许优先级0核心，避免核心先入视野导致反复攻核归位而永远不能抵达后排。
+
+### ADR-078：神殿守卫技能包与受限开局选择（2026-10-17；DEF-012）
+
+守卫独立CombatUnit/AbilitySet与技能身份，不替换游侠定义。Q/E在公开Ability执行点中以公共Targeting许可后过滤扇形、公开Damage/Modifier结算；W沿用DataDriven ApplyModifier与有限护盾。可选shield_fraction/shield_cap_fraction默认0，旧shield_amount配置不变；有上限声明时，同族新盾吸收余量按当前ASC最大生命及已有盾余量限制。被动三次有效直接普攻受击武装，下次直接普攻给盾，按Root去重、4秒内置冷却，死亡重建Intrinsic。
+
+Boss失衡采用数据驱动Modifier，Boss自持来源使多人同池叠层，首次一层起固定8秒窗口，4层触发2秒Stunned及总8秒失衡保护。没有新Tag/事件或攻击阶段API，不宣称Boss三阶段已实现。
+
+开局选择为Defense独立owner-only组件schema1，只接收改用配置白名单守卫的意图，复用连接限频/重放；初始准备、空构筑/库存/经验及未购团队效果才允许成功一次。服务器安全出生并初始化，控制绑定成功后才提交记录、改委托和销毁旧角色；失败保留旧角色与金币。已有候选随身份修订且保留原截止。此入口不调用旧ReplacePlayerHero，不扩大为完整中途迁移；DEF-009相关Gap保持。发布契约、Combat内容/事件/公式和既有Choice/Run/HUD schema不变，新增身份与字段可逆兼容。

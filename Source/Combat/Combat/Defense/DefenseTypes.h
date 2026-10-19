@@ -4,6 +4,7 @@
 #include "DefenseTypes.generated.h"
 class ACombatUnitCharacter;
 class UCombatUnitData;
+class UCombatAIProfileData;
 class ADefenseObjective;
 
 /** 防守阶段只由服务器 Director 改变；胜败是不可逆终态。 */
@@ -43,6 +44,9 @@ struct COMBAT_API FDefenseSpawnGroup
 	/** 稳定 UnitData，敌队且无最后一击金币经验；奖励由整局导演发放。 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Defense", meta=(DisplayName="单位定义", ToolTip="稳定 UnitData，敌队且无最后一击金币经验；奖励由整局导演发放。"))
 	TObjectPtr<UCombatUnitData> UnitData;
+	/** 为空沿用导演队列；非空由角色树独占下令，在登记出生和设置路线职责后启动。 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Defense", meta=(DisplayName="路线角色AI", ToolTip="可选的已编译且开启感知的角色配置。空值由导演沿路线攻击核心；非空由角色树按职责选敌，单位定义的AI配置必须为空，Boss组不支持。本局开始时冻结参数。"))
+	TObjectPtr<UCombatAIProfileData> RoleProfile;
 	/** 1 到 64 个，单波总数最多 128。 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Defense", meta=(DisplayName="数量", ToolTip="1 到 64 个，单波总数最多 128。", ClampMin="1", ClampMax="64"))
 	int32 Count = 1;

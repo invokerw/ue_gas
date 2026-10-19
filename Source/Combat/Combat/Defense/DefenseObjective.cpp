@@ -20,3 +20,25 @@ ADefenseObjective::ADefenseObjective(const FObjectInitializer& Init) : Super(Ini
 	Body->SetRelativeScale3D(FVector(1.8,1.8,1.8));
 	GetCapsuleComponent()->InitCapsuleSize(92,96);
 }
+
+ADefenseSiegeEnemy::ADefenseSiegeEnemy(const FObjectInitializer& Init) : Super(Init)
+{
+	Body->SetRelativeScale3D(FVector(1.05,0.75,0.85));
+	Body->SetRelativeLocation(FVector(0,0,-25));
+	Ram=CreateDefaultSubobject<UStaticMeshComponent>(TEXT("SiegeRam"));
+	Ram->SetupAttachment(GetRootComponent());
+	Ram->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	Ram->SetCanEverAffectNavigation(false);
+	static ConstructorHelpers::FObjectFinder<UStaticMesh> ShapeMesh(TEXT("/Engine/BasicShapes/Cylinder.Cylinder"));
+	Ram->SetStaticMesh(ShapeMesh.Object);
+	Ram->SetRelativeScale3D(FVector(0.22,0.22,1.4));
+	Ram->SetRelativeRotation(FRotator(90,0,0));
+	Ram->SetRelativeLocation(FVector(50,0,15));
+}
+
+ADefenseAssassinEnemy::ADefenseAssassinEnemy(const FObjectInitializer& Init) : Super(Init)
+{
+	static ConstructorHelpers::FObjectFinder<UStaticMesh> ShapeMesh(TEXT("/Engine/BasicShapes/Cone.Cone"));
+	Body->SetStaticMesh(ShapeMesh.Object);
+	Body->SetRelativeScale3D(FVector(0.55,0.55,1.65));
+}

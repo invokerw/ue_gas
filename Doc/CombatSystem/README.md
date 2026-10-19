@@ -163,3 +163,9 @@
 - [DEF-008 援军印记与复活保护](Specs/DEF-008-defense-reinforcement.spec.md)：两次救援、缩短复活、短盾与原商店状态反馈。
 
 - [DEF-009 Phase 2 收口](Specs/DEF-009-defense-phase2-completion.spec.md)：六件正式团队商品、24卡池、家族门槛与英雄替换保留。
+
+- [DEF-010 Phase 3A 攻城兵](Specs/DEF-010-phase3-siege-enemy.spec.md)：两波真实出生、冲槌外形、原路线攻击与号角伤害验证。
+
+- [DEF-011 刺客接入](Specs/DEF-011-phase3-assassin-enemy.spec.md)：低生命目标策略与原Lane角色复用，真实第4/5波（已验收）。
+
+- [DEF-012 神殿守卫](Specs/DEF-012-phase3-guardian-hero.spec.md)：三主动一被动、Boss失衡与受限开局选择（2026-10-19已验收）。

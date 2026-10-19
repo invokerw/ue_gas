@@ -20,6 +20,7 @@
 #include "Combat/Attributes/CombatAttributeSet.h"
 #include "Combat/Combat/CombatDamageSubsystem.h"
 #include "Combat/Unit/CombatUnitLifecycleComponent.h"
+#include "Combat/Unit/CombatProgressionComponent.h"
 #include "Combat/Scheduling/CombatSchedulerSubsystem.h"
 #include "Combat/Network/CombatNetworkSecuritySubsystem.h"
 #include "Combat/Core/CombatTags.h"
@@ -670,5 +671,79 @@ bool FDefenseFormalTeamItemsValidationTest::RunTest(const FString&)
 	F.Effects[0]->ConditionalDamageFraction=1.01f; TestFalse(TEXT("Conditional fraction bounded"),F.Effects[0]->ValidateDefinition(Error)); F.Effects[0]->ConditionalDamageFraction=.15f;
 	F.Effects[0]->ModifierData->RuntimeParameters.Reset(); TestFalse(TEXT("Conditional runtime needs target parameters"),F.Effects[0]->ValidateDefinition(Error)); F.Effects[0]->ModifierData->RuntimeParameters.Add(TEXT("target_role"),1); F.Effects[0]->ModifierData->RuntimeParameters.Add(TEXT("damage_fraction"),.15f);
 	F.Effects[1]->DurationWaves=0; TestFalse(TEXT("Agile is wave scoped"),F.Effects[1]->ValidateDefinition(Error)); return true;
+}
+/** 真实攻城资产承受公共Damage，用实际Health差验证号角，而非只比较请求Amount。 */
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDefenseSiegeHornTest,"Combat.Defense.Siege.HornActualDamageAndExpiry",DefenseTeamShopTests::Flags)
+bool FDefenseSiegeHornTest::RunTest(const FString&)
+{
+	DefenseTeamShopTests::FFixture F;
+	auto* Horn=LoadObject<UCombatItemData>(nullptr,TEXT("/Game/Combat/Demo/Defense/TeamShop/DA_Item_team_hunt_horn.DA_Item_team_hunt_horn"));
+	auto* Data=LoadObject<UCombatUnitData>(nullptr,TEXT("/Game/Combat/Demo/Defense/DA_DefenseSiege.DA_DefenseSiege"));
+	auto* Class=LoadClass<ADefenseEnemy>(nullptr,TEXT("/Game/Combat/Demo/Defense/BP_DefenseSiege.BP_DefenseSiege_C"));
+	if(!TestNotNull(TEXT("Actual horn asset"),Horn)||!TestNotNull(TEXT("Actual siege asset"),Data)||!TestNotNull(TEXT("Actual siege blueprint"),Class)) return false;
+	F.Items[0]=Horn; F.Shop->Categories[0].Items[0]=Horn;
+	if(!F.Start(*this)) return false;
+	auto* W=F.World.GetWorld(); FActorSpawnParameters Spawn; Spawn.SpawnCollisionHandlingOverride=ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	auto* Target=W->SpawnActor<ADefenseEnemy>(Class,FVector(1500,0,100),FRotator::ZeroRotator,Spawn);
+	if(!TestNotNull(TEXT("Production siege spawned"),Target)) return false;
+	TestTrue(TEXT("Initialize real definition"),Target->InitializeFromUnitData(Data)); if(!Target->HasActorBegunPlay()) Target->DispatchBeginPlay();
+	auto* Source=F.Players[0]->GetCommandedUnit(); auto* Plain=F.Players[1]->GetCommandedUnit();
+	const int64 BeforeGold=F.Players[0]->GetCombatEconomyComponent()->GetGold(); const auto XP=Source->GetCombatProgressionComponent()->GetExperience();
+	FCombatDamageRequest R; R.Source=Source; R.DamageType=ECombatDamageType::Pure; R.Amount=20;
+	R.Target=Target; const auto Base=W->GetSubsystem<UCombatDamageSubsystem>()->DealDamage(R);
+	R.Target=Plain; const auto PlainBase=W->GetSubsystem<UCombatDamageSubsystem>()->DealDamage(R);
+	const auto Request=F.Request(); TestTrue(TEXT("Horn original economy purchase"),F.Buy(F.Players[0],Request).bSuccess);
+	TestTrue(TEXT("Horn repeated receipt"),F.Buy(F.Players[0],Request).bSuccess);
+	R.Target=Target; const float HP=Target->GetCombatAttributeSet()->GetHealth(); const auto Boosted=W->GetSubsystem<UCombatDamageSubsystem>()->DealDamage(R);
+	TestTrue(TEXT("Real siege dealt damage"),Base.bSuccess&&Boosted.bSuccess&&Base.Event.AppliedAmount>0);
+	TestEqual(TEXT("Siege actual damage +15 percent"),Boosted.Event.AppliedAmount,Base.Event.AppliedAmount*1.15f);
+	TestEqual(TEXT("Health confirms actual delta"),HP-Target->GetCombatAttributeSet()->GetHealth(),Boosted.Event.AppliedAmount);
+	R.Target=Plain; const auto PlainBoosted=W->GetSubsystem<UCombatDamageSubsystem>()->DealDamage(R);
+	TestEqual(TEXT("Ordinary target no amplification"),PlainBoosted.Event.AppliedAmount,PlainBase.Event.AppliedAmount);
+	TestEqual(TEXT("One260 payment"),F.Players[0]->GetCombatEconomyComponent()->GetGold(),BeforeGold-260);
+	FDefenseTeamShopTestAccess::Phase(F.Director,EDefensePhase::Intermission,0);
+	R.Target=Target; const auto After=W->GetSubsystem<UCombatDamageSubsystem>()->DealDamage(R);
+	TestEqual(TEXT("Expiry removes hunt amplification"),After.Event.AppliedAmount,Base.Event.AppliedAmount);
+	R.Amount=100000; W->GetSubsystem<UCombatDamageSubsystem>()->DealDamage(R);
+	TestEqual(TEXT("No per-kill gold duplicates wave reward"),F.Players[0]->GetCombatEconomyComponent()->GetGold(),BeforeGold-260);
+	TestEqual(TEXT("No per-kill XP"),Source->GetCombatProgressionComponent()->GetExperience(),XP);
+	F.Director->Shutdown(); TestEqual(TEXT("Hero modifiers cleaned"),Source->GetCombatModifierComponent()->GetActiveModifierCount(),0); return true;
+}
+/** 真实刺客资产承受公共Damage，用实际Health差验证号角，而非只比较请求Amount。 */
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDefenseAssassinHornTest,"Combat.Defense.Assassin.HornActualDamageAndExpiry",DefenseTeamShopTests::Flags)
+bool FDefenseAssassinHornTest::RunTest(const FString&)
+{
+	DefenseTeamShopTests::FFixture F;
+	auto* Horn=LoadObject<UCombatItemData>(nullptr,TEXT("/Game/Combat/Demo/Defense/TeamShop/DA_Item_team_hunt_horn.DA_Item_team_hunt_horn"));
+	auto* Data=LoadObject<UCombatUnitData>(nullptr,TEXT("/Game/Combat/Demo/Defense/DA_DefenseAssassin.DA_DefenseAssassin"));
+	auto* Class=LoadClass<ADefenseEnemy>(nullptr,TEXT("/Game/Combat/Demo/Defense/BP_DefenseAssassin.BP_DefenseAssassin_C"));
+	if(!TestNotNull(TEXT("Actual horn asset"),Horn)||!TestNotNull(TEXT("Actual assassin asset"),Data)||!TestNotNull(TEXT("Actual assassin blueprint"),Class)) return false;
+	F.Items[0]=Horn; F.Shop->Categories[0].Items[0]=Horn;
+	if(!F.Start(*this)) return false;
+	auto* W=F.World.GetWorld(); FActorSpawnParameters Spawn; Spawn.SpawnCollisionHandlingOverride=ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	auto* Target=W->SpawnActor<ADefenseEnemy>(Class,FVector(1500,0,100),FRotator::ZeroRotator,Spawn);
+	if(!TestNotNull(TEXT("Production assassin spawned"),Target)) return false;
+	TestTrue(TEXT("Initialize real definition"),Target->InitializeFromUnitData(Data)); if(!Target->HasActorBegunPlay()) Target->DispatchBeginPlay();
+	auto* Source=F.Players[0]->GetCommandedUnit(); auto* Plain=F.Players[1]->GetCommandedUnit();
+	const int64 BeforeGold=F.Players[0]->GetCombatEconomyComponent()->GetGold(); const auto XP=Source->GetCombatProgressionComponent()->GetExperience();
+	FCombatDamageRequest R; R.Source=Source; R.DamageType=ECombatDamageType::Pure; R.Amount=20;
+	R.Target=Target; const auto Base=W->GetSubsystem<UCombatDamageSubsystem>()->DealDamage(R);
+	R.Target=Plain; const auto PlainBase=W->GetSubsystem<UCombatDamageSubsystem>()->DealDamage(R);
+	const auto Request=F.Request(); TestTrue(TEXT("Horn original economy purchase"),F.Buy(F.Players[0],Request).bSuccess);
+	TestTrue(TEXT("Horn repeated receipt"),F.Buy(F.Players[0],Request).bSuccess);
+	R.Target=Target; const float HP=Target->GetCombatAttributeSet()->GetHealth(); const auto Boosted=W->GetSubsystem<UCombatDamageSubsystem>()->DealDamage(R);
+	TestTrue(TEXT("Real assassin dealt damage"),Base.bSuccess&&Boosted.bSuccess&&Base.Event.AppliedAmount>0);
+	TestEqual(TEXT("Assassin actual damage +15 percent"),Boosted.Event.AppliedAmount,Base.Event.AppliedAmount*1.15f);
+	TestEqual(TEXT("Health confirms actual delta"),HP-Target->GetCombatAttributeSet()->GetHealth(),Boosted.Event.AppliedAmount);
+	R.Target=Plain; const auto PlainBoosted=W->GetSubsystem<UCombatDamageSubsystem>()->DealDamage(R);
+	TestEqual(TEXT("Ordinary target no amplification"),PlainBoosted.Event.AppliedAmount,PlainBase.Event.AppliedAmount);
+	TestEqual(TEXT("One260 payment"),F.Players[0]->GetCombatEconomyComponent()->GetGold(),BeforeGold-260);
+	FDefenseTeamShopTestAccess::Phase(F.Director,EDefensePhase::Intermission,0);
+	R.Target=Target; const auto After=W->GetSubsystem<UCombatDamageSubsystem>()->DealDamage(R);
+	TestEqual(TEXT("Expiry removes hunt amplification"),After.Event.AppliedAmount,Base.Event.AppliedAmount);
+	R.Amount=100000; W->GetSubsystem<UCombatDamageSubsystem>()->DealDamage(R);
+	TestEqual(TEXT("No per-kill gold duplicates wave reward"),F.Players[0]->GetCombatEconomyComponent()->GetGold(),BeforeGold-260);
+	TestEqual(TEXT("No per-kill XP"),Source->GetCombatProgressionComponent()->GetExperience(),XP);
+	F.Director->Shutdown(); TestEqual(TEXT("Hero modifiers cleaned"),Source->GetCombatModifierComponent()->GetActiveModifierCount(),0); return true;
 }
 #endif

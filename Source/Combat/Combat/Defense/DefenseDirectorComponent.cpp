@@ -2,6 +2,8 @@
 #include "Combat/Defense/DefenseData.h"
 #include "Combat/Defense/DefenseAugmentData.h"
 #include "Combat/Defense/DefenseChoiceComponent.h"
+#include "Combat/Defense/DefenseHeroSelectionComponent.h"
+#include "Combat/Defense/DefenseGameMode.h"
 #include "Combat/Combat/CombatHealSubsystem.h"
 #include "Misc/CommandLine.h"
 #include "Misc/Parse.h"
@@ -10,6 +12,7 @@
 #include "Combat/Defense/DefenseObjective.h"
 #include "Combat/Ability/CombatAbilitySystemComponent.h"
 #include "Combat/AI/CombatAIBrainComponent.h"
+#include "Combat/AI/CombatAIProfileData.h"
 #include "Combat/Modifiers/CombatModifierComponent.h"
 #include "Combat/Order/CombatOrderComponent.h"
 #include "Combat/Scheduling/CombatSchedulerSubsystem.h"
@@ -42,7 +45,11 @@ bool UDefenseDirectorComponent::InitializeForRun(UDefenseRunData* Data, ADefense
 	for (UDefenseWaveData* Wave : Data->Waves)
 	{
 		auto* Copy = DuplicateObject<UDefenseWaveData>(Wave, RunData);
-		for (auto& Group : Copy->SpawnGroups) Group.UnitData = DuplicateObject<UCombatUnitData>(Group.UnitData, Copy);
+		for (auto& Group : Copy->SpawnGroups)
+		{
+			Group.UnitData = DuplicateObject<UCombatUnitData>(Group.UnitData, Copy);
+			if (Group.RoleProfile) Group.RoleProfile = DuplicateObject<UCombatAIProfileData>(Group.RoleProfile, Copy);
+		}
 		if (Copy->FixedAugment) Copy->FixedAugment = DuplicateObject<UCombatModifierData>(Copy->FixedAugment, Copy);
 		RunData->Waves.Add(Copy);
 	}
@@ -211,6 +218,20 @@ bool UDefenseDirectorComponent::SpawnEnemy(const FDefenseSpawnGroup& G)
 	Enemy->GetCombatAIBrainComponent()->ConfigureProfile(nullptr);
 	auto* Orders = Enemy->GetCombatOrderComponent();
 	Orders->MaxChaseDuration = RunData->Waves[View.WaveIndex]->MaxDuration;
+	if (G.RoleProfile)
+	{
+		// 先登记敌人再授予职责，角色树是此组唯一命令来源，不能继续排入导演的人工队列。
+		auto* Brain = Enemy->GetCombatAIBrainComponent();
+		FCombatAIAssignment Duty;
+		Duty.Home = Position;
+		Duty.Route = RunData->Routes[G.RouteIndex].Waypoints;
+		if (!Brain->SetAssignment(Duty)) { Finish(false, TEXT("RoleAssignmentRejected")); return true; }
+		Brain->ConfigureProfile(G.RoleProfile);
+		if (!Brain->IsRunning()) { Finish(false, TEXT("RoleStartupFailed")); return true; }
+		UE_LOG(LogCombat, Display, TEXT("DefenseRoleSpawn Wave=%d Route=%d Unit=%s Definition=%s Profile=%s Life=%u"),
+			View.WaveIndex, G.RouteIndex, *Enemy->GetName(), *Enemy->GetUnitDefinitionId().ToString(), *G.RoleProfile->GetPrimaryAssetId().ToString(), Enemy->GetLifeGeneration());
+		return true;
+	}
 	bool Queue = false;
 	for (const FVector& P : RunData->Routes[G.RouteIndex].Waypoints)
 	{
@@ -289,6 +310,10 @@ void UDefenseDirectorComponent::Publish()
 		View.OfferDrawCount=SeedState.DomainOrdinals.FindRef(TEXT("Run.AugmentOffer"));
 	}
 	if (GameState.IsValid()) GameState->Publish(View);
+	const auto* Mode=GetWorld()?GetWorld()->GetAuthGameMode<ADefenseGameMode>():nullptr;
+	for(const auto& Pair:Players) if(auto* PC=Pair.Key.Get())
+		if(auto* Selection=PC->FindComponentByClass<UDefenseHeroSelectionComponent>())
+			Selection->PublishEligibility(Mode&&Mode->GetGuardianClass()&&CanSelectStartingHero(PC),Pair.Value.bStartingHeroSelected);
 }
 void UDefenseDirectorComponent::Finish(bool bVictory, const FName Reason)
 {

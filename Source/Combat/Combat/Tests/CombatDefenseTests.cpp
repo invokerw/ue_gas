@@ -2,6 +2,8 @@
 #if WITH_DEV_AUTOMATION_TESTS
 #include "Misc/AutomationTest.h"
 #include "Combat/Defense/DefenseData.h"
+#include "Combat/Defense/DefensePlayerController.h"
+#include "Combat/AI/CombatAIProfileData.h"
 #include "Combat/Defense/DefenseAugmentData.h"
 #include "Combat/Defense/DefenseOfferSampler.h"
 #include "Combat/Defense/DefenseDirectorComponent.h"
@@ -262,5 +264,45 @@ bool FDefensePhase2ThreeBuildBossTest::RunTest(const FString&)
 		TestEqual(TEXT("Boss outcome is exactly once"),F.D->GetPhase(),EDefensePhase::Victory);
 	}
 	return true;
+}
+/** 可选角色先校验且本局参数独立冻结，不能让UnitData早启动第二个命令来源。 */
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDefenseRoleProfileTest,"Combat.Defense.Assassin.RoleProfileValidationAndFreeze",DefenseTests::Flags)
+bool FDefenseRoleProfileTest::RunTest(const FString&)
+{
+	DefenseTests::FFixture F;
+	auto* Original=LoadObject<UCombatAIProfileData>(nullptr,TEXT("/Game/Combat/Demo/AI/Defense/DA_DefenseAssassinAI.DA_DefenseAssassinAI"));
+	if(!TestNotNull(TEXT("Authored assassin role"),Original)) return false;
+	auto* P=DuplicateObject<UCombatAIProfileData>(Original,F.Owner); auto& G=F.Run->Waves[0]->SpawnGroups[0]; G.RoleProfile=P;
+	FString Error; TestTrue(TEXT("Optional role accepted"),F.Run->ValidateRuntime(Error));
+	P->bEnablePerception=false; TestFalse(TEXT("No perception rejected"),F.Run->ValidateRuntime(Error)); P->bEnablePerception=true;
+	G.UnitData->AIProfile=P; TestFalse(TEXT("Early second writer rejected"),F.Run->ValidateRuntime(Error)); G.UnitData->AIProfile=nullptr;
+	F.Run->Waves.Last()->SpawnGroups[0].RoleProfile=P; TestFalse(TEXT("Boss role rejected"),F.Run->ValidateRuntime(Error)); F.Run->Waves.Last()->SpawnGroups[0].RoleProfile=nullptr;
+	if(!TestTrue(TEXT("Run starts"),F.Start())) return false;
+	const auto* Frozen=F.D->GetFrozenRunData()->Waves[0]->SpawnGroups[0].RoleProfile.Get();
+	TestTrue(TEXT("Config independently owned"),Frozen&&Frozen!=P&&Frozen!=Original);
+	P->MissingHealthWeight=0; P->TargetPriorities.Reset();
+	TestEqual(TEXT("Running selection weight frozen"),Frozen->MissingHealthWeight,100.f);
+	TestEqual(TEXT("Running priority frozen"),Frozen->TargetPriorities.Num(),Original->TargetPriorities.Num());
+	F.D->Shutdown(); TestFalse(TEXT("Director schedules cleared"),FDefenseTestAccess::Work(F.D)); return true;
+}
+/** 开局入口严格限制空构筑；没有导航时保留旧角色与资源，不退化为任意位置出生。 */
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDefenseStartingHeroGateTest,"Combat.Defense.Guardian.SelectionGatesAndSpawnFailure",DefenseTests::Flags)
+bool FDefenseStartingHeroGateTest::RunTest(const FString&)
+{
+	DefenseTests::FFixture F; F.Run->PreparationDuration=40; if(!F.Start()) return false;
+	auto* PC=F.W->SpawnActor<ADefensePlayerController>();
+	FActorSpawnParameters P; P.SpawnCollisionHandlingOverride=ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	auto* Old=F.W->SpawnActor<ACombatUnitCharacter>(FVector(1000,0,100),FRotator::ZeroRotator,P);
+	auto* Data=NewObject<UCombatUnitData>(Old); Data->DefinitionName=TEXT("guardian_selection_original"); Data->ExperienceReward=0; Old->InitializeFromUnitData(Data);
+	if(!Old->HasActorBegunPlay()) Old->DispatchBeginPlay(); TestTrue(TEXT("Bind initial hero"),PC->SetCommandedUnitAuthority(Old));
+	TestTrue(TEXT("Register player"),F.D->RegisterPlayer(PC,Old)); TestTrue(TEXT("Fresh prep eligible"),F.D->CanSelectStartingHero(PC));
+	auto* Class=LoadClass<ACombatUnitCharacter>(nullptr,TEXT("/Game/Combat/Demo/Defense/Guardian/BP_DefenseGuardian.BP_DefenseGuardian_C")); if(!TestNotNull(TEXT("Guardian whitelist class"),Class)) return false;
+	const int64 Gold=PC->GetCombatEconomyComponent()->GetGold(); FName Failure;
+	TestFalse(TEXT("Missing navigation safely refuses spawn"),F.D->SelectStartingHero(PC,Class,Failure)); TestEqual(TEXT("Stable spawn failure"),Failure,FName(TEXT("HeroSpawnBlocked")));
+	TestTrue(TEXT("Old hero remains commanded and alive"),PC->GetCommandedUnit()==Old&&Old->GetLifeState()==ECombatLifeState::Alive&&!Old->IsActorBeingDestroyed());
+	TestEqual(TEXT("No payment or loss"),PC->GetCombatEconomyComponent()->GetGold(),Gold);
+	TestFalse(TEXT("Unknown player not eligible"),F.D->CanSelectStartingHero(F.W->SpawnActor<ADefensePlayerController>()));
+	Old->GetCombatProgressionComponent()->AddExperience(1); TestFalse(TEXT("Progressed hero cannot be discarded"),F.D->CanSelectStartingHero(PC));
+	F.Advance(); TestFalse(TEXT("Combat closes selection"),F.D->CanSelectStartingHero(PC)); return true;
 }
 #endif

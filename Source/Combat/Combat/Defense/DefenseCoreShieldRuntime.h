@@ -15,7 +15,7 @@ protected:
 	virtual void OnCreated_Implementation() override;
 	virtual void OnDamageBlock_Implementation(FCombatDamageEvent& Event) override;
 private:
-	/** 领取时从最大生命计算并通过 shield_amount 参数快照；刷新不会补充。 */
+	/** 创建时优先用shield_fraction比例，否则用shield_amount；可选shield_cap_fraction限制同族新盾合计余量，默认0关闭。刷新不会补充。 */
 	float RemainingShield=0;
 };
 

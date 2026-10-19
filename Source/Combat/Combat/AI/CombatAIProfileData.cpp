@@ -53,7 +53,8 @@ bool UCombatAIProfileData::ValidateRuntime(FString& Diagnostic) const
 			|| !InRange(PerceptionBudgetRetrySeconds, 0.01f, 1.0f)
 			|| Perception.VisibilityPolicy != ECombatVisibilityPolicy::None || Perception.MaxCandidates < 1 || Perception.MaxCandidates > 64
 			|| Perception.MaxMemories < Perception.MaxCandidates || Perception.MaxMemories > 128
-			|| !InRange(DistanceWeight, 0, 100) || !InRange(ThreatWeight, 0, 100) || !InRange(MinTargetHold, 0, 30)
+			|| RouteEngagementMinPriority < -100 || RouteEngagementMinPriority > 100
+			|| !InRange(MissingHealthWeight, 0, 10000) || !InRange(DistanceWeight, 0, 100) || !InRange(ThreatWeight, 0, 100) || !InRange(MinTargetHold, 0, 30)
 			|| !InRange(TargetSwitchMargin, 0, 10000) || !InRange(LeashDistance, 80, 10000) || !InRange(MaxEngagementSeconds, 0.1f, 120)
 			|| !InRange(ArrivalTolerance, 1, 500) || !InRange(RetryDelay, 0.05f, 10) || !InRange(RoutePause, 0.05f, 10)
 			|| MaxAttempts < 1 || MaxAttempts > 10 || TargetPriorities.Num() > 64)

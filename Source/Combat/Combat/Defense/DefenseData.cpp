@@ -2,6 +2,7 @@
 #include "Combat/Defense/DefenseAugmentData.h"
 #include "Combat/Unit/CombatUnitCharacter.h"
 #include "Misc/DataValidation.h"
+#include "Combat/AI/CombatAIProfileData.h"
 
 namespace DefenseData
 {
@@ -37,6 +38,8 @@ bool UDefenseWaveData::ValidateRuntime(FString& OutDiagnostic) const
 		if (!G.UnitClass || G.UnitClass->HasAnyClassFlags(CLASS_Abstract) || !DefenseData::ValidUnit(G.UnitData)
 			|| G.Count < 1 || G.Count > 64 || G.RouteIndex < 0 || !FMath::IsFinite(G.SpawnInterval)
 			|| G.SpawnInterval < 0 || G.SpawnInterval > 30) return false;
+		if (G.RoleProfile && (G.bBoss || !G.RoleProfile->bEnablePerception || !G.RoleProfile->ValidateRuntime(OutDiagnostic)))
+		{ OutDiagnostic = TEXT("路线角色AI必须启用感知、通过编译校验且不能用于Boss组"); return false; }
 		const auto* CDO = G.UnitClass->GetDefaultObject<ACombatUnitCharacter>();
 		if (CDO->GetUnitData() && CDO->GetUnitData() != G.UnitData) return false;
 		Total += G.Count;

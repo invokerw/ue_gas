@@ -110,3 +110,20 @@ Director在RegisterPlayer绑定英雄现有OnDied/OnRespawned；解除登记、�
 英雄替换事务先停止旧Order并解绑旧Hero生命周期观察，再通过既有Controller绑定代次建立新Unit；旧Hero的精确强化句柄撤销后，Director按OwnedAugments和CompatibleHeroes重建新Hero效果。公开Apply后重新查PlayerRecord，失败时终局或保持旧绑定，不使用失效Map引用。选择回执、待生效卡和团队账本不随Hero实例迁移而丢失。
 
 正式团队条件效果仍由团队账本持有Hero+Handle；换Hero时团队属性/条件效果重新应用，核心效果和购买记录不变。24卡终局门槛只读OwnedAugments家族计数，不在UI维护第二套构筑事实。Phase2回归覆盖替换、旧句柄、24卡冷读和正式三件商品；见 [DEF-009](../Specs/DEF-009-defense-phase2-completion.spec.md)。
+
+
+## DEF-010 攻城内容增量（2026-10-17）
+
+ADefenseSiegeEnemy只增加无碰撞/无导航影响的静态网格组件，沿用Unit唯一AIController与所有清理入口，不创建Tick、Timer、Schedule或新权威状态。第三/第五波生成仍使用Director冻结计划/安全导航点/EnemyRecord/LifeGeneration，正常死亡、异常EndPlay、清场及终局使用同一流程。
+
+仅显式DefenseSiegeSmoke下网络探针订阅Combat日志，EndPlay解绑；PIE探针弱持有事件子系统，命令析构解绑。探针记录真实生产攻城自然DamageApplied的来源/核心目标，不给攻城单位注入伤害核心命令。见 [DEF-010](../Specs/DEF-010-phase3-siege-enemy.spec.md)。
+
+### DEF-011 刺客生命周期接入（2026-10-17）
+
+新增出生组RoleProfile由Director在InitializeForRun深复制配置并强持有；编译StateTree共享只读。Spawn先注册Enemy LifeGeneration，再设置职责和启动现有Brain，跳过导演队列。Profile预检失败不启动，运行时启动失败按原终局清理；没有新Timer、Damage入口或额外事件订阅。感知、角色Order、ControlEpoch和生命代次继续由Brain原有协议清理，Director终局Stop/Destroy保证取消。生命分数仅在当前公共Targeting查询许可后读取ASC；失去许可的记忆保持最后观察值。专项验证结果见DEF-011 Spec，不改变前序历史结论。
+
+### DEF-012 守卫技能与开局角色事务（2026-10-17）
+
+Q/E执行点复用公开Targeting/Damage/Modifier，伤害后复核施法者和目标Life再施控；W由DataDriven动作创建同族有限盾。被动Runtime由Intrinsic持有，32根事件缓存有界，世界游戏时间控制内置冷却；死亡移除/复活重建，未新增Timer。Boss失衡用自持来源合并队伍层数，保持首层截止，触发先锁定再以公开延迟队列施加保护/眩晕和移除自身。
+
+开局选择组件归Controller，owner-only schema1；有界32回执和高水位配合共享限频防重放。Director只在空构筑准备阶段接受，导航安全Spawn后必须先FinishSpawning，使ASC ActorInfo就绪，才复核技能授予；控制绑定成功和阶段/生命二次确认后提交记录、改生命委托、销毁旧Unit及专用AI。失败保持旧记录/金币；Command Pawn不更换。选择组件EndPlay清回执，原导演终局清理继续统一释放。完整中途HeroSwap仍不由本切片覆盖。
