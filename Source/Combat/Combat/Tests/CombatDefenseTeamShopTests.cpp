@@ -385,7 +385,7 @@ bool FDefenseCoreShieldPurchaseTest::RunTest(const FString&)
 	TestFalse(TEXT("Competing buyer rejected"),F.Buy(F.Players[1],Competitor).bSuccess);
 	TestEqual(TEXT("Exact220 charge"),F.Players[0]->GetCombatEconomyComponent()->GetGold(),int64(280));
 	TestEqual(TEXT("Core shield projected400"),F.State->GetRunView().ObjectiveShield,400.0f);
-	TestEqual(TEXT("Independent view schema"),F.State->GetRunView().SchemaVersion,3);
+	TestEqual(TEXT("Independent view schema with event projection"),F.State->GetRunView().SchemaVersion,4);
 	const auto Handle=FDefenseTeamShopTestAccess::FirstHandle(F.Director,F.Items[0]->GetPrimaryAssetId());
 	for(auto* PC:F.Players) TestEqual(TEXT("No shield on heroes"),PC->GetCommandedUnit()->GetCombatModifierComponent()->GetActiveModifierCount(),0);
 	CombatEffectUtilities::ApplyAttributeAdditive(F.Core,*F.Core->GetCombatAbilitySystemComponent(),UCombatAttributeSet::GetMaxHealthAttribute(),1000);

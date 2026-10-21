@@ -218,7 +218,7 @@ bool UCombatShopData::ValidateRuntime(FString& OutError) const
 		if (!UCombatDefinitionData::IsValidDefinitionName(Category.CategoryId) || CategoryIds.Contains(Category.CategoryId)
 			|| Category.Items.IsEmpty())
 		{
-			OutError = TEXT("Shop categories require unique lower_snake_case ids and non-empty item lists");
+			OutError = FString::Printf(TEXT("Shop category invalid: Id=%s ValidName=%d Duplicate=%d Items=%d"), *Category.CategoryId.ToString(), UCombatDefinitionData::IsValidDefinitionName(Category.CategoryId), CategoryIds.Contains(Category.CategoryId), Category.Items.Num());
 			return false;
 		}
 		CategoryIds.Add(Category.CategoryId);

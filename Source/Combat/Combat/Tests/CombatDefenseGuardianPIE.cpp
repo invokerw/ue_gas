@@ -42,10 +42,11 @@ private: FAutomationTestBase* Test; double At;
 class FDefenseGuardianPIEProbe : public IAutomationLatentCommand
 {
 public:
-	explicit FDefenseGuardianPIEProbe(FAutomationTestBase* T):Test(T),At(FPlatformTime::Seconds()) {}
+	explicit FDefenseGuardianPIEProbe(FAutomationTestBase* T):Test(T),At(0) {}
 	~FDefenseGuardianPIEProbe() override { if(Events.IsValid()) Events->OnRecord().Remove(Record); }
 	bool Update() override
 	{
+		if(At==0) At=FPlatformTime::Seconds();
 		if(FPlatformTime::Seconds()-At>90) { Test->AddError(FString::Printf(TEXT("Guardian PIE timeout stage%d mask%d"),Stage,Mask)); return true; }
 		auto* W=GEditor?GEditor->PlayWorld.Get():nullptr; if(!W) return false;
 		auto* PC=Cast<ADefensePlayerController>(W->GetFirstPlayerController()); auto* HUD=PC?Cast<ADefenseHUD>(PC->GetHUD()):nullptr; auto* Widget=HUD?HUD->GetBuildWidget():nullptr;

@@ -2,6 +2,7 @@
 #include "CoreMinimal.h"
 #include "Combat/Data/CombatDefinitionData.h"
 #include "Combat/Defense/DefenseTypes.h"
+#include "Combat/Defense/DefenseEventData.h"
 #include "DefenseData.generated.h"
 
 class UDefenseAugmentPoolData;
@@ -82,6 +83,12 @@ public:
 	/** 开发/测试用固定种子；0 表示服务器生成。完整种子不复制给客户端。 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Defense|RNG", meta=(DisplayName="开发固定种子", ToolTip="仅开发或自动化使用；非零时服务器使用该 RunSeed，生产默认 0 由服务器生成。", ClampMin="0"))
 	int64 DevelopmentSeedOverride = 0;
+	/** 事件目录；为空时按开关加载两个固定原型事件。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Defense|Event", meta=(DisplayName="事件目录", ToolTip="第2/4波后的事件定义；为空且启用原型事件时使用代码内置的两个原型事件。"))
+	TArray<TObjectPtr<UDefenseEventData>> Events;
+	/** 是否启用第2/4波固定事件；生产防守资产保持开启，纯波次测试可关闭。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Defense|Event", meta=(DisplayName="启用原型事件", ToolTip="开启后在没有事件资产时使用宝库探索和神殿誓约；关闭仅用于不需要事件的旧测试夹具。"))
+	bool bEnablePrototypeEvents = true;
 	/** 团队商店目录；为空保持 DEF-004 无团队购买。 */
 	/** 选择不暂停对局，整备时间必须容纳整个窗口。 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Defense|Augment", meta=(DisplayName="选择时长", ToolTip="初始与普通波后选择的游戏秒数，1 到 60；不能大于准备或整备时长。", ClampMin="1", ClampMax="60", Units="s"))

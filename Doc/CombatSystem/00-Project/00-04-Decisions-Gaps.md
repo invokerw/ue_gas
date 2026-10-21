@@ -495,3 +495,18 @@ DEF-011 0.2追加：RouteEngagementMinPriority默认-100保留旧候选；刺客
 Boss失衡采用数据驱动Modifier，Boss自持来源使多人同池叠层，首次一层起固定8秒窗口，4层触发2秒Stunned及总8秒失衡保护。没有新Tag/事件或攻击阶段API，不宣称Boss三阶段已实现。
 
 开局选择为Defense独立owner-only组件schema1，只接收改用配置白名单守卫的意图，复用连接限频/重放；初始准备、空构筑/库存/经验及未购团队效果才允许成功一次。服务器安全出生并初始化，控制绑定成功后才提交记录、改委托和销毁旧角色；失败保留旧角色与金币。已有候选随身份修订且保留原截止。此入口不调用旧ReplacePlayerHero，不扩大为完整中途迁移；DEF-009相关Gap保持。发布契约、Combat内容/事件/公式和既有Choice/Run/HUD schema不变，新增身份与字段可逆兼容。
+
+
+### ADR-079：DEF-013 防守事件原型与风险确认（2026-10-19）
+
+事件接入现有 Defense Director/StateTree/Scheduler 边界，不增加地图蓝图 Timer、独立金币或核心生命旁路。第2/4波清场后进入 `EventChoice` 阶段；默认事件配置为空时由服务器创建两个固定原型，正式资产可通过 `UDefenseEventData` 覆盖。事件请求使用 `RunId + PhaseGeneration + EventId + EventRevision + RequestId + BindingGeneration + LifeGeneration`，服务器拥有安全/风险/取消/超时终态和 `FDefenseRiskLedger`，客户端只复制标题、说明、状态和截止时间。
+
+风险选项先进入10秒可取消确认；任一当前玩家可取消，无操作采用安全选项。安全奖励使用既有 Economy/Progression/Heal 入口；风险成功只对下一波增加一名基础敌人、清场后发放延迟奖励并增加Boss奖励倍率，均按一次性账本结算。Defense RunView schema 从3升级为4，Combat Release/Tag/Event/Formula/Economy schema不变；旧RunData通过默认原型事件保持可启动，测试夹具可显式关闭原型事件。
+
+DEF-013专项Automation通过；当前独立PIE事件按钮验证受既有导航/启动环境超时，待后续冷启动PIE复验。
+
+### ADR-079 追加：独立 Target 必须使用平台正确的 Stage（2026-10-21）
+
+0.3 的独立 Target 风险定位为启动方式错误：直接运行仓库 Binaries 下的 Server/Client，却没有 WindowsServer/WindowsClient 的 Cooked 容器和预生成 AssetRegistry；非编辑器包摘要的裁剪布局不能直接读取 raw Content。没有修改 FBufferReader、放宽版本校验或增加读取缓冲。
+
+0.5 使用源码5.8.2构建独立Server/Client，安装版兼容5.8.2 Cooker分别生成WindowsServer和WindowsClient并Stage/Pak/Archive。真实staged Server加载AssetRegistry后为NetMode1，两客户端为3；两轮六波事件同局RunId、取消/确认、1940金币和Owner拒绝均通过。由 `Tools/package_defense_targets.ps1` 与 `Tools/run_defense_targets.py` 固化构建/分发/启动顺序、新日志目录和进程清理。历史raw启动失败保留为Red证据，额外风险已关闭；不把Game Target的单机通过替代Dedicated证据。

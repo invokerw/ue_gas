@@ -1,4 +1,4 @@
-param([ValidateRange(1,2)][int]$Players = 1, [switch]$Defeat, [switch]$Choices, [switch]$TeamShop, [switch]$Reinforcement, [switch]$Siege, [switch]$Assassin, [switch]$Guardian, [string]$EvidenceFolder = "DEF-010", [int]$Port = 7880, [int]$TimeoutSeconds = 420)
+param([ValidateRange(1,2)][int]$Players = 1, [switch]$Defeat, [switch]$Choices, [switch]$TeamShop, [switch]$Reinforcement, [switch]$Siege, [switch]$Assassin, [switch]$Guardian, [switch]$Events, [string]$EvidenceFolder = "DEF-010", [int]$Port = 7880, [int]$TimeoutSeconds = 420)
 $ErrorActionPreference = 'Stop'
 $Repo = Split-Path $PSScriptRoot -Parent
 $EnvironmentInfo = python (Join-Path $PSScriptRoot 'ue_environment.py') check --json | ConvertFrom-Json
@@ -8,7 +8,7 @@ $Project = Join-Path $Repo 'ue_gas.uproject'
 $Case = if ($Defeat) { "defeat-$Players" } else { "victory-$Players" }
 $TaskFolder = $EvidenceFolder
 if ($TaskFolder -notmatch '^[A-Za-z0-9_-]+$') { throw 'EvidenceFolder must be a single folder name' }
-if ($Guardian) { $Case = "guardian-$Case" } elseif ($Assassin) { $Case = "assassin-$Case" } elseif ($Siege) { $Case = "siege-$Case" } elseif ($Reinforcement) { $Case = "reinforcement-$Case" } elseif ($TeamShop) { $Case = "team-shop-$Case" }
+if ($Events) { $Case = "events-$Case" } elseif ($Guardian) { $Case = "guardian-$Case" } elseif ($Assassin) { $Case = "assassin-$Case" } elseif ($Siege) { $Case = "siege-$Case" } elseif ($Reinforcement) { $Case = "reinforcement-$Case" } elseif ($TeamShop) { $Case = "team-shop-$Case" }
 $OutputDir = Join-Path $Repo "Saved/$TaskFolder/network-$Case"
 New-Item -ItemType Directory -Force -Path $OutputDir | Out-Null
 # 清除本用例的旧日志，避免新进程启动前误读上次 Pass。
@@ -28,7 +28,8 @@ try {
     if ($Siege) { $Flags += @('-DefenseSiegeSmoke','-DefenseSeed=831907') }
     if ($Assassin) { $Flags += @('-DefenseAssassinSmoke','-DefenseSeed=831907') }
     if ($Guardian) { $Flags += @('-DefenseGuardianSmoke','-DefenseSeed=831907') }
-    $Arguments = @(('"' + $Project + '"'), '/Game/Combat/Demo/Defense/L_Defense', '-server', "-port=$Port", ('-abslog="' + $ServerLog + '"')) + $Flags
+    if ($Events) { $Flags += @('-DefenseEventSmoke','-DefenseSeed=831907') }
+    $Arguments = @(('"' + $Project + '"'), '/Game/Combat/Demo/Defense/L_Defense', '-server', "-port=$Port", '-ModelContextProtocolPort=8070', ('-abslog="' + $ServerLog + '"')) + $Flags
     $Processes += Start-Process -FilePath $Editor -ArgumentList $Arguments -WindowStyle Hidden -PassThru
     $Logs += $ServerLog
     $Start = Get-Date
@@ -41,7 +42,7 @@ try {
     if (-not $Ready) { throw 'Server listen timeout' }
     for ($Index = 1; $Index -le $Players; $Index++) {
         $ClientLog = Join-Path $OutputDir "client-$Index.log"
-        $Arguments = @(('"' + $Project + '"'), "127.0.0.1:$Port", '-game', "-DefenseSmokeSeat=$Index", '-windowed', '-ResX=960', '-ResY=540', ('-abslog="' + $ClientLog + '"')) + $Flags
+        $Arguments = @(('"' + $Project + '"'), "127.0.0.1:$Port", '-game', "-DefenseSmokeSeat=$Index", "-ModelContextProtocolPort=$([int](8070+$Index))", '-windowed', '-ResX=960', '-ResY=540', ('-abslog="' + $ClientLog + '"')) + $Flags
         $Processes += Start-Process -FilePath $Editor -ArgumentList $Arguments -WindowStyle Hidden -PassThru
         $Logs += $ClientLog
     }

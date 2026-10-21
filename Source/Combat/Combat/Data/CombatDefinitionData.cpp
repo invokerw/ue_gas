@@ -130,8 +130,13 @@ bool UCombatDefinitionData::UpgradeSchemaToCurrent()
 
 bool UCombatDefinitionData::IsValidDefinitionName(const FName Name)
 {
+	// Cooked FName不保留显示大小写；首个同名条目的拼写不是作者输入，也不改变比较身份。
+#if WITH_CASE_PRESERVING_NAME
 	const FString Value = Name.ToString();
-	if (Value.IsEmpty() || Value[0] < TCHAR('a') || Value[0] > TCHAR('z'))
+#else
+	const FString Value = Name.ToString().ToLower();
+#endif
+	if (Name.IsNone() || Value.IsEmpty() || Value[0] < TCHAR('a') || Value[0] > TCHAR('z'))
 	{
 		return false;
 	}

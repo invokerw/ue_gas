@@ -29,6 +29,12 @@ private:
 	void Finish(bool bPass,const FString& Detail);
 	/** 测试编排使用公共 Damage 形成合法死亡，不直接写生命或改导演计数。 */
 	void Kill(ACombatUnitCharacter* Unit);
+	/** 显式事件网络验证：两客户端同号请求隔离、取消/确认、奖励和只读复制。 */
+	void ExerciseEvents();
+	int32 EventNetStep=0,EventNetMask=0,EventNetLastWave=INDEX_NONE;
+	double EventNetAt=0,EventNetWaveAt=0;
+	int64 EventNetGold=0;
+	bool bEventNetPrepared=false,bEventNetReceipt=false;
 	/** 在真实连接上提交选择/重抽及相同载荷重放，只在显式测试开关下执行。 */
 	void ExerciseChoices();
 	/** 显式攻城验证只观察生产出生/移动/伤害，不为攻城单位发出测试命令。 */

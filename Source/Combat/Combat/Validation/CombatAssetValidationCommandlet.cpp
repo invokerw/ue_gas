@@ -1,6 +1,7 @@
 #include "Combat/Validation/CombatAssetValidationCommandlet.h"
 #include "Combat/AI/CombatAIProfileData.h"
 #include "Combat/Defense/DefenseData.h"
+#include "Combat/Defense/DefenseEventData.h"
 #include "Combat/Defense/DefenseAugmentData.h"
 #include "Combat/Items/CombatItemData.h"
 #include "Combat/Economy/CombatEconomyData.h"
@@ -127,6 +128,7 @@ FCombatAssetValidationReport FCombatAssetValidator::ValidateProjectAssets()
 		UCombatShopData::StaticClass()->GetClassPathName(),
 		UCombatAIProfileData::StaticClass()->GetClassPathName(),
 		UDefenseRunData::StaticClass()->GetClassPathName(),
+		UDefenseEventData::StaticClass()->GetClassPathName(),
 		UDefenseWaveData::StaticClass()->GetClassPathName(),
 		UDefenseAugmentData::StaticClass()->GetClassPathName(),
 		UDefenseAugmentPoolData::StaticClass()->GetClassPathName(),

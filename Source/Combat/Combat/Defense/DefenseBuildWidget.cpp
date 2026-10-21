@@ -1,5 +1,6 @@
 #include "Combat/Defense/DefenseBuildWidget.h"
 #include "Combat/Defense/DefenseChoiceComponent.h"
+#include "Combat/Defense/DefenseEventComponent.h"
 #include "Combat/Defense/DefenseHeroSelectionComponent.h"
 #include "Combat/Defense/DefensePlayerController.h"
 #include "Combat/Defense/DefenseGameState.h"
@@ -64,6 +65,15 @@ TSharedRef<SWidget> UDefenseBuildWidget::RebuildWidget()
 			.BorderBackgroundColor(DefenseBuildUI::Background).Padding(12)
 			[SAssignNew(OwnedBody,SVerticalBox)]
 		]
+	]
+	+SOverlay::Slot().HAlign(HAlign_Center).VAlign(VAlign_Top).Padding(FMargin(0,140,0,0))
+	[
+		SNew(SBox).WidthOverride(620)
+		[
+			SAssignNew(EventPanel,SBorder).BorderImage(FCoreStyle::Get().GetBrush("WhiteBrush"))
+			.BorderBackgroundColor(FLinearColor(0.10f,0.05f,0.02f,0.97f)).Padding(16)
+			[SAssignNew(EventBody,SVerticalBox)]
+		]
 	];
 	SeenRevision=INDEX_NONE; RefreshContents(); return Root;
 }
@@ -101,6 +111,7 @@ void UDefenseBuildWidget::RefreshContents()
 	const bool Open=View.Offer.ChoiceRevision>0 && !View.Offer.bResolved && !View.Offer.bCancelled;
 	ChoicePanel->SetVisibility(Waiting||Open?EVisibility::Visible:EVisibility::Collapsed);
 	OwnedPanel->SetVisibility(C?EVisibility::Visible:EVisibility::Collapsed);
+	RefreshEventPanel();
 	OwnedBody->AddSlot().AutoHeight()[DefenseBuildUI::Label(FText::FromString(TEXT("本局构筑")),17)];
 	for(const auto& Card:View.Owned)
 	{
@@ -181,6 +192,42 @@ void UDefenseBuildWidget::RefreshContents()
 	if(!View.bCanChoose) ChoiceBody->AddSlot().AutoHeight().Padding(0,8)[DefenseBuildUI::Label(FText::FromString(TEXT("阵亡或窗口已过期：等待服务器确认，复活后应用已选强化。")),13)];
 	ChoiceBody->AddSlot().AutoHeight().Padding(0,4)[DefenseBuildUI::Label(ExplainFailure(View.LastResult.FailureReason),13)];
 }
+
+void UDefenseBuildWidget::RefreshEventPanel()
+{
+	if (!EventBody || !EventPanel) return;
+	EventSafeButton.Reset(); EventRiskButton.Reset(); EventCancelButton.Reset();
+	EventBody->ClearChildren();
+	const auto* State=GetWorld()?GetWorld()->GetGameState<ADefenseGameState>():nullptr;
+	const auto* PC=Cast<ADefensePlayerController>(GetOwningPlayer());
+	auto* Event=PC&&PC->GetEventComponent()?PC->GetEventComponent():nullptr;
+	const FDefenseEventView V=State?State->GetRunView().Event:FDefenseEventView();
+	const bool Open=State&&State->GetDefensePhase()==EDefensePhase::EventChoice&&V.EventId.IsValid()&&V.State!=EDefenseEventState::ResolvedSafe&&V.State!=EDefenseEventState::ResolvedRisk&&V.State!=EDefenseEventState::Cancelled&&V.State!=EDefenseEventState::Expired;
+	EventPanel->SetVisibility(Open?EVisibility::Visible:EVisibility::Collapsed);
+	if(!Open||!Event) return;
+	EventBody->AddSlot().AutoHeight()[DefenseBuildUI::Label(V.Title,22)];
+	EventBody->AddSlot().AutoHeight().Padding(0,4)[SNew(STextBlock).ColorAndOpacity(FLinearColor::White).Text_Lambda([this]
+	{
+		const auto* Current=GetWorld()?GetWorld()->GetGameState<ADefenseGameState>():nullptr;
+		if(!Current) return FText::GetEmpty();
+		const auto E=Current->GetRunView().Event;
+		const int32 Seconds=FMath::Max(0,FMath::CeilToInt(E.Deadline-Current->GetServerWorldTimeSeconds()));
+		return FText::FromString(FString::Printf(TEXT("%s · %d 秒"),E.State==EDefenseEventState::PendingRisk?TEXT("等待发起人确认，任一队员可取消"):TEXT("全队可选择"),Seconds));
+	})];
+	if(V.State!=EDefenseEventState::PendingRisk) EventBody->AddSlot().AutoHeight().Padding(0,8)[DefenseBuildUI::Label(V.SafeDescription,14)];
+	EventBody->AddSlot().AutoHeight().Padding(0,8)[DefenseBuildUI::Label(V.RiskDescription,14)];
+	if(V.State==EDefenseEventState::PendingRisk)
+	{
+		EventBody->AddSlot().AutoHeight().Padding(0,4)[SAssignNew(EventRiskButton,SButton).ClickMethod(EButtonClickMethod::MouseDown).OnClicked_Lambda([Event]{ Event->RequestOption(EDefenseEventOption::Risk); return FReply::Handled(); })[DefenseBuildUI::Label(FText::FromString(TEXT("确认风险选项")),16)]];
+		EventBody->AddSlot().AutoHeight().Padding(0,4)[SAssignNew(EventCancelButton,SButton).ClickMethod(EButtonClickMethod::MouseDown).OnClicked_Lambda([Event]{ Event->RequestOption(EDefenseEventOption::Cancel); return FReply::Handled(); })[DefenseBuildUI::Label(FText::FromString(TEXT("取消风险，采用安全选项")),16)]];
+	}
+	else
+	{
+		EventBody->AddSlot().AutoHeight().Padding(0,4)[SAssignNew(EventSafeButton,SButton).ClickMethod(EButtonClickMethod::MouseDown).OnClicked_Lambda([Event]{ Event->RequestOption(EDefenseEventOption::Safe); return FReply::Handled(); })[DefenseBuildUI::Label(FText::FromString(TEXT("选择安全选项")),16)]];
+		EventBody->AddSlot().AutoHeight().Padding(0,4)[SAssignNew(EventRiskButton,SButton).ClickMethod(EButtonClickMethod::MouseDown).OnClicked_Lambda([Event]{ Event->RequestOption(EDefenseEventOption::Risk); return FReply::Handled(); })[DefenseBuildUI::Label(FText::FromString(TEXT("发起风险选项（10秒可取消）")),16)]];
+	}
+}
+
 FReply UDefenseBuildWidget::StartRun()
 {
 	auto* Mode=GetWorld()?GetWorld()->GetAuthGameMode<ADefenseGameMode>():nullptr;
@@ -192,10 +239,10 @@ void UDefenseBuildWidget::NativeTick(const FGeometry& Geometry,float Delta)
 {
 	Super::NativeTick(Geometry,Delta);
 	const auto* C=GetChoice(); const auto* State=GetWorld()?GetWorld()->GetGameState<ADefenseGameState>():nullptr;
-	const int32 Revision=C?C->GetView().Revision:0; const bool Waiting=State&&State->GetRunView().bWaitingForStart;
+	const int32 Revision=C?C->GetView().Revision:0; const bool Waiting=State&&State->GetRunView().bWaitingForStart; const int32 EventRevision=State?State->GetRunView().Event.ViewRevision:0;
 	const auto* PC=Cast<ADefensePlayerController>(GetOwningPlayer());
 	const int32 HeroRevision=PC&&PC->GetHeroSelection()?PC->GetHeroSelection()->GetView().Revision:0;
-	if(Revision!=SeenRevision || Waiting!=bSeenWaiting || HeroRevision!=SeenHeroRevision) { SeenRevision=Revision; bSeenWaiting=Waiting; SeenHeroRevision=HeroRevision; RefreshContents(); }
+	if(Revision!=SeenRevision || Waiting!=bSeenWaiting || HeroRevision!=SeenHeroRevision || EventRevision!=SeenEventRevision || (State&&State->GetDefensePhase()!=SeenPhase) || (State&&State->GetRunView().Event.EventId!=SeenEventId)) { SeenRevision=Revision; bSeenWaiting=Waiting; SeenHeroRevision=HeroRevision; SeenEventRevision=EventRevision; if(State) { SeenPhase=State->GetDefensePhase(); SeenEventId=State->GetRunView().Event.EventId; } RefreshContents(); }
 	const auto* HUD=GetOwningPlayer()?Cast<ACombatPlayerHUD>(GetOwningPlayer()->GetHUD()):nullptr;
 	const bool Shopping=HUD&&HUD->GetShopWidget()&&HUD->GetShopWidget()->IsShopOpen();
 	if(OwnedPanel) OwnedPanel->SetVisibility(C&&!Shopping?EVisibility::Visible:EVisibility::Collapsed);
@@ -203,7 +250,7 @@ void UDefenseBuildWidget::NativeTick(const FGeometry& Geometry,float Delta)
 }
 bool UDefenseBuildWidget::IsScreenPositionOverUI(const FVector2D Position) const
 {
-	for(const auto& Panel:{ChoicePanel,OwnedPanel})
+	for(const auto& Panel:{ChoicePanel,OwnedPanel,EventPanel})
 		if(Panel && Panel->GetVisibility().IsVisible() && Panel->GetCachedGeometry().IsUnderLocation(Position)) return true;
 	return false;
 }
@@ -213,7 +260,8 @@ FReply UDefenseBuildWidget::NativeOnMouseButtonDown(const FGeometry& Geometry,co
 }
 void UDefenseBuildWidget::ReleaseSlateResources(bool bReleaseChildren)
 {
-	GuardianButton.Reset(); ChoicePanel.Reset(); OwnedPanel.Reset(); ChoiceBody.Reset(); OwnedBody.Reset(); SeedInput.Reset(); StartButton.Reset(); RerollButton.Reset(); CardButtons.Reset();
+	EventSafeButton.Reset(); EventRiskButton.Reset(); EventCancelButton.Reset();
+	GuardianButton.Reset(); ChoicePanel.Reset(); OwnedPanel.Reset(); EventPanel.Reset(); ChoiceBody.Reset(); OwnedBody.Reset(); EventBody.Reset(); SeedInput.Reset(); StartButton.Reset(); RerollButton.Reset(); CardButtons.Reset();
 	Super::ReleaseSlateResources(bReleaseChildren);
 }
 

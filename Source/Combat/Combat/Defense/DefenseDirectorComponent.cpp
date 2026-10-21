@@ -24,9 +24,30 @@
 #include "Components/CapsuleComponent.h"
 #include "NavigationSystem.h"
 #include "GameFramework/Controller.h"
+#include "GameFramework/PlayerState.h"
 #include "Engine/World.h"
 
 UDefenseDirectorComponent::UDefenseDirectorComponent() { PrimaryComponentTick.bCanEverTick = false; }
+
+void UDefenseDirectorComponent::BuildDefaultEvents()
+{
+	FrozenEvents.Reset();
+	if (!RunData) return;
+	RunData->Events.Reset();
+	auto* Vault = NewObject<UDefenseEventData>(RunData);
+	Vault->DefinitionName = TEXT("defense_event_vault"); Vault->Kind = EDefenseEventKind::Vault; Vault->TriggerAfterWave = 2;
+	Vault->Title = FText::FromString(TEXT("北侧宝库"));
+	Vault->SafeDescription = FText::FromString(TEXT("安全取出补给：全队获得240金币与60经验。"));
+	Vault->RiskDescription = FText::FromString(TEXT("冒险开启宝库：下一波增加一名敌人，成功后全队获得300金币，Boss奖励提高10%。"));
+	Vault->SafeGold = 240; Vault->SafeExperience = 60; Vault->RiskBudgetBonus = 12; Vault->RiskGold = 300; Vault->BossRewardBonusFraction = 0.1f;
+	auto* Oath = NewObject<UDefenseEventData>(RunData);
+	Oath->DefinitionName = TEXT("defense_event_oath"); Oath->Kind = EDefenseEventKind::Oath; Oath->TriggerAfterWave = 4;
+	Oath->Title = FText::FromString(TEXT("神殿誓约"));
+	Oath->SafeDescription = FText::FromString(TEXT("修复神殿核心：立即恢复核心最大生命的12%。"));
+	Oath->RiskDescription = FText::FromString(TEXT("接受悬赏：下一波增加一名敌人，成功后全队获得300金币，Boss奖励提高10%。"));
+	Oath->SafeCoreHealFraction = 0.12f; Oath->RiskBudgetBonus = 12; Oath->RiskGold = 300; Oath->BossRewardBonusFraction = 0.1f;
+	RunData->Events.Reset(); RunData->Events.Add(Vault); RunData->Events.Add(Oath); FrozenEvents = RunData->Events;
+}
 
 bool UDefenseDirectorComponent::InitializeForRun(UDefenseRunData* Data, ADefenseObjective* Core, ADefenseGameState* State, const bool bWaitForStart)
 {
@@ -53,6 +74,16 @@ bool UDefenseDirectorComponent::InitializeForRun(UDefenseRunData* Data, ADefense
 		if (Copy->FixedAugment) Copy->FixedAugment = DuplicateObject<UCombatModifierData>(Copy->FixedAugment, Copy);
 		RunData->Waves.Add(Copy);
 	}
+	RunData->Events.Reset();
+	if (!Data->Events.IsEmpty())
+	{
+		for (const UDefenseEventData* Event : Data->Events) if (Event) RunData->Events.Add(DuplicateObject<UDefenseEventData>(Event, RunData));
+	}
+	if (RunData->bEnablePrototypeEvents)
+	{
+		if (RunData->Events.IsEmpty()) BuildDefaultEvents(); else FrozenEvents = RunData->Events;
+	}
+	else FrozenEvents.Reset();
 	if (Data->AugmentPool)
 	{
 		RunData->AugmentPool=DuplicateObject<UDefenseAugmentPoolData>(Data->AugmentPool,RunData);
@@ -128,6 +159,18 @@ void UDefenseDirectorComponent::Advance(const FCombatScheduledTickContext& Tick,
 	if (!IsCurrent(ExpectedRun, Generation)) return;
 	PhaseSchedule = {};
 	if (!IsCoreAlive()) { Finish(false, TEXT("ObjectiveLost")); return; }
+	if (View.Phase == EDefensePhase::EventChoice)
+	{
+		if (EventView.State == EDefenseEventState::Offered && Tick.ActualTime >= EventView.Deadline)
+		{
+			ResolveEvent(EDefenseEventOption::Safe, EDefenseEventState::Expired, nullptr);
+		}
+		else if (EventView.State == EDefenseEventState::PendingRisk && Tick.ActualTime >= EventView.Deadline)
+		{
+			ResolveEvent(EDefenseEventOption::Cancel, EDefenseEventState::Expired, nullptr);
+		}
+		return;
+	}
 	if (View.Phase != EDefensePhase::WaveCombat)
 	{
 		ExpireChoices(Tick.ActualTime,true);
@@ -135,7 +178,8 @@ void UDefenseDirectorComponent::Advance(const FCombatScheduledTickContext& Tick,
 		const int32 Next = View.WaveIndex + 1;
 		if (!RunData->Waves.IsValidIndex(Next)) { Finish(false, TEXT("MissingWave")); return; }
 		GroupIndex = SpawnIndex = SpawnFailures = 0;
-		View.PendingSpawns = 0;
+		RiskExtraSpawnsRemaining = ConsumeRiskBonusForWave(Next);
+		View.PendingSpawns = RiskExtraSpawnsRemaining;
 		for (const auto& Group : RunData->Waves[Next]->SpawnGroups) View.PendingSpawns += Group.Count;
 		EnterPhase(EDefensePhase::WaveCombat, Next, RunData->Waves[Next]->MaxDuration);
 		SchedulePhase(0);
@@ -153,6 +197,7 @@ void UDefenseDirectorComponent::Advance(const FCombatScheduledTickContext& Tick,
 		if (!RewardWave()) { Finish(false, TEXT("RewardFailed")); return; }
 		if (RunData->Waves[View.WaveIndex]->bBossWave) { Finish(true, TEXT("BossDefeated")); return; }
 		ClearEnemies();
+		if (View.WaveIndex == 1 || View.WaveIndex == 3) { OpenEventAfterWave(View.WaveIndex); return; }
 		EnterPhase(View.WaveIndex == 4 ? EDefensePhase::BossPreparation : EDefensePhase::Intermission,
 			View.WaveIndex, RunData->IntermissionDuration);
 		OpenChoiceWindows();
@@ -166,6 +211,13 @@ void UDefenseDirectorComponent::SpawnNext()
 	const auto& Groups = RunData->Waves[View.WaveIndex]->SpawnGroups;
 	while (Groups.IsValidIndex(GroupIndex) && SpawnIndex >= Groups[GroupIndex].Count)
 	{ ++GroupIndex; SpawnIndex = 0; }
+	if (!Groups.IsValidIndex(GroupIndex) && RiskExtraSpawnsRemaining > 0)
+	{
+		const FDefenseSpawnGroup* Extra = Groups.IsValidIndex(0) ? &Groups[0] : nullptr;
+		if (!Extra || !SpawnEnemy(*Extra)) { if (++SpawnFailures > RunData->SpawnRetryLimit) Finish(false, TEXT("SpawnFailed")); else SchedulePhase(0.5f); return; }
+		--RiskExtraSpawnsRemaining; --View.PendingSpawns; SpawnFailures=0; Publish();
+		if (RiskExtraSpawnsRemaining > 0) SchedulePhase(1.0f); else QueueWaveCompletion(); return;
+	}
 	if (!Groups.IsValidIndex(GroupIndex)) { QueueWaveCompletion(); return; }
 	const auto& G = Groups[GroupIndex];
 	if (!SpawnEnemy(G))
@@ -297,6 +349,7 @@ void UDefenseDirectorComponent::Monitor(const FCombatScheduledTickContext& Tick)
 }
 void UDefenseDirectorComponent::Publish()
 {
+	View.Event = EventView;
 	View.ObjectiveShield=ReadObjectiveShield();
 	if (Objective.IsValid())
 	{
@@ -323,7 +376,7 @@ void UDefenseDirectorComponent::Finish(bool bVictory, const FName Reason)
 	View.TerminalReason = Reason;
 	View.bWaitingForStart = false;
 	View.Phase = bVictory ? EDefensePhase::Victory : EDefensePhase::Defeat;
-	++View.PhaseGeneration; View.Deadline = 0; View.PendingSpawns = 0;
+	++View.PhaseGeneration; View.Deadline = 0; EventView = {}; View.Event = EventView; View.PendingSpawns = 0;
 	GetWorld()->GetSubsystem<UCombatSchedulerSubsystem>()->CancelAllForOwner(this);
 	PhaseSchedule = MonitorSchedule = {};
 	if (Objective.IsValid()) Objective->GetCombatLifecycleComponent()->OnDied().RemoveAll(this);
@@ -390,6 +443,15 @@ void UDefenseDirectorComponent::RemovePlayer(ACombatPlayerController* Player)
 		if(auto* Choice=Player->FindComponentByClass<UDefenseChoiceComponent>()) Choice->ClearAuthority();
 		Player->GetCombatEconomyComponent()->RefreshShopOffers();
 	}
+
+	HighEventRequestIds.Remove(Player);
+	EventReceipts.RemoveAll([Player](const FDefenseEventReceipt& R){return R.Player.Get()==Player;});
+	if(EventProposer.Get()==Player&&EventView.State==EDefenseEventState::PendingRisk)
+	{
+		// 发起人离线仅退回安全选项，不允许离线身份留下自动风险确认。
+		ResolveEvent(EDefenseEventOption::Cancel,EDefenseEventState::Cancelled,nullptr);
+		EventProposer.Reset();
+	}
 	ExpireTeamShop(); PublishTeamShop();
 }
 bool UDefenseDirectorComponent::RewardWave()
@@ -401,7 +463,8 @@ bool UDefenseDirectorComponent::RewardWave()
 		auto* Player = Pair.Key.Get(); auto& Record = Pair.Value;
 		if (!Player || Record.RewardedWaves.Contains(View.WaveIndex)) continue;
 		Record.RewardedWaves.Add(View.WaveIndex);
-		if (Wave->GoldReward > 0 && !Player->GetCombatEconomyComponent()->AddGold(Wave->GoldReward, TEXT("DefenseWave"))) return false;
+		const int32 WaveGold = Wave->bBossWave ? FMath::RoundToInt(Wave->GoldReward * (1.0f + EarnedBossRewardBonus)) : Wave->GoldReward;
+		if (WaveGold > 0 && !Player->GetCombatEconomyComponent()->AddGold(WaveGold, TEXT("DefenseWave"))) return false;
 		Record.PendingExperience += Wave->ExperienceReward;
 
 		if (!RunData->AugmentPool && Wave->FixedAugment && !Record.OwnedAugments.Contains(Wave->FixedAugment->GetPrimaryAssetId()))
@@ -410,6 +473,7 @@ bool UDefenseDirectorComponent::RewardWave()
 			Record.PendingAugments.Add(Wave->FixedAugment);
 		}
 	}
+	if (!RewardRiskEvent(View.WaveIndex)) return false;
 	ServicePlayers(GetWorld()->GetTimeSeconds());
 	return !Terminal.bTerminal;
 }
@@ -469,6 +533,153 @@ void UDefenseDirectorComponent::ServicePlayers(const double Now)
 		}
 	}
 }
+
+void UDefenseDirectorComponent::OpenEventAfterWave(const int32 CompletedWaveIndex)
+{
+	if (!IsCurrent(View.RunId, GetPhaseGeneration())) return;
+	UDefenseEventData* Definition = nullptr;
+	for (UDefenseEventData* Candidate : FrozenEvents)
+		if (Candidate && Candidate->TriggerAfterWave == CompletedWaveIndex + 1) { Definition = Candidate; break; }
+	if (!Definition)
+	{
+		EnterPhase(CompletedWaveIndex == 4 ? EDefensePhase::BossPreparation : EDefensePhase::Intermission,
+			CompletedWaveIndex, RunData->IntermissionDuration);
+		OpenChoiceWindows(); SchedulePhase(RunData->IntermissionDuration); return;
+	}
+	EnterPhase(EDefensePhase::EventChoice, CompletedWaveIndex, 20.0f);
+	EventView = {};
+	EventView.EventId = FGuid::NewGuid(); EventView.Revision = 1; EventView.DefinitionId = Definition->GetPrimaryAssetId();
+	EventView.Title = Definition->Title; EventView.SafeDescription = Definition->SafeDescription; EventView.RiskDescription = Definition->RiskDescription;
+	EventView.State = EDefenseEventState::Offered; EventView.Deadline = GetWorld()->GetTimeSeconds() + 20.0;
+	RiskLedger = {}; RiskLedger.EventId = EventView.EventId; RiskLedger.Revision = EventView.Revision; RiskLedger.DefinitionId = Definition->GetPrimaryAssetId();
+	RiskLedger.TriggerAfterWave = CompletedWaveIndex + 1; RiskLedger.State = EDefenseEventState::Offered;
+	PublishEvent(); SchedulePhase(20.0f);
+	UE_LOG(LogCombat, Display, TEXT("DefenseEventOpened Run=%s Event=%s Wave=%d Definition=%s Schema=%d"), *View.RunId.ToString(), *EventView.EventId.ToString(), CompletedWaveIndex, *EventView.DefinitionId.ToString(), View.SchemaVersion);
+}
+
+FDefenseEventView UDefenseDirectorComponent::BuildEventView() const { return EventView; }
+
+int32 UDefenseDirectorComponent::InspectEventReplay(ACombatPlayerController* Player, const FDefenseEventRequest& Request) const
+{
+	if (!Player) return 0;
+	for (const FDefenseEventReceipt& Receipt : EventReceipts)
+	{
+		if (Receipt.Player.Get() != Player || Receipt.Request.RequestId != Request.RequestId) continue;
+		const bool Same = Receipt.Request.RunId == Request.RunId && Receipt.Request.PhaseGeneration == Request.PhaseGeneration
+			&& Receipt.Request.EventId == Request.EventId && Receipt.Request.EventRevision == Request.EventRevision
+			&& Receipt.Request.BindingGeneration == Request.BindingGeneration && Receipt.Request.LifeGeneration == Request.LifeGeneration
+			&& Receipt.Request.Option == Request.Option;
+		return Same ? 1 : -1;
+	}
+	return 0;
+}
+
+bool UDefenseDirectorComponent::ResolveEvent(const EDefenseEventOption Option, const EDefenseEventState State, ACombatPlayerController* Proposer)
+{
+	if (!IsCurrent(View.RunId, GetPhaseGeneration()) || View.Phase != EDefensePhase::EventChoice || bEventMutating || !EventView.EventId.IsValid()) return false;
+	UDefenseEventData* Definition = nullptr;
+	for (UDefenseEventData* Candidate : FrozenEvents) if (Candidate && Candidate->GetPrimaryAssetId() == EventView.DefinitionId) { Definition = Candidate; break; }
+	if (!Definition) return false;
+	TGuardValue<bool> Guard(bEventMutating, true);
+	if (Option == EDefenseEventOption::Risk && EventView.State == EDefenseEventState::Offered)
+	{
+		EventProposer=Proposer;
+		EventView.State = EDefenseEventState::PendingRisk; EventView.ViewRevision++;
+		EventView.ProposerName = Proposer && Proposer->PlayerState ? Proposer->PlayerState->GetPlayerName() : TEXT("");
+		EventView.Deadline = GetWorld()->GetTimeSeconds() + 10.0; RiskLedger.State = EDefenseEventState::PendingRisk; RiskLedger.Option = Option; ++RiskLedger.Revision; EventView.Revision=RiskLedger.Revision;
+		PublishEvent(); SchedulePhase(10.0f); return true;
+	}
+	if (EventView.State == EDefenseEventState::PendingRisk && Option == EDefenseEventOption::Risk)
+	{
+		if(Proposer!=EventProposer.Get()) return false;
+		UDefenseEventData* RiskDefinition = Definition; RiskLedger.State = EDefenseEventState::ResolvedRisk; RiskLedger.Option = EDefenseEventOption::Risk; RiskLedger.TargetWave = View.WaveIndex + 1; RiskLedger.RiskBudgetBonus = RiskDefinition->RiskBudgetBonus; RiskLedger.BossRewardBonusFraction = RiskDefinition->BossRewardBonusFraction;
+		++RiskLedger.Revision; EventView.State = EDefenseEventState::ResolvedRisk; EventView.Revision = RiskLedger.Revision; EventView.ViewRevision++; PublishEvent(); FinishEventAndResume(); return true;
+	}
+	const bool bSafe = Option == EDefenseEventOption::Safe || Option == EDefenseEventOption::Cancel;
+	if (!bSafe || (EventView.State != EDefenseEventState::Offered && EventView.State != EDefenseEventState::PendingRisk)) return false;
+	if (Definition->Kind == EDefenseEventKind::Vault)
+	{
+		for (auto& Pair : Players)
+		{
+			auto* PC = Pair.Key.Get(); auto& Record = Pair.Value; auto* Hero = Record.Hero.Get();
+			if (!PC) continue;
+			if (Definition->SafeGold > 0 && !PC->GetCombatEconomyComponent()->AddGold(Definition->SafeGold, TEXT("DefenseEventSafe"))) { Finish(false, TEXT("EventRewardFailed")); return false; }
+			Record.PendingExperience += Definition->SafeExperience;
+		}
+		ServicePlayers(GetWorld()->GetTimeSeconds());
+	}
+	else if (Definition->SafeCoreHealFraction > 0.0f)
+	{
+		FCombatHealRequest Heal; Heal.Source = Objective.Get(); Heal.Target = Objective.Get(); Heal.Amount = Objective->GetCombatAttributeSet()->GetMaxHealth() * Definition->SafeCoreHealFraction;
+		if (!GetWorld()->GetSubsystem<UCombatHealSubsystem>()->Heal(Heal).bSuccess) { Finish(false, TEXT("EventCoreHealFailed")); return false; }
+	}
+	EventView.State = State == EDefenseEventState::Expired ? EDefenseEventState::Expired : (Option == EDefenseEventOption::Cancel ? EDefenseEventState::Cancelled : EDefenseEventState::ResolvedSafe);
+	RiskLedger.Option = EDefenseEventOption::Safe; RiskLedger.State = EventView.State; ++RiskLedger.Revision; EventView.Revision = RiskLedger.Revision; EventView.ViewRevision++;
+	PublishEvent(); FinishEventAndResume(); return true;
+}
+
+void UDefenseDirectorComponent::FinishEventAndResume()
+{
+	if (!IsCurrent(View.RunId, GetPhaseGeneration())) return;
+	GetWorld()->GetSubsystem<UCombatSchedulerSubsystem>()->Cancel(PhaseSchedule); PhaseSchedule = {};
+	const int32 CompletedWave = View.WaveIndex;
+	EnterPhase(CompletedWave == 4 ? EDefensePhase::BossPreparation : EDefensePhase::Intermission, CompletedWave, RunData->IntermissionDuration);
+	OpenChoiceWindows(); SchedulePhase(RunData->IntermissionDuration); PublishEvent();
+}
+
+FDefenseEventResult UDefenseDirectorComponent::ProcessDefenseEvent(ACombatPlayerController* Player, const FDefenseEventRequest& Request)
+{
+	FDefenseEventResult Result; Result.RequestId = Request.RequestId; Result.FailureReason = TEXT("InvalidEvent");
+	for (const FDefenseEventReceipt& Receipt : EventReceipts)
+	{
+		if (Receipt.Player.Get() == Player && Receipt.Request.RequestId == Request.RequestId)
+		{ if(InspectEventReplay(Player,Request)<0) { Result.FailureReason=TEXT("RequestPayloadMismatch"); return Result; } return Receipt.Result; }
+	}
+	if (!IsCurrent(View.RunId, GetPhaseGeneration()) || View.Phase != EDefensePhase::EventChoice || !Player || !Players.Contains(Player)
+		|| Request.RunId != View.RunId || Request.PhaseGeneration != View.PhaseGeneration || Request.EventId != EventView.EventId
+		|| Request.EventRevision != EventView.Revision || !Player->GetCommandedUnit()
+		|| Player->GetCommandedUnit()->GetLifeState()!=ECombatLifeState::Alive || Player->GetCommandedUnit()->GetLifeGeneration() != Request.LifeGeneration
+		|| Player->GetCommandBindingGeneration() != Request.BindingGeneration)
+	{ return Result; }
+	if (Request.RequestId <= 0 || Request.RequestId <= HighEventRequestIds.FindRef(Player)) { Result.FailureReason = TEXT("StaleRequest"); return Result; }
+	HighEventRequestIds.FindOrAdd(Player) = Request.RequestId;
+	const bool Accepted = ResolveEvent(Request.Option, Request.Option == EDefenseEventOption::Risk ? EDefenseEventState::PendingRisk : EDefenseEventState::ResolvedSafe, Player);
+	Result.bSuccess = Accepted; Result.FailureReason = Accepted ? NAME_None : FName(TEXT("EventClosed"));
+	EventReceipts.Add({Player, Request, Result}); if (EventReceipts.Num() > 32) EventReceipts.RemoveAt(0);
+	return Result;
+}
+
+bool UDefenseDirectorComponent::RewardRiskEvent(const int32 CompletedWaveIndex)
+{
+	if (RiskLedger.State != EDefenseEventState::ResolvedRisk || RiskLedger.TargetWave != CompletedWaveIndex || RiskLedger.bRewardGranted) return true;
+	UDefenseEventData* Definition = nullptr;
+	for (UDefenseEventData* Candidate : FrozenEvents) if (Candidate && Candidate->GetPrimaryAssetId() == RiskLedger.DefinitionId) { Definition = Candidate; break; }
+	if (!Definition) return false;
+	RiskLedger.bRewardGranted = true; RiskLedger.RewardBatchId = FGuid::NewGuid();
+	EarnedBossRewardBonus += RiskLedger.BossRewardBonusFraction;
+	for (auto& Pair : Players)
+	{
+		auto* PC = Pair.Key.Get(); auto* Hero = Pair.Value.Hero.Get(); if (!PC) continue;
+		if (Definition->RiskGold > 0 && !PC->GetCombatEconomyComponent()->AddGold(Definition->RiskGold, TEXT("DefenseEventRisk"))) return false;
+		if (Hero) Pair.Value.PendingExperience += Definition->RiskExperience;
+	}
+	UE_LOG(LogCombat, Display, TEXT("DefenseEventRiskRewarded Run=%s Event=%s Wave=%d Batch=%s"), *View.RunId.ToString(), *RiskLedger.EventId.ToString(), CompletedWaveIndex, *RiskLedger.RewardBatchId.ToString());
+	return true;
+}
+
+int32 UDefenseDirectorComponent::ConsumeRiskBonusForWave(const int32 WaveIndex)
+{
+	if (RiskLedger.State != EDefenseEventState::ResolvedRisk || RiskLedger.TargetWave != WaveIndex || RiskLedger.RiskBudgetBonus <= 0) return 0;
+	const int32 Bonus = FMath::Max(1, RiskLedger.RiskBudgetBonus / 12); RiskLedger.RiskBudgetBonus = 0; return Bonus;
+}
+
+void UDefenseDirectorComponent::PublishEvent()
+{
+	if(View.Phase==EDefensePhase::EventChoice) View.Deadline=EventView.Deadline;
+	EventView.ViewRevision = EventView.ViewRevision == MAX_int32 ? 1 : EventView.ViewRevision + 1;
+	Publish();
+}
+
 void UDefenseDirectorComponent::Shutdown()
 {
 	if (bEnding) return;
@@ -482,7 +693,7 @@ void UDefenseDirectorComponent::Shutdown()
 	TArray<TWeakObjectPtr<ACombatPlayerController>> RemovedPlayers;
 	Players.GetKeys(RemovedPlayers);
 	for (const auto& Player : RemovedPlayers) RemovePlayer(Player.Get());
-	Players.Reset(); bInitialized = false;
+	Players.Reset(); HighEventRequestIds.Reset(); EventProposer.Reset(); EarnedBossRewardBonus=0; EventReceipts.Reset(); FrozenEvents.Reset(); EventView = {}; RiskLedger = {}; bInitialized = false;
 	Publish();
 }
 void UDefenseDirectorComponent::EndPlay(const EEndPlayReason::Type Reason) { Shutdown(); Super::EndPlay(Reason); }

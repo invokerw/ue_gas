@@ -39,6 +39,13 @@ struct FDefenseTestAccess
 	{ return D->Players.FindChecked(PC).PendingExperience; }
 	static bool Work(UDefenseDirectorComponent* D)
 	{ return D->PhaseSchedule.IsValid() || D->MonitorSchedule.IsValid(); }
+	static void OpenEvent(UDefenseDirectorComponent* D,int32 Wave) { D->OpenEventAfterWave(Wave); }
+	static bool ResolveEvent(UDefenseDirectorComponent* D,EDefenseEventOption Option,EDefenseEventState State) { return D->ResolveEvent(Option,State,nullptr); }
+	static const FDefenseEventView& Event(UDefenseDirectorComponent* D) { return D->EventView; }
+	static const FDefenseRiskLedger& Risk(UDefenseDirectorComponent* D) { return D->RiskLedger; }
+	static void ExpireEvent(UDefenseDirectorComponent* D) { FCombatScheduledTickContext T; T.ActualTime=D->EventView.Deadline+.01; D->Advance(T,D->View.RunId,D->GetPhaseGeneration()); }
+	static bool RiskReward(UDefenseDirectorComponent* D,int32 Wave) { return D->RewardRiskEvent(Wave); }
+	static float BossBonus(UDefenseDirectorComponent* D) { return D->EarnedBossRewardBonus; }
 };
 namespace DefenseTests
 {
@@ -83,7 +90,13 @@ namespace DefenseTests
 		void ToBoss()
 		{
 			Advance();
-			for(int32 I=0;I<5;++I) { Kill(Enemy()); Advance(); Advance(); }
+			for(int32 I=0;I<5;++I)
+			{
+				Kill(Enemy()); Advance();
+				if(D->GetPhase()==EDefensePhase::EventChoice)
+					FDefenseTestAccess::ResolveEvent(D,EDefenseEventOption::Safe,EDefenseEventState::ResolvedSafe);
+				Advance();
+			}
 		}
 	};
 }
@@ -258,13 +271,84 @@ bool FDefensePhase2ThreeBuildBossTest::RunTest(const FString&)
 		for(const auto& Ptr:Pool->Augments){const auto* Card=Ptr.Get(); if(!Card||Card->Family!=Family) continue; if(Card->Rarity==EDefenseAugmentRarity::Final) Final=Card; else if(Base<2){Owned.Add(Card->GetPrimaryAssetId()); ++Base;}}
 		TestTrue(TEXT("Family plan has two starter cards"),Base==2); TestNotNull(TEXT("Family plan has finale"),Final);
 		if(Final) TestTrue(TEXT("Family plan is Boss-eligible after wave3"),FDefenseOfferSampler::IsEligible(*Final,*Pool,FPrimaryAssetId(TEXT("CombatUnit"),TEXT("phase2_hero")),2,Owned));
-		DefenseTests::FFixture F; if(!F.Start()) return false;
+		DefenseTests::FFixture F; F.Run->bEnablePrototypeEvents=false; if(!F.Start()) return false;
 		F.ToBoss(); auto* Boss=F.Enemy(); F.Kill(Boss); FDefenseTestAccess::DuplicateDeath(F.D,Boss); F.Advance();
 		TestTrue(TEXT("Deterministic family plan reaches prototype Boss victory"),F.D->GetTerminalResult().bVictory);
 		TestEqual(TEXT("Boss outcome is exactly once"),F.D->GetPhase(),EDefensePhase::Victory);
 	}
 	return true;
 }
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDefenseEventTest,"Combat.Defense.Event.RiskConfirmationAndExactlyOnce",DefenseTests::Flags)
+bool FDefenseEventTest::RunTest(const FString&)
+{
+	DefenseTests::FFixture F; if(!F.Start()) return false;
+	FDefenseTestAccess::OpenEvent(F.D,1);
+	TestEqual(TEXT("Second-wave event opens"),F.D->GetPhase(),EDefensePhase::EventChoice);
+	TestEqual(TEXT("Vault event has an offer"),FDefenseTestAccess::Event(F.D).State,EDefenseEventState::Offered);
+	TestTrue(TEXT("Risk request enters confirmation"),FDefenseTestAccess::ResolveEvent(F.D,EDefenseEventOption::Risk,EDefenseEventState::PendingRisk));
+	TestEqual(TEXT("Risk confirmation is cancellable"),FDefenseTestAccess::Event(F.D).State,EDefenseEventState::PendingRisk);
+	TestTrue(TEXT("Risk confirmation commits once"),FDefenseTestAccess::ResolveEvent(F.D,EDefenseEventOption::Risk,EDefenseEventState::PendingRisk));
+	TestEqual(TEXT("Event resumes intermission"),F.D->GetPhase(),EDefensePhase::Intermission);
+	TestEqual(TEXT("Risk ledger targets next wave"),FDefenseTestAccess::Risk(F.D).TargetWave,2);
+	const auto Generation=F.D->GetPhaseGeneration();
+	TestFalse(TEXT("Old event cannot resolve again"),FDefenseTestAccess::ResolveEvent(F.D,EDefenseEventOption::Risk,EDefenseEventState::PendingRisk));
+	TestEqual(TEXT("No duplicate phase transition"),F.D->GetPhaseGeneration(),Generation);
+	return true;
+}
+
+
+/** 独立请求玩家使用同一编号也不能串回执；危险确认只允许发起人，任意队员可取消。 */
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDefenseEventPlayerIsolationTest,"Combat.Defense.Event.PlayerIsolationAndReplay",DefenseTests::Flags)
+bool FDefenseEventPlayerIsolationTest::RunTest(const FString&)
+{
+ DefenseTests::FFixture F;if(!F.Start()) return false;
+ TArray<ACombatPlayerController*> P;
+ for(int32 I=0;I<2;++I)
+ {
+  auto* PC=F.W->SpawnActor<ACombatPlayerController>();auto* Hero=F.W->SpawnActor<ACombatUnitCharacter>();
+  auto* Data=NewObject<UCombatUnitData>(Hero);Data->DefinitionName=FName(FString::Printf(TEXT("event_hero_%d"),I));
+  Hero->InitializeFromUnitData(Data);if(!Hero->HasActorBegunPlay()) Hero->DispatchBeginPlay();
+  TestTrue(TEXT("Bind event hero"),PC->SetCommandedUnitAuthority(Hero));
+  auto* Economy=NewObject<UCombatEconomyData>(PC);Economy->DefinitionName=TEXT("event_economy");Economy->PassiveGoldPerMinute=0;
+  auto* Shop=NewObject<UCombatShopData>(PC);Shop->DefinitionName=TEXT("event_shop");
+  auto* Item=NewObject<UCombatItemData>(Shop);Item->DefinitionName=TEXT("event_item");Item->bPurchasable=true;Item->PurchasePrice=10;
+  auto& Category=Shop->Categories.AddDefaulted_GetRef();Category.CategoryId=TEXT("basics");Category.DisplayName=FText::FromString(TEXT("基础"));Category.Items.Add(Item);
+  FString Error;TestTrue(TEXT("Event economy ready"),PC->GetCombatEconomyComponent()->InitializeForMatch(Economy,Shop,false,Error));
+  TestTrue(TEXT("Register event hero"),F.D->RegisterPlayer(PC,Hero));P.Add(PC);
+ }
+ FDefenseTestAccess::OpenEvent(F.D,1);
+ auto Request=[&](int32 Player,int32 Id,EDefenseEventOption Option)
+ {
+  FDefenseEventRequest R;R.RequestId=Id;R.RunId=F.State->GetRunView().RunId;R.PhaseGeneration=F.D->GetPhaseGeneration();
+  const auto V=F.D->BuildEventView();R.EventId=V.EventId;R.EventRevision=V.Revision;R.BindingGeneration=P[Player]->GetCommandBindingGeneration();R.LifeGeneration=P[Player]->GetCommandedUnit()->GetLifeGeneration();R.Option=Option;return R;
+ };
+ const auto Original=Request(0,1,EDefenseEventOption::Risk);TestTrue(TEXT("Risk proposed"),F.D->ProcessDefenseEvent(P[0],Original).bSuccess);
+ TestTrue(TEXT("Same payload replay accepted"),F.D->ProcessDefenseEvent(P[0],Original).bSuccess);
+ auto Changed=Original;Changed.Option=EDefenseEventOption::Safe;
+ TestEqual(TEXT("Payload substitution refused"),F.D->ProcessDefenseEvent(P[0],Changed).FailureReason,FName(TEXT("RequestPayloadMismatch")));
+ auto ForeignConfirm=Request(1,1,EDefenseEventOption::Risk);
+ TestFalse(TEXT("Another player cannot confirm proposer risk"),F.D->ProcessDefenseEvent(P[1],ForeignConfirm).bSuccess);
+ auto Cancel=Request(1,2,EDefenseEventOption::Cancel);TestTrue(TEXT("Other player may cancel with independent request sequence"),F.D->ProcessDefenseEvent(P[1],Cancel).bSuccess);
+ TestEqual(TEXT("Cancelled resumes once"),F.D->GetPhase(),EDefensePhase::Intermission);
+ const auto Generation=F.D->GetPhaseGeneration();TestTrue(TEXT("Cancellation replay uses original receipt"),F.D->ProcessDefenseEvent(P[1],Cancel).bSuccess);TestEqual(TEXT("No duplicate transition"),F.D->GetPhaseGeneration(),Generation);
+ FDefenseTestAccess::OpenEvent(F.D,3);auto NewRisk=Request(0,2,EDefenseEventOption::Risk);TestTrue(TEXT("Next risk opens"),F.D->ProcessDefenseEvent(P[0],NewRisk).bSuccess);
+ F.D->RemovePlayer(P[0]);TestEqual(TEXT("Proposer disconnect cancels"),F.D->BuildEventView().State,EDefenseEventState::Cancelled);return true;
+}
+/** 调度截止走同一安全终态，成功风险波只贡献一次可跨事件保留的Boss倍率。 */
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDefenseEventTimeoutRewardTest,"Combat.Defense.Event.TimeoutAndAccumulatedReward",DefenseTests::Flags)
+bool FDefenseEventTimeoutRewardTest::RunTest(const FString&)
+{
+ DefenseTests::FFixture F;if(!F.Start()) return false;
+ FDefenseTestAccess::OpenEvent(F.D,1);FDefenseTestAccess::ResolveEvent(F.D,EDefenseEventOption::Risk,EDefenseEventState::PendingRisk);
+ FDefenseTestAccess::ExpireEvent(F.D);TestEqual(TEXT("Risk timeout selects safe"),F.D->BuildEventView().State,EDefenseEventState::Expired);
+ FDefenseTestAccess::OpenEvent(F.D,1);FDefenseTestAccess::ResolveEvent(F.D,EDefenseEventOption::Risk,EDefenseEventState::PendingRisk);FDefenseTestAccess::ResolveEvent(F.D,EDefenseEventOption::Risk,EDefenseEventState::ResolvedRisk);
+ TestTrue(TEXT("Risk wave reward succeeds"),FDefenseTestAccess::RiskReward(F.D,2));TestTrue(TEXT("Repeated risk reward succeeds without extra credit"),FDefenseTestAccess::RiskReward(F.D,2));TestEqual(TEXT("One earned bonus"),FDefenseTestAccess::BossBonus(F.D),.1f);
+ FDefenseTestAccess::OpenEvent(F.D,3);TestEqual(TEXT("Opening next event retains prior boss bonus"),FDefenseTestAccess::BossBonus(F.D),.1f);
+ FDefenseTestAccess::ResolveEvent(F.D,EDefenseEventOption::Risk,EDefenseEventState::PendingRisk);FDefenseTestAccess::ResolveEvent(F.D,EDefenseEventOption::Risk,EDefenseEventState::ResolvedRisk);FDefenseTestAccess::RiskReward(F.D,4);
+ TestEqual(TEXT("Two successful event bonuses accumulate"),FDefenseTestAccess::BossBonus(F.D),.2f);return true;
+}
+
 /** 可选角色先校验且本局参数独立冻结，不能让UnitData早启动第二个命令来源。 */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDefenseRoleProfileTest,"Combat.Defense.Assassin.RoleProfileValidationAndFreeze",DefenseTests::Flags)
 bool FDefenseRoleProfileTest::RunTest(const FString&)

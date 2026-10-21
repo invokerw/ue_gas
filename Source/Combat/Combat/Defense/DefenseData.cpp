@@ -86,6 +86,17 @@ bool UDefenseRunData::ValidateRuntime(FString& OutDiagnostic) const
 		Ids.Add(Waves[I]->GetPrimaryAssetId());
 		for (const auto& Group : Waves[I]->SpawnGroups) if (!Routes.IsValidIndex(Group.RouteIndex)) return false;
 	}
+	if (!Events.IsEmpty())
+	{
+		TSet<FPrimaryAssetId> EventIds;
+		TSet<int32> EventWaves;
+		for (const UDefenseEventData* Event : Events)
+		{
+			FString EventError;
+			if (!Event || !Event->ValidateRuntime(EventError) || EventIds.Contains(Event->GetPrimaryAssetId()) || EventWaves.Contains(Event->TriggerAfterWave)) { OutDiagnostic = EventError.IsEmpty() ? TEXT("事件定义重复或无效") : EventError; return false; }
+			EventIds.Add(Event->GetPrimaryAssetId()); EventWaves.Add(Event->TriggerAfterWave);
+		}
+	}
 	if (AugmentPool)
 	{
 		if (!AugmentPool->ValidateRuntime(OutDiagnostic)) return false;

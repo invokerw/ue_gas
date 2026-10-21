@@ -75,6 +75,7 @@ void ACombatDefenseNetworkScenario::Tick(float Delta)
 	auto* State=GetWorld()->GetGameState<ADefenseGameState>();
 	if(!State || !State->GetRunView().RunId.IsValid()) return;
 	const auto& V=State->GetRunView();
+	if(FParse::Param(FCommandLine::Get(),TEXT("DefenseEventSmoke"))) { ExerciseEvents(); return; }
 	const bool Siege=FParse::Param(FCommandLine::Get(),TEXT("DefenseSiegeSmoke"));
 	if(Siege) ObserveSiege();
 	const bool Assassin=FParse::Param(FCommandLine::Get(),TEXT("DefenseAssassinSmoke"));

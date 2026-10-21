@@ -230,7 +230,11 @@ bool FCombatDataIdentityTest::RunTest(const FString& Parameters)
 {
 	TestTrue(TEXT("lower_snake_case identity is valid"), UCombatDefinitionData::IsValidDefinitionName(TEXT("basic_unit_2")));
 	TestFalse(TEXT("empty identity is invalid"), UCombatDefinitionData::IsValidDefinitionName(NAME_None));
-	TestFalse(TEXT("uppercase identity is invalid"), UCombatDefinitionData::IsValidDefinitionName(TEXT("BasicUnit")));
+	#if WITH_CASE_PRESERVING_NAME
+	TestFalse(TEXT("uppercase authored identity is invalid"), UCombatDefinitionData::IsValidDefinitionName(TEXT("BasicUnit")));
+#else
+	TestTrue(TEXT("Cooked FName comparison identity tolerates pooled display case"), UCombatDefinitionData::IsValidDefinitionName(TEXT("BasicUnit")));
+#endif
 	TestFalse(TEXT("leading digit identity is invalid"), UCombatDefinitionData::IsValidDefinitionName(TEXT("2unit")));
 
 	UCombatUnitData* Unit = NewObject<UCombatUnitData>(GetTransientPackage(), TEXT("TransientUnitAsset"));

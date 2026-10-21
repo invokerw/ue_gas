@@ -4,6 +4,7 @@
 #include "Tests/AutomationEditorCommon.h"
 #include "Tests/AutomationCommon.h"
 #include "Editor.h"
+#include "Combat/Tests/CombatDefensePIEHelpers.h"
 #include "EngineUtils.h"
 #include "UnrealClient.h"
 #include "Misc/Paths.h"
@@ -24,9 +25,10 @@
 class FDefenseChoiceUIProbe : public IAutomationLatentCommand
 {
 public:
-	explicit FDefenseChoiceUIProbe(FAutomationTestBase* T):Test(T),Started(FPlatformTime::Seconds()) {}
+	explicit FDefenseChoiceUIProbe(FAutomationTestBase* T):Test(T),Started(0) {}
 	virtual bool Update() override
 	{
+		if(Started==0) Started=FPlatformTime::Seconds();
 		if(FPlatformTime::Seconds()-Started>35) { Test->AddError(TEXT("Choice UI flow timed out")); return true; }
 		auto* World=GEditor?GEditor->PlayWorld.Get():nullptr; if(!World) return false;
 		ADefensePlayerController* PC=nullptr;
@@ -84,6 +86,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDefenseChoicePIETest,"Combat.Defense.PIE.Choic
 bool FDefenseChoicePIETest::RunTest(const FString&)
 {
 	ADD_LATENT_AUTOMATION_COMMAND(FEditorLoadMap(TEXT("/Game/Combat/Demo/Defense/L_Defense")));
+	FAutomationTestFramework::Get().EnqueueLatentCommand(MakeShared<FDefensePIENavigationReady>(this));
 	ADD_LATENT_AUTOMATION_COMMAND(FStartPIECommand(false));
 	FAutomationTestFramework::Get().EnqueueLatentCommand(MakeShared<FDefenseChoiceUIProbe>(this));
 	ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(1));

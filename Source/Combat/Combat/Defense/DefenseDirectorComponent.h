@@ -3,6 +3,7 @@
 #include "Components/ActorComponent.h"
 #include "Combat/Defense/DefenseTypes.h"
 #include "Combat/Defense/DefenseAugmentData.h"
+#include "Combat/Defense/DefenseEventData.h"
 #include "Combat/Items/CombatItemAcquireEffect.h"
 #include "Combat/Log/CombatEventSubsystem.h"
 #include "DefenseDirectorComponent.generated.h"
@@ -130,9 +131,16 @@ public:
 	bool CanReceiveTeamItem(const FCombatItemAcquireContext& Context,FGameplayTag& Failure) const;
 	/** 在 ItemSubsystem 的领取锁内提交团队效果和限购账本。 */
 	bool ReceiveTeamItem(const FCombatItemAcquireContext& Context,FGameplayTag& Failure);
+	/** 事件组件提交当前事件意图；服务器复核阶段、修订、玩家身份和重复请求。 */
+	FDefenseEventResult ProcessDefenseEvent(ACombatPlayerController* Player, const FDefenseEventRequest& Request);
+	/** 构造所有客户端共享的事件只读快照。 */
+	FDefenseEventView BuildEventView() const;
+	/** 检查事件请求是否已缓存；0未命中，1同载荷，-1复用编号换载荷。 */
+	int32 InspectEventReplay(ACombatPlayerController* Player, const FDefenseEventRequest& Request) const;
 private:
 #if WITH_DEV_AUTOMATION_TESTS
 	friend struct FDefenseTestAccess;
+	friend struct FDefenseEventPIEAccess;
 	friend struct FDefenseChoiceTestAccess;
 	friend struct FDefenseTeamShopTestAccess;
 #endif
@@ -178,6 +186,20 @@ private:
 	void UnbindHeroLifecycle(ACombatUnitCharacter* Hero);
 	/** 生成固定种子下的三张合法候选。 */
 	bool GenerateAugmentOffer(FDefensePlayerRecord& Record, int32 WaveIndex);
+	/** 创建并发布一个事件节点；没有资产配置时使用两个固定原型事件。 */
+	void OpenEventAfterWave(int32 CompletedWaveIndex);
+	/** 事件安全/风险/取消/超时的唯一结算入口。 */
+	bool ResolveEvent(EDefenseEventOption Option, EDefenseEventState State, ACombatPlayerController* Proposer);
+	/** 事件结束后恢复整备流程；旧事件句柄在此之前全部失效。 */
+	void FinishEventAndResume();
+	/** 为当前事件创建默认原型数据。 */
+	void BuildDefaultEvents();
+	/** 结算风险事件成功波次的延迟奖励。 */
+	bool RewardRiskEvent(int32 CompletedWaveIndex);
+	/** 风险预算换算为下一波的额外基础敌人数量。 */
+	int32 ConsumeRiskBonusForWave(int32 WaveIndex);
+	/** 发布所有客户端可读的事件状态。 */
+	void PublishEvent();
 	/** 返回当前玩家是否持有某个 DefinitionId。 */
 	static bool HasOwnedAugment(const FDefensePlayerRecord& Record, const FPrimaryAssetId& DefinitionId);
 	/** 只在整备阶段开窗，生成成功后更新所有者投影。 */
@@ -226,6 +248,17 @@ private:
 	UPROPERTY(Transient) TMap<FPrimaryAssetId,TObjectPtr<UCombatItemData>> FrozenTeamItems;
 	TMap<FPrimaryAssetId,FDefenseTeamPurchaseRecord> TeamPurchaseLedger;
 	int32 TeamShopRevision=1;
+	UPROPERTY(Transient) TArray<TObjectPtr<UDefenseEventData>> FrozenEvents;
+	FDefenseRiskLedger RiskLedger;
+	FDefenseEventView EventView;
+	struct FDefenseEventReceipt { TWeakObjectPtr<ACombatPlayerController> Player; FDefenseEventRequest Request; FDefenseEventResult Result; };
+	TArray<FDefenseEventReceipt> EventReceipts;
+	/** 请求编号只在同一连接内单调，玩家之间不能共享高水位或回执。 */
+	TMap<TWeakObjectPtr<ACombatPlayerController>,int32> HighEventRequestIds;
+	TWeakObjectPtr<ACombatPlayerController> EventProposer;
+	/** 已成功清场的事件累计倍率；新事件不能覆盖先前已赚取的Boss奖励。 */
+	float EarnedBossRewardBonus=0;
+	bool bEventMutating=false;
 	int64 LastShopPhase=0;
 	bool bTeamItemsInitialized=false;
 	int32 NextPlayerOrdinal = 0;
@@ -237,6 +270,7 @@ private:
 	bool bStartingHeroMutating=false;
 	bool bTeamShopMutating = false;
 	int32 GroupIndex = 0, SpawnIndex = 0, SpawnFailures = 0;
+	int32 RiskExtraSpawnsRemaining = 0;
 	TArray<FDefenseEnemyRecord> Enemies;
 	TMap<TWeakObjectPtr<ACombatPlayerController>, FDefensePlayerRecord> Players;
 	/** 阶段任务被每次转换取消；监视任务跨阶段存活并在终局统一取消。 */

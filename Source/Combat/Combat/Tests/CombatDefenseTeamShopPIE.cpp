@@ -4,6 +4,7 @@
 #include "Tests/AutomationEditorCommon.h"
 #include "Tests/AutomationCommon.h"
 #include "Editor.h"
+#include "Combat/Tests/CombatDefensePIEHelpers.h"
 #include "EngineUtils.h"
 #include "UnrealClient.h"
 #include "Misc/Paths.h"
@@ -22,9 +23,10 @@
 class FDefenseTeamShopUIProbe : public IAutomationLatentCommand
 {
 public:
-	explicit FDefenseTeamShopUIProbe(FAutomationTestBase* In,bool Aid=false):Test(In),Started(FPlatformTime::Seconds()),bAid(Aid) {}
+	explicit FDefenseTeamShopUIProbe(FAutomationTestBase* In,bool Aid=false):Test(In),Started(0),bAid(Aid) {}
 	virtual bool Update() override
 	{
+		if(Started==0) Started=FPlatformTime::Seconds();
 		if(FPlatformTime::Seconds()-Started>80) { Test->AddError(TEXT("Team shop UI timed out")); return true; }
 		auto* W=GEditor?GEditor->PlayWorld.Get():nullptr; if(!W) return false;
 		ADefensePlayerController* PC=nullptr;
@@ -84,6 +86,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDefenseTeamShopPIETest,"Combat.Defense.PIE.Tea
 bool FDefenseTeamShopPIETest::RunTest(const FString&)
 {
 	ADD_LATENT_AUTOMATION_COMMAND(FEditorLoadMap(TEXT("/Game/Combat/Demo/Defense/L_Defense")));
+	FAutomationTestFramework::Get().EnqueueLatentCommand(MakeShared<FDefensePIENavigationReady>(this));
 	ADD_LATENT_AUTOMATION_COMMAND(FStartPIECommand(false));
 	FAutomationTestFramework::Get().EnqueueLatentCommand(MakeShared<FDefenseTeamShopUIProbe>(this));
 	ADD_LATENT_AUTOMATION_COMMAND(FEndPlayMapCommand());
@@ -93,6 +96,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDefenseReinforcementPIETest,"Combat.Defense.PI
 bool FDefenseReinforcementPIETest::RunTest(const FString&)
 {
 	ADD_LATENT_AUTOMATION_COMMAND(FEditorLoadMap(TEXT("/Game/Combat/Demo/Defense/L_Defense")));
+	FAutomationTestFramework::Get().EnqueueLatentCommand(MakeShared<FDefensePIENavigationReady>(this));
 	ADD_LATENT_AUTOMATION_COMMAND(FStartPIECommand(false));
 	FAutomationTestFramework::Get().EnqueueLatentCommand(MakeShared<FDefenseTeamShopUIProbe>(this,true));
 	ADD_LATENT_AUTOMATION_COMMAND(FEndPlayMapCommand());
