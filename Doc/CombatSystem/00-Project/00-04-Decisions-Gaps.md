@@ -503,7 +503,7 @@ Boss失衡采用数据驱动Modifier，Boss自持来源使多人同池叠层，�
 
 风险选项先进入10秒可取消确认；任一当前玩家可取消，无操作采用安全选项。安全奖励使用既有 Economy/Progression/Heal 入口；风险成功只对下一波增加一名基础敌人、清场后发放延迟奖励并增加Boss奖励倍率，均按一次性账本结算。Defense RunView schema 从3升级为4，Combat Release/Tag/Event/Formula/Economy schema不变；旧RunData通过默认原型事件保持可启动，测试夹具可显式关闭原型事件。
 
-DEF-013专项Automation通过；当前独立PIE事件按钮验证受既有导航/启动环境超时，待后续冷启动PIE复验。
+DEF-013专项Automation、真实渲染PIE、正式资产冷回读和两轮WindowsServer/WindowsClient Dedicated双客户端验证均通过；长时间Soak/Perf未执行。用户已于2026-10-21确认DEF-013验收完成。
 
 ### ADR-079 追加：独立 Target 必须使用平台正确的 Stage（2026-10-21）
 

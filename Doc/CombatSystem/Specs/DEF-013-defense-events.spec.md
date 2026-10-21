@@ -1,7 +1,7 @@
 # DEF-013 Phase 3D 防守事件节点与风险确认
 
 > Spec 版本：`0.5`
-> 状态：`READY_FOR_REVIEW`
+> 状态：`已验收`
 > Owner：Codex
 > 创建日期：2026-10-19
 > 关联进度台账：`00-01-Progress-Tracker.md` §12.13
@@ -177,7 +177,7 @@ Intermission/BossPreparation
 - F2 对抗审查：单人本地审查，重新从工具输入和真实日志审查 raw 路径、错误平台、陈旧日志、伪 NetMode/RunId、外来拥有者、崩溃优先和异常清理；边界单测和实际失败拒绝/两轮运行支持 PASS。未添加生产自动操作或引擎断言旁路。
 - Push-Ready 六层：Tests PASS（59 工具测试与两轮三端）；Types/Build PASS（三 Target）；No Regression PASS（0.5 仅编排/诊断，保留 0.3 已验证 gameplay）；Adversarial PASS；DDD/Constraints PASS（无发布/schema/权威入口变化）；Decisions PASS（ADR-079 记录正确平台 Stage 约束）。
 - 历史 Red 保留：`Saved/DEF-013/target-network-final/server.log` 的 raw Target 启动失败。根因是未使用平台匹配的 Cooked 内容及 AssetRegistry；平台完整归档实际通过后该风险关闭，不再列为未闭合引擎风险。
-- 未执行项：本轮未重跑完整 Combat/PIE/资产校验或长时间 Soak，原因见 §7；无已知本次范围内未闭合风险。当前待用户验收，未提交、未推送。
+- 未执行项：本轮未重跑完整 Combat/PIE/资产校验或长时间 Soak，原因见 §7；无已知本次范围内未闭合风险。用户已于 2026-10-21 确认验收完成；未提交、未推送。
 
 ## 10. 变更记录
 
@@ -212,8 +212,8 @@ Intermission/BossPreparation
 
 - 计算总分：`4.6`（加权 4.61，四舍五入一位）
 - 未闭合风险：无已知本次范围内风险；长时间 Soak/Perf 未执行，不以两轮 smoke 宣称长期稳定性。
-- 自评结论：`READY_FOR_REVIEW`
-- 用户验收状态：`READY_FOR_REVIEW`
+- 自评结论：`EVIDENCE_SUFFICIENT`
+- 用户验收状态：`已验收`（2026-10-21；用户确认“验收完成”）
 
 ### Reflect 与调优
 
@@ -221,7 +221,7 @@ Intermission/BossPreparation
 - 根因类别：`单次实现`（独立 Target 启动部署不完整）。
 - 调整文件与预期收益：将平台打包/完整性检查、独立三端日志身份验证固化到 Tools 和 README，减少再次误用仓库裸程序或旧日志；无需改通用 Skill 或引擎源码。
 - 回归验证：0.5 三 Target 构建、平台 Cook/Stage/Archive、工具 59/59、独立三端两轮通过；0.3 gameplay、PIE、冷回读证据保留且不冒充本轮重跑。
-- 需要用户决定的问题：无；等待用户验收，不自动提交。
+- 需要用户决定的问题：无；用户已验收，未授权后续阶段或自动提交/推送。
 
 
 ## 12. 0.2 验证闭环修正计划（2026-10-20）
@@ -275,3 +275,7 @@ Intermission/BossPreparation
 现有客户端摘要没有 RunId，为执行 AC-09 的同局检查，在 `Source/Combat/Combat/Tests/CombatDefenseEventNetwork.cpp` 的两条末态日志补记现有复制视图 RunId；只改变显式 smoke 的诊断文本，不改请求、复制载荷或 gameplay。随后重编 Server/Client、重新 Stage 其产物，所有结果必须来自同一批次。其余0.4计划保持。
 
 - 0.5 F1 APPROVED，审查人 Codex；preflight/plan通过，确认日志补充无 gameplay/schema 副作用，更新产物后再测试。
+
+## 15. 用户验收记录（2026-10-21）
+
+用户确认“验收完成”。DEF-013 Phase 3D 事件原型与风险确认已验收。本次仅更新验收状态和证据台账，不新增运行验证结论；用户尚未授权后续阶段或自动提交/推送。
