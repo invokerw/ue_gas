@@ -64,6 +64,7 @@ private:
 #if WITH_DEV_AUTOMATION_TESTS
 	friend class FCombatShopWidgetStructureTest;
 	friend class FDefenseTeamShopUIProbe;
+	friend class FDefenseEquipmentUIProbe;
 #endif
 
 	struct FItemEntry

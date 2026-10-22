@@ -1,7 +1,7 @@
 # 00-01 开发进度台账
 
-> 最后更新：2026-10-21
-> 当前工作：DEF-013 0.5 已关闭独立 Server/Client Target 启动风险，专用 WindowsServer/WindowsClient Cook/Stage 归档和两轮 Dedicated 双客户端事件验证通过；用户于 2026-10-21 确认验收完成。DEF-010/011/012 的既有验收记录保持，下一阶段尚未授权。
+> 最后更新：2026-10-22
+> 当前工作：DEF-013已于2026-10-21验收并提交74d2f9d；DEF-014首批四件已于2026-10-22验收成功，准备本地提交，不推送。其余四件装备、长期平衡与容量验证仍后续。
 > HUD-MINIMAP-002（2026-09-30）：0.3 修复运行时 `Collapsed` 后，0.4 按用户追加要求将小地图固定到视口左下并支持拖动，0.5 移除鼠标悬停时的操作提示行，0.6 将左键拖动改为平移摄像机视角并保持地图固定，0.7 保持未越界镜头为透视梯形，0.8 改为靠边裁剪可见部分并继续随摄像机移动，0.9 增加暗色地形与标识，1.0/1.1 移除全部文字并收敛按下定位拖动时序，1.2 增加保存地图后生成 JSON 配置的编辑器入口；正常模块冷启动 PIE 截图与 `VISIBLE` 回读通过，Minimap 8/8、Camera 6/6，用户已完成验收并授权本地提交。完整 Combat 回归受 UE/D3D12 设备移除中断，未宣称全量通过。见 [HUD-MINIMAP-002 Spec](../Specs/HUD-MINIMAP-002-minimap-implementation.spec.md)。
 > CTRL-001 英雄查看与多操（2026-09-24）：用户已验收 0.2 并授权本地提交。查看、切换、Shift 多选/框选和群体命令已实现；镜头仅首次定位，选择/确认空窗保持锚点；单位不可作为地面，实际接触向上速度由 193.67 降至 0 cm/s。F0 GO、F1 APPROVED 0.2、F2 PASS、Push-Ready READY；Editor/Server/Client、完整 Automation 153 项（0 失败）、真实 Demo 坡道 PIE 与 Dedicated 双客户端的三段到达/折返/静置均通过。验收回写沿用已有工程验证，不新增运行验证结论。证据见 [CTRL-001](../Specs/CTRL-001-multi-unit-selection.spec.md) 与 ADR-067。
 > RES-001 玩家资源/英雄库存边界 0.2（2026-09-24）：用户已验收并授权本地提交。玩家战略资源由 PlayerController 账本持有，库存实例/Holder/槽位/修订仍归英雄；纯资源余额变化保留服务器诊断事件但退出战斗 UI 日志，购买/出售/合成和物品事件不变。最终 UE 构建、Economy 11/11、UI Log 5/5、文档与 delivery Gate 通过，见 [RES-001](../Specs/RES-001-player-resource-ownership.spec.md) 与 ADR-066。
@@ -366,12 +366,14 @@ HUD-ABILITY-CLICK-001/002 追加验收状态：`用户已验收`（2026-09-14）
 | DEF-011 | Phase 3B 游猎刺客与低生命选敌 | 已验收 | 0.2 F0 GO/F1 APPROVED/F2 PASS/Push-Ready READY；第4/5波双路紫色刺客、低生命比例优先、限时追击/归位与完线攻核；230非PIE/4PIE、三Target、131定义、双客户端4刺客打英雄及4攻城打核心、775包Cook通过；纳入2026-10-19验收提交，见 [Spec](../Specs/DEF-011-phase3-assassin-enemy.spec.md) |
 | DEF-012 | Phase 3C 神殿守卫英雄包与开局选择 | 已验收 | 0.1 F0 GO/F1 APPROVED/F2 PASS/Push-Ready READY；三主动一被动、固定窗口Boss失衡、开局白名单选角与同族盾上限；237非PIE/6真实PIE、三Target、144定义、双客户端RPC/技能/六波、797包Cook通过；纳入2026-10-19验收提交，见 [Spec](../Specs/DEF-012-phase3-guardian-hero.spec.md) |
 | DEF-013 | Phase 3D 事件原型与风险确认 | 已验收 | 0.5 F0 GO/F1 APPROVED/F2 PASS/Push-Ready READY；两个正式事件、风险确认/取消/超时、RunView schema4、Slate按钮已接入；0.3 已通过74非PIE、6渲染交互PIE、146定义/0错误、冷回读与Game归档。0.5 修正raw Target启动方式：Editor/Server/Client构建、WindowsServer/WindowsClient Cook/Stage/Archive、两轮真实Dedicated+双Client六波事件和同RunId/奖励/权限断言均通过；旧FBufferReader风险已关闭。用户于2026-10-21确认验收完成，见 [Spec](../Specs/DEF-013-defense-events.spec.md) |
+| DEF-014 | Phase 3E 首批四件防守装备 | 已验收 | 0.2 F0 GO/F1 APPROVED/F2 PASS/Push-Ready READY；铁制弓/迅弦/石卫徽记/猎手瞄准镜、真实九格限持有与每整备窗口两件配额；三Target、248非PIE/3原商店渲染PIE、59工具测试、154资产0错误、807包双平台Cook/Stage及独立Dedicated双Client同局四实物/7步RPC/精确金币和属性复制通过；用户于2026-10-22确认验收成功并授权本地提交，不推送。其余四件、远程兵/Boss阶段/统计仍后续，见 [Spec](../Specs/DEF-014-defense-equipment-foundation.spec.md) |
 
 ## 13. 用户验收记录
 
 | 里程碑 | 提交验收日期 | 用户结论 | 修正要求 | 最终验收日期 | 下一阶段授权 |
 | --- | --- | --- | --- | --- | --- |
 | M0 | 2026-08-24 | 已验收 | 无 | 2026-08-24 | 已授权 M1（2026-08-24） |
+| DEF-014 | 2026-10-22 | 已验收 | 无 | 2026-10-22 | 暂无下一阶段授权 |
 | M1 | 2026-08-25 | 已验收 | 中文注释规范与 M1 源码注释已补齐 | 2026-08-25 | 已授权 M2（2026-08-25） |
 | M2 | 2026-08-25 | 已验收 | 无 | 2026-08-26 | 已授权 M3（2026-08-26） |
 | M3 | 2026-08-26 | 已验收 | 无 | 2026-08-26 | 已授权 M4（2026-08-26） |
@@ -554,3 +556,8 @@ HUD-ABILITY-CLICK-001/002 追加验收状态：`用户已验收`（2026-09-14）
 
 2026-10-21：DEF-013 0.5 关闭额外风险：raw Binaries 启动未配对应Cooked内容导致AssetRegistry失败和包摘要断言；WindowsServer/WindowsClient专用归档两轮三端事件 smoke 通过，工具固化平台/日志/NetMode/RunId/早退检查，转为待用户验收。未提交或推送。
 2026-10-21：用户确认DEF-013事件系统验收完成；同步Spec、台账和ADR-079的当前状态，不新增运行验证结论，未授权后续阶段或自动提交/推送。
+
+2026-10-21：用户在DEF-013验收本地提交后授权“继续下一步”；DEF-014按首批四件防守装备切片开工，0.2补充授予/拾取/购买共同持有限额，F1与Build Gate先于生产修改，未自动提交。
+
+2026-10-21：DEF-014首批四件验证收口，三Target、248非PIE、3真实商店PIE、59工具测试、154资产/冷回读和WindowsServer/WindowsClient双平台Cook/Stage/Archive通过。最终独立三端RunId=9D41AE4A4FD2647A42A253858FA4AC2D；修复GE操作序列化、提交观察者生命周期和旧援军夹具滚动。转待用户验收，未自动提交或推进其余四件。
+2026-10-22：用户确认DEF-014首批四件验收成功并授权本地提交；同步Spec、台账和ADR-080当前状态，不推送，不提前推进其余四件。

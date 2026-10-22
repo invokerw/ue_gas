@@ -63,3 +63,9 @@ Demo 资产仍位于 `/Game/Combat/Demo/Economy` 和 `/Game/Combat/Demo/UI`，�
 只对即用购买保存 32 条完整载荷回执与请求高水位。重发仍消耗连接限频，但不会重复扣款或生效；同号换载荷、旧绑定、旧上下文/阶段拒绝。普通经济请求仍沿用旧重放拒绝语义。`ShopOffers` 仅向拥有者复制，给既有商店提供可购/剩余次数/领取者/效果到期；变更商品条件不递增玩家金币修订。
 
 防守专用目录 `/Game/Combat/Demo/Defense/DA_DefenseUnifiedShop` 保留原商品分类并追加“团队补给 · 获得即用”。六件物品在 `/Game/Combat/Demo/Defense/TeamShop/DA_Item_team_*`；团队效果仍归 Director，使用者可阵亡，待复活补领有效期内的属性。原 `DefenseTeamShopData`、`DefenseTeamShopComponent` 和专用购买 RPC 已删除，UI 继续使用右下金币按钮、左键查看与右键购买。商品 tooltip 显示限购和持续信息，标题提示最近即用购买结果。详见 [DEF-006](../Specs/DEF-006-reuse-shop-use-on-acquire.spec.md)。
+
+## DEF-014：普通商品领域条件
+
+原商店可为普通无配方叶子配置同步购买策略，沿用ShopOffers和领域上下文。服务器在唯一库存事务前重新查询窗口/配额，并在成功事务的经济互斥内记账；完整同载荷重放返回原实例句柄和回执，不会重复扣款或扣配额。库存MaxOwnedQuantity检查包含锁定和背包。未配置策略的普通商品保持原行为，团队即用商品继续使用原AcquireEffect。
+
+原商店悬停展示策略给出的窗口、限额与拒绝原因，不负责判定权限。防守首批四件通过原目录新增“防守装备”分类；不创建第二商店、余额或库存。见 [DEF-014](../Specs/DEF-014-defense-equipment-foundation.spec.md)。

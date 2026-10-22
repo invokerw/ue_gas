@@ -36,6 +36,18 @@ int32 UCombatInventoryComponent::GetItemCount() const
 	return Count;
 }
 
+bool UCombatInventoryComponent::IsWithinOwnershipLimit(const UCombatItemData& Definition, const int32 AdditionalQuantity) const
+{
+    if (AdditionalQuantity <= 0) return false;
+    if (Definition.MaxOwnedQuantity == 0) return true;
+    if (Definition.MaxOwnedQuantity < 0 || AdditionalQuantity > Definition.MaxOwnedQuantity || !GetItems()) return false;
+    int32 Owned = 0;
+    for (const FCombatItemHandle Handle : Slots)
+        if (const auto* Item = GetItems()->FindItem(Handle); Item && Item->Definition && Item->Holder == GetUnit()
+            && Item->Definition->GetPrimaryAssetId() == Definition.GetPrimaryAssetId()) Owned += Item->Quantity;
+    return Owned <= Definition.MaxOwnedQuantity - AdditionalQuantity;
+}
+
 bool UCombatInventoryComponent::GiveItem(UCombatItemData* Definition, int32 Quantity, FCombatItemHandle& OutHandle, FGameplayTag& Failure)
 {
 	OutHandle = {};
@@ -102,6 +114,11 @@ bool UCombatInventoryComponent::AcceptItem(UCombatItemInstance& Item, FCombatIte
 	{
 		OutHandle={}; return Items->ConsumeOnAcquire(Item,Unit,Failure);
 	}
+    if (!IsWithinOwnershipLimit(*Item.Definition, Item.Quantity))
+    {
+        Failure = CombatTags::Failure_ActionUnsupported;
+        return false;
+    }
 	for (const FCombatItemHandle Handle : Slots)
 	{
 		UCombatItemInstance* Into = Items->FindMutable(Handle);

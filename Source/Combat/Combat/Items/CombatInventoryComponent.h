@@ -52,6 +52,8 @@ public:
 	FCombatItemHandle GetItemAt(int32 Slot) const { return Slots.IsValidIndex(Slot) ? Slots[Slot] : FCombatItemHandle(); }
 	int32 GetRevision() const { return InventoryRevision; }
 	int32 GetItemCount() const;
+    /** 只读真实九格的同定义数量，锁定与背包不排除；0上限表示不限量，不检查金币或空格。 */
+    bool IsWithinOwnershipLimit(const UCombatItemData& Definition, int32 AdditionalQuantity) const;
 
 private:
 	friend class UCombatEconomyComponent;

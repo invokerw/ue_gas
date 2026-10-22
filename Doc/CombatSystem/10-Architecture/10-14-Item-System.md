@@ -89,10 +89,10 @@ Pickup / Drop 进入 Order 状态机，复用 AI 导航、路径跟随、Schedul
 
 | 契约 | 当前值 |
 | --- | --- |
-| ReleaseId / ContractVersion | combat_v4_economy_rc1 / 4 |
+| ReleaseId / ContractVersion | combat_v5_acquisition_rc1 / 5 |
 | GameplayTag / Combat Event | 3 / 3 |
 | HUD View / 玩家日志投影 | 8 / 3 |
-| Economy Presentation | 3（玩家金币入口 + 当前英雄库存投影） |
+| Economy Presentation | 4（玩家金币入口、当前英雄库存和商品条件投影） |
 | Content / Formula / RNG | 1 / 1 / 1 |
 | 能力开关 | bItemsEnabled=true，bEconomyEnabled=true；旧 `bItemsAndEconomy=false` |
 
@@ -116,3 +116,11 @@ Pickup / Drop 进入 Order 状态机，复用 AI 导航、路径跟随、Schedul
 `GiveItem`、`TryPickup` 与原经济购买共用 ItemSubsystem 的领取入口。实例在执行期间被锁定；成功后同步消费并释放地面 Actor/登记记录，结果 Handle 为空；失败保留地面实例或回滚购买金额/修订。满九格仍能领取，库存修订不因无槽消费变化。拾取仍先经过公共 Targeting 的距离、状态、LOS 与原共享约束。日志保留已消费实例的不可变 SourceContext，后续团队效果也保留来源。
 
 即用商品不能充当合成组件；复制请求与快照规则见 [10-15](10-15-Economy-Shop-Crafting.md) 和 [DEF-006](../Specs/DEF-006-reuse-shop-use-on-acquire.spec.md)。
+
+## DEF-014：持有限额与普通装备购买策略
+
+`UCombatItemData::MaxOwnedQuantity` 默认0不限量，正数1–99表示同一英雄九格内同定义的总数量上限；背包和锁定仍计入。普通授予、拾取和经济购买共用库存只读检查，超额失败保留金币或地面实例。配置的MaxStack不能高于正的持有上限。
+
+可选内嵌 `ShopPolicy` 只允许可直接购买的普通无配方商品，不能与获得即用共配，也不能作为其他配方组件。QueryOffer 无副作用；OnPurchased 在原经济/库存互斥内仅记录领域配额，使用预检时冻结的上下文与稳定付款人，禁止扣金币、操作库存、广播或异步执行。经济组件为策略商品冻结定义/被动并复用原ShopOffers、领域上下文与32条完整回执；没有新RPC或wire schema。
+
+防守四件装备占原库存，出生/复活/背包/等待/出售/EndPlay沿用现有精确句柄生命周期。每种限一件、每个整备窗口每人最多成功购买两件；失败不记次数，出售与死亡不退次数，团队即用不占此配额。数据、迁移和实际验证见 [DEF-014](../Specs/DEF-014-defense-equipment-foundation.spec.md)。

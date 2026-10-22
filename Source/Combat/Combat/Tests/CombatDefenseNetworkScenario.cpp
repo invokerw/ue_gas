@@ -75,6 +75,7 @@ void ACombatDefenseNetworkScenario::Tick(float Delta)
 	auto* State=GetWorld()->GetGameState<ADefenseGameState>();
 	if(!State || !State->GetRunView().RunId.IsValid()) return;
 	const auto& V=State->GetRunView();
+	if(FParse::Param(FCommandLine::Get(),TEXT("DefenseEquipmentSmoke"))) { ExerciseEquipment(); return; }
 	if(FParse::Param(FCommandLine::Get(),TEXT("DefenseEventSmoke"))) { ExerciseEvents(); return; }
 	const bool Siege=FParse::Param(FCommandLine::Get(),TEXT("DefenseSiegeSmoke"));
 	if(Siege) ObserveSiege();
@@ -276,6 +277,7 @@ void ACombatDefenseNetworkScenario::GetLifetimeReplicatedProps(TArray<FLifetimeP
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 	DOREPLIFETIME(ACombatDefenseNetworkScenario,FinalAttributes);
+    DOREPLIFETIME(ACombatDefenseNetworkScenario,EquipmentSamples);
 	DOREPLIFETIME(ACombatDefenseNetworkScenario,GuardianSmokeHero);
 	DOREPLIFETIME(ACombatDefenseNetworkScenario,GuardianTrainingTarget);
 }

@@ -4,6 +4,7 @@
 #include "Combat/Defense/DefenseAugmentData.h"
 #include "CombatDefenseNetworkScenario.generated.h"
 class ACombatUnitCharacter;
+class ACombatPlayerController;
 struct FCombatLogRecord;
 /** 网络验证末态：由服务器采样属性，客户端比对复制的实际 AttributeSet；只用于测试探针。 */
 USTRUCT()
@@ -29,6 +30,14 @@ private:
 	void Finish(bool bPass,const FString& Detail);
 	/** 测试编排使用公共 Damage 形成合法死亡，不直接写生命或改导演计数。 */
 	void Kill(ACombatUnitCharacter* Unit);
+    /** 显式装备测试：原RPC购买、重复/配额/战斗拒绝和拥有者库存、公共属性复制。 */
+    void ExerciseEquipment();
+    int32 EquipmentStep=0, EquipmentRequestId=0;
+    bool bEquipmentAwaiting=false, bEquipmentExpectSuccess=false, bEquipmentPrepared=false;
+    double EquipmentWaveAt=0, EquipmentFinishAt=0;
+    int32 EquipmentWave=INDEX_NONE;
+    TMap<TWeakObjectPtr<ACombatPlayerController>, int64> EquipmentInitialGold;
+    UPROPERTY(Replicated) TArray<FDefenseChoiceSmokeSample> EquipmentSamples;
 	/** 显式事件网络验证：两客户端同号请求隔离、取消/确认、奖励和只读复制。 */
 	void ExerciseEvents();
 	int32 EventNetStep=0,EventNetMask=0,EventNetLastWave=INDEX_NONE;

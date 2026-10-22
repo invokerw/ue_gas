@@ -69,6 +69,9 @@ struct FDefensePlayerRecord
 	TArray<FDefenseChoiceReceipt> ChoiceResults;
 	int32 HighRequestId = 0;
 	int32 RerollsUsed = 0;
+    /** 最近成功购买装备的整备阶段代次；死亡、出售和控制切换不重置本窗口次数。 */
+    int32 EquipmentPurchasePhase = 0;
+    int32 EquipmentPurchases = 0;
 	/** 初始空构筑选择只成功一次，不作为中途英雄迁移入口。 */
 	bool bStartingHeroSelected=false;
 	TArray<FPrimaryAssetId> PreviousUnchosen;
@@ -131,6 +134,10 @@ public:
 	bool CanReceiveTeamItem(const FCombatItemAcquireContext& Context,FGameplayTag& Failure) const;
 	/** 在 ItemSubsystem 的领取锁内提交团队效果和限购账本。 */
 	bool ReceiveTeamItem(const FCombatItemAcquireContext& Context,FGameplayTag& Failure);
+    /** 普通装备只读准入：当前登记英雄、整备阶段、同款持有限额及每窗口两次配额。 */
+    FCombatShopOfferView BuildEquipmentOffer(ACombatPlayerController* Player, const UCombatItemData* Item) const;
+    /** 经济互斥内使用预检时冻结的局/阶段记录成功购买，不调用外部API或广播。 */
+    void RecordEquipmentPurchase(ACombatPlayerController* Player, const FCombatShopOfferView& AcceptedOffer);
 	/** 事件组件提交当前事件意图；服务器复核阶段、修订、玩家身份和重复请求。 */
 	FDefenseEventResult ProcessDefenseEvent(ACombatPlayerController* Player, const FDefenseEventRequest& Request);
 	/** 构造所有客户端共享的事件只读快照。 */
@@ -143,6 +150,7 @@ private:
 	friend struct FDefenseEventPIEAccess;
 	friend struct FDefenseChoiceTestAccess;
 	friend struct FDefenseTeamShopTestAccess;
+	friend struct FDefenseEquipmentTestAccess;
 #endif
 	/** 阶段转换取消旧阶段工作，RunId 不变而 generation 递增。 */
 	void EnterPhase(EDefensePhase Phase, int32 Wave, float Duration);

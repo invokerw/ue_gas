@@ -395,9 +395,9 @@ FText UCombatShopWidget::BuildItemToolTip(const UCombatItemData& Item) const
 	FString Error;
 	if (DisplayShopData) DisplayShopData->CalculateItemPrice(Item.GetPrimaryAssetId(), Price, Error);
 	FString Description = Item.Description.IsEmpty() ? TEXT("") : TEXT("\n") + Item.Description.ToString();
-	if(Item.bUseOnAcquire)
+	if(Item.bUseOnAcquire || Item.ShopPolicy)
 	{
-		Description+=TEXT("\n获得即使用 · 不占库存");
+		if (Item.bUseOnAcquire) Description+=TEXT("\n获得即使用 · 不占库存");
 		if(const auto* Economy=GetEconomy()) if(const auto* Offer=Economy->FindShopOffer(Item.GetPrimaryAssetId()))
 		{
 			Description+=TEXT("\n")+Offer->Status.ToString();
@@ -522,8 +522,8 @@ void UCombatShopWidget::RebuildCatalog()
 			FString Error;
 			Shop->CalculateItemPrice(Item->GetPrimaryAssetId(), Price, Error);
 			FText Badge = FText::AsNumber(Price);
-			if(Item->bUseOnAcquire) if(const auto* Economy=GetEconomy()) if(const auto* Offer=Economy->FindShopOffer(Item->GetPrimaryAssetId()))
-				if(!Offer->bCanPurchase) Badge=FText::FromString(Offer->RemainingPurchases==0?TEXT("已用"):TEXT("未开放"));
+			if(Item->bUseOnAcquire || Item->ShopPolicy) if(const auto* Economy=GetEconomy()) if(const auto* Offer=Economy->FindShopOffer(Item->GetPrimaryAssetId()))
+				if(!Offer->bCanPurchase) Badge=FText::FromString(Offer->RemainingPurchases==0?(Item->bUseOnAcquire?TEXT("已用"):TEXT("限额")):TEXT("未开放"));
 			Items->AddSlot()
 			[
 				BuildItemNode(*Item, Badge, BuildItemToolTip(*Item), CatalogEntries, CatalogIconResources,

@@ -7,7 +7,7 @@ class ACombatUnitCharacter;
 class ACombatPlayerController;
 class UCombatItemData;
 
-/** 商店的只读领取条件；不复制效果对象，Revision 属于对应领域上下文。 */
+/** 商店的只读购买条件；不复制效果对象，Revision 属于对应领域上下文。 */
 USTRUCT(BlueprintType)
 struct COMBAT_API FCombatShopOfferView
 {
@@ -16,7 +16,7 @@ struct COMBAT_API FCombatShopOfferView
 	UPROPERTY() FGuid ContextId;
 	UPROPERTY() int32 Revision=0;
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Shop", meta=(DisplayName="可购买", ToolTip="服务器确认的当前领域条件；余额仍由经济系统检查。")) bool bCanPurchase=false;
-	UPROPERTY(BlueprintReadOnly, Category="Combat|Shop", meta=(DisplayName="剩余次数", ToolTip="-1 表示不限购，0 表示已用尽，正数为剩余可领次数。")) int32 RemainingPurchases=-1;
+	UPROPERTY(BlueprintReadOnly, Category="Combat|Shop", meta=(DisplayName="剩余次数", ToolTip="-1 表示不限购，0 表示已用尽，正数为剩余可购买次数。")) int32 RemainingPurchases=-1;
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Shop", meta=(DisplayName="效果生效中", ToolTip="是否有已领取的持续效果仍在生效。")) bool bEffectActive=false;
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Shop", meta=(DisplayName="最后覆盖波", ToolTip="1-based 最后覆盖波次；0 表示立即使用或不按波次到期。")) int32 ExpireWave=0;
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Shop", meta=(DisplayName="领取者", ToolTip="最近一次成功领取者的名称。")) FString RecipientName;

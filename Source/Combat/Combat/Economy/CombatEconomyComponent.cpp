@@ -3,6 +3,7 @@
 #include "Combat/Economy/CombatEconomyData.h"
 #include "Combat/Economy/CombatShopData.h"
 #include "Combat/Items/CombatItemAcquireEffect.h"
+#include "Combat/Items/CombatItemShopPolicy.h"
 #include "Combat/Items/CombatItemData.h"
 #include "Combat/Items/CombatItemSubsystem.h"
 #include "Combat/Items/CombatInventoryComponent.h"
@@ -100,10 +101,14 @@ bool UCombatEconomyComponent::InitializeForMatch(UCombatEconomyData* EconomyData
 	FrozenSellValueBasisPoints = EconomyData->SellValueBasisPoints;
 	ShopData = DuplicateObject<UCombatShopData>(InShopData,this);
 	for(auto& Category:ShopData->Categories) for(auto& Reference:Category.Items)
-		if(auto* Item=Reference.LoadSynchronous(); Item&&Item->bUseOnAcquire)
+		if(auto* Item=Reference.LoadSynchronous(); Item&&(Item->bUseOnAcquire || Item->ShopPolicy))
 		{
 			auto* Copy=DuplicateObject<UCombatItemData>(Item,this);
-			FrozenAcquireItems.Add(Copy); Reference=Copy;
+            // 策略与装备平衡在本局冻结；编辑源资产不会改变已初始化玩家的装备效果。
+            if (Copy->ShopPolicy)
+                for (auto& Passive : Copy->Passives)
+                    if (Passive.Modifier) Passive.Modifier = DuplicateObject<UCombatModifierData>(Passive.Modifier, Copy);
+			FrozenOfferItems.Add(Copy); Reference=Copy;
 		}
 	bDebugCommandsEnabled = bEnableDebugCommands;
 	bInitialized = true;
@@ -459,6 +464,16 @@ bool UCombatEconomyComponent::PurchaseItem(const FPrimaryAssetId& ItemDefinition
 	UCombatInventoryComponent* Inventory = nullptr;
 	if (!ValidateInventoryTransactionRevisions(ExpectedEconomyRevision, ExpectedInventoryRevision, OutFailure, Inventory)) return false;
 
+    UCombatItemData* PurchaseDefinition = ShopData->FindItem(ItemDefinitionId);
+    FCombatShopOfferView AcceptedOffer;
+    if (PurchaseDefinition && PurchaseDefinition->ShopPolicy)
+    {
+        AcceptedOffer = PurchaseDefinition->ShopPolicy->QueryOffer(Inventory->GetUnit(), PurchaseDefinition);
+        if (AcceptedOffer.ContextId != ContextId || AcceptedOffer.Revision != ContextRevision)
+        { OutFailure = CombatTags::Failure_Economy_Stale; return false; }
+        if (!AcceptedOffer.bCanPurchase)
+        { OutFailure = CombatTags::Failure_ActionUnsupported; return false; }
+    }
 	TArray<FPrimaryAssetId> OwnedDefinitions;
 	UCombatItemSubsystem* Items = GetItems();
 	for (const FCombatItemHandle Handle : Inventory->Slots)
@@ -491,6 +506,8 @@ bool UCombatEconomyComponent::PurchaseItem(const FPrimaryAssetId& ItemDefinition
 		return false;
 	}
 
+    if (!Inventory->IsWithinOwnershipLimit(*TargetDefinition, 1))
+    { OutFailure = CombatTags::Failure_ActionUnsupported; return false; }
 	TArray<FConsumedEntry> Consumed;
 	if (!ResolveInventoryConsumedEntries(*Inventory, Plan.ConsumedDefinitions, Consumed, OutFailure)) return false;
 	const int64 PreviousGold = ReplicatedView.Gold;
@@ -503,6 +520,8 @@ bool UCombatEconomyComponent::PurchaseItem(const FPrimaryAssetId& ItemDefinition
 		const UCombatItemInstance* Result = Items->FindItem(OutResultHandle);
 		if (Result) PurchasedSource = Result->MakeSource();
 		ReplicatedView.Gold -= Plan.TotalCost;
+        if (TargetDefinition->ShopPolicy)
+            TargetDefinition->ShopPolicy->OnPurchased(GetCombatPlayer(), AcceptedOffer);
 	}
 	AdvanceEconomyRevision();
 	FCombatItemHandle TrackedHandle = OutResultHandle;
@@ -524,7 +543,7 @@ bool UCombatEconomyComponent::TryCraftInventoryRecipe(UCombatInventoryComponent&
 	OutHandle = {};
 	ACombatUnitCharacter* Unit = Inventory.GetUnit();
 	UCombatItemSubsystem* Items = GetItems();
-	if (!Unit || !Items || TargetDefinition.Recipe.IsEmpty()) return false;
+	if (!Unit || !Items || TargetDefinition.Recipe.IsEmpty() || !Inventory.IsWithinOwnershipLimit(TargetDefinition, 1)) return false;
 
 	TArray<FPrimaryAssetId> DirectIngredients;
 	for (const FCombatItemRecipeIngredient& Ingredient : TargetDefinition.Recipe)
@@ -893,7 +912,7 @@ void UCombatEconomyComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	{
 		Scheduler->CancelAllForOwner(this);
 	}
-	ShopData = nullptr; FrozenAcquireItems.Reset(); AcquireReceipts.Reset(); ReplicatedView.ShopOffers.Reset();
+	ShopData = nullptr; FrozenOfferItems.Reset(); AcquireReceipts.Reset(); ReplicatedView.ShopOffers.Reset();
 	Super::EndPlay(EndPlayReason);
 }
 
@@ -928,7 +947,11 @@ void UCombatEconomyComponent::RefreshShopOffers()
 {
 	auto* PC=GetCombatPlayer(); if(!PC||!PC->HasAuthority()||!bInitialized||bEnding||!ShopData) return;
 	TArray<FCombatShopOfferView> Next;
-	for(const auto& Item:FrozenAcquireItems) if(Item&&Item->AcquireEffect) Next.Add(Item->AcquireEffect->QueryOffer(PC->GetCommandedUnit(),Item));
+    for (const auto& Item : FrozenOfferItems)
+    {
+        if (Item && Item->AcquireEffect) Next.Add(Item->AcquireEffect->QueryOffer(PC->GetCommandedUnit(), Item));
+        else if (Item && Item->ShopPolicy) Next.Add(Item->ShopPolicy->QueryOffer(PC->GetCommandedUnit(), Item));
+    }
 	if(Next==ReplicatedView.ShopOffers) return;
 	ReplicatedView.ShopOffers=MoveTemp(Next); PC->ForceNetUpdate(); OnEconomyViewChanged.Broadcast();
 }
@@ -938,6 +961,11 @@ bool UCombatEconomyComponent::IsAcquirePurchase(const FCombatEconomyRequest& R) 
 {
 	const auto* Item=ShopData&&R.Action==ECombatEconomyAction::Purchase?ShopData->FindItem(R.ItemDefinitionId):nullptr;
 	return Item&&Item->bUseOnAcquire;
+}
+bool UCombatEconomyComponent::IsContextPurchase(const FCombatEconomyRequest& Request) const
+{
+    const auto* Item = ShopData && Request.Action == ECombatEconomyAction::Purchase ? ShopData->FindItem(Request.ItemDefinitionId) : nullptr;
+    return Item && (Item->bUseOnAcquire || Item->ShopPolicy);
 }
 int32 UCombatEconomyComponent::InspectAcquireReplay(const FCombatEconomyRequest& R) const
 { for(const auto& E:AcquireReceipts) if(E.Request.RequestId==R.RequestId) return E.Request==R?1:-1; return 0; }

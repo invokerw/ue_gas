@@ -70,11 +70,13 @@ public:
 	UCombatShopData* GetShopData() const { return ShopData; }
 	/** 只重建商品条件，不改变金币/库存修订。领域阶段变化时调用。 */
 	void RefreshShopOffers();
-	/** 当前拥有者投影中的指定商品条件；普通商品返回空。 */
+	/** 当前拥有者投影中的指定商品条件；无购买策略的普通商品返回空。 */
 	const FCombatShopOfferView* FindShopOffer(FPrimaryAssetId Id) const;
 	/** 是否为当前目录的获得即用商品，客户端不能自行指定。 */
 	bool IsAcquirePurchase(const FCombatEconomyRequest& Request) const;
-	/** 检查完整回执：0 未缓存、1 同载荷、-1 换载荷。 */
+    /** 是否使用领域条件与完整回执；包括即用商品和可选普通商品购买策略。 */
+    bool IsContextPurchase(const FCombatEconomyRequest& Request) const;
+	/** 检查领域商品完整回执：0 未缓存、1 同载荷、-1 换载荷。 */
 	int32 InspectAcquireReplay(const FCombatEconomyRequest& Request) const;
 	/** 读取缓存回执，调用方先完成当前连接/绑定/上下文验证。 */
 	FCombatEconomyResult GetAcquireReplay(int32 RequestId) const;
@@ -136,7 +138,7 @@ private:
 	UPROPERTY(ReplicatedUsing=OnRep_EconomyView, Transient)
 	FCombatEconomyView ReplicatedView;
 	UPROPERTY(Transient) TObjectPtr<UCombatShopData> ShopData;
-	UPROPERTY(Transient) TArray<TObjectPtr<UCombatItemData>> FrozenAcquireItems;
+	UPROPERTY(Transient) TArray<TObjectPtr<UCombatItemData>> FrozenOfferItems;
 	TArray<FCombatAcquirePurchaseReceipt> AcquireReceipts;
 	int32 AcquireRequestHighWater=0;
 	int64 FrozenGoldCap = 0;

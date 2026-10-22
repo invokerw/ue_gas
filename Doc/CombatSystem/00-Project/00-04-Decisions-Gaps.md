@@ -510,3 +510,13 @@ DEF-013专项Automation、真实渲染PIE、正式资产冷回读和两轮Window
 0.3 的独立 Target 风险定位为启动方式错误：直接运行仓库 Binaries 下的 Server/Client，却没有 WindowsServer/WindowsClient 的 Cooked 容器和预生成 AssetRegistry；非编辑器包摘要的裁剪布局不能直接读取 raw Content。没有修改 FBufferReader、放宽版本校验或增加读取缓冲。
 
 0.5 使用源码5.8.2构建独立Server/Client，安装版兼容5.8.2 Cooker分别生成WindowsServer和WindowsClient并Stage/Pak/Archive。真实staged Server加载AssetRegistry后为NetMode1，两客户端为3；两轮六波事件同局RunId、取消/确认、1940金币和Owner拒绝均通过。由 `Tools/package_defense_targets.ps1` 与 `Tools/run_defense_targets.py` 固化构建/分发/启动顺序、新日志目录和进程清理。历史raw启动失败保留为Red证据，额外风险已关闭；不把Game Target的单机通过替代Dedicated证据。
+
+### ADR-080：普通装备的同步领域购买策略（2026-10-21；DEF-014）
+
+DEF-014 已新增默认空的 UCombatItemShopPolicy：QueryOffer 只读构造既有 ShopOffers，OnPurchased 只在原经济/库存互斥内记录成功购买配额，不写金币、实例或发布事件。仅可购买的普通无配方叶子允许配置；原商品无策略时行为不变。沿用现有领域上下文、拥有者修订与32条完整回执，不改变网络字段/发布schema。
+
+防守适配要求同局登记英雄、存活核心、整备阶段、每种九格限一件、每玩家每PhaseGeneration整备窗口最多两次成功装备购买。死亡/出售不退配额，团队即用不占配额，注销/Shutdown释放记录。四件新物品身份为 CombatItem:item_iron_bow/item_swift_string/item_stone_guard/item_hunter_scope，效果通过原公开Modifier/ASC，其他四件与完整八件收口后续。回滚移除原Defense目录新分类及本步文件组，不修改已验收团队消耗品。成功回调使用稳定付款人PC和已接受Offer的阶段代次；同步库存观察者销毁英雄或推进阶段仍只记原窗口一次。
+
+ADR-080 0.2：MaxOwnedQuantity 默认0保持旧内容不限量，普通授予/拾取与经济购买共用真实九格计数，锁定与背包仍计入，策略物品禁止作为配方组件；防守四件限额1。
+
+DEF-014首批四件已通过248非PIE、3商店渲染PIE、154资产校验、三Target和WindowsServer/WindowsClient Cook/Stage/Archive及独立Dedicated双客户端。用户于2026-10-22确认验收成功并授权本地提交，不推送；长期平衡、四人容量及其余四件留后续，见 [DEF-014](../Specs/DEF-014-defense-equipment-foundation.spec.md)。

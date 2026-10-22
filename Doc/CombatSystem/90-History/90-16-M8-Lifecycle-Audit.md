@@ -127,3 +127,9 @@ ADefenseSiegeEnemy只增加无碰撞/无导航影响的静态网格组件，沿�
 Q/E执行点复用公开Targeting/Damage/Modifier，伤害后复核施法者和目标Life再施控；W由DataDriven动作创建同族有限盾。被动Runtime由Intrinsic持有，32根事件缓存有界，世界游戏时间控制内置冷却；死亡移除/复活重建，未新增Timer。Boss失衡用自持来源合并队伍层数，保持首层截止，触发先锁定再以公开延迟队列施加保护/眩晕和移除自身。
 
 开局选择组件归Controller，owner-only schema1；有界32回执和高水位配合共享限频防重放。Director只在空构筑准备阶段接受，导航安全Spawn后必须先FinishSpawning，使ASC ActorInfo就绪，才复核技能授予；控制绑定成功和阶段/生命二次确认后提交记录、改生命委托、销毁旧Unit及专用AI。失败保持旧记录/金币；Command Pawn不更换。选择组件EndPlay清回执，原导演终局清理继续统一释放。完整中途HeroSwap仍不由本切片覆盖。
+
+### DEF-014 普通装备与购买配额（2026-10-21）
+
+装备实例、被动Runtime和ActiveGE继续由原Inventory/Modifier持有；背包/等待/死亡/出售/EndPlay走原精确句柄清理，复活协调一次。新增ShopPolicy随经济冻结定义持有，无Timer、委托或异步任务；EndPlay释放冻结引用。
+
+整备配额属于Director的玩家记录，记录预检时冻结的PhaseGeneration和成功次数；付款人的稳定Controller与英雄实例分开，提交通知中英雄结束不丢失已提交配额，通知推进阶段不把旧购买记到新窗口。死亡/出售不退次数，注销/Shutdown随记录清理。反例、World teardown和网络证据见DEF-014 Spec，不改历史M8结论。

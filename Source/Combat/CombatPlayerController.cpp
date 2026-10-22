@@ -694,6 +694,7 @@ FCombatEconomyResult ACombatPlayerController::ProcessEconomyRequestForConnection
 		? GetWorld()->GetSubsystem<UCombatNetworkSecuritySubsystem>() : nullptr;
 	const int32 Replay=CombatEconomyComponent?CombatEconomyComponent->InspectAcquireReplay(Request):0;
 	const bool AcquirePurchase=CombatEconomyComponent&&CombatEconomyComponent->IsAcquirePurchase(Request);
+    const bool ContextPurchase = CombatEconomyComponent && CombatEconomyComponent->IsContextPurchase(Request);
 	FString Diagnostic;
 	if (!Security || !Security->ValidateAndConsumeEconomyRequest(
 		RequestingController, CombatEconomyComponent, Request, Result.FailureTag, Diagnostic, Replay!=0))
@@ -713,7 +714,7 @@ FCombatEconomyResult ACombatPlayerController::ProcessEconomyRequestForConnection
 	}
 
 	if(Replay<0) { Result.FailureTag=CombatTags::Failure_Network_DuplicateRequest; return Result; }
-	if(AcquirePurchase)
+	if(ContextPurchase)
 	{
 		CombatEconomyComponent->RefreshShopOffers();
 		const auto* Offer=CombatEconomyComponent->FindShopOffer(Request.ItemDefinitionId);
@@ -747,7 +748,7 @@ FCombatEconomyResult ACombatPlayerController::ProcessEconomyRequestForConnection
 	Result.GoldDelta = CombatEconomyComponent->GetGold() - BeforeGold;
 	Result.EconomyRevision = CombatEconomyComponent->GetEconomyRevision();
 	Result.InventoryRevision = CombatEconomyComponent->GetInventoryRevision();
-	if(AcquirePurchase) CombatEconomyComponent->RememberAcquireResult(Request,Result);
+	if(ContextPurchase) CombatEconomyComponent->RememberAcquireResult(Request,Result);
 	return Result;
 }
 

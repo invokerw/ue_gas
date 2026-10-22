@@ -27,6 +27,12 @@ bool UCombatItemData::ValidateRuntime(FString& OutError) const
 		OutError = TEXT("Invalid item identity, stack, charges or aura radius");
 		return false;
 	}
+    if (MaxOwnedQuantity < 0 || MaxOwnedQuantity > 99 || (MaxOwnedQuantity > 0 && MaxStack > MaxOwnedQuantity)
+        || (ShopPolicy && (!bPurchasable || bUseOnAcquire || !Recipe.IsEmpty() || bRecipeScroll)))
+    {
+        OutError = TEXT("持有上限必须为0到99；购买策略只允许直接购买的普通无配方商品");
+        return false;
+    }
 	for (const FCombatItemRecipeIngredient& Ingredient : Recipe)
 	{
 		if (Ingredient.Item.IsNull() || Ingredient.Quantity < 1 || Ingredient.Quantity > 99)

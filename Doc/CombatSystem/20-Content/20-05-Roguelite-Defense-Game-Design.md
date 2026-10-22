@@ -770,3 +770,9 @@ DEF-012本地验证：237非PIE/6真实PIE、三Target、144定义、双客户�
 第2波和第4波清场后现已进入服务器权威事件阶段。运行时默认提供两个固定原型：北侧宝库（安全奖励金币/经验，风险提高下一波压力并增加Boss奖励）和神殿誓约（安全修复核心，风险提高下一波压力并增加Boss奖励）。风险选项进入10秒确认窗口，任一当前玩家可取消，无操作采用安全选项；事件请求带有RunId、PhaseGeneration、EventId、EventRevision、RequestId和绑定/生命代次，奖励与风险账本只结算一次。
 
 事件使用Defense RunView schema 4和拥有者事件请求组件，客户端只读事件标题/说明/截止时间并提交选项意图，不能直接写金币、经验、核心生命或预算。事件阶段暂停下一波出生和阶段推进，但世界模拟继续；事件终态后恢复原有整备流程。专项Automation、真实渲染PIE、正式资产冷回读和两轮WindowsServer/WindowsClient Dedicated双客户端验证均通过；用户已于2026-10-21确认DEF-013验收完成，长时间Soak/Perf仍未执行。完整12波/5事件节点仍属于后续扩展。
+
+### DEF-014 Phase 3E：首批防守装备（2026-10-21）
+
+原Combat商店新增防守装备分类，接入item_iron_bow/铁制弓180、item_swift_string/迅弦220、item_stone_guard/石卫徽记160、item_hunter_scope/猎手瞄准镜260。铁弓在公共伤害前阶段只放大直接普攻12%；迅弦通过GAS将BaseAttackTime乘0.92，不改变技能冷却；石卫增加120最大生命且不补当前生命；瞄准镜对稳定定义含elite/siege/boss的目标伤害增加12%，普通兵和刺客不触发。
+
+四件均为普通占槽装备，每种九格限一件，每玩家每个整备阶段最多成功购买两件；死亡/出售不返还本窗次数，团队即用不占装备配额。背包禁被动、回装等待6秒、复活恢复和出售均复用现有Inventory。购买策略与限额在服务器核对，UI只显示原ShopOffers。回能符、修复透镜、回城信标、商贾印仍未接入；本切片不代表完整八件、Boss阶段或Phase3完成。当前验收与验证以 [DEF-014](../Specs/DEF-014-defense-equipment-foundation.spec.md) 和台账为准。

@@ -18,6 +18,9 @@
 #include "Combat/Economy/CombatEconomyComponent.h"
 #include "Widgets/Input/SButton.h"
 #include "Widgets/Input/SEditableTextBox.h"
+#include "Widgets/Layout/SScrollBox.h"
+#include "Framework/Application/SlateApplication.h"
+#include "Layout/WidgetPath.h"
 
 /** 真实地图上点击实际购买按钮，核对扣款、核心屏障、种子输入保留与战斗阶段 UI 禁用。 */
 class FDefenseTeamShopUIProbe : public IAutomationLatentCommand
@@ -27,7 +30,7 @@ public:
 	virtual bool Update() override
 	{
 		if(Started==0) Started=FPlatformTime::Seconds();
-		if(FPlatformTime::Seconds()-Started>80) { Test->AddError(TEXT("Team shop UI timed out")); return true; }
+		if(FPlatformTime::Seconds()-Started>80) { Test->AddError(FString::Printf(TEXT("Team shop UI timed out stage %d"),Stage)); return true; }
 		auto* W=GEditor?GEditor->PlayWorld.Get():nullptr; if(!W) return false;
 		ADefensePlayerController* PC=nullptr;
 		for(TActorIterator<ADefensePlayerController> It(W);It;++It) if(It->IsLocalController()) PC=*It;
@@ -45,7 +48,21 @@ public:
 		if(Stage==1)
 		{
 			const auto* Entry=Shop->CatalogEntries.FindByPredicate([&](const auto& E){return E.DefinitionId==FPrimaryAssetId(TEXT("CombatItem"),bAid?TEXT("team_reinforcement_mark"):TEXT("team_shrine_barrier"));});
-			if(!Entry||!Entry->HitWidget||Entry->HitWidget->GetCachedGeometry().GetLocalSize().X<1) return false;
+			if(!Entry||!Entry->HitWidget) return false;
+            // 新目录可能将团队末尾商品排到可视区外；先走真实滚动容器，再按更新后的几何右键。
+            if(!bScrolled)
+            {
+                FWidgetPath Path;
+                if(!FSlateApplication::Get().GeneratePathToWidgetUnchecked(Entry->HitWidget.ToSharedRef(),Path,EVisibility::All))return false;
+                for(int32 Index=Path.Widgets.Num()-1;Index>=0;--Index)
+                    if(Path.Widgets[Index].Widget->GetType()==FName(TEXT("SScrollBox")))
+                    {
+                        StaticCastSharedRef<SScrollBox>(Path.Widgets[Index].Widget)->ScrollDescendantIntoView(Entry->HitWidget,false,EDescendantScrollDestination::Center);
+                        bScrolled=true;return false;
+                    }
+                return false;
+            }
+            if(Entry->HitWidget->GetCachedGeometry().GetLocalSize().X<1)return false;
 			Gold=Economy->GetGold();
 			const auto G=Entry->HitWidget->GetCachedGeometry(); const auto P=G.LocalToAbsolute(G.GetLocalSize()*0.5f);
 			Test->TestTrue(TEXT("Original shop blocks world input"),Shop->IsScreenPositionOverUI(P));
@@ -80,7 +97,7 @@ private:
 		FPointerEvent E(0,P,P,TSet<FKey>{EKeys::LeftMouseButton},EKeys::LeftMouseButton,0,FModifierKeysState());
 		Test->TestTrue(TEXT("Button handled"),Button->OnMouseButtonDown(G,E).IsEventHandled());
 	}
-	FAutomationTestBase* Test; double Started,CapturedAt=0; int32 Stage=0; int64 Gold=0; bool bAid=false;
+	FAutomationTestBase* Test; double Started,CapturedAt=0; int32 Stage=0; int64 Gold=0; bool bAid=false,bScrolled=false;
 };
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDefenseTeamShopPIETest,"Combat.Defense.PIE.TeamShopButtons",EAutomationTestFlags::EditorContext|EAutomationTestFlags::EngineFilter)
 bool FDefenseTeamShopPIETest::RunTest(const FString&)

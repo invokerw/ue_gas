@@ -169,3 +169,5 @@
 - [DEF-011 刺客接入](Specs/DEF-011-phase3-assassin-enemy.spec.md)：低生命目标策略与原Lane角色复用，真实第4/5波（已验收）。
 
 - [DEF-012 神殿守卫](Specs/DEF-012-phase3-guardian-hero.spec.md)：三主动一被动、Boss失衡与受限开局选择（2026-10-19已验收）。
+
+- [DEF-014 防守装备首批四件](Specs/DEF-014-defense-equipment-foundation.spec.md)：铁弓/迅弦/石卫/瞄准镜，原库存购买、同款持有限额和整备窗口配额。
