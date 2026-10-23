@@ -98,3 +98,15 @@ UDefenseShieldRuntime承接DEF-007的有限护盾吸收逻辑，原UDefenseCoreS
 ## DEF-009 Phase 2 构筑扩展
 
 强化定义继续使用稳定PrimaryAssetId、Family/Rarity/Prerequisites/CompatibleHeroes；终局卡的时间和家族门槛由服务器Sampler判断，客户端只显示CardView。新团队条件效果使用已有ModifierRuntime/PreDealDamage和CooldownReductionPct，不新增商店、RPC或Damage子系统。Hero替换使用公开Controller绑定与Director记录迁移；不兼容卡保留ID但不创建Modifier。
+
+## DEF-015：配置条件冷却
+
+普通英雄AbilityData可选择内嵌CombatCooldownPolicy（契约1）。MaxReduction指定本技能的总缩减上限，BonusParameterKey读取当前有效Modifier的同名参数并相加，每实例计一次、不再乘层数。比如原冷却10秒、ASC全局30%、条件8%、上限40%，本次冻结6.2秒；全局38%时冻结6秒。空策略保留原全局公式，物品主动忽略英雄策略；已开始冷却不因装备/参数变化重排。策略本身不保存冷却、属性、Timer或持有运行中的单位。
+
+防守守卫Q/E配置defense_qe_cooldown_reduction与40%上限，W仅配置40%上限且无条件键。新装备必须依赖原Inventory/Modifier的有效生命周期，不能直接修改ASC冷却账本或HUD。详情与验收证据见 [DEF-015](../Specs/DEF-015-defense-utility-equipment.spec.md)。
+
+## DEF-016：经济报价参数
+
+shop_discount_fraction（经济报价契约1）只从当前有效Modifier Runtime汇总，每实例计一次；合计限制0至20%，按最近万分比量化并在整笔总价上一次floor。配置0.05可让商店商品、获得即用及防守重抽享5%折扣，不影响既有出售窗口外规则。背包、回装等待、死亡暂停和Break过滤沿用公共Modifier有效性；不要在UI、AcquireEffect或ShopPolicy里再次扣款/折算。
+
+新FCombatShopPriceView自身schema1只复制拥有者折扣万分比，与冻结经济聚合布局分开；旧空参数默认0折扣。商贾印资产已接入，未来节俭卡可复用参数但本轮未创建卡资产。客户端不提交折扣，三端同步构建，不承诺混版本联机；见 [DEF-016](../Specs/DEF-016-defense-merchant-seal.spec.md) 与ADR-082。

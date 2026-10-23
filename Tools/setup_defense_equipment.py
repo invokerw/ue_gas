@@ -126,7 +126,12 @@ def verify(readonly):
     categories = list(shop.get_editor_property("categories"))
     gear = [c for c in categories if str(c.get_editor_property("category_id")) == "defense_equipment"]
     team = [c for c in categories if str(c.get_editor_property("category_id")) == "team_supplies"]
-    assert len(gear) == 1 and len(gear[0].get_editor_property("items")) == 4
+    assert len(gear) == 1
+    gear_ids = {str(ref.get_editor_property("definition_name")) for ref in gear[0].get_editor_property("items")}
+    first_ids = {row[0] for row in ROWS}
+    # 兼容正式的四/六/七件切片；未知额外目录仍失败。
+    utility_ids = first_ids | {"item_mana_sigil", "item_repair_lens"}
+    assert gear_ids in (first_ids, utility_ids, utility_ids | {"item_merchants_seal"})
     assert len(team) == 1 and len(team[0].get_editor_property("items")) == 6
     report = []
     for key, title, price, glyph, desc, kind in ROWS:

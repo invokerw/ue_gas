@@ -1,4 +1,4 @@
-param([ValidateRange(1,2)][int]$Players = 1, [switch]$Defeat, [switch]$Choices, [switch]$TeamShop, [switch]$Reinforcement, [switch]$Siege, [switch]$Assassin, [switch]$Guardian, [switch]$Events, [switch]$Equipment, [string]$EvidenceFolder = "DEF-010", [int]$Port = 7880, [int]$TimeoutSeconds = 420)
+param([ValidateRange(1,2)][int]$Players = 1, [switch]$Defeat, [switch]$Choices, [switch]$TeamShop, [switch]$Reinforcement, [switch]$Siege, [switch]$Assassin, [switch]$Guardian, [switch]$Events, [switch]$Equipment, [switch]$UtilityEquipment, [switch]$MerchantSeal, [string]$EvidenceFolder = "DEF-010", [int]$Port = 7880, [int]$TimeoutSeconds = 420)
 $ErrorActionPreference = 'Stop'
 $Repo = Split-Path $PSScriptRoot -Parent
 $EnvironmentInfo = python (Join-Path $PSScriptRoot 'ue_environment.py') check --json | ConvertFrom-Json
@@ -8,7 +8,7 @@ $Project = Join-Path $Repo 'ue_gas.uproject'
 $Case = if ($Defeat) { "defeat-$Players" } else { "victory-$Players" }
 $TaskFolder = $EvidenceFolder
 if ($TaskFolder -notmatch '^[A-Za-z0-9_-]+$') { throw 'EvidenceFolder must be a single folder name' }
-if ($Equipment) { $Case = "equipment-$Case" } elseif ($Events) { $Case = "events-$Case" } elseif ($Guardian) { $Case = "guardian-$Case" } elseif ($Assassin) { $Case = "assassin-$Case" } elseif ($Siege) { $Case = "siege-$Case" } elseif ($Reinforcement) { $Case = "reinforcement-$Case" } elseif ($TeamShop) { $Case = "team-shop-$Case" }
+if ($MerchantSeal) { $Case = "merchant-seal-$Case" } elseif ($UtilityEquipment) { $Case = "utility-equipment-$Case" } elseif ($Equipment) { $Case = "equipment-$Case" } elseif ($Events) { $Case = "events-$Case" } elseif ($Guardian) { $Case = "guardian-$Case" } elseif ($Assassin) { $Case = "assassin-$Case" } elseif ($Siege) { $Case = "siege-$Case" } elseif ($Reinforcement) { $Case = "reinforcement-$Case" } elseif ($TeamShop) { $Case = "team-shop-$Case" }
 $OutputDir = Join-Path $Repo "Saved/$TaskFolder/network-$Case"
 New-Item -ItemType Directory -Force -Path $OutputDir | Out-Null
 # 清除本用例的旧日志，避免新进程启动前误读上次 Pass。
@@ -29,6 +29,8 @@ try {
     if ($Assassin) { $Flags += @('-DefenseAssassinSmoke','-DefenseSeed=831907') }
     if ($Guardian) { $Flags += @('-DefenseGuardianSmoke','-DefenseSeed=831907') }
     if ($Equipment) { $Flags += @('-DefenseEquipmentSmoke','-DefenseSeed=831907') }
+    if ($MerchantSeal) { $Flags += @('-DefenseMerchantSealSmoke','-DefenseSeed=831907') }
+    if ($UtilityEquipment) { $Flags += @('-DefenseUtilityEquipmentSmoke','-DefenseSeed=831907') }
     if ($Events) { $Flags += @('-DefenseEventSmoke','-DefenseSeed=831907') }
     $Arguments = @(('"' + $Project + '"'), '/Game/Combat/Demo/Defense/L_Defense', '-server', "-port=$Port", '-ModelContextProtocolPort=8070', ('-abslog="' + $ServerLog + '"')) + $Flags
     $Processes += Start-Process -FilePath $Editor -ArgumentList $Arguments -WindowStyle Hidden -PassThru

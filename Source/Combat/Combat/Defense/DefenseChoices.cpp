@@ -179,7 +179,7 @@ FDefenseChoiceResult UDefenseDirectorComponent::ProcessChoice(ACombatPlayerContr
 			if(Candidates.IsEmpty()) Result.FailureReason=TEXT("NoAlternative");
 			else
 			{
-				const int32 Price=R->RerollsUsed?100:60;
+				const int32 Price=CalculateRerollCost(PC, R->RerollsUsed);
 				if(!PC->GetCombatEconomyComponent()->TrySpendGold(Price,Request.EconomyRevision,TEXT("DefenseReroll"))) Result.FailureReason=TEXT("GoldOrRevision");
 				else
 				{
@@ -195,6 +195,13 @@ FDefenseChoiceResult UDefenseDirectorComponent::ProcessChoice(ACombatPlayerContr
 	if(R->ChoiceResults.Num()==32) R->ChoiceResults.RemoveAt(0);
 	R->ChoiceResults.Add({Request,Result}); PublishChoices(); Publish(); return Result;
 }
+int32 UDefenseDirectorComponent::CalculateRerollCost(ACombatPlayerController* PC, const int32 RerollsUsed) const
+{
+	const int32 BasePrice = RerollsUsed > 0 ? 100 : 60;
+	const UCombatEconomyComponent* Economy = PC ? PC->GetCombatEconomyComponent() : nullptr;
+	return Economy ? static_cast<int32>(FMath::Clamp<int64>(Economy->ApplyShopDiscount(BasePrice), 0, MAX_int32)) : BasePrice;
+}
+
 FDefenseChoiceResult UDefenseDirectorComponent::ChooseAugment(ACombatPlayerController* PC,const int32 RequestId,
 	const int32 Revision,const FPrimaryAssetId& Id)
 {
@@ -206,7 +213,7 @@ FDefenseChoiceView UDefenseDirectorComponent::BuildChoiceView(ACombatPlayerContr
 {
 	FDefenseChoiceView Out;
 	const auto* R=Players.Find(PC); if(!R || !RunData->AugmentPool || !GetOwner()->HasAuthority() || GetNetMode()==NM_Client) return Out;
-	Out.Offer=R->CurrentOffer; Out.RerollsUsed=R->RerollsUsed; Out.RerollCost=R->RerollsUsed?100:60;
+	Out.Offer=R->CurrentOffer; Out.RerollsUsed=R->RerollsUsed; Out.RerollCost=CalculateRerollCost(PC, R->RerollsUsed);
 	if(!R->ChoiceResults.IsEmpty()) Out.LastResult=R->ChoiceResults.Last().Result;
 	const auto MakeView=[this,R](FPrimaryAssetId Id)
 	{

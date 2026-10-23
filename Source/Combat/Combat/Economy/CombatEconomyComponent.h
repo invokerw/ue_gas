@@ -12,6 +12,7 @@ class UCombatItemInstance;
 class UCombatItemSubsystem;
 class UCombatInventoryComponent;
 class UCombatShopData;
+class UCombatModifierComponent;
 
 /**
  * PlayerController 持有的服务器权威玩家资源账本。金币和后续战略资源跟随玩家连接；
@@ -53,6 +54,14 @@ public:
 	/** 返回当前主控英雄库存快照；物品实例仍由该英雄的库存组件持有。 */
 	UFUNCTION(BlueprintPure, Category="Combat|Economy", meta=(DisplayName="获取英雄库存"))
 	FCombatHeroInventoryView GetHeroInventoryView() const;
+	/** 返回当前有效商店折扣；服务器读取活动 Modifier，客户端读取 owner-only 快照。 */
+	UFUNCTION(BlueprintPure, Category="Combat|Economy", meta=(DisplayName="获取商店折扣", ToolTip="服务器读取当前有效效果，客户端只读拥有者价格快照；总折扣最多20%。"))
+	float GetShopDiscountFraction() const;
+	/** 对一个已验证的正整数基础费用执行一次封顶与向下取整。 */
+	UFUNCTION(BlueprintPure, Category="Combat|Economy", meta=(DisplayName="计算折后费用", ToolTip="对整笔非负费用一次向下取整，折扣最多20%；负数输入返回0。"))
+	int64 ApplyShopDiscount(UPARAM(DisplayName="基础费用") int64 BasePrice) const;
+	/** 使用当前拥有者投影构造商品报价，供商店界面显示；服务器购买仍会重新构造权威计划。 */
+	bool CalculateCurrentItemPrice(const FPrimaryAssetId& ItemDefinitionId, int64& OutPrice, FString& OutError) const;
 	UFUNCTION(BlueprintPure, Category="Combat|Economy", meta=(DisplayName="获取经济修订"))
 	int32 GetEconomyRevision() const { return ReplicatedView.EconomyRevision; }
 	UFUNCTION(BlueprintPure, Category="Combat|Economy", meta=(DisplayName="获取玩家资源修订"))
@@ -61,6 +70,8 @@ public:
 	int32 GetInventoryRevision() const { return ReplicatedView.InventoryRevision; }
 	/** 返回当前主控单位库存实例的当前修订；不存在或不属于该单位时返回 0。 */
 	int32 FindInventoryItemRevision(FCombatItemHandle Handle) const;
+	/** 返回独立 schema1 拥有者价格投影；不是客户端付款输入。 */
+	const FCombatShopPriceView& GetShopPriceView() const { return ShopPriceView; }
 	/** 返回拥有者只读快照。 */
 	const FCombatEconomyView& GetEconomyView() const { return ReplicatedView; }
 	/** 主控单位绑定或库存变化后刷新 owner-only 经济/库存投影；不改变任何权威状态。 */
@@ -110,6 +121,16 @@ private:
 	ACombatPlayerController* GetCombatPlayer() const;
 	UCombatItemSubsystem* GetItems() const;
 	UCombatInventoryComponent* GetCommandedInventory() const;
+	/** 从当前主控英雄的有效效果读取折扣，不缓存 gameplay 真值。 */
+	float ResolveAuthoritativeShopDiscountFraction() const;
+	/** 切换观察源时先解绑旧英雄；只订阅当前主控的效果集合。 */
+	void BindShopPriceSource();
+	/** 效果变化后重建独立价格投影；事务内推迟到最终 RefreshView。 */
+	void RefreshShopPriceProjection();
+	/** 服务器使用本局冻结目录；客户端按服务器目录身份加载只读资产。 */
+	const UCombatShopData* ResolvePriceCatalog() const;
+	/** 按拥有者库存数量展开未锁定定义，供只读配方补购报价使用。 */
+	void BuildProjectedOwnedDefinitions(TArray<FPrimaryAssetId>& OutDefinitions) const;
 	bool ValidateInventoryTransactionRevisions(int32 ExpectedEconomyRevision, int32 ExpectedInventoryRevision,
 		FGameplayTag& OutFailure, UCombatInventoryComponent*& OutInventory) const;
 	bool ResolveInventoryConsumedEntries(UCombatInventoryComponent& Inventory,
@@ -133,10 +154,18 @@ private:
 
 	UFUNCTION()
 	void OnRep_EconomyView();
+	UFUNCTION()
+	void OnRep_ShopPriceView();
 
 	/** 仅向 PlayerController 的 owning connection 复制的完整经济投影。 */
 	UPROPERTY(ReplicatedUsing=OnRep_EconomyView, Transient)
 	FCombatEconomyView ReplicatedView;
+	/** 独立的拥有者价格字段，保持冻结经济聚合结构不变。 */
+	UPROPERTY(ReplicatedUsing=OnRep_ShopPriceView, Transient)
+	FCombatShopPriceView ShopPriceView;
+	/** 观察者不持有英雄生命；换主控和 EndPlay 显式解绑。 */
+	TWeakObjectPtr<UCombatModifierComponent> ShopPriceSource;
+	FDelegateHandle ShopPriceChangedHandle;
 	UPROPERTY(Transient) TObjectPtr<UCombatShopData> ShopData;
 	UPROPERTY(Transient) TArray<TObjectPtr<UCombatItemData>> FrozenOfferItems;
 	TArray<FCombatAcquirePurchaseReceipt> AcquireReceipts;

@@ -120,6 +120,8 @@ public:
 	FDefenseChoiceResult ProcessChoice(ACombatPlayerController* Player, const FDefenseChoiceRequest& Request);
 	/** 返回玩家自己的白名单快照；不包含完整种子或效果对象。 */
 	FDefenseChoiceView BuildChoiceView(ACombatPlayerController* Player) const;
+	/** 读取当前玩家有效商店折扣后的一次重抽费用；服务器扣款与视图共用。 */
+	int32 CalculateRerollCost(ACombatPlayerController* Player, int32 RerollsUsed) const;
 	/** 完整缓存命中状态：0 未命中，1 同载荷，-1 复用 ID 换载荷。 */
 	int32 InspectChoiceReplay(ACombatPlayerController* Player, const FDefenseChoiceRequest& Request) const;
 	/** 为玩家返回当前修订候选；没有候选时按当前波次生成一次。 */
@@ -138,6 +140,11 @@ public:
     FCombatShopOfferView BuildEquipmentOffer(ACombatPlayerController* Player, const UCombatItemData* Item) const;
     /** 经济互斥内使用预检时冻结的局/阶段记录成功购买，不调用外部API或广播。 */
     void RecordEquipmentPurchase(ACombatPlayerController* Player, const FCombatShopOfferView& AcceptedOffer);
+    /** 只读确认当前Run的登记英雄身份，不要求购物阶段；用于本人的核心治疗归属。 */
+    bool IsRegisteredEquipmentHero(const ACombatUnitCharacter* Hero) const;
+    /** 只读确认导演持有的当前存活核心，避免使用GameState展示快照驱动治疗。 */
+    bool IsCurrentEquipmentCore(const ACombatUnitCharacter* Core) const;
+
 	/** 事件组件提交当前事件意图；服务器复核阶段、修订、玩家身份和重复请求。 */
 	FDefenseEventResult ProcessDefenseEvent(ACombatPlayerController* Player, const FDefenseEventRequest& Request);
 	/** 构造所有客户端共享的事件只读快照。 */
@@ -151,6 +158,7 @@ private:
 	friend struct FDefenseChoiceTestAccess;
 	friend struct FDefenseTeamShopTestAccess;
 	friend struct FDefenseEquipmentTestAccess;
+    friend struct FDefenseUtilityTestAccess;
 #endif
 	/** 阶段转换取消旧阶段工作，RunId 不变而 generation 递增。 */
 	void EnterPhase(EDefensePhase Phase, int32 Wave, float Duration);

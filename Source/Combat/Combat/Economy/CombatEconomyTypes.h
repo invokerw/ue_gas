@@ -84,6 +84,15 @@ struct COMBAT_API FCombatHeroInventoryView
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Economy", meta=(DisplayName="物品栏物品", ToolTip="当前主控英雄九槽拥有者快照；物品实例仍属于英雄。")) TArray<FCombatItemView> Items;
 };
 
+/** 独立的拥有者价格投影（schema 1）；只影响本地报价，不能作为服务器付款输入。 */
+USTRUCT(BlueprintType)
+struct COMBAT_API FCombatShopPriceView
+{
+	GENERATED_BODY()
+	UPROPERTY(BlueprintReadOnly, Category="Combat|Economy", meta=(DisplayName="报价版本", ToolTip="价格投影独立版本；当前为1，不改变兼容经济聚合快照。")) int32 SchemaVersion = 1;
+	UPROPERTY(BlueprintReadOnly, Category="Combat|Economy", meta=(ClampMin="0", ClampMax="2000", DisplayName="折扣万分比", ToolTip="服务器当前有效折扣，500表示5%，范围0至2000；只供拥有者显示，不接受客户端修改。")) int32 DiscountBasisPoints = 0;
+};
+
 /** 仅拥有者复制的兼容聚合快照；新的代码应按玩家资源和英雄库存分别读取。 */
 USTRUCT(BlueprintType)
 struct COMBAT_API FCombatEconomyView

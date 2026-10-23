@@ -224,7 +224,8 @@ bool UDefenseDirectorComponent::ReceiveTeamItem(const FCombatItemAcquireContext&
 	}
 	if(E->ObjectiveHeal>0||E->ObjectiveHealFraction>0)
 	{
-		FCombatHealRequest R; R.Source=Objective.Get(); R.Target=Objective.Get();
+		// 存活购买者是本次修复参与者；允许阵亡领取的旧规则仍回退核心自身来源。
+        FCombatHealRequest R; R.Source=IsValid(C.Recipient)&&C.Recipient->GetLifeState()==ECombatLifeState::Alive?C.Recipient:Objective.Get(); R.Target=Objective.Get();
 		R.Amount=E->ObjectiveHealFraction>0?Objective->GetCombatAttributeSet()->GetMaxHealth()*E->ObjectiveHealFraction:E->ObjectiveHeal;
 		R.SourceContext=C.Source;
 		const auto Applied=GetWorld()->GetSubsystem<UCombatHealSubsystem>()->Heal(R); if(!Applied.bSuccess) { Failure=Applied.FailureTag; return false; }

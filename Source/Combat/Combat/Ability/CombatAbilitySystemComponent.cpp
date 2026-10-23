@@ -1,4 +1,5 @@
 #include "Combat/Ability/CombatAbilitySystemComponent.h"
+#include "Combat/Ability/CombatCooldownPolicy.h"
 
 #include "GameplayEffect.h"
 
@@ -494,7 +495,10 @@ bool UCombatAbilitySystemComponent::CommitCombatAbilityStage(
 	{
 		const float Cdr = FCombatNumericPolicyV1::ClampReduction(
 			GetNumericAttribute(UCombatAttributeSet::GetCooldownReductionPctAttribute()));
-		if (!ApplyCombatCooldown(Handle, BaseCooldown * (1.0f - Cdr)))
+		const float Duration=AbilityData.CooldownPolicy?AbilityData.CooldownPolicy->CalculateDuration(this,BaseCooldown):BaseCooldown*(1.f-Cdr);
+        if(!FMath::IsFinite(Duration)||Duration<0)
+        {OutFailureTag=CombatTags::Failure_Ability_CommitFailed;return false;}
+		if (!ApplyCombatCooldown(Handle, Duration))
 		{
 			OutFailureTag = CombatTags::Failure_Ability_CommitFailed;
 			return false;

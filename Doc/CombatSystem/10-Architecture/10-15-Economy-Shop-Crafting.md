@@ -69,3 +69,13 @@ Demo 资产仍位于 `/Game/Combat/Demo/Economy` 和 `/Game/Combat/Demo/UI`，�
 原商店可为普通无配方叶子配置同步购买策略，沿用ShopOffers和领域上下文。服务器在唯一库存事务前重新查询窗口/配额，并在成功事务的经济互斥内记账；完整同载荷重放返回原实例句柄和回执，不会重复扣款或扣配额。库存MaxOwnedQuantity检查包含锁定和背包。未配置策略的普通商品保持原行为，团队即用商品继续使用原AcquireEffect。
 
 原商店悬停展示策略给出的窗口、限额与拒绝原因，不负责判定权限。防守首批四件通过原目录新增“防守装备”分类；不创建第二商店、余额或库存。见 [DEF-014](../Specs/DEF-014-defense-equipment-foundation.spec.md)。
+
+## DEF-015：本人修复归属
+
+防守装备目录现有六件，新增回能符/修复透镜仍走原RPC、完整回执、实例和整备配额。应急石由存活购买英雄作为公共Heal直接来源，以便读取本人的修复透镜及通用来源治疗增幅；允许阵亡领取的原规则保持，阵亡购买回退核心自身来源，不借用已失效装备。物品SourceContext仍保留应急石身份。没有新增价格或网络字段，回城和折扣另作后续切片。见 [DEF-015](../Specs/DEF-015-defense-utility-equipment.spec.md)。
+
+## DEF-016：统一经济折扣与报价投影
+
+经济报价契约1：当前主控英雄的有效shop_discount_fraction相加后限制在0至20%，按最近万分比量化；整笔购买计划的缺失叶子总额和防守重抽费用各折算一次。整数商/余数计算避免浮点0.05导致少扣一金及大额乘法溢出；60/100在5%时为57/95。普通购买和获得即用都在原服务器事务中重算，客户端请求没有价格或折扣字段。购买链PurchasePaidGold保存折后实付；全额退款窗口返实付，窗口外继续原目录价乘出售比例。
+
+新增独立owner-only FCombatShopPriceView（自身SchemaVersion=1，DiscountBasisPoints为0至2000），保持已冻结FCombatEconomyView和EconomyPresentationSchemaVersion=4。服务器每次结算读取活动效果；价格字段只是表现投影。当前主控Modifier集合委托驱动刷新，换控/EndPlay先解绑；死亡暂停与复活恢复也通知。既有领域商品刷新入口复核不改变集合的状态变化，不新增周期调度。客户端只按原ShopDefinitionId从AssetManager解析目录和拥有者库存重建报价，既不持有权威ShopData也不运行Modifier。价格和经济字段可分开到达，各OnRep都会重建商店；新请求仍受原金币/库存/领域修订校验。重抽视图去重同时比较价格与次数。配置、边界和实际验证见 [DEF-016](../Specs/DEF-016-defense-merchant-seal.spec.md)。

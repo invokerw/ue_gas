@@ -610,8 +610,15 @@ bool UDefenseDirectorComponent::ResolveEvent(const EDefenseEventOption Option, c
 	}
 	else if (Definition->SafeCoreHealFraction > 0.0f)
 	{
-		FCombatHealRequest Heal; Heal.Source = Objective.Get(); Heal.Target = Objective.Get(); Heal.Amount = Objective->GetCombatAttributeSet()->GetMaxHealth() * Definition->SafeCoreHealFraction;
-		if (!GetWorld()->GetSubsystem<UCombatHealSubsystem>()->Heal(Heal).bSuccess) { Finish(false, TEXT("EventCoreHealFailed")); return false; }
+		const auto ExpectedRun=View.RunId; const uint32 ExpectedPhase=GetPhaseGeneration();
+        auto* Record=Option==EDefenseEventOption::Safe&&State!=EDefenseEventState::Expired?Players.Find(Proposer):nullptr;
+        auto* Participant=Record?Record->Hero.Get():nullptr;
+        // 只有本人明确安全选择归属英雄；取消/自动安全不能借队伍其它人的透镜。
+        FCombatHealRequest Heal; Heal.Source=IsValid(Participant)&&Participant->GetLifeState()==ECombatLifeState::Alive&&IsRegisteredEquipmentHero(Participant)?Participant:Objective.Get();
+        Heal.Target=Objective.Get(); Heal.Amount=Objective->GetCombatAttributeSet()->GetMaxHealth()*Definition->SafeCoreHealFraction;
+        if (!GetWorld()->GetSubsystem<UCombatHealSubsystem>()->Heal(Heal).bSuccess) { Finish(false, TEXT("EventCoreHealFailed")); return false; }
+        // 真实治疗已提交；同步日志观察者可能结束Run，不能再创建已清空的事件终态。
+        if(!IsCurrent(ExpectedRun,ExpectedPhase)||View.Phase!=EDefensePhase::EventChoice)return true;
 	}
 	EventView.State = State == EDefenseEventState::Expired ? EDefenseEventState::Expired : (Option == EDefenseEventOption::Cancel ? EDefenseEventState::Cancelled : EDefenseEventState::ResolvedSafe);
 	RiskLedger.Option = EDefenseEventOption::Safe; RiskLedger.State = EventView.State; ++RiskLedger.Revision; EventView.Revision = RiskLedger.Revision; EventView.ViewRevision++;
@@ -645,6 +652,8 @@ FDefenseEventResult UDefenseDirectorComponent::ProcessDefenseEvent(ACombatPlayer
 	HighEventRequestIds.FindOrAdd(Player) = Request.RequestId;
 	const bool Accepted = ResolveEvent(Request.Option, Request.Option == EDefenseEventOption::Risk ? EDefenseEventState::PendingRisk : EDefenseEventState::ResolvedSafe, Player);
 	Result.bSuccess = Accepted; Result.FailureReason = Accepted ? NAME_None : FName(TEXT("EventClosed"));
+    // 公开奖励/治疗可同步结束Run或移除连接；提交结果保留，但不得复活已清空的回执缓存。
+    if(bEnding||!bInitialized||!IsValid(Player)||!Players.Contains(Player))return Result;
 	EventReceipts.Add({Player, Request, Result}); if (EventReceipts.Num() > 32) EventReceipts.RemoveAt(0);
 	return Result;
 }

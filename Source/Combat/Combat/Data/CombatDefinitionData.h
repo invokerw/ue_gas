@@ -14,6 +14,7 @@
 #include "CombatDefinitionData.generated.h"
 
 class UCombatAbilitySet;
+class UCombatCooldownPolicy;
 class UCombatAIProfileData;
 class UCombatItemData;
 class UCombatGameplayAbility;
@@ -312,6 +313,11 @@ public:
 	/** 引导期间相邻周期回调的秒数；引导技能要求大于 0 且不超过引导总时长。首次在一个间隔后触发，恰好落在结束时刻的周期不执行。 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Ability", meta=(ClampMin="0", Units="s", DisplayName="引导触发间隔", ToolTip="引导期间相邻周期回调的秒数；引导技能要求大于 0 且不超过引导总时长。首次在一个间隔后触发，恰好落在结束时刻的周期不执行。"))
 	float ChannelInterval = 0.0f;
+
+    /** 普通英雄技能的可选冷却规则；空值沿用原全局缩减，物品主动忽略此字段。 */
+    UPROPERTY(EditDefaultsOnly, Instanced, BlueprintReadOnly, Category="Combat|Ability", meta=(DisplayName="冷却取值策略", ToolTip="可选：在原ASC提交点将全局与条件效果统一取值并封顶；空值保持旧公式，已开始的冷却不会重排，物品主动保持原规则。"))
+    TObjectPtr<UCombatCooldownPolicy> CooldownPolicy;
+
 
 	/** 选择在哪个施法阶段正式扣除 ManaCost；在该阶段前失败或中断不会扣除。 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Ability", meta=(DisplayName="费用提交阶段", ToolTip="选择 ManaCost 在技能激活生命周期中的权威提交阶段。"))

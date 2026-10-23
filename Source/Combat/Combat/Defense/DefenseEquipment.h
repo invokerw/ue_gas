@@ -22,3 +22,12 @@ class COMBAT_API UDefenseEquipmentDamageRuntime : public UCombatModifierRuntime
 protected:
     virtual void OnPreDealDamage_Implementation(FCombatDamageEvent& Event) override;
 };
+
+/** 修复透镜只放大当前装备英雄本人对本局核心的公共治疗，不影响队友或普通目标。 */
+UCLASS(meta=(DisplayName="本人核心修复增幅", ToolTip="core_repair_fraction配置增幅；仅装备英雄为直接来源且目标是当前Run核心时生效，不创建额外治疗。"))
+class COMBAT_API UDefenseCoreRepairRuntime : public UCombatModifierRuntime
+{
+    GENERATED_BODY()
+protected:
+    virtual void OnPreDealHeal_Implementation(FCombatHealEvent& Event) override;
+};

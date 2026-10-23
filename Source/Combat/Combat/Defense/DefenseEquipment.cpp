@@ -1,4 +1,5 @@
 #include "Combat/Defense/DefenseEquipment.h"
+#include "Combat/Defense/DefenseObjective.h"
 #include "Combat/Defense/DefenseDirectorComponent.h"
 #include "Combat/Items/CombatItemData.h"
 #include "Combat/Items/CombatInventoryComponent.h"
@@ -75,4 +76,25 @@ void UDefenseEquipmentDamageRuntime::OnPreDealDamage_Implementation(FCombatDamag
     }
     const float Fraction = GetRuntimeParameter(TEXT("damage_fraction"));
     if (FMath::IsFinite(Fraction) && Fraction > 0 && Fraction <= 1) Event.Amount *= 1.0f + Fraction;
+}
+
+bool UDefenseDirectorComponent::IsRegisteredEquipmentHero(const ACombatUnitCharacter* Hero) const
+{
+    if(!IsValid(Hero)||Hero->GetWorld()!=GetWorld()||!GetOwner()||!GetOwner()->HasAuthority()||!IsCurrent(View.RunId,GetPhaseGeneration()))return false;
+    const auto* Player=Cast<ACombatPlayerController>(Hero->GetResourceOwnerPlayerController());
+    const auto* Record=Players.Find(Player);
+    return IsValid(Player)&&Player->GetWorld()==GetWorld()&&Player->GetCommandedUnit()==Hero&&Record&&Record->Hero.Get()==Hero;
+}
+void UDefenseCoreRepairRuntime::OnPreDealHeal_Implementation(FCombatHealEvent& Event)
+{
+    auto* Hero=GetTargetUnit();auto* Mode=IsValid(Hero)&&Hero->GetWorld()?Hero->GetWorld()->GetAuthGameMode<ADefenseGameMode>():nullptr;
+    if(!IsActive()||Event.Source!=Hero||!Mode||!Event.Target||Event.Target->GetWorld()!=Hero->GetWorld()
+        ||!Mode->GetDefenseDirector()->IsCurrentEquipmentCore(Event.Target)||!Mode->GetDefenseDirector()->IsRegisteredEquipmentHero(Hero))return;
+    const float Fraction=GetRuntimeParameter(TEXT("core_repair_fraction"));
+    if(FMath::IsFinite(Fraction)&&Fraction>0&&Fraction<=1&&Event.Amount>0)Event.Amount*=1.f+Fraction;
+}
+
+bool UDefenseDirectorComponent::IsCurrentEquipmentCore(const ACombatUnitCharacter* Core) const
+{
+    return GetOwner()&&GetOwner()->HasAuthority()&&Core==Objective.Get()&&IsCoreAlive();
 }

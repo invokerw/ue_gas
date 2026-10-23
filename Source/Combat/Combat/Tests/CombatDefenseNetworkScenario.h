@@ -4,6 +4,7 @@
 #include "Combat/Defense/DefenseAugmentData.h"
 #include "CombatDefenseNetworkScenario.generated.h"
 class ACombatUnitCharacter;
+class ADefensePlayerController;
 class ACombatPlayerController;
 struct FCombatLogRecord;
 /** 网络验证末态：由服务器采样属性，客户端比对复制的实际 AttributeSet；只用于测试探针。 */
@@ -32,6 +33,19 @@ private:
 	void Kill(ACombatUnitCharacter* Unit);
     /** 显式装备测试：原RPC购买、重复/配额/战斗拒绝和拥有者库存、公共属性复制。 */
     void ExerciseEquipment();
+    /** 显式条件装备验证：两件真实RPC、本人核心修复和实际Q/E的拥有者冷却复制。 */
+    void ExerciseUtilityEquipment();
+    void ExerciseMerchantSeal();
+    bool bUtilityPrepared=false,bUtilityAwaiting=false,bUtilityExpectSuccess=false;
+    int32 UtilityStep=0,UtilityRequest=0,UtilityServerStage=0;
+    int64 UtilityInitialGold=0;
+    double UtilityFinishAt=0;
+    bool bMerchantPrepared=false,bMerchantAwaiting=false,bMerchantExpectSuccess=false;
+    int32 MerchantStep=0,MerchantRequest=0,MerchantChoiceRequest=0;
+    int64 MerchantInitialGold=0;
+    double MerchantFinishAt=0;
+    TMap<TWeakObjectPtr<ADefensePlayerController>, int64> MerchantInitialGoldByPlayer;
+
     int32 EquipmentStep=0, EquipmentRequestId=0;
     bool bEquipmentAwaiting=false, bEquipmentExpectSuccess=false, bEquipmentPrepared=false;
     double EquipmentWaveAt=0, EquipmentFinishAt=0;

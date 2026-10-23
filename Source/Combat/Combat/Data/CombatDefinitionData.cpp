@@ -1,4 +1,5 @@
 #include "Combat/Data/CombatDefinitionData.h"
+#include "Combat/Ability/CombatCooldownPolicy.h"
 #include "Combat/Items/CombatItemData.h"
 #include "Combat/Items/CombatItemTypes.h"
 #include "Combat/Ability/CombatAbilityIndicatorGeometry.h"
@@ -309,6 +310,7 @@ bool UCombatAbilityData::ValidateRuntime(FString& OutDiagnostic) const
 		OutDiagnostic = TEXT("Ability targeting or lifecycle timing is invalid/unsupported in M3");
 		return false;
 	}
+    if(CooldownPolicy&&!CooldownPolicy->ValidateDefinition(OutDiagnostic))return false;
 	const bool bChannelled = BehaviorTags.HasTagExact(CombatTags::Ability_Behavior_Channelled);
 	if (bChannelled != (ChannelDuration > 0.0f && ChannelInterval > 0.0f)
 		|| (bChannelled && ChannelInterval > ChannelDuration))

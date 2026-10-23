@@ -673,6 +673,8 @@ void UCombatModifierComponent::HandleOwnerDeath()
 			RemoveModifierImmediate(Runtime->GetHandle());
 		}
 	}
+	// 保留效果也会被死亡暂停；即使没有移除实例，价格等派生观察者仍需刷新。
+	NotifyModifierCollectionChanged();
 }
 
 void UCombatModifierComponent::HandleOwnerRespawn()
@@ -693,6 +695,7 @@ void UCombatModifierComponent::HandleOwnerRespawn()
 			ScheduleRuntime(*Runtime, true);
 		}
 	}
+	NotifyModifierCollectionChanged();
 }
 
 void UCombatModifierComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
@@ -740,4 +743,12 @@ void UCombatModifierComponent::EmitModifierLog(
 		bRefreshed ? TEXT("Refreshed") : (bRemoved ? TEXT("Removed") : TEXT("Applied")),
 		*Runtime.GetHandle().ToString());
 	Events->Emit(Record);
+}
+
+float UCombatModifierComponent::GetActiveRuntimeParameterSum(const FName Key) const
+{
+    if(Key.IsNone())return 0;
+    double Total=0;
+    for(const auto* Runtime:MakeSortedSnapshot()) Total+=Runtime->GetRuntimeParameter(Key);
+    return FMath::IsFinite(Total)&&FMath::Abs(Total)<=MAX_flt?float(Total):0.f;
 }

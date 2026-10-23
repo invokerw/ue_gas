@@ -124,3 +124,13 @@ Pickup / Drop 进入 Order 状态机，复用 AI 导航、路径跟随、Schedul
 可选内嵌 `ShopPolicy` 只允许可直接购买的普通无配方商品，不能与获得即用共配，也不能作为其他配方组件。QueryOffer 无副作用；OnPurchased 在原经济/库存互斥内仅记录领域配额，使用预检时冻结的上下文与稳定付款人，禁止扣金币、操作库存、广播或异步执行。经济组件为策略商品冻结定义/被动并复用原ShopOffers、领域上下文与32条完整回执；没有新RPC或wire schema。
 
 防守四件装备占原库存，出生/复活/背包/等待/出售/EndPlay沿用现有精确句柄生命周期。每种限一件、每个整备窗口每人最多成功购买两件；失败不记次数，出售与死亡不退次数，团队即用不占此配额。数据、迁移和实际验证见 [DEF-014](../Specs/DEF-014-defense-equipment-foundation.spec.md)。
+
+## DEF-015：两件条件装备
+
+回能符与修复透镜为普通占槽物品，价格240/200，共用DEF-014购买策略、九格限持有1与整备窗口共限两件；进入背包、六秒重新装备等待、死亡复活和出售仍由原Inventory精确管理效果。
+
+回能符的条件参数只存在有效ActiveGE绑定的Runtime中；可选CombatCooldownPolicy在原ASC提交点读取全局CDR与条件和，防守Q/E增加8个百分点并按40%封顶。W不读取此参数，物品主动与旧空策略保持原路径；移走装备不重排已经提交的冷却。透镜通过公共PreDealHeal为本人对当前登记核心的请求增加20%，不创建额外治疗或属性账本。本人购买应急石或明确选事件安全才使用英雄来源；队友/取消/自动安全不受其他英雄透镜影响。详见 [DEF-015](../Specs/DEF-015-defense-utility-equipment.spec.md)。
+
+## DEF-016：商贾印
+
+原防守装备目录增至七件，商贾印item_merchants_seal价格240，绑定英雄、不可丢弃、九格限一件，仍占整备窗口两次购买配额。equipment_merchants_seal以公共运行时参数shop_discount_fraction=0.05生效，没有专用Runtime或额外属性。库存背包/重新装备等待/死亡/出售的精确句柄仍由原Inventory拥有；有效参数与拥有者报价随效果生命周期更新。整笔购买、即用商品和配方补购的取整与退款见 [10-15](10-15-Economy-Shop-Crafting.md) 和 [DEF-016](../Specs/DEF-016-defense-merchant-seal.spec.md)。

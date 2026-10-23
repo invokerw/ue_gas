@@ -54,6 +54,7 @@ void UDefenseChoiceComponent::PublishAuthority(const FDefenseChoiceView& Snapsho
 	bool Same=Snapshot.Offer.RunId==View.Offer.RunId && Snapshot.Offer.ChoiceRevision==View.Offer.ChoiceRevision
 		&& Snapshot.Offer.bResolved==View.Offer.bResolved && Snapshot.Offer.bCancelled==View.Offer.bCancelled
 		&& Snapshot.Offer.Deadline==View.Offer.Deadline && Snapshot.bCanChoose==View.bCanChoose && Snapshot.bCanReroll==View.bCanReroll
+		&& Snapshot.RerollCost==View.RerollCost && Snapshot.RerollsUsed==View.RerollsUsed
 		&& Snapshot.Owned.Num()==View.Owned.Num() && Snapshot.LastResult.RequestId==View.LastResult.RequestId
 		&& Snapshot.LastResult.FailureReason==View.LastResult.FailureReason;
 	if(Same) for(int32 I=0;I<Snapshot.Owned.Num();++I) Same &= Snapshot.Owned[I].bPending==View.Owned[I].bPending;

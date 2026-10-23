@@ -133,3 +133,13 @@ Q/E执行点复用公开Targeting/Damage/Modifier，伤害后复核施法者和�
 装备实例、被动Runtime和ActiveGE继续由原Inventory/Modifier持有；背包/等待/死亡/出售/EndPlay走原精确句柄清理，复活协调一次。新增ShopPolicy随经济冻结定义持有，无Timer、委托或异步任务；EndPlay释放冻结引用。
 
 整备配额属于Director的玩家记录，记录预检时冻结的PhaseGeneration和成功次数；付款人的稳定Controller与英雄实例分开，提交通知中英雄结束不丢失已提交配额，通知推进阶段不把旧购买记到新窗口。死亡/出售不退次数，注销/Shutdown随记录清理。反例、World teardown和网络证据见DEF-014 Spec，不改历史M8结论。
+
+### DEF-015 条件冷却与本人修复（2026-10-22）
+
+可选冷却策略由AbilityData持有且只读，不持有施法单位或计时任务；条件和读取当前ActiveGE绑定的有效Runtime，死亡暂停/Break失效由原Modifier过滤。冷却仍仅由ASC原GE/结束时刻拥有，提交后卖出、背包或重生不重排；物品主动维持原实例冷却。
+
+两件装备的常驻效果和释放归原Inventory，无新增Delegate/Timer。核心修复的参与者只活在本次公共Heal同步调用，来源为当前登记存活英雄，自动安全回退核心。治疗提交观察者Shutdown后，ResolveEvent不重建事件状态，外层ProcessDefenseEvent也不重建已清空回执；成功治疗结果保持提交，避免以回滚名义二次治疗。真实反例与回归见DEF-015 Spec。
+
+### DEF-016 价格派生观察者（2026-10-23）
+
+Economy组件弱持有当前主控ModifierComponent及唯一集合委托句柄；初始化/主控绑定时重绑，先移除旧委托，组件EndPlay显式解绑并清价格字段。效果在库存事务内变化时观察者不广播中间价格，最终RefreshView统一投影；背包移除和Scheduler回装后的Apply/Remove会刷新报价。死亡暂停/复活恢复即使保留全部实例也通知；仅状态标签变化由既有领域Monitor发布入口复核，不创建Timer。玩家金币仍由原Economy拥有，价格字段没有独立权威余额或结算。回归覆盖换控、旧源通知、真实死亡/复活、保留效果、清库存、英雄EndPlay和World teardown，见 [DEF-016](../Specs/DEF-016-defense-merchant-seal.spec.md)。

@@ -171,3 +171,7 @@
 - [DEF-012 神殿守卫](Specs/DEF-012-phase3-guardian-hero.spec.md)：三主动一被动、Boss失衡与受限开局选择（2026-10-19已验收）。
 
 - [DEF-014 防守装备首批四件](Specs/DEF-014-defense-equipment-foundation.spec.md)：铁弓/迅弦/石卫/瞄准镜，原库存购买、同款持有限额和整备窗口配额。
+
+- [DEF-015 回能符与修复透镜](Specs/DEF-015-defense-utility-equipment.spec.md)：条件冷却与本人核心修复归属、真实商店和网络验证。
+
+- [DEF-016 商贾印](Specs/DEF-016-defense-merchant-seal.spec.md)：第七件普通装备、统一商店/重抽折扣、独立拥有者价格投影与网络验收。

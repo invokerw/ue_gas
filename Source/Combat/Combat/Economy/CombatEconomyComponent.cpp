@@ -9,12 +9,14 @@
 #include "Combat/Items/CombatInventoryComponent.h"
 #include "Combat/Ability/CombatAbilitySystemComponent.h"
 #include "Combat/Ability/CombatGameplayAbility.h"
+#include "Combat/Modifiers/CombatModifierComponent.h"
 #include "Combat/Core/CombatTags.h"
 #include "Combat/Log/CombatEventSubsystem.h"
 #include "Combat/Scheduling/CombatSchedulerSubsystem.h"
 #include "CombatPlayerController.h"
 #include "Combat/Unit/CombatUnitCharacter.h"
 #include "Engine/World.h"
+#include "Engine/AssetManager.h"
 #include "Net/UnrealNetwork.h"
 
 UCombatEconomyComponent::UCombatEconomyComponent()
@@ -28,6 +30,7 @@ void UCombatEconomyComponent::GetLifetimeReplicatedProps(TArray<FLifetimePropert
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 	DOREPLIFETIME_CONDITION(UCombatEconomyComponent, ReplicatedView, COND_OwnerOnly);
+	DOREPLIFETIME_CONDITION(UCombatEconomyComponent, ShopPriceView, COND_OwnerOnly);
 }
 
 ACombatPlayerController* UCombatEconomyComponent::GetCombatPlayer() const
@@ -61,6 +64,103 @@ FCombatHeroInventoryView UCombatEconomyComponent::GetHeroInventoryView() const
 	View.InventoryRevision = ReplicatedView.InventoryRevision;
 	View.Items = ReplicatedView.InventoryItems;
 	return View;
+}
+
+float UCombatEconomyComponent::ResolveAuthoritativeShopDiscountFraction() const
+{
+	constexpr float MaxDiscount = 0.20f;
+	static const FName DiscountKey(TEXT("shop_discount_fraction"));
+	const ACombatPlayerController* Player = GetCombatPlayer();
+	const ACombatUnitCharacter* Unit = Player ? Player->GetCommandedUnit() : nullptr;
+	const UCombatModifierComponent* Modifiers = IsValid(Unit) && !Unit->IsActorBeingDestroyed() ? Unit->GetCombatModifierComponent() : nullptr;
+	return Modifiers
+		? FMath::Clamp(Modifiers->GetActiveRuntimeParameterSum(DiscountKey), 0.0f, MaxDiscount)
+		: 0.0f;
+}
+
+float UCombatEconomyComponent::GetShopDiscountFraction() const
+{
+	const ACombatPlayerController* Player = GetCombatPlayer();
+	if (bEnding || !IsInitialized()) return 0.0f;
+	if (Player && Player->HasAuthority() && GetNetMode() != NM_Client)
+	{
+		return ResolveAuthoritativeShopDiscountFraction();
+	}
+	return FMath::Clamp(ShopPriceView.DiscountBasisPoints, 0, 2000) / 10000.0f;
+}
+
+int64 UCombatEconomyComponent::ApplyShopDiscount(const int64 BasePrice) const
+{
+	if (BasePrice <= 0) return FMath::Max<int64>(0, BasePrice);
+	// 折扣按万分比冻结后做整数商/余数计算，避免 0.05f 的二进制误差把 60 算成 56；
+	// 余数项仍向下取整，且不使用 BasePrice * 10000，避免大额价格乘法溢出。
+	constexpr int64 BasisPoints = 10000;
+	const int64 DiscountBasisPoints = FMath::Clamp<int64>(
+		static_cast<int64>(FMath::RoundToInt(GetShopDiscountFraction() * static_cast<float>(BasisPoints))), 0, 2000);
+	const int64 Multiplier = BasisPoints - DiscountBasisPoints;
+	const int64 Quotient = BasePrice / BasisPoints;
+	const int64 Remainder = BasePrice % BasisPoints;
+	return FMath::Max<int64>(0, Quotient * Multiplier + (Remainder * Multiplier) / BasisPoints);
+}
+
+void UCombatEconomyComponent::BindShopPriceSource()
+{
+	ACombatPlayerController* Player = GetCombatPlayer();
+	ACombatUnitCharacter* Hero = Player ? Player->GetCommandedUnit() : nullptr;
+	UCombatModifierComponent* Next = IsValid(Hero) && !Hero->IsActorBeingDestroyed() ? Hero->GetCombatModifierComponent() : nullptr;
+	if (ShopPriceSource.Get() == Next) return;
+	if (UCombatModifierComponent* Previous = ShopPriceSource.Get())
+		Previous->OnModifierCollectionChanged().Remove(ShopPriceChangedHandle);
+	ShopPriceSource = Next;
+	ShopPriceChangedHandle.Reset();
+	if (Next) ShopPriceChangedHandle = Next->OnModifierCollectionChanged().AddUObject(this, &UCombatEconomyComponent::RefreshShopPriceProjection);
+}
+
+void UCombatEconomyComponent::RefreshShopPriceProjection()
+{
+	if (!bInitialized || bEnding || bMutating || !GetOwner() || !GetOwner()->HasAuthority() || GetNetMode() == NM_Client) return;
+	const int32 Basis = FMath::Clamp(FMath::RoundToInt(ResolveAuthoritativeShopDiscountFraction() * 10000.0f), 0, 2000);
+	if (ShopPriceView.DiscountBasisPoints == Basis) return;
+	ShopPriceView.DiscountBasisPoints = Basis;
+	GetOwner()->ForceNetUpdate();
+	OnEconomyViewChanged.Broadcast();
+}
+
+const UCombatShopData* UCombatEconomyComponent::ResolvePriceCatalog() const
+{
+	if (GetNetMode() != NM_Client && GetOwner() && GetOwner()->HasAuthority()) return ShopData;
+	if (!ReplicatedView.ShopDefinitionId.IsValid()) return nullptr;
+	UAssetManager& Assets = UAssetManager::Get();
+	if (const auto* Catalog = Cast<UCombatShopData>(Assets.GetPrimaryAssetObject(ReplicatedView.ShopDefinitionId))) return Catalog;
+	return Cast<UCombatShopData>(Assets.GetPrimaryAssetPath(ReplicatedView.ShopDefinitionId).TryLoad());
+}
+
+void UCombatEconomyComponent::BuildProjectedOwnedDefinitions(TArray<FPrimaryAssetId>& OutDefinitions) const
+{
+	OutDefinitions.Reset();
+	for (const FCombatItemView& View : ReplicatedView.InventoryItems)
+	{
+		if (!View.Handle.IsValid() || View.bLocked || !View.DefinitionId.IsValid()) continue;
+		for (int32 Quantity = 0; Quantity < View.Quantity; ++Quantity) OutDefinitions.Add(View.DefinitionId);
+	}
+}
+
+bool UCombatEconomyComponent::CalculateCurrentItemPrice(const FPrimaryAssetId& ItemDefinitionId, int64& OutPrice, FString& OutError) const
+{
+	OutPrice = 0;
+	OutError.Reset();
+	const UCombatShopData* Catalog = ResolvePriceCatalog();
+	if (!Catalog)
+	{
+		OutError = TEXT("Shop is unavailable");
+		return false;
+	}
+	TArray<FPrimaryAssetId> OwnedDefinitions;
+	BuildProjectedOwnedDefinitions(OwnedDefinitions);
+	FCombatPurchasePlan Plan;
+	if (!Catalog->BuildPurchasePlan(ItemDefinitionId, OwnedDefinitions, Plan, OutError)) return false;
+	OutPrice = ApplyShopDiscount(Plan.TotalCost);
+	return true;
 }
 
 void UCombatEconomyComponent::AdvanceRevision(int32& Revision)
@@ -494,7 +594,8 @@ bool UCombatEconomyComponent::PurchaseItem(const FPrimaryAssetId& ItemDefinition
 			? CombatTags::Failure_Economy_RecipeInvalid : CombatTags::Failure_Economy_CatalogUnavailable;
 		return false;
 	}
-	if (Plan.TotalCost < 0 || ReplicatedView.Gold < Plan.TotalCost)
+	const int64 PurchaseCost = ApplyShopDiscount(Plan.TotalCost);
+	if (Plan.TotalCost < 0 || PurchaseCost < 0 || ReplicatedView.Gold < PurchaseCost)
 	{
 		OutFailure = CombatTags::Failure_Economy_InsufficientGold;
 		return false;
@@ -515,11 +616,11 @@ bool UCombatEconomyComponent::PurchaseItem(const FPrimaryAssetId& ItemDefinition
 	{
 		TGuardValue<bool> EconomyGuard(bMutating, true);
 		TGuardValue<bool> InventoryGuard(Inventory->bMutating, true);
-		if (!CommitInventoryResult(*Inventory, *TargetDefinition, Consumed, Plan.TotalCost,
+		if (!CommitInventoryResult(*Inventory, *TargetDefinition, Consumed, PurchaseCost,
 			OutResultHandle, OutFailure, TEXT("Purchased"))) return false;
 		const UCombatItemInstance* Result = Items->FindItem(OutResultHandle);
 		if (Result) PurchasedSource = Result->MakeSource();
-		ReplicatedView.Gold -= Plan.TotalCost;
+		ReplicatedView.Gold -= PurchaseCost;
         if (TargetDefinition->ShopPolicy)
             TargetDefinition->ShopPolicy->OnPurchased(GetCombatPlayer(), AcceptedOffer);
 	}
@@ -854,6 +955,8 @@ void UCombatEconomyComponent::RefreshView(const bool bResourceChanged, const boo
 	ReplicatedView.InventoryItems.Reset();
 	ReplicatedView.InventoryItems.SetNum(CombatItems::TotalSlots);
 	ReplicatedView.InventoryRevision = 0;
+	BindShopPriceSource();
+	ShopPriceView.DiscountBasisPoints = FMath::Clamp(FMath::RoundToInt(ResolveAuthoritativeShopDiscountFraction() * 10000.0f), 0, 2000);
 	if (const UCombatInventoryComponent* Inventory = GetCommandedInventory())
 	{
 		Inventory->BuildViews(ReplicatedView.InventoryItems);
@@ -864,6 +967,11 @@ void UCombatEconomyComponent::RefreshView(const bool bResourceChanged, const boo
 	OnEconomyViewChanged.Broadcast();
 	if (bResourceChanged) OnPlayerResourceViewChanged.Broadcast();
 	if (bInventoryChanged) OnHeroInventoryViewChanged.Broadcast();
+}
+
+void UCombatEconomyComponent::OnRep_ShopPriceView()
+{
+	OnEconomyViewChanged.Broadcast();
 }
 
 void UCombatEconomyComponent::OnRep_EconomyView()
@@ -908,6 +1016,8 @@ void UCombatEconomyComponent::EmitEconomyEvent(const FGameplayTag EventType,
 void UCombatEconomyComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
 	bEnding = true;
+	if (UCombatModifierComponent* Source = ShopPriceSource.Get()) Source->OnModifierCollectionChanged().Remove(ShopPriceChangedHandle);
+	ShopPriceSource.Reset(); ShopPriceChangedHandle.Reset(); ShopPriceView = {};
 	if (UCombatSchedulerSubsystem* Scheduler = GetWorld() ? GetWorld()->GetSubsystem<UCombatSchedulerSubsystem>() : nullptr)
 	{
 		Scheduler->CancelAllForOwner(this);
@@ -930,12 +1040,13 @@ bool UCombatEconomyComponent::PurchaseAcquireItem(UCombatItemData& Item,const in
 	if(!Offer.bCanPurchase) { Failure=CombatTags::Failure_ActionUnsupported; return false; }
 	FCombatPurchasePlan Plan;
 	if(!ShopData->BuildPurchasePlan(Item.GetPrimaryAssetId(),{},Plan,Error)||!Plan.ConsumedDefinitions.IsEmpty()) { Failure=CombatTags::Failure_Economy_RecipeInvalid; return false; }
-	if(ReplicatedView.Gold<Plan.TotalCost) { Failure=CombatTags::Failure_Economy_InsufficientGold; return false; }
+	const int64 PurchaseCost = ApplyShopDiscount(Plan.TotalCost);
+	if(PurchaseCost < 0 || ReplicatedView.Gold<PurchaseCost) { Failure=CombatTags::Failure_Economy_InsufficientGold; return false; }
 	TGuardValue<bool> MoneyGuard(bMutating,true); TGuardValue<bool> InventoryGuard(Inventory->bMutating,true);
 	auto* Instance=GetItems()->CreateItem(&Item,1); if(!Instance) { Failure=CombatTags::Failure_ActionUnsupported; return false; }
 	const auto Handle=Instance->Handle; const auto Source=Instance->MakeSource();
 	const int64 Before=ReplicatedView.Gold; const int32 BeforeRevision=ReplicatedView.EconomyRevision;
-	ReplicatedView.Gold-=Plan.TotalCost; AdvanceEconomyRevision();
+	ReplicatedView.Gold-=PurchaseCost; AdvanceEconomyRevision();
 	if(!GetItems()->ConsumeOnAcquire(*Instance,Unit,Failure))
 	{
 		GetItems()->DestroyItem(Handle); ReplicatedView.Gold=Before; ReplicatedView.EconomyRevision=BeforeRevision; return false;
@@ -946,6 +1057,9 @@ bool UCombatEconomyComponent::PurchaseAcquireItem(UCombatItemData& Item,const in
 void UCombatEconomyComponent::RefreshShopOffers()
 {
 	auto* PC=GetCombatPlayer(); if(!PC||!PC->HasAuthority()||!bInitialized||bEnding||!ShopData) return;
+	// 既有领域 Monitor 也覆盖只改变 Break 标签而不改集合的情况；不另设价格计时器。
+	BindShopPriceSource();
+	RefreshShopPriceProjection();
 	TArray<FCombatShopOfferView> Next;
     for (const auto& Item : FrozenOfferItems)
     {

@@ -520,3 +520,19 @@ DEF-014 已新增默认空的 UCombatItemShopPolicy：QueryOffer 只读构造既
 ADR-080 0.2：MaxOwnedQuantity 默认0保持旧内容不限量，普通授予/拾取与经济购买共用真实九格计数，锁定与背包仍计入，策略物品禁止作为配方组件；防守四件限额1。
 
 DEF-014首批四件已通过248非PIE、3商店渲染PIE、154资产校验、三Target和WindowsServer/WindowsClient Cook/Stage/Archive及独立Dedicated双客户端。用户于2026-10-22确认验收成功并授权本地提交，不推送；长期平衡、四人容量及其余四件留后续，见 [DEF-014](../Specs/DEF-014-defense-equipment-foundation.spec.md)。
+
+### ADR-081：条件冷却策略与本人核心修复归属（2026-10-22；DEF-015）
+
+已以兼容可选内嵌CombatCooldownPolicy（自身契约1）扩展AbilityData，空值保持原ASC全局冷却式；防守英雄Q/E读取有效ActiveGE绑定Runtime的defense_qe_cooldown_reduction，与全局CDR相加后按内容配置上限40%，W不读取条件项。策略在唯一冷却提交点取值，已开始冷却不重排，物品主动保持既有路径。不修改原公共API签名、全局Formula/Release或网络schema。
+
+修复透镜只通过公共PreDealHeal为本人对当前Run核心的修复增20%；团队应急石把已校验接收英雄作为直接治疗来源，明确安全事件把当次请求英雄作为来源；队友/取消/超时等自动修复不借其他英雄透镜。源身份调整保留SourceContext与公共增幅/真实Health上限，回调结束Run后不得重建事件账本。两件稳定身份为CombatItem:item_mana_sigil、item_repair_lens，价格240/200，共用原整备两件配额。回城与折扣在后续独立切片评审；本步先通过Spec0.1计划审查与Build Gate，再实施行为文件。
+
+DEF-015已通过三Target、255非PIE/4原商店渲染PIE、158资产及WindowsServer/WindowsClient双平台Cook/Stage/Archive、独立Dedicated双客户端，待用户验收。新增装备回归与失败边界见 [DEF-015](../Specs/DEF-015-defense-utility-equipment.spec.md)，未自动提交；GAP-030动态GE定义复制诊断仍保留，拥有者冷却快照与核心Health/库存复制为实际验证结果。
+
+### ADR-082：商贾印统一报价与独立拥有者价格投影（2026-10-23；DEF-016）
+
+商贾印作为第七件普通装备，240金币，shop_discount_fraction=0.05；沿用BoundUnit/每款九格限1/每整备窗两件配额。所有购买（含获得即用、配方缺失叶子补购）及防守重抽由原Economy/Choice服务器入口在每笔费用总额上一次floor。有效参数相加封顶20%，以最近万分比量化并用整数商/余数避免浮点少扣一金和乘法溢出；无参数仍0折扣。原退款窗口返实付，窗口外出售继续原目录价及比例，本关卡原有50%出售比例低于最便宜80%购入价，不产生买卖套利；未来提高出售比例超过80%需重新审查。节俭卡资产与回城另立切片。
+
+新增独立FCombatShopPriceView自身schema1（owner-only，非请求），保持冻结FCombatEconomyView/Release/Formula/Tag/Event版本；不承诺混版本可执行文件联机。当前英雄Modifier委托驱动价格投影，主控切换/EndPlay解绑；服务器每笔结算重新读取有效效果，客户端按ShopDefinitionId解析AssetManager目录及库存构造只读报价，不依赖服务器ShopData或Runtime。重抽已有发布比较覆盖价格和次数，金币不足时不提交候选或次数。计划0.2事前重审见 [DEF-016](../Specs/DEF-016-defense-merchant-seal.spec.md)。
+
+DEF-016最终验证：三Target、9专项/264非PIE/5渲染PIE、59工具、160定义0错误/0警告、813包双平台Cook/Stage/Archive以及归档独立Dedicated双Client通过；RunId=A42EEEBA455EBEE6510C42857659AF80，逐端折扣/190报价/57与95重抽/实付582与重放一致，归档与源码exe摘要匹配。0.1先实现后测试的偏差保留，0.2真实Red/Green和F2结果见Spec；用户尚未验收，未提交或推送，GAP-030未关闭。

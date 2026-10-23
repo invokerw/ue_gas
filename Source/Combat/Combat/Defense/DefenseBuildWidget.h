@@ -26,6 +26,7 @@ protected:
 	virtual void ReleaseSlateResources(bool bReleaseChildren) override;
 private:
 #if WITH_DEV_AUTOMATION_TESTS
+	friend class FDefenseMerchantSealUIProbe;
 	friend class FDefenseChoiceWidgetTest;
 	friend class FDefenseChoiceUIProbe;
 	friend class FDefenseEventPIEProbe;

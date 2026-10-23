@@ -65,6 +65,8 @@ private:
 	friend class FCombatShopWidgetStructureTest;
 	friend class FDefenseTeamShopUIProbe;
 	friend class FDefenseEquipmentUIProbe;
+    friend class FDefenseUtilityEquipmentUIProbe;
+    friend class FDefenseMerchantSealUIProbe;
 #endif
 
 	struct FItemEntry
