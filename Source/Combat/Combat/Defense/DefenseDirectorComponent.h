@@ -104,6 +104,7 @@ public:
 	/** 幂等清理所有己方资源；GameMode 和 Component EndPlay 共用。 */
 	void Shutdown();
 	virtual void EndPlay(const EEndPlayReason::Type Reason) override;
+	FGuid GetRunId() const { return View.RunId; }
 	EDefensePhase GetPhase() const { return View.Phase; }
 	int32 GetCurrentWaveIndex() const { return View.WaveIndex; }
 	uint32 GetPhaseGeneration() const { return static_cast<uint32>(View.PhaseGeneration); }
@@ -142,6 +143,10 @@ public:
     void RecordEquipmentPurchase(ACombatPlayerController* Player, const FCombatShopOfferView& AcceptedOffer);
     /** 只读确认当前Run的登记英雄身份，不要求购物阶段；用于本人的核心治疗归属。 */
     bool IsRegisteredEquipmentHero(const ACombatUnitCharacter* Hero) const;
+	/** 回城仅允许同Run当前登记主控、活核心及未终局；不接收客户端目的地。 */
+	bool CanRecall(const ACombatUnitCharacter* Hero) const;
+	/** 按本局冻结复活区寻找导航/胶囊安全落点，失败不改变位置。 */
+	bool ResolveRecallDestination(const ACombatUnitCharacter* Hero, FVector& OutDestination) const;
     /** 只读确认导演持有的当前存活核心，避免使用GameState展示快照驱动治疗。 */
     bool IsCurrentEquipmentCore(const ACombatUnitCharacter* Core) const;
 
@@ -159,6 +164,7 @@ private:
 	friend struct FDefenseTeamShopTestAccess;
 	friend struct FDefenseEquipmentTestAccess;
     friend struct FDefenseUtilityTestAccess;
+    friend struct FReturnBeaconTestAccess;
 #endif
 	/** 阶段转换取消旧阶段工作，RunId 不变而 generation 递增。 */
 	void EnterPhase(EDefensePhase Phase, int32 Wave, float Duration);

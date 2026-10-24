@@ -143,3 +143,9 @@ Q/E执行点复用公开Targeting/Damage/Modifier，伤害后复核施法者和�
 ### DEF-016 价格派生观察者（2026-10-23）
 
 Economy组件弱持有当前主控ModifierComponent及唯一集合委托句柄；初始化/主控绑定时重绑，先移除旧委托，组件EndPlay显式解绑并清价格字段。效果在库存事务内变化时观察者不广播中间价格，最终RefreshView统一投影；背包移除和Scheduler回装后的Apply/Remove会刷新报价。死亡暂停/复活恢复即使保留全部实例也通知；仅状态标签变化由既有领域Monitor发布入口复核，不创建Timer。玩家金币仍由原Economy拥有，价格字段没有独立权威余额或结算。回归覆盖换控、旧源通知、真实死亡/复活、保留效果、清库存、英雄EndPlay和World teardown，见 [DEF-016](../Specs/DEF-016-defense-merchant-seal.spec.md)。
+
+## DEF-017 增量生命周期审计（2026-10-23）
+
+回城每次激活由Ability持有原ChannelTask，以及Damage记录和根组件TransformUpdated的精确委托。正常/取消/死亡/换控/EndPlay统一解绑；到期前复核生命与绑定。自身传送前只解绑位置观察，扣血观察保留到提交结束；Motion开始日志/本地观察点之后调用完整只读业务复核，终局或换控不得继续移动。同步传送只在栈中持有Handle及重入锁，没有跨帧任务；原Order由Ability唯一释放，不由传送重复恢复。
+
+死亡快照在Alive→Dying前从有效Runtime构造，绑定DeathParameterLife，清理/重复通知不重写，成功复活递增生命后清空。Inventory仍负责效果销毁/重建，援军仍以原死亡凭证至多消耗/兑现一次。新增专项和真实PIE证据、未覆盖项以 [DEF-017](../Specs/DEF-017-defense-return-beacon.spec.md) 为准，不改写M8历史验收。

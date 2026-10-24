@@ -752,3 +752,15 @@ float UCombatModifierComponent::GetActiveRuntimeParameterSum(const FName Key) co
     for(const auto* Runtime:MakeSortedSnapshot()) Total+=Runtime->GetRuntimeParameter(Key);
     return FMath::IsFinite(Total)&&FMath::Abs(Total)<=MAX_flt?float(Total):0.f;
 }
+
+void UCombatModifierComponent::BuildActiveRuntimeParameterSnapshot(TMap<FName, float>& OutParameters) const
+{
+	OutParameters.Reset();
+	for (const UCombatModifierRuntime* Runtime : MakeSortedSnapshot())
+	{
+		if (const UCombatModifierData* Data = Runtime->GetModifierData())
+			for (const auto& Parameter : Data->RuntimeParameters) OutParameters.FindOrAdd(Parameter.Key);
+		for (const auto& Override : Runtime->RuntimeParameterOverrides) OutParameters.FindOrAdd(Override.Key);
+	}
+	for (auto& Parameter : OutParameters) Parameter.Value = GetActiveRuntimeParameterSum(Parameter.Key);
+}

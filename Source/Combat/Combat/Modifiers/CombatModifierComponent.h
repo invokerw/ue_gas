@@ -159,6 +159,9 @@ public:
 	/** 技能生效阶段费用提交后，按优先级尝试消耗一个可格挡该技能的效果；成功返回 true 并停止寻找，技能动作不再执行。 */
 	bool TryConsumeSpellBlock(const FPrimaryAssetId& AbilityDefinitionId, ACombatUnitCharacter* Caster, const FCombatEventContext& Context);
 
+	/** 冻结当前有效效果的全部具名参数和；仅供死亡等同步边界保存，不是最终属性账本。 */
+	void BuildActiveRuntimeParameterSnapshot(TMap<FName, float>& OutParameters) const;
+
 	/** 单位开始死亡时移除配置为随死亡清理的效果；其余实例保留属性/标签，暂停战斗回调及计时，复活时再按原到期时间处理。 */
 	void HandleOwnerDeath();
 	/** 单位复活后清掉保留实例中已经过期的效果，恢复其余实例的周期和过期调度。 */

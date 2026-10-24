@@ -134,3 +134,9 @@ Pickup / Drop 进入 Order 状态机，复用 AI 导航、路径跟随、Schedul
 ## DEF-016：商贾印
 
 原防守装备目录增至七件，商贾印item_merchants_seal价格240，绑定英雄、不可丢弃、九格限一件，仍占整备窗口两次购买配额。equipment_merchants_seal以公共运行时参数shop_discount_fraction=0.05生效，没有专用Runtime或额外属性。库存背包/重新装备等待/死亡/出售的精确句柄仍由原Inventory拥有；有效参数与拥有者报价随效果生命周期更新。整笔购买、即用商品和配方补购的取整与退款见 [10-15](10-15-Economy-Shop-Crafting.md) 和 [DEF-016](../Specs/DEF-016-defense-merchant-seal.spec.md)。
+
+## DEF-017：回城信标与死亡快照
+
+回城信标item_return_beacon为第八件防守装备，150金币、BoundUnit、不可丢弃、九格限一且共用整备窗两件配额。普通被动equipment_return_beacon仅提供defense_recall_reduction_seconds=1和defense_respawn_reduction_seconds=2，不另建Runtime或计时器；背包、六秒回装等待、出售与死亡清理均沿原Inventory。
+
+Lifecycle在Alive转Dying之前调用BuildActiveRuntimeParameterSnapshot，冻结当时有效Runtime参数，绑定本生命；GetDeathRuntimeParameter只在该生命Dead返回，未知键/新生命为0，成功复活即清空。Director在唯一OnHeroDied读取减时，普通8秒/信标6秒/援军5秒/两者3秒，最低0，仍经原Monitor安全复活。购买或登记已死英雄不追溯本次信标效果，重复死亡通知不重排或重复消耗援军。见 [DEF-017](../Specs/DEF-017-defense-return-beacon.spec.md)。

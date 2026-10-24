@@ -76,7 +76,7 @@ def verify():
     gear=next(c for c in cats if str(c.get_editor_property("category_id"))=="defense_equipment")
     ids={str(i.get_editor_property("definition_name")) for i in gear.get_editor_property("items")}
     original={"item_iron_bow","item_swift_string","item_stone_guard","item_hunter_scope","item_mana_sigil","item_repair_lens"}
-    assert ids in (original,original|{"item_merchants_seal"})
+    assert ids in (original,original|{"item_merchants_seal"},original|{"item_merchants_seal","item_return_beacon"})
     assert len(next(c for c in cats if str(c.get_editor_property("category_id"))=="team_supplies").get_editor_property("items"))==6
     report={"items":[],"policies":[]}
     for key,title,price,glyph,desc,kind,amount in ROWS:

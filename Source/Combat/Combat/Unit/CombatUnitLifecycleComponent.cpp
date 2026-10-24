@@ -36,6 +36,11 @@ bool UCombatUnitLifecycleComponent::RequestDeath(
 		return false;
 	}
 
+	DeathParameters.Reset();
+	DeathParameterLife = Unit->GetLifeGeneration();
+	if (const UCombatModifierComponent* Modifiers = Unit->GetCombatModifierComponent())
+		Modifiers->BuildActiveRuntimeParameterSnapshot(DeathParameters);
+
 	// Dying 是同步清理屏障：先阻止新玩法，再取消所有本生命代次的活动行为。
 	Unit->SetLifeStateFromLifecycle(ECombatLifeState::Dying);
 	if (auto* Brain = Unit->GetCombatAIBrainComponent()) Brain->StopLogic(TEXT("Owner death"));
@@ -104,6 +109,7 @@ bool UCombatUnitLifecycleComponent::RespawnAtLocation(const FVector NewLocation)
 		return false;
 	}
 	Unit->IncrementLifeGenerationFromLifecycle();
+	DeathParameters.Reset(); DeathParameterLife = 0;
 	if (UCombatAbilitySystemComponent* Asc = Unit->GetCombatAbilitySystemComponent())
 	{
 		const float MaxHealth = Asc->GetNumericAttribute(UCombatAttributeSet::GetMaxHealthAttribute());
@@ -183,4 +189,11 @@ void UCombatUnitLifecycleComponent::EmitLifecycleLog(
 	Record.UnitLifeGeneration = Unit->GetLifeGeneration();
 	Record.Diagnostic = bRespawn ? TEXT("Respawned") : TEXT("Died");
 	Events->Emit(Record);
+}
+
+float UCombatUnitLifecycleComponent::GetDeathRuntimeParameter(const FName Key) const
+{
+	const ACombatUnitCharacter* Unit = GetOwnerUnit();
+	return Unit && Unit->HasAuthority() && Unit->GetLifeState() == ECombatLifeState::Dead
+		&& Unit->GetLifeGeneration() == DeathParameterLife ? DeathParameters.FindRef(Key) : 0.0f;
 }

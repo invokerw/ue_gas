@@ -110,3 +110,9 @@ UDefenseShieldRuntime承接DEF-007的有限护盾吸收逻辑，原UDefenseCoreS
 shop_discount_fraction（经济报价契约1）只从当前有效Modifier Runtime汇总，每实例计一次；合计限制0至20%，按最近万分比量化并在整笔总价上一次floor。配置0.05可让商店商品、获得即用及防守重抽享5%折扣，不影响既有出售窗口外规则。背包、回装等待、死亡暂停和Break过滤沿用公共Modifier有效性；不要在UI、AcquireEffect或ShopPolicy里再次扣款/折算。
 
 新FCombatShopPriceView自身schema1只复制拥有者折扣万分比，与冻结经济聚合布局分开；旧空参数默认0折扣。商贾印资产已接入，未来节俭卡可复用参数但本轮未创建卡资产。客户端不提交折扣，三端同步构建，不承诺混版本联机；见 [DEF-016](../Specs/DEF-016-defense-merchant-seal.spec.md) 与ADR-082。
+
+## DEF-017：原生引导、同步Motion与死亡参数
+
+原生引导扩展使用ResolveChannelDurationForActivation/ValidateChannelCompletion，基类独占Scheduler/提交/结束和UnitView；不要再建Actor Timer。TryTeleport是Motion组件的服务器同步入口（自身契约1）：调用方负责导航和业务落点，组件检查生命/冲突/胶囊阻挡，在开始日志/本地OnMotionStarted观察点后复核ExpectedOwner和可选只读ValidateBeforeCommit。复核失败不改位置；入场后只发一次MotionFinished，且不泵送当前Cast Order。回城在此回调复核Run/Owner/Binding/Life/位置/状态，避免开始日志里换控或终局后仍传送。该本地观察点仅属于新同步传送，不改变原连续Motion事件顺序。
+
+需要清理前有效参数的死亡行为可读取Lifecycle本生命死亡快照，不能在OnDied后重新读取已移除的装备效果；快照不是最终属性或客户端账本，复活清空。此兼容新增不改冻结RPC/USTRUCT、Tag/Event/Release版本。正式资产与边界测试见 [DEF-017](../Specs/DEF-017-defense-return-beacon.spec.md)。

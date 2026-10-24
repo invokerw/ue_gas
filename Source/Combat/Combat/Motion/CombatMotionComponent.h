@@ -8,6 +8,7 @@
 #include "CombatMotionComponent.generated.h"
 
 class ACombatUnitCharacter;
+class APlayerController;
 
 /**
  * 单位上的服务器强制位移组件，用于击退、拉拽等不由普通寻路产生的移动。
@@ -28,6 +29,11 @@ public:
 	 * 返回成功表示已经登记并暂停普通移动，尚未发生位移；失败不会改变现有通道。
 	 */
 	FCombatMotionResult TryAcquireMotion(const FCombatMotionRequest& Request);
+	/** 服务器同步安全传送（契约1）：目标胶囊不能阻挡、不能有活动Motion；调用者负责导航与业务目的地。
+	 * 不恢复或泵送当前Order，避免在引导完成回调里重新激活同一Cast；开始观察点后复核生命和可选Owner，并执行同步只读业务复核，false不移动。
+	 */
+	FCombatMotionResult TryTeleport(const FVector& Destination, const FCombatEventContext& ParentEvent, const FCombatSourceContext& Source,
+        APlayerController* ExpectedOwner = nullptr, const TFunction<bool()>& ValidateBeforeCommit = {});
 	/** 按指定原因结束活动位移并释放通道；最后一条结束时恢复普通移动和命令。旧、重复或身份不匹配的句柄返回 false。 */
 	bool ReleaseMotion(FCombatMotionHandle Handle, ECombatMotionFinishReason Reason = ECombatMotionFinishReason::Cancelled);
 	/** 返回完整 Handle 是否仍活动。 */
@@ -38,6 +44,8 @@ public:
 	int32 GetActiveMotionCount() const { return ActiveMotions.Num(); }
 	/** 取得最近一次强制位移的最终结果；首次结束前为默认值，后续结束会覆盖。 */
 	const FCombatMotionResult& GetLastMotionResult() const { return LastMotionResult; }
+	/** 订阅传送开始日志后的同步观察点；回调返回后组件会复核生命、Owner 和目标阻挡。 */
+    FOnCombatMotionStarted& OnMotionStarted() { return MotionStartedDelegate; }
 	/** 订阅强制位移最终结束的服务器本地通知；订阅者退出时应解绑。 */
 	FOnCombatMotionFinished& OnMotionFinished() { return MotionFinishedDelegate; }
 
@@ -86,9 +94,12 @@ private:
 	uint32 MotionGeneration = 1;
 	/** 高优先级请求正在替换旧请求时，抑制中途恢复导航与 Order。 */
 	bool bAcquiringReplacement = false;
+	/** 同步传送占用期间拒绝重入请求；没有跨帧任务。 */
+	bool bTeleporting = false;
 	/** EndPlay 期间不恢复导航或 Order。 */
 	bool bEnding = false;
 	/** 最近最终结果和结束通知；结果只保留一份，不形成历史记录。 */
 	FCombatMotionResult LastMotionResult;
-	FOnCombatMotionFinished MotionFinishedDelegate;
+	FOnCombatMotionStarted MotionStartedDelegate;
+    FOnCombatMotionFinished MotionFinishedDelegate;
 };

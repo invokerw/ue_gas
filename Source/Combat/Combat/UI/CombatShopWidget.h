@@ -67,6 +67,7 @@ private:
 	friend class FDefenseEquipmentUIProbe;
     friend class FDefenseUtilityEquipmentUIProbe;
     friend class FDefenseMerchantSealUIProbe;
+    friend class FReturnBeaconPIEProbe;
 #endif
 
 	struct FItemEntry

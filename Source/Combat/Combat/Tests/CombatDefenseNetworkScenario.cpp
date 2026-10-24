@@ -75,6 +75,7 @@ void ACombatDefenseNetworkScenario::Tick(float Delta)
 	auto* State=GetWorld()->GetGameState<ADefenseGameState>();
 	if(!State || !State->GetRunView().RunId.IsValid()) return;
 	const auto& V=State->GetRunView();
+	if(FParse::Param(FCommandLine::Get(),TEXT("DefenseReturnBeaconSmoke"))) { ExerciseReturnBeacon(); return; }
 	if(FParse::Param(FCommandLine::Get(),TEXT("DefenseMerchantSealSmoke"))) { ExerciseMerchantSeal(); return; }
 	if(FParse::Param(FCommandLine::Get(),TEXT("DefenseUtilityEquipmentSmoke"))) { ExerciseUtilityEquipment(); return; }
 	if(FParse::Param(FCommandLine::Get(),TEXT("DefenseEquipmentSmoke"))) { ExerciseEquipment(); return; }
@@ -279,6 +280,7 @@ void ACombatDefenseNetworkScenario::GetLifetimeReplicatedProps(TArray<FLifetimeP
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 	DOREPLIFETIME(ACombatDefenseNetworkScenario,FinalAttributes);
+    DOREPLIFETIME(ACombatDefenseNetworkScenario,ReturnBeaconPhase);
     DOREPLIFETIME(ACombatDefenseNetworkScenario,EquipmentSamples);
 	DOREPLIFETIME(ACombatDefenseNetworkScenario,GuardianSmokeHero);
 	DOREPLIFETIME(ACombatDefenseNetworkScenario,GuardianTrainingTarget);

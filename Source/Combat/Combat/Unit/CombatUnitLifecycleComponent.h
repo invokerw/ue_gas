@@ -32,6 +32,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category="Combat|Life", meta=(DisplayName="在指定位置复活", ToolTip="仅服务器接受已死亡单位的复活请求；检查坐标数值后直接传送，不做导航投射或落点避障。成功时递增生命代次、恢复满生命/法力、重建效果和恢复任务，最后进入 Alive 并广播；传送失败则退回 Dead。"))
 	bool RespawnAtLocation(UPARAM(DisplayName="复活位置") FVector NewLocation);
 
+	/** 仅在本生命Dead期间读取死亡清理前冻结的有效参数；复活/旧生命/未知键为0，自身契约1。 */
+	float GetDeathRuntimeParameter(FName Key) const;
+
 	/** 返回 exactly-once 死亡广播。 */
 	FOnCombatUnitDied& OnDied() { return DiedDelegate; }
 	/** 返回 exactly-once 复活广播。 */
@@ -45,6 +48,9 @@ private:
 	/** 为成功完成的死亡或复活转换写入一次结构化日志；重复请求由状态检查提前拒绝。 */
 	void EmitLifecycleLog(const FCombatEventContext& Context, bool bRespawn, ACombatUnitCharacter* OtherUnit) const;
 
+	/** 当前死亡生命的一次性有效效果快照；不复制，也不作为属性聚合来源。 */
+	TMap<FName, float> DeathParameters;
+	uint32 DeathParameterLife = 0;
 	/** 当前 Unit 的死亡观察者。 */
 	FOnCombatUnitDied DiedDelegate;
 	/** 当前 Unit 的复活观察者。 */

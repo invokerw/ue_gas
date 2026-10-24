@@ -87,6 +87,11 @@ public:
 	TObjectPtr<UCombatAbilityData> AbilityData;
 
 protected:
+	/** 本次激活只解析一次引导时长；默认使用定义值，派生类可按当前有效条件冻结新值。 */
+	virtual float ResolveChannelDurationForActivation() const;
+	/** 引导到期前的额外业务检查；默认允许，失败通过原中断/结束入口清理。不得产生效果。 */
+	virtual bool ValidateChannelCompletion(FGameplayTag& OutFailure) const;
+
 	/** 按配置顺序执行伤害、治疗、效果、事件或创建弹体/区域；首个失败结束执行并返回原因，之前已经产生的效果不回滚。 */
 	FCombatAbilityActionResult ExecuteDataDrivenActions();
 
@@ -127,6 +132,8 @@ private:
 	FCombatScheduleHandle CastPointSchedule;
 	/** 负责引导周期与到期的技能任务；结束时解绑通知并销毁。 */
 	UPROPERTY(Transient) TObjectPtr<UAbilityTask_WaitCombatInterval> ChannelTask;
+	/** 激活时冻结的引导秒数；装备变化不重排已有任务。 */
+	float ActivationChannelDuration = 0.0f;
 	/** 本 Activation 已写入日志的生命周期标签集合。 */
 	TSet<FGameplayTag> EmittedLifecycleEvents;
 	/** Cost 每个 Activation 最多提交一次。 */

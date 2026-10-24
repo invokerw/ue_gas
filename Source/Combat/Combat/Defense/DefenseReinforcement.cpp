@@ -28,7 +28,9 @@ void UDefenseDirectorComponent::OnHeroDied(ACombatUnitCharacter* Hero,const FCom
 	{
 		auto& R=Player.Value; if(!Player.Key.IsValid()||R.Hero.Get()!=Hero) continue;
 		const uint32 Life=Hero->GetLifeGeneration(); if(R.DeadLife==Life) return;
-		R.DeadLife=Life; R.RespawnAt=GetWorld()->GetTimeSeconds()+RunData->RespawnDelay; R.RespawnRetries=0;
+		const float EquipmentReduction = FMath::Max(0.0f, Hero->GetCombatLifecycleComponent()->GetDeathRuntimeParameter(TEXT("defense_respawn_reduction_seconds")));
+		const float BaseDelay = FMath::Max(0.0f, RunData->RespawnDelay - EquipmentReduction);
+		R.DeadLife=Life; R.RespawnAt=GetWorld()->GetTimeSeconds()+BaseDelay; R.RespawnRetries=0;
 		R.PendingReinforcement={}; R.ReinforcementDeathLife=0;
 		for(auto& Pair:TeamPurchaseLedger)
 		{
@@ -36,11 +38,13 @@ void UDefenseDirectorComponent::OnHeroDied(ACombatUnitCharacter* Hero,const FCom
 			const auto* Item=FrozenTeamItems.Find(Pair.Key); const auto* E=Item?Cast<UDefenseTeamItemEffect>((*Item)->AcquireEffect):nullptr;
 			if(!E||!E->ReinforcementShieldData||!Purchase.bEffectActive||Purchase.RemainingReinforcements<=0||Purchase.ExcludedDeaths.FindRef(Hero)==Life) continue;
 			--Purchase.RemainingReinforcements; R.PendingReinforcement=Pair.Key; R.ReinforcementDeathLife=Life;
-			R.RespawnAt=GetWorld()->GetTimeSeconds()+FMath::Max(0.0f,RunData->RespawnDelay-E->RespawnReduction);
+			R.RespawnAt=GetWorld()->GetTimeSeconds()+FMath::Max(0.0f,BaseDelay-E->RespawnReduction);
 			UE_LOG(LogCombat,Display,TEXT("DefenseReinforcementReserved Item=%s Hero=%s DeathLife=%u Remaining=%d Delay=%.2f"),
-				*Pair.Key.ToString(),*Hero->GetName(),Life,Purchase.RemainingReinforcements,FMath::Max(0.0f,RunData->RespawnDelay-E->RespawnReduction));
+				*Pair.Key.ToString(),*Hero->GetName(),Life,Purchase.RemainingReinforcements,FMath::Max(0.0f,BaseDelay-E->RespawnReduction));
 			break;
 		}
+		UE_LOG(LogCombat, Display, TEXT("DefenseRespawnScheduled Hero=%s Life=%u Delay=%.2f EquipmentReduction=%.2f"),
+			*Hero->GetName(), Life, R.RespawnAt-GetWorld()->GetTimeSeconds(), EquipmentReduction);
 		++TeamShopRevision; PublishTeamShop(); return;
 	}
 }

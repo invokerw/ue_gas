@@ -536,3 +536,11 @@ DEF-015已通过三Target、255非PIE/4原商店渲染PIE、158资产及WindowsS
 新增独立FCombatShopPriceView自身schema1（owner-only，非请求），保持冻结FCombatEconomyView/Release/Formula/Tag/Event版本；不承诺混版本可执行文件联机。当前英雄Modifier委托驱动价格投影，主控切换/EndPlay解绑；服务器每笔结算重新读取有效效果，客户端按ShopDefinitionId解析AssetManager目录及库存构造只读报价，不依赖服务器ShopData或Runtime。重抽已有发布比较覆盖价格和次数，金币不足时不提交候选或次数。计划0.2事前重审见 [DEF-016](../Specs/DEF-016-defense-merchant-seal.spec.md)。
 
 DEF-016最终验证：三Target、9专项/264非PIE/5渲染PIE、59工具、160定义0错误/0警告、813包双平台Cook/Stage/Archive以及归档独立Dedicated双Client通过；RunId=A42EEEBA455EBEE6510C42857659AF80，逐端折扣/190报价/57与95重抽/实付582与重放一致，归档与源码exe摘要匹配。0.1先实现后测试的偏差保留，0.2真实Red/Green和F2结果见Spec；用户尚未验收，未提交或推送，GAP-030未关闭。
+
+### ADR-083：防守回城与死亡参数快照（2026-10-23；DEF-017）
+
+基础回城通过UCombatGameplayAbility/原Order RPC，以防守共享技能组追加到当前空槽（游侠W、守卫R），保留原技能顺序；零蓝耗，3秒引导/30秒CD，CD在开始引导时提交且内容策略固定不缩减，移动或真实扣血打断。信标150金币、普通占槽/绑定/限1/原两件整备配额，公共参数分别缩短引导1秒与复活等待2秒；引导启动冻结、最少1秒，死亡与援军减时相加，最少0并仍经原安全复活Monitor。
+
+公共原生扩展各自身契约1：Ability增加可重写的引导时长与到期前校验，默认保持原定义/允许；Motion增加权威安全同步传送，检查生命/通道/胶囊阻挡并在日志回调后复核，经CharacterMovement更新，不在技能里直接改Transform；Lifecycle在Alive转Dying前只冻结有效Runtime参数并绑定生命，OnDied读取、复活清空，不能事后读已清理装备。冻结网络USTRUCT、Tag/Event/Formula/Release版本不变，无新RPC或客户端落点/数值输入，三端使用同版本。完整范围、反例、回滚和事前F1见 [DEF-017](../Specs/DEF-017-defense-return-beacon.spec.md)。
+
+DEF-017交付补强：同步Motion开始日志/本地观察点之后重新检查Owner及完整业务资格；回城的ValidateBeforeCommit复核Run/Binding/Life/状态/原点，换控或导演Shutdown不再继续改位置。两个真实PIE反例均关闭；最终9专项/273非PIE、8渲染PIE、59工具、164定义0/0、三Target/818包双平台归档与Dedicated双Client通过，RunId=26B8A72143977E6ED60ACDA318BFE815、源码/归档exeSHA一致且全退出。用户已于2026-10-24验收完成，待本地提交，未推送；GAP-027/030未关闭，长期/3–4人容量后续。

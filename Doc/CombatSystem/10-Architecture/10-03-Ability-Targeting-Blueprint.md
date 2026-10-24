@@ -238,3 +238,9 @@ SpawnProjectile/CreateThinker（返回稳定 Handle）
 - 六类生命周期事件的数量和顺序可自动化断言。
 - Ability 移除能清理 intrinsic modifier 和活动实例，不回滚已发射快照对象。
 - M3 对当时尚未启用的 Projectile/Thinker Action 在资产校验和运行时都明确拒绝；M5 已使用同一 schema 正式启用。
+
+## DEF-017：每次激活冻结引导与完成复核
+
+原生派生Ability可重写ResolveChannelDurationForActivation与ValidateChannelCompletion（自身契约1）；默认仍读AbilityData.ChannelDuration/允许完成。原GAS在激活时冻结有效时长，Scheduler任务和UnitView共用同一时间窗；扩展回调同步取消后不能继续启动/完成任务。正常ChannelFinish回调只调用一次，即使回调失败转取消，ChannelEnded、OrderReleased和AbilityEnded仍各一次。
+
+防守共享CombatAbility:defense_recall追加到游侠W/守卫R，不改原技能排序或RPC。3秒引导、0蓝耗、30秒固定冷却；信标启动时生效则2秒，至少1秒，途中换装不重排。真实DamageApplied的AppliedAmount>0（含HPLoss）或位置变化打断；完全吸收/0伤不打断。完成点和Motion开始观察点之后均复核同Run、Owner/Binding/Life、存活、位置与状态，经Director安全导航落点和公共Motion同步传送；不补资源或改生命代次。见 [DEF-017](../Specs/DEF-017-defense-return-beacon.spec.md)。

@@ -1,7 +1,10 @@
 #include "Combat/Motion/CombatMotionComponent.h"
 
 #include "GameFramework/CharacterMovementComponent.h"
+#include "GameFramework/PlayerController.h"
 #include "NavigationSystem.h"
+#include "Components/CapsuleComponent.h"
+#include "Engine/World.h"
 
 #include "Combat/Core/CombatTags.h"
 #include "Combat/Log/CombatEventSubsystem.h"
@@ -23,7 +26,7 @@ FCombatMotionResult UCombatMotionComponent::TryAcquireMotion(const FCombatMotion
 		Result.FailureTag = CombatTags::Failure_Authority;
 		return Result;
 	}
-	if (Unit->GetLifeState() != ECombatLifeState::Alive)
+	if (bEnding || bTeleporting || Unit->GetLifeState() != ECombatLifeState::Alive)
 	{
 		Result.FailureTag = CombatTags::Failure_Life_NotAlive;
 		return Result;
@@ -92,6 +95,55 @@ FCombatMotionResult UCombatMotionComponent::TryAcquireMotion(const FCombatMotion
 		ECombatMotionFinishReason::Completed, FGameplayTag());
 	Result.bSuccess = true;
 	Result.Handle = Handle;
+	return Result;
+}
+
+FCombatMotionResult UCombatMotionComponent::TryTeleport(const FVector& Destination, const FCombatEventContext& ParentEvent, const FCombatSourceContext& Source,
+    APlayerController* ExpectedOwner, const TFunction<bool()>& ValidateBeforeCommit)
+{
+	FCombatMotionResult Result;
+	ACombatUnitCharacter* Unit = GetOwnerUnit();
+	if (!Unit || !Unit->HasAuthority() || GetNetMode() == NM_Client) { Result.FailureTag = CombatTags::Failure_Authority; return Result; }
+	if (bEnding || Unit->IsActorBeingDestroyed() || Unit->GetLifeState() != ECombatLifeState::Alive)
+	{ Result.FailureTag = CombatTags::Failure_Life_NotAlive; return Result; }
+	if (bTeleporting || HasActiveMotion()) { Result.FailureTag = CombatTags::Failure_Motion_ChannelBusy; return Result; }
+	if (Destination.ContainsNaN()) { Result.FailureTag = CombatTags::Failure_InvalidNumber; return Result; }
+	auto* Movement = Unit->GetCharacterMovement();
+	auto* Capsule = Unit->GetCapsuleComponent();
+	const FCollisionShape Shape = FCollisionShape::MakeCapsule(Capsule->GetScaledCapsuleRadius(), Capsule->GetScaledCapsuleHalfHeight());
+	const FCollisionQueryParams Query(SCENE_QUERY_STAT(CombatTeleport), false, Unit);
+	if (!Movement || GetWorld()->OverlapBlockingTestByProfile(Destination, Unit->GetActorQuat(), Capsule->GetCollisionProfileName(), Shape, Query))
+	{ Result.FailureTag = CombatTags::Failure_Motion_Blocked; return Result; }
+	TGuardValue<bool> Guard(bTeleporting, true);
+	FActiveMotion Snapshot;
+	Snapshot.Handle.Key.Id = NextMotionId++; Snapshot.Handle.Key.Generation = MotionGeneration; Snapshot.Handle.Key.LifeGeneration = Unit->GetLifeGeneration();
+	Snapshot.StartLocation = Unit->GetActorLocation(); Snapshot.Request.TargetLocation = Destination;
+	Snapshot.Request.Channel = ECombatMotionChannel::Both; Snapshot.Request.Source = Unit; Snapshot.Request.SourceContext = Source;
+	Snapshot.Request.ParentEvent = ParentEvent;
+	if (!Snapshot.Request.ParentEvent.IsValid()) Snapshot.Request.ParentEvent = GetWorld()->GetSubsystem<UCombatEventSubsystem>()->CreateRootEvent();
+	Result.Handle = Snapshot.Handle;
+	EmitMotionLog(Snapshot, CombatTags::Event_Combat_MotionStarted, ECombatMotionFinishReason::Completed, {});
+    MotionStartedDelegate.Broadcast(Snapshot.Handle);
+	// 日志观察者可死亡、换控、销毁或改碰撞；提交位置前再查同生命、Owner 和当前落点，不能使用旧准入。
+	const bool Current = IsValid(Unit) && !Unit->IsActorBeingDestroyed() && !bEnding
+		&& Unit->GetLifeState() == ECombatLifeState::Alive && Unit->GetLifeGeneration() == Snapshot.Handle.Key.LifeGeneration
+        && (!ExpectedOwner || Unit->GetCommandingPlayerController() == ExpectedOwner)
+        && (!ValidateBeforeCommit || ValidateBeforeCommit());
+	if (Current && !GetWorld()->OverlapBlockingTestByProfile(Destination, Unit->GetActorQuat(), Capsule->GetCollisionProfileName(), Shape, Query))
+	{
+		FHitResult Hit;
+		Movement->StopMovementImmediately();
+		Movement->SafeMoveUpdatedComponent(Destination-Unit->GetActorLocation(), Unit->GetActorQuat(), false, Hit, ETeleportType::TeleportPhysics);
+		Movement->bJustTeleported = true;
+		Result.bSuccess = Unit->GetActorLocation().Equals(Destination, 0.1);
+		Unit->ForceNetUpdate();
+	}
+	Result.FinishReason = Result.bSuccess ? ECombatMotionFinishReason::Completed : ECombatMotionFinishReason::Cancelled;
+	Result.FailureTag = Result.bSuccess ? FGameplayTag() : CombatTags::Failure_Motion_Blocked.GetTag();
+	Result.FinalLocation = IsValid(Unit) ? Unit->GetActorLocation() : FVector::ZeroVector;
+	LastMotionResult = Result;
+	EmitMotionLog(Snapshot, CombatTags::Event_Combat_MotionFinished, Result.FinishReason, Result.FailureTag);
+	MotionFinishedDelegate.Broadcast(Result);
 	return Result;
 }
 

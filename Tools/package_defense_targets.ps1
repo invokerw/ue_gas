@@ -23,7 +23,7 @@ foreach($targetName in @('ue_gasServer','ue_gasClient')){
  $targetReceipt=Join-Path $targetRepo "Binaries/Win64/$targetName.target"
  if(!(Test-Path -LiteralPath $targetBinary) -or !(Test-Path -LiteralPath $targetReceipt)){throw "Missing built Target: $targetName"}
  $targetMetadata=Get-Content -LiteralPath $targetReceipt -Raw|ConvertFrom-Json
- $targetExpected=if($targetName -eq 'ue_gasServer'){'Server'}else{'Client'}
+ $targetExpected='Client'; if($targetName -eq 'ue_gasServer'){$targetExpected='Server'}
  if($targetMetadata.TargetType -ne $targetExpected){throw "Wrong Target receipt: $targetName"}
 }
 $targetInstalledEngine=Split-Path (Split-Path (Split-Path $targetEnv.installed_editor -Parent) -Parent) -Parent

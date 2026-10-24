@@ -36,6 +36,16 @@ private:
     /** 显式条件装备验证：两件真实RPC、本人核心修复和实际Q/E的拥有者冷却复制。 */
     void ExerciseUtilityEquipment();
     void ExerciseMerchantSeal();
+    /** 显式回城验证：两英雄原Order/RPC、3/2秒显示、伤害取消、安全回城及真实6秒复活。 */
+    void ExerciseReturnBeacon();
+    UPROPERTY(Replicated) int32 ReturnBeaconPhase=0;
+    int32 ReturnBeaconStep=0,ReturnBeaconRequest=0;
+    double ReturnBeaconAt=0,ReturnBeaconDeathAt=0;
+    bool bReturnBeaconBaseSeen=false,bReturnBeaconShortSeen=false;
+    FVector ReturnBeaconOrigin;
+    uint32 ReturnBeaconLife=0;
+    TMap<TWeakObjectPtr<ACombatUnitCharacter>,FVector> ReturnBeaconOrigins;
+    TMap<TWeakObjectPtr<ACombatUnitCharacter>,uint32> ReturnBeaconLives;
     bool bUtilityPrepared=false,bUtilityAwaiting=false,bUtilityExpectSuccess=false;
     int32 UtilityStep=0,UtilityRequest=0,UtilityServerStage=0;
     int64 UtilityInitialGold=0;

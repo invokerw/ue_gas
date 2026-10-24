@@ -102,7 +102,7 @@ def verify():
     gear = next(c for c in categories if str(c.get_editor_property("category_id")) == "defense_equipment")
     ids = {str(i.get_editor_property("definition_name")) for i in gear.get_editor_property("items")}
     expected = {"item_iron_bow", "item_swift_string", "item_stone_guard", "item_hunter_scope", "item_mana_sigil", "item_repair_lens", ITEM_ID}
-    assert ids == expected, (ids, expected)
+    assert ids in (expected, expected | {"item_return_beacon"}), (ids, expected)
     assert len(next(c for c in categories if str(c.get_editor_property("category_id")) == "team_supplies").get_editor_property("items")) == 6
     item = load(FOLDER + "/DA_" + ITEM_ID)
     mod = load(FOLDER + "/DA_equipment_merchants_seal")

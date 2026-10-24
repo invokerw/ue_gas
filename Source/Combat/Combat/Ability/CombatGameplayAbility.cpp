@@ -155,6 +155,13 @@ void UCombatGameplayAbility::ActivateAbility(
 	CombatContext.TargetLifeGeneration = CombatContext.TargetActor
 		? CombatContext.TargetActor->GetLifeGeneration() : 0;
 
+	ActivationChannelDuration = ResolveChannelDurationForActivation();
+	if (AbilityData->BehaviorTags.HasTagExact(CombatTags::Ability_Behavior_Channelled)
+		&& (!FMath::IsFinite(ActivationChannelDuration) || ActivationChannelDuration < AbilityData->ChannelInterval))
+	{
+		InterruptAbility(CombatTags::Failure_InvalidNumber, TEXT("Invalid activation channel duration"));
+		return;
+	}
 	FGameplayTag FailureTag;
 	if (!CommitStage(ECombatAbilityCommitStage::CastStarted, FailureTag))
 	{
@@ -216,6 +223,8 @@ void UCombatGameplayAbility::EndAbility(
 			bChannelEnded = true;
 			EmitLifecycleEvent(CombatTags::Event_Combat_AbilityChannelEnded, FGameplayTag(), TEXT("ChannelEnded Interrupted=1"));
 		}
+		// 完成扩展回调可能同步取消；正常完成已锁定回调标记时仍须先发一次引导结束事件。
+		if (bChannelStarted) EmitLifecycleEvent(CombatTags::Event_Combat_AbilityChannelEnded, FGameplayTag(), TEXT("ChannelEnded Interrupted=1"));
 		ReleaseCombatOrder(false, LastInterruptFailureTag.IsValid()
 			? LastInterruptFailureTag : CombatTags::Order_Failure_Cancelled.GetTag());
 	}
@@ -249,6 +258,17 @@ void UCombatGameplayAbility::EndAbility(
 	if (CombatContext.Caster && CombatContext.SourceContext.ItemHandle.IsValid())
 		CombatContext.Caster->GetCombatInventoryComponent()->NotifyAbilityEnded(CombatContext.SourceContext.ItemHandle);
 	bEnding = false;
+}
+
+float UCombatGameplayAbility::ResolveChannelDurationForActivation() const
+{
+	return AbilityData ? AbilityData->ChannelDuration : 0.0f;
+}
+
+bool UCombatGameplayAbility::ValidateChannelCompletion(FGameplayTag& OutFailure) const
+{
+	OutFailure = {};
+	return true;
 }
 
 void UCombatGameplayAbility::ReceiveSpellStart_Implementation(const FCombatAbilityActivationContext& Context) { (void)Context; }
@@ -525,6 +545,7 @@ void UCombatGameplayAbility::HandleCastPoint(const FCombatScheduledTickContext& 
 		return;
 	}
 	ReceiveSpellStart(CombatContext);
+	if (!IsActive() || bEnding) return;
 	LastActionResult = ExecuteDataDrivenActions();
 	if (!LastActionResult.bSuccess)
 	{
@@ -542,7 +563,7 @@ void UCombatGameplayAbility::HandleCastPoint(const FCombatScheduledTickContext& 
 	{
 		bChannelStarted = true;
 		ChannelTask = UAbilityTask_WaitCombatInterval::WaitCombatInterval(
-			this, AbilityData->ChannelInterval, AbilityData->ChannelDuration);
+			this, AbilityData->ChannelInterval, ActivationChannelDuration);
 		ChannelTask->OnTick.AddDynamic(this, &UCombatGameplayAbility::HandleChannelTick);
 		ChannelTask->OnFinished.AddDynamic(this, &UCombatGameplayAbility::HandleChannelFinished);
 		ChannelTask->ReadyForActivation();
@@ -554,7 +575,7 @@ void UCombatGameplayAbility::HandleCastPoint(const FCombatScheduledTickContext& 
 		{
 			const double StartTime = GetWorld()->GetTimeSeconds();
 			View->NotifyAbilityChannelStarted(CombatContext.EventContext.RootEventId,
-				StartTime, StartTime + AbilityData->ChannelDuration);
+				StartTime, StartTime + ActivationChannelDuration);
 		}
 		return;
 	}
@@ -576,10 +597,17 @@ void UCombatGameplayAbility::HandleChannelTick(const FCombatScheduledTickContext
 void UCombatGameplayAbility::HandleChannelFinished()
 {
 	ChannelTask = nullptr;
+	FGameplayTag Failure;
+	if (!ValidateChannelCompletion(Failure))
+	{
+		InterruptAbility(Failure.IsValid() ? Failure : CombatTags::Failure_ActionUnsupported.GetTag(), TEXT("Channel completion rejected"));
+		return;
+	}
 	if (!bChannelEnded)
 	{
-		ReceiveChannelFinish(CombatContext, false);
 		bChannelEnded = true;
+		ReceiveChannelFinish(CombatContext, false);
+		if (!IsActive() || bEnding) return;
 		EmitLifecycleEvent(CombatTags::Event_Combat_AbilityChannelEnded, FGameplayTag(), TEXT("ChannelEnded Interrupted=0"));
 	}
 	if (!bOrderReleased)

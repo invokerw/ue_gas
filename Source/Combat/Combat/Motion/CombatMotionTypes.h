@@ -89,5 +89,7 @@ struct COMBAT_API FCombatMotionResult
 	UPROPERTY(BlueprintReadOnly, Category="Combat|Motion") FVector FinalLocation = FVector::ZeroVector;
 };
 
+/** 传送开始日志完成后、真正移动前的服务器本地观察点；观察者可让当前 Owner/生命失效。 */
+DECLARE_MULTICAST_DELEGATE_OneParam(FOnCombatMotionStarted, const FCombatMotionHandle&);
 /** 强制位移记录移除后的服务器本地通知；同一请求只广播一次，随后才可能恢复原命令。 */
 DECLARE_MULTICAST_DELEGATE_OneParam(FOnCombatMotionFinished, const FCombatMotionResult&);
